@@ -37,8 +37,8 @@ func main() {
 		log.Fatalf("Failed to initialize crypto module: %v", err)
 	}
 
-	// 3. Connect to PostgreSQL (optional fail-soft in dev if database not ready yet)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	// 3. Connect to PostgreSQL (with retry to wait for DB startup)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
 	dbPool, err := database.Connect(ctx, cfg.DatabaseURL)

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -23,7 +25,29 @@ func Load() *Config {
 	port := getEnv("PORT", "8080")
 	appBaseURL := getEnv("APP_BASE_URL", "http://localhost:8080")
 	env := getEnv("ENVIRONMENT", "development")
-	dbURL := getEnv("DATABASE_URL", "postgres://teslacost:teslacost_dev_secret@localhost:5432/teslacost?sslmode=disable")
+
+	// Determine database URL:
+	// If DB_HOST is set, build a safely URL-encoded connection string (preventing issues with special characters in passwords).
+	var dbURL string
+	if dbHost := getEnv("DB_HOST", ""); dbHost != "" {
+		dbPort := getEnv("DB_PORT", "5432")
+		dbUser := getEnv("DB_USER", "teslacost")
+		dbPass := getEnv("DB_PASSWORD", "teslacost_dev_secret")
+		dbName := getEnv("DB_NAME", "teslacost")
+		dbSSL := getEnv("DB_SSLMODE", "disable")
+
+		u := &url.URL{
+			Scheme:   "postgres",
+			User:     url.UserPassword(dbUser, dbPass),
+			Host:     net.JoinHostPort(dbHost, dbPort),
+			Path:     "/" + dbName,
+			RawQuery: "sslmode=" + dbSSL,
+		}
+		dbURL = u.String()
+	} else {
+		dbURL = getEnv("DATABASE_URL", "postgres://teslacost:teslacost_dev_secret@localhost:5432/teslacost?sslmode=disable")
+	}
+
 	encKey := getEnv("APP_ENCRYPTION_KEY", "dev-default-32-byte-secret-key!!")
 	jwtSecret := getEnv("JWT_SECRET", "super_secret_jwt_signing_key_for_teslacost_app")
 	jwtExpHours, _ := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "72"))
