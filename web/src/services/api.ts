@@ -104,9 +104,17 @@ export const api = {
   getDriveExpenses: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/expenses`),
   createDriveExpense: (vehicleId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/expenses`, { method: 'POST', body: JSON.stringify(data) }),
+  updateDriveExpense: (vehicleId: string, expenseId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteDriveExpense: (vehicleId: string, expenseId: string) =>
+    request<void>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'DELETE' }),
   getMaintenance: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/maintenance`),
   createMaintenance: (vehicleId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/maintenance`, { method: 'POST', body: JSON.stringify(data) }),
+  updateMaintenance: (vehicleId: string, maintenanceId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/maintenance/${maintenanceId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteMaintenance: (vehicleId: string, maintenanceId: string) =>
+    request<void>(`/vehicles/${vehicleId}/maintenance/${maintenanceId}`, { method: 'DELETE' }),
   getCharges: (vehicleId: string, page = 1, limit = 50) =>
     request<any>(`/vehicles/${vehicleId}/charges?page=${page}&limit=${limit}`),
 

@@ -469,6 +469,44 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 	return list, nil
 }
 
+func (r *Repository) UpdateDriveExpense(ctx context.Context, exp *models.DriveExpense) error {
+	query := `
+		UPDATE drive_expenses
+		SET trip_group_id = $1,
+		    drive_id = $2,
+		    type = $3,
+		    amount = $4,
+		    currency = $5,
+		    date = $6,
+		    notes = $7
+		WHERE id = $8 AND vehicle_id = $9;
+	`
+	cmdTag, err := r.pool.Exec(ctx, query,
+		exp.TripGroupID, exp.DriveID, exp.Type,
+		exp.Amount, exp.Currency, exp.Date, exp.Notes,
+		exp.ID, exp.VehicleID,
+	)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("expense not found")
+	}
+	return nil
+}
+
+func (r *Repository) DeleteDriveExpense(ctx context.Context, vehicleID, expenseID string) error {
+	query := `DELETE FROM drive_expenses WHERE id = $1 AND vehicle_id = $2;`
+	cmdTag, err := r.pool.Exec(ctx, query, expenseID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("expense not found")
+	}
+	return nil
+}
+
 // ============================================================================
 // Tires, Wear Logs & Rotations
 // ============================================================================
@@ -1003,6 +1041,46 @@ func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID stri
 		list = append(list, m)
 	}
 	return list, nil
+}
+
+func (r *Repository) UpdateMaintenanceExpense(ctx context.Context, m *models.MaintenanceExpense) error {
+	query := `
+		UPDATE maintenance_expenses
+		SET category = $1,
+		    amount = $2,
+		    currency = $3,
+		    date = $4,
+		    odometer = $5,
+		    is_recurring = $6,
+		    recurrence_interval_months = $7,
+		    description = $8,
+		    updated_at = NOW()
+		WHERE id = $9 AND vehicle_id = $10;
+	`
+	cmdTag, err := r.pool.Exec(ctx, query,
+		m.Category, m.Amount, m.Currency, m.Date,
+		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.Description,
+		m.ID, m.VehicleID,
+	)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("maintenance expense not found")
+	}
+	return nil
+}
+
+func (r *Repository) DeleteMaintenanceExpense(ctx context.Context, vehicleID, maintenanceID string) error {
+	query := `DELETE FROM maintenance_expenses WHERE id = $1 AND vehicle_id = $2;`
+	cmdTag, err := r.pool.Exec(ctx, query, maintenanceID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return errors.New("maintenance expense not found")
+	}
+	return nil
 }
 
 // ============================================================================

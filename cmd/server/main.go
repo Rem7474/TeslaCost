@@ -182,8 +182,12 @@ func main() {
 				// Expenses
 				r.Get("/{vehicleId}/expenses", expenseHandler.ListDriveExpenses)
 				r.Post("/{vehicleId}/expenses", expenseHandler.CreateDriveExpense)
+				r.Put("/{vehicleId}/expenses/{expenseId}", expenseHandler.UpdateDriveExpense)
+				r.Delete("/{vehicleId}/expenses/{expenseId}", expenseHandler.DeleteDriveExpense)
 				r.Get("/{vehicleId}/maintenance", expenseHandler.ListMaintenance)
 				r.Post("/{vehicleId}/maintenance", expenseHandler.CreateMaintenance)
+				r.Put("/{vehicleId}/maintenance/{maintenanceId}", expenseHandler.UpdateMaintenance)
+				r.Delete("/{vehicleId}/maintenance/{maintenanceId}", expenseHandler.DeleteMaintenance)
 				r.Get("/{vehicleId}/charges", expenseHandler.ListCharges)
 
 				// TCO Analytics

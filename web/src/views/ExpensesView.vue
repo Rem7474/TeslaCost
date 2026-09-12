@@ -18,6 +18,8 @@ import {
   CheckSquare,
   Square,
   ArrowRight,
+  Pencil,
+  Trash2,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -32,6 +34,8 @@ const loading = ref(false)
 // Modals
 const showAddTollModal = ref(false)
 const showAddMaintModal = ref(false)
+const editingTollId = ref<string | null>(null)
+const editingMaintId = ref<string | null>(null)
 
 const recentDrives = ref<any[]>([])
 const associationMode = ref<'NONE' | 'SINGLE' | 'MULTI'>('NONE')
@@ -48,7 +52,7 @@ const tollForm = ref({
 const maintForm = ref({
   category: 'MAINTENANCE',
   amount: '',
-  date: new Date().toISOString(),
+  date: new Date().toISOString().substring(0, 10),
   odometer: 0,
   is_recurring: false,
   recurrence_interval_months: 12,
@@ -85,6 +89,7 @@ async function loadRecentDrives() {
 }
 
 function openAddTollModal() {
+  editingTollId.value = null
   tollForm.value = {
     type: 'TOLL',
     amount: '',
@@ -96,6 +101,38 @@ function openAddTollModal() {
   selectedDriveIds.value = []
   showAddTollModal.value = true
   loadRecentDrives()
+}
+
+function openEditTollModal(e: any) {
+  editingTollId.value = e.id
+  tollForm.value = {
+    type: e.type || 'TOLL',
+    amount: String(e.amount),
+    date: new Date(e.date).toISOString().substring(0, 16),
+    notes: e.notes || '',
+  }
+  if (e.drive_id) {
+    associationMode.value = 'SINGLE'
+    selectedDriveId.value = e.drive_id
+    selectedDriveIds.value = []
+  } else {
+    associationMode.value = 'NONE'
+    selectedDriveId.value = ''
+    selectedDriveIds.value = []
+  }
+  showAddTollModal.value = true
+  loadRecentDrives()
+}
+
+async function handleDeleteToll(e: any) {
+  if (!vehicleStore.activeVehicle) return
+  if (!confirm(`Supprimer ce péage / parking de ${Number(e.amount).toFixed(2)} € ?`)) return
+  try {
+    await api.deleteDriveExpense(vehicleStore.activeVehicle.id, e.id)
+    await loadData()
+  } catch (err: any) {
+    alert(`Erreur lors de la suppression : ${err.message}`)
+  }
 }
 
 function onSingleDriveChange() {
@@ -159,7 +196,11 @@ async function handleCreateToll() {
       payload.drive_ids = selectedDriveIds.value
     }
 
-    await api.createDriveExpense(vehicleStore.activeVehicle.id, payload)
+    if (editingTollId.value) {
+      await api.updateDriveExpense(vehicleStore.activeVehicle.id, editingTollId.value, payload)
+    } else {
+      await api.createDriveExpense(vehicleStore.activeVehicle.id, payload)
+    }
     showAddTollModal.value = false
     await loadData()
   } catch (err: any) {
@@ -167,17 +208,60 @@ async function handleCreateToll() {
   }
 }
 
+function openAddMaintModal() {
+  editingMaintId.value = null
+  maintForm.value = {
+    category: 'MAINTENANCE',
+    amount: '',
+    date: new Date().toISOString().substring(0, 10),
+    odometer: 0,
+    is_recurring: false,
+    recurrence_interval_months: 12,
+    description: '',
+  }
+  showAddMaintModal.value = true
+}
+
+function openEditMaintModal(m: any) {
+  editingMaintId.value = m.id
+  maintForm.value = {
+    category: m.category || 'MAINTENANCE',
+    amount: String(m.amount),
+    date: new Date(m.date).toISOString().substring(0, 10),
+    odometer: m.odometer ? Math.round(m.odometer) : 0,
+    is_recurring: Boolean(m.is_recurring),
+    recurrence_interval_months: m.recurrence_interval_months || 12,
+    description: m.description || '',
+  }
+  showAddMaintModal.value = true
+}
+
+async function handleDeleteMaint(m: any) {
+  if (!vehicleStore.activeVehicle) return
+  if (!confirm(`Supprimer la dépense "${m.description}" de ${Number(m.amount).toFixed(2)} € ?`)) return
+  try {
+    await api.deleteMaintenance(vehicleStore.activeVehicle.id, m.id)
+    await loadData()
+  } catch (err: any) {
+    alert(`Erreur lors de la suppression : ${err.message}`)
+  }
+}
+
 async function handleCreateMaint() {
   if (!vehicleStore.activeVehicle) return
   try {
-    await api.createMaintenance(vehicleStore.activeVehicle.id, {
+    const payload = {
       ...maintForm.value,
       amount: Number(maintForm.value.amount),
       odometer: maintForm.value.odometer ? Number(maintForm.value.odometer) : null,
-    })
+      date: new Date(maintForm.value.date).toISOString(),
+    }
+    if (editingMaintId.value) {
+      await api.updateMaintenance(vehicleStore.activeVehicle.id, editingMaintId.value, payload)
+    } else {
+      await api.createMaintenance(vehicleStore.activeVehicle.id, payload)
+    }
     showAddMaintModal.value = false
-    maintForm.value.amount = ''
-    maintForm.value.description = ''
     await loadData()
   } catch (err: any) {
     alert(`Erreur : ${err.message}`)
@@ -218,15 +302,15 @@ function formatDriveTime(dateStr: string) {
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          + Péage / Parking
+          Péage / Parking
         </button>
         <button
           v-if="activeTab === 'MAINTENANCE'"
-          @click="showAddMaintModal = true"
+          @click="openAddMaintModal"
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          + Entretien / Fixe
+          Entretien / Fixe
         </button>
       </div>
     </div>
@@ -290,15 +374,31 @@ function formatDriveTime(dateStr: string) {
             <div class="text-lg font-extrabold text-amber-400">
               {{ e.amount.toFixed(2) }} {{ e.currency }}
             </div>
-            <button
-              v-if="e.drive_id || e.trip_group_id"
-              @click="router.push({ path: '/carpools', query: e.drive_id ? { new_drive_id: e.drive_id } : { new_trip_group_id: e.trip_group_id } })"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
-              title="Créer un covoiturage pour ce trajet"
-            >
-              <Users class="w-3.5 h-3.5 text-cyan-400" />
-              <span>Covoiturer</span>
-            </button>
+            <div class="flex items-center gap-1.5">
+              <button
+                v-if="e.drive_id || e.trip_group_id"
+                @click="router.push({ path: '/carpools', query: e.drive_id ? { new_drive_id: e.drive_id } : { new_trip_group_id: e.trip_group_id } })"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
+                title="Créer un covoiturage pour ce trajet"
+              >
+                <Users class="w-3.5 h-3.5 text-cyan-400" />
+                <span>Covoiturer</span>
+              </button>
+              <button
+                @click="openEditTollModal(e)"
+                class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-xl transition-colors border border-slate-700/60"
+                title="Modifier ce péage"
+              >
+                <Pencil class="w-3.5 h-3.5" />
+              </button>
+              <button
+                @click="handleDeleteToll(e)"
+                class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
+                title="Supprimer ce péage"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -314,10 +414,10 @@ function formatDriveTime(dateStr: string) {
         <div
           v-for="m in maintenanceExpenses"
           :key="m.id"
-          class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between"
+          class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
-          <div>
-            <div class="flex items-center gap-2">
+          <div class="space-y-1">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-pink-500/10 text-pink-400 border border-pink-500/20">
                 {{ m.category }}
               </span>
@@ -326,11 +426,29 @@ function formatDriveTime(dateStr: string) {
                 <Repeat class="w-3 h-3 text-pink-400" /> tous les {{ m.recurrence_interval_months }} mois
               </span>
             </div>
-            <p class="text-sm font-semibold text-slate-200 mt-1">{{ m.description }}</p>
+            <p class="text-sm font-semibold text-slate-200">{{ m.description }}</p>
             <p v-if="m.odometer" class="text-xs text-slate-400">À {{ Math.round(m.odometer) }} km</p>
           </div>
-          <div class="text-lg font-extrabold text-pink-400">
-            {{ m.amount.toFixed(2) }} {{ m.currency }}
+          <div class="flex items-center justify-between sm:justify-end gap-3">
+            <div class="text-lg font-extrabold text-pink-400">
+              {{ m.amount.toFixed(2) }} {{ m.currency }}
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button
+                @click="openEditMaintModal(m)"
+                class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-pink-400 rounded-xl transition-colors border border-slate-700/60"
+                title="Modifier cette dépense"
+              >
+                <Pencil class="w-3.5 h-3.5" />
+              </button>
+              <button
+                @click="handleDeleteMaint(m)"
+                class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
+                title="Supprimer cette dépense"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -376,7 +494,7 @@ function formatDriveTime(dateStr: string) {
         <div class="flex items-center justify-between">
           <h3 class="text-base font-bold text-white flex items-center gap-2">
             <Receipt class="w-5 h-5 text-amber-400" />
-            Ajouter un Péage / Parking
+            {{ editingTollId ? 'Modifier le Péage / Parking' : 'Ajouter un Péage / Parking' }}
           </h3>
           <button @click="showAddTollModal = false" class="text-slate-400 hover:text-white">
             <X class="w-5 h-5" />
@@ -491,22 +609,25 @@ function formatDriveTime(dateStr: string) {
             <button type="button" @click="showAddTollModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
               Annuler
             </button>
-            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">
-              Enregistrer
+            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl font-medium">
+              {{ editingTollId ? 'Mettre à jour' : 'Enregistrer' }}
             </button>
           </div>
         </form>
       </div>
     </div>
 
-    <!-- Modal: Add Maintenance/Fixed -->
+    <!-- Modal: Add / Edit Maintenance/Fixed -->
     <div
       v-if="showAddMaintModal"
       class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
         <div class="flex items-center justify-between">
-          <h3 class="text-base font-bold text-white">Ajouter Entretien / Dépense Fixe</h3>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <Wrench class="w-5 h-5 text-pink-400" />
+            {{ editingMaintId ? 'Modifier Entretien / Dépense Fixe' : 'Ajouter Entretien / Dépense Fixe' }}
+          </h3>
           <button @click="showAddMaintModal = false" class="text-slate-400 hover:text-white">
             <X class="w-5 h-5" />
           </button>
@@ -528,25 +649,40 @@ function formatDriveTime(dateStr: string) {
             <label class="block text-xs font-semibold text-slate-300 mb-1">Description</label>
             <input v-model="maintForm.description" required placeholder="ex: Remplacement filtre habitacle" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
-            <input v-model="maintForm.amount" type="number" step="0.01" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Date</label>
+              <input v-model="maintForm.date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
+              <input v-model="maintForm.amount" type="number" step="0.01" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
           </div>
+
           <div>
             <label class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
             <input v-model.number="maintForm.odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
-          <div class="flex items-center gap-2 pt-1">
-            <input v-model="maintForm.is_recurring" type="checkbox" id="rec" class="rounded border-slate-700 bg-slate-800 text-rose-600 focus:ring-rose-500" />
-            <label for="rec" class="text-xs text-slate-300 font-medium">Dépense récurrente</label>
+
+          <div class="space-y-2 pt-1">
+            <div class="flex items-center gap-2">
+              <input v-model="maintForm.is_recurring" type="checkbox" id="rec" class="rounded border-slate-700 bg-slate-800 text-rose-600 focus:ring-rose-500" />
+              <label for="rec" class="text-xs text-slate-300 font-medium">Dépense récurrente</label>
+            </div>
+            <div v-if="maintForm.is_recurring" class="pt-1">
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Intervalle de récurrence (mois)</label>
+              <input v-model.number="maintForm.recurrence_interval_months" type="number" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
           </div>
 
-          <div class="flex justify-end gap-2 pt-2">
+          <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
             <button type="button" @click="showAddMaintModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
               Annuler
             </button>
-            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">
-              Enregistrer
+            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl font-medium">
+              {{ editingMaintId ? 'Mettre à jour' : 'Enregistrer' }}
             </button>
           </div>
         </form>

@@ -122,6 +122,95 @@ func (h *ExpenseHandler) ListDriveExpenses(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, list)
 }
 
+func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	expenseID := chi.URLParam(r, "expenseId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	var req CreateDriveExpenseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	expDate, err := time.Parse(time.RFC3339, req.Date)
+	if err != nil {
+		expDate = time.Now()
+	}
+
+	curr := req.Currency
+	if curr == "" {
+		curr = "EUR"
+	}
+
+	expType := req.Type
+	if expType == "" {
+		expType = "TOLL"
+	}
+
+	var driveID = req.DriveID
+	var tripGroupID = req.TripGroupID
+
+	if len(req.DriveIDs) > 1 {
+		groupName := "Trajet multi-étapes"
+		if req.Notes != nil && *req.Notes != "" {
+			groupName = *req.Notes
+		}
+		tg := &models.TripGroup{
+			VehicleID: vehicleID,
+			Name:      groupName,
+			Notes:     req.Notes,
+		}
+		if err := h.repo.CreateTripGroup(r.Context(), tg, req.DriveIDs); err == nil {
+			tripGroupID = &tg.ID
+		}
+	} else if len(req.DriveIDs) == 1 {
+		driveID = &req.DriveIDs[0]
+	}
+
+	exp := &models.DriveExpense{
+		ID:          expenseID,
+		VehicleID:   vehicleID,
+		TripGroupID: tripGroupID,
+		DriveID:     driveID,
+		Type:        expType,
+		Amount:      req.Amount,
+		Currency:    curr,
+		Date:        expDate,
+		Notes:       req.Notes,
+	}
+
+	if err := h.repo.UpdateDriveExpense(r.Context(), exp); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to update expense")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, exp)
+}
+
+func (h *ExpenseHandler) DeleteDriveExpense(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	expenseID := chi.URLParam(r, "expenseId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	if err := h.repo.DeleteDriveExpense(r.Context(), vehicleID, expenseID); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to delete expense")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Expense deleted successfully"})
+}
+
 type CreateMaintenanceRequest struct {
 	Category                 string   `json:"category"`
 	Amount                   float64  `json:"amount"`
@@ -197,6 +286,71 @@ func (h *ExpenseHandler) ListMaintenance(w http.ResponseWriter, r *http.Request)
 	}
 
 	writeJSON(w, http.StatusOK, list)
+}
+
+func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	maintID := chi.URLParam(r, "maintenanceId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	var req CreateMaintenanceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	mDate, err := time.Parse(time.RFC3339, req.Date)
+	if err != nil {
+		mDate = time.Now()
+	}
+
+	curr := req.Currency
+	if curr == "" {
+		curr = "EUR"
+	}
+
+	m := &models.MaintenanceExpense{
+		ID:                       maintID,
+		VehicleID:                vehicleID,
+		Category:                 req.Category,
+		Amount:                   req.Amount,
+		Currency:                 curr,
+		Date:                     mDate,
+		Odometer:                 req.Odometer,
+		IsRecurring:              req.IsRecurring,
+		RecurrenceIntervalMonths: req.RecurrenceIntervalMonths,
+		Description:              req.Description,
+	}
+
+	if err := h.repo.UpdateMaintenanceExpense(r.Context(), m); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to update maintenance expense")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, m)
+}
+
+func (h *ExpenseHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	maintID := chi.URLParam(r, "maintenanceId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	if err := h.repo.DeleteMaintenanceExpense(r.Context(), vehicleID, maintID); err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to delete maintenance expense")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Maintenance expense deleted successfully"})
 }
 
 func (h *ExpenseHandler) ListCharges(w http.ResponseWriter, r *http.Request) {
