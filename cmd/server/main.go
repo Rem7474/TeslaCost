@@ -78,7 +78,7 @@ func main() {
 	}))
 
 	// Public Health Check Endpoint
-	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		dbStatus := "connected"
 		if dbPool == nil {
@@ -90,7 +90,9 @@ func main() {
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"version":   "1.0.0",
 		})
-	})
+	}
+	r.Get("/api/health", healthHandler)
+	r.Get("/healthz", healthHandler)
 
 	// API Routes
 	if repo != nil {
