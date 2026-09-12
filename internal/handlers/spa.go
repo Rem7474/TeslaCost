@@ -17,6 +17,13 @@ func NewSPAServer(fileSystem fs.FS) *SPAServer {
 }
 
 func (s *SPAServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/api") {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`{"error":"Endpoint introuvable ou service indisponible"}`))
+		return
+	}
+
 	cleanPath := path.Clean(r.URL.Path)
 	if cleanPath == "/" || cleanPath == "." {
 		cleanPath = "index.html"

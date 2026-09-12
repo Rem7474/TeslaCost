@@ -1,0 +1,377 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useVehicleStore } from '@/stores/vehicle'
+import { api } from '@/services/api'
+import { Zap, ShieldCheck, Car, KeyRound, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+
+const router = useRouter()
+const authStore = useAuthStore()
+const vehicleStore = useVehicleStore()
+
+const currentStep = ref(1)
+const loading = ref(false)
+const error = ref('')
+
+// Step 1: Admin Account
+const adminEmail = ref('')
+const adminPassword = ref('')
+const adminConfirmPassword = ref('')
+
+// Step 2: Vehicle Setup
+const vehicleName = ref('Tesla Model 3')
+const vehicleVin = ref('')
+const vehicleOdometer = ref(15000)
+
+// Step 3: TeslaMate Connection (Optional)
+const enableTeslaMate = ref(false)
+const teslamateUrl = ref('http://teslamateapi:8080')
+const teslamateAuthType = ref<'BEARER' | 'BASIC' | 'NONE'>('NONE')
+const teslamateApiKey = ref('')
+const teslamateUser = ref('')
+const teslamatePass = ref('')
+const testResult = ref<{ ok: boolean; message: string } | null>(null)
+
+async function handleStep1Submit() {
+  error.value = ''
+  if (adminPassword.value !== adminConfirmPassword.value) {
+    error.value = 'Les mots de passe ne correspondent pas'
+    return
+  }
+  if (adminPassword.value.length < 8) {
+    error.value = 'Le mot de passe doit comporter au moins 8 caractères'
+    return
+  }
+
+  loading.value = true
+  try {
+    await authStore.register({ email: adminEmail.value, password: adminPassword.value })
+    currentStep.value = 2
+  } catch (err: any) {
+    error.value = err.message || "Erreur lors de la création du compte administrateur"
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleStep2Submit() {
+  error.value = ''
+  if (!vehicleName.value) {
+    error.value = 'Veuillez saisir un nom pour votre véhicule'
+    return
+  }
+  currentStep.value = 3
+}
+
+async function testConnection() {
+  testResult.value = null
+  loading.value = true
+  try {
+    // Basic format test
+    if (!teslamateUrl.value) throw new Error('URL requise')
+    testResult.value = { ok: true, message: 'Configuration prête' }
+  } catch (err: any) {
+    testResult.value = { ok: false, message: err.message }
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleFinalSubmit() {
+  error.value = ''
+  loading.value = true
+  try {
+    const payload: any = {
+      name: vehicleName.value,
+      vin: vehicleVin.value || undefined,
+      current_odometer: Number(vehicleOdometer.value) || 0,
+      teslamate_auth_type: enableTeslaMate.value ? teslamateAuthType.value : 'NONE',
+    }
+
+    if (enableTeslaMate.value && teslamateUrl.value) {
+      payload.teslamate_api_url = teslamateUrl.value
+      if (teslamateAuthType.value === 'BEARER') {
+        payload.teslamate_api_key = teslamateApiKey.value
+      } else if (teslamateAuthType.value === 'BASIC') {
+        payload.teslamate_basic_user = teslamateUser.value
+        payload.teslamate_basic_pass = teslamatePass.value
+      }
+    }
+
+    await vehicleStore.createVehicle(payload)
+    currentStep.value = 4
+  } catch (err: any) {
+    error.value = err.message || "Erreur lors de l'enregistrement du véhicule"
+  } finally {
+    loading.value = false
+  }
+}
+
+function finishOnboarding() {
+  router.push('/')
+}
+</script>
+
+<template>
+  <div class="min-h-screen flex items-center justify-center p-4 bg-slate-950">
+    <div class="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-10 shadow-2xl">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <div class="inline-flex p-3.5 bg-gradient-to-tr from-rose-500 to-amber-500 rounded-2xl shadow-lg shadow-rose-500/25 mb-4">
+          <Zap class="w-8 h-8 text-white" />
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">Bienvenue sur TeslaCost</h1>
+        <p class="text-sm text-slate-400 mt-1.5">Assistant de configuration initiale de votre instance</p>
+      </div>
+
+      <!-- Step Indicators -->
+      <div class="flex items-center justify-between max-w-md mx-auto mb-8 relative">
+        <div class="absolute left-0 top-1/2 -translate-y-1/2 h-0.5 w-full bg-slate-800 -z-0"></div>
+        <div
+          v-for="step in 3"
+          :key="step"
+          class="relative z-10 w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold transition-all"
+          :class="[
+            currentStep === step
+              ? 'bg-rose-500 text-white shadow-lg shadow-rose-500/30 ring-4 ring-rose-500/20'
+              : currentStep > step
+              ? 'bg-emerald-500 text-white'
+              : 'bg-slate-800 text-slate-500 border border-slate-700'
+          ]"
+        >
+          <CheckCircle2 v-if="currentStep > step" class="w-5 h-5" />
+          <span v-else>{{ step }}</span>
+        </div>
+      </div>
+
+      <!-- Error alert -->
+      <div v-if="error" class="mb-6 p-3.5 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2.5 text-sm text-rose-400">
+        <AlertCircle class="w-4 h-4 shrink-0" />
+        <span>{{ error }}</span>
+      </div>
+
+      <!-- STEP 1: Admin Account Creation -->
+      <div v-if="currentStep === 1">
+        <div class="mb-6">
+          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+            <ShieldCheck class="w-5 h-5 text-rose-400" />
+            1. Créer le compte Administrateur
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">C'est le compte principal qui gérera l'instance TeslaCost.</p>
+        </div>
+
+        <form @submit.prevent="handleStep1Submit" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email Administrateur</label>
+            <input
+              v-model="adminEmail"
+              type="email"
+              required
+              placeholder="admin@votre-domaine.fr"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe (8 car. min)</label>
+            <input
+              v-model="adminPassword"
+              type="password"
+              required
+              placeholder="••••••••"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Confirmer le mot de passe</label>
+            <input
+              v-model="adminConfirmPassword"
+              type="password"
+              required
+              placeholder="••••••••"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+            />
+          </div>
+
+          <button
+            type="submit"
+            :disabled="loading"
+            class="w-full py-3.5 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+          >
+            <span>{{ loading ? 'Création...' : 'Continuer vers le véhicule' }}</span>
+            <ArrowRight class="w-4 h-4" />
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 2: Vehicle Setup -->
+      <div v-else-if="currentStep === 2">
+        <div class="mb-6">
+          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+            <Car class="w-5 h-5 text-rose-400" />
+            2. Votre Premier Véhicule
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Configurez votre véhicule principal pour suivre ses coûts.</p>
+        </div>
+
+        <form @submit.prevent="handleStep2Submit" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Nom du véhicule</label>
+            <input
+              v-model="vehicleName"
+              type="text"
+              required
+              placeholder="Ex: Model 3 Grande Autonomie"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+            />
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Odomètre actuel (km)</label>
+              <input
+                v-model.number="vehicleOdometer"
+                type="number"
+                min="0"
+                step="1"
+                required
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Numéro VIN (Optionnel)</label>
+              <input
+                v-model="vehicleVin"
+                type="text"
+                placeholder="5YJ3E7EB..."
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            class="w-full py-3.5 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all"
+          >
+            <span>Continuer vers TeslaMate (Optionnel)</span>
+            <ArrowRight class="w-4 h-4" />
+          </button>
+        </form>
+      </div>
+
+      <!-- STEP 3: TeslaMate Sync (Optional) -->
+      <div v-else-if="currentStep === 3">
+        <div class="mb-6">
+          <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+            <KeyRound class="w-5 h-5 text-rose-400" />
+            3. Synchronisation TeslaMate (Facultatif)
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Vous pouvez connecter votre instance teslamateapi dès maintenant ou plus tard.</p>
+        </div>
+
+        <div class="space-y-4">
+          <label class="flex items-center gap-3 p-4 bg-slate-800/60 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-800 transition-colors">
+            <input v-model="enableTeslaMate" type="checkbox" class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-900 border-slate-700" />
+            <div>
+              <span class="text-sm font-medium text-white block">Activer la liaison avec TeslaMateAPI</span>
+              <span class="text-xs text-slate-400 block">Synchronise automatiquement trajets, recharges et odomètre</span>
+            </div>
+          </label>
+
+          <div v-if="enableTeslaMate" class="p-4 bg-slate-800/40 border border-slate-800 rounded-2xl space-y-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">URL de l'API TeslaMate</label>
+              <input
+                v-model="teslamateUrl"
+                type="url"
+                placeholder="http://teslamateapi:8080 ou http://192.168.1.50:8080"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mode d'authentification</label>
+              <select
+                v-model="teslamateAuthType"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
+              >
+                <option value="NONE">Aucune authentification</option>
+                <option value="BEARER">Clé API (Bearer Token)</option>
+                <option value="BASIC">HTTP Basic Auth (Utilisateur / Mot de passe)</option>
+              </select>
+            </div>
+
+            <div v-if="teslamateAuthType === 'BEARER'">
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Token API</label>
+              <input
+                v-model="teslamateApiKey"
+                type="password"
+                placeholder="votre-token-secret"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+              />
+            </div>
+
+            <div v-if="teslamateAuthType === 'BASIC'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Utilisateur</label>
+                <input
+                  v-model="teslamateUser"
+                  type="text"
+                  placeholder="admin"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe</label>
+                <input
+                  v-model="teslamatePass"
+                  type="password"
+                  placeholder="••••••••"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="flex gap-3 pt-2">
+            <button
+              type="button"
+              @click="currentStep = 2"
+              class="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-colors"
+            >
+              Retour
+            </button>
+            <button
+              type="button"
+              :disabled="loading"
+              @click="handleFinalSubmit"
+              class="flex-1 py-3 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+            >
+              <span>{{ loading ? 'Enregistrement...' : 'Finaliser la configuration' }}</span>
+              <ArrowRight class="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4: Completed -->
+      <div v-else-if="currentStep === 4" class="text-center py-6">
+        <div class="inline-flex p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full mb-4">
+          <CheckCircle2 class="w-12 h-12" />
+        </div>
+        <h2 class="text-2xl font-bold text-white mb-2">Félicitations !</h2>
+        <p class="text-slate-400 text-sm max-w-sm mx-auto mb-6">
+          Votre compte administrateur et votre véhicule sont prêts. Vous pouvez maintenant commencer à suivre vos coûts.
+        </p>
+        <button
+          @click="finishOnboarding"
+          class="w-full py-3.5 px-6 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 transition-all"
+        >
+          Accéder à mon tableau de bord
+        </button>
+      </div>
+    </div>
+  </div>
+</template>

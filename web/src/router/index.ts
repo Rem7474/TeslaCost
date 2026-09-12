@@ -8,6 +8,7 @@ import ExpensesView from '@/views/ExpensesView.vue'
 import VehiclesView from '@/views/VehiclesView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
+import OnboardingView from '@/views/OnboardingView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -53,17 +54,49 @@ const router = createRouter({
       component: RegisterView,
     },
     {
+      path: '/onboarding',
+      name: 'onboarding',
+      component: OnboardingView,
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },
   ],
 })
 
-router.beforeEach((to, _from, next) => {
+let checkedOnboarding = false
+let needsOnboarding = false
+
+async function checkOnboardingStatus() {
+  if (checkedOnboarding) return needsOnboarding
+  try {
+    const res = await fetch('/api/auth/config')
+    if (res.ok) {
+      const data = await res.json()
+      needsOnboarding = !!data.needs_onboarding
+      checkedOnboarding = true
+    }
+  } catch {
+    // fallback
+  }
+  return needsOnboarding
+}
+
+router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
+
+  // On first startup without account, route to onboarding
+  if (!authStore.isAuthenticated) {
+    const isFirstRun = await checkOnboardingStatus()
+    if (isFirstRun && to.name !== 'onboarding') {
+      return next({ name: 'onboarding' })
+    }
+  }
+
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login' })
-  } else if ((to.name === 'login' || to.name === 'register') && authStore.isAuthenticated) {
+  } else if ((to.name === 'login' || to.name === 'register' || to.name === 'onboarding') && authStore.isAuthenticated) {
     next({ name: 'dashboard' })
   } else {
     next()

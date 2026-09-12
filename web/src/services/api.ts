@@ -24,14 +24,25 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (res.status === 401) {
     localStorage.removeItem('teslacost_token')
-    if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+    if (window.location.pathname !== '/login' && window.location.pathname !== '/register' && window.location.pathname !== '/onboarding') {
       window.location.href = '/login'
     }
   }
 
-  const data = await res.json()
+  let data: any
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) {
+    data = await res.json()
+  } else {
+    throw new Error(
+      res.ok
+        ? 'Réponse du serveur invalide'
+        : `Erreur (${res.status}): La base de données ou le service n'est pas prêt`
+    )
+  }
+
   if (!res.ok) {
-    throw new Error(data.error || `Request failed with status ${res.status}`)
+    throw new Error(data.error || `La requête a échoué (${res.status})`)
   }
 
   return data as T

@@ -40,18 +40,24 @@ type AuthResponse struct {
 	User  any    `json:"user"`
 }
 
-// GetConfig returns public authentication configuration (e.g. whether registration is open)
+// GetConfig returns public authentication configuration (e.g. whether registration is open or onboarding is required)
 func (h *AuthHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	count, err := h.repo.GetUserCount(r.Context())
+	userCount := 0
+	if err == nil {
+		userCount = count
+	}
+	needsOnboarding := (userCount == 0)
+
 	regEnabled := !h.disableRegistration
-	if !regEnabled {
-		count, err := h.repo.GetUserCount(r.Context())
-		if err == nil && count == 0 {
-			regEnabled = true
-		}
+	if needsOnboarding {
+		regEnabled = true
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"registration_enabled": regEnabled,
+		"needs_onboarding":     needsOnboarding,
+		"user_count":           userCount,
 	})
 }
 
