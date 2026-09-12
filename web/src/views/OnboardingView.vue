@@ -40,7 +40,7 @@ async function handleStep1Submit() {
     return
   }
   if (adminPassword.value.length < 8) {
-    error.value = 'Le mot de passe doit comporter au moins 8 caractères'
+    error.value = 'Le mot de passe doit comporter au moins 8 caractÃ¨res'
     return
   }
 
@@ -49,7 +49,7 @@ async function handleStep1Submit() {
     await authStore.register({ email: adminEmail.value, password: adminPassword.value })
     currentStep.value = 2
   } catch (err: any) {
-    error.value = err.message || "Erreur lors de la création du compte administrateur"
+    error.value = err.message || "Erreur lors de la crÃ©ation du compte administrateur"
   } finally {
     loading.value = false
   }
@@ -58,7 +58,7 @@ async function handleStep1Submit() {
 async function handleStep2Submit() {
   error.value = ''
   if (!vehicleName.value) {
-    error.value = 'Veuillez saisir un nom pour votre véhicule'
+    error.value = 'Veuillez saisir un nom pour votre vÃ©hicule'
     return
   }
   currentStep.value = 3
@@ -70,7 +70,7 @@ async function testConnection() {
   try {
     // Basic format test
     if (!teslamateUrl.value) throw new Error('URL requise')
-    testResult.value = { ok: true, message: 'Configuration prête' }
+    testResult.value = { ok: true, message: 'Configuration prÃªte' }
   } catch (err: any) {
     testResult.value = { ok: false, message: err.message }
   } finally {
@@ -102,7 +102,7 @@ async function handleFinalSubmit() {
     await vehicleStore.createVehicle(payload)
     currentStep.value = 4
   } catch (err: any) {
-    error.value = err.message || "Erreur lors de l'enregistrement du véhicule"
+    error.value = err.message || "Erreur lors de l'enregistrement du vÃ©hicule"
   } finally {
     loading.value = false
   }
@@ -156,9 +156,9 @@ function finishOnboarding() {
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-white flex items-center gap-2">
             <ShieldCheck class="w-5 h-5 text-rose-400" />
-            1. Créer le compte Administrateur
+            1. CrÃ©er le compte Administrateur
           </h2>
-          <p class="text-xs text-slate-400 mt-1">C'est le compte principal qui gérera l'instance TeslaCost.</p>
+          <p class="text-xs text-slate-400 mt-1">C'est le compte principal qui gÃ©rera l'instance TeslaCost.</p>
         </div>
 
         <form @submit.prevent="handleStep1Submit" class="space-y-4">
@@ -179,7 +179,7 @@ function finishOnboarding() {
               v-model="adminPassword"
               type="password"
               required
-              placeholder="••••••••"
+              placeholder="Â•Â•Â•Â•Â•Â•Â•Â•"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
           </div>
@@ -190,7 +190,7 @@ function finishOnboarding() {
               v-model="adminConfirmPassword"
               type="password"
               required
-              placeholder="••••••••"
+              placeholder="Â•Â•Â•Â•Â•Â•Â•Â•"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
           </div>
@@ -200,7 +200,7 @@ function finishOnboarding() {
             :disabled="loading"
             class="w-full py-3.5 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
           >
-            <span>{{ loading ? 'Création...' : 'Continuer vers le véhicule' }}</span>
+            <span>{{ loading ? 'CrÃ©ation...' : 'Continuer vers le vÃ©hicule' }}</span>
             <ArrowRight class="w-4 h-4" />
           </button>
         </form>
@@ -211,14 +211,14 @@ function finishOnboarding() {
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-white flex items-center gap-2">
             <Car class="w-5 h-5 text-rose-400" />
-            2. Votre Premier Véhicule
+            2. Votre Premier VÃ©hicule
           </h2>
-          <p class="text-xs text-slate-400 mt-1">Configurez votre véhicule principal pour suivre ses coûts.</p>
+          <p class="text-xs text-slate-400 mt-1">Configurez votre vÃ©hicule principal pour suivre ses coÃ»ts.</p>
         </div>
 
         <form @submit.prevent="handleStep2Submit" class="space-y-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Nom du véhicule</label>
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Nom du vÃ©hicule</label>
             <input
               v-model="vehicleName"
               type="text"
@@ -230,7 +230,7 @@ function finishOnboarding() {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Odomètre actuel (km)</label>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">OdomÃ¨tre actuel (km)</label>
               <input
                 v-model.number="vehicleOdometer"
                 type="number"
@@ -241,7 +241,7 @@ function finishOnboarding() {
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Numéro VIN (Optionnel)</label>
+              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">NumÃ©ro VIN (Optionnel)</label>
               <input
                 v-model="vehicleVin"
                 type="text"
@@ -268,7 +268,7 @@ function finishOnboarding() {
             <KeyRound class="w-5 h-5 text-rose-400" />
             3. Synchronisation TeslaMate (Facultatif)
           </h2>
-          <p class="text-xs text-slate-400 mt-1">Vous pouvez connecter votre instance teslamateapi dès maintenant ou plus tard.</p>
+          <p class="text-xs text-slate-400 mt-1">Vous pouvez connecter votre instance teslamateapi dÃ¨s maintenant ou plus tard.</p>
         </div>
 
         <div class="space-y-4">
@@ -276,7 +276,7 @@ function finishOnboarding() {
             <input v-model="enableTeslaMate" type="checkbox" class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-900 border-slate-700" />
             <div>
               <span class="text-sm font-medium text-white block">Activer la liaison avec TeslaMateAPI</span>
-              <span class="text-xs text-slate-400 block">Synchronise automatiquement trajets, recharges et odomètre</span>
+              <span class="text-xs text-slate-400 block">Synchronise automatiquement trajets, recharges et odomÃ¨tre</span>
             </div>
           </label>
 
@@ -298,7 +298,7 @@ function finishOnboarding() {
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
               >
                 <option value="NONE">Aucune authentification</option>
-                <option value="BEARER">Clé API (Bearer Token)</option>
+                <option value="BEARER">ClÃ© API (Bearer Token)</option>
                 <option value="BASIC">HTTP Basic Auth (Utilisateur / Mot de passe)</option>
               </select>
             </div>
@@ -328,7 +328,7 @@ function finishOnboarding() {
                 <input
                   v-model="teslamatePass"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Â•Â•Â•Â•Â•Â•Â•Â•"
                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
                 />
               </div>
@@ -361,15 +361,15 @@ function finishOnboarding() {
         <div class="inline-flex p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full mb-4">
           <CheckCircle2 class="w-12 h-12" />
         </div>
-        <h2 class="text-2xl font-bold text-white mb-2">Félicitations !</h2>
+        <h2 class="text-2xl font-bold text-white mb-2">FÃ©licitations !</h2>
         <p class="text-slate-400 text-sm max-w-sm mx-auto mb-6">
-          Votre compte administrateur et votre véhicule sont prêts. Vous pouvez maintenant commencer à suivre vos coûts.
+          Votre compte administrateur et votre vÃ©hicule sont prÃªts. Vous pouvez maintenant commencer Ã  suivre vos coÃ»ts.
         </p>
         <button
           @click="finishOnboarding"
           class="w-full py-3.5 px-6 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 transition-all"
         >
-          Accéder à mon tableau de bord
+          AccÃ©der Ã  mon tableau de bord
         </button>
       </div>
     </div>
