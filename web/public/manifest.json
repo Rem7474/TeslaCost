@@ -1,0 +1,17 @@
+{
+  "name": "TeslaCost - Suivi TCO & Entretien",
+  "short_name": "TeslaCost",
+  "description": "Application de suivi des coûts de possession et d'entretien pour véhicules électriques",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/pwa-icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
