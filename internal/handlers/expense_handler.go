@@ -22,13 +22,14 @@ func NewExpenseHandler(repo *database.Repository) *ExpenseHandler {
 }
 
 type CreateDriveExpenseRequest struct {
-	TripGroupID *string `json:"trip_group_id"`
-	DriveID     *string `json:"drive_id"`
-	Type        string  `json:"type"` // TOLL, PARKING, etc.
-	Amount      float64 `json:"amount"`
-	Currency    string  `json:"currency"`
-	Date        string  `json:"date"`
-	Notes       *string `json:"notes"`
+	TripGroupID *string  `json:"trip_group_id"`
+	DriveID     *string  `json:"drive_id"`
+	DriveIDs    []string `json:"drive_ids"`
+	Type        string   `json:"type"` // TOLL, PARKING, etc.
+	Amount      float64  `json:"amount"`
+	Currency    string   `json:"currency"`
+	Date        string   `json:"date"`
+	Notes       *string  `json:"notes"`
 }
 
 func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Request) {
@@ -61,10 +62,30 @@ func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Reque
 		expType = "TOLL"
 	}
 
+	var driveID = req.DriveID
+	var tripGroupID = req.TripGroupID
+
+	if len(req.DriveIDs) > 1 {
+		groupName := "Trajet multi-étapes"
+		if req.Notes != nil && *req.Notes != "" {
+			groupName = *req.Notes
+		}
+		tg := &models.TripGroup{
+			VehicleID: vehicleID,
+			Name:      groupName,
+			Notes:     req.Notes,
+		}
+		if err := h.repo.CreateTripGroup(r.Context(), tg, req.DriveIDs); err == nil {
+			tripGroupID = &tg.ID
+		}
+	} else if len(req.DriveIDs) == 1 {
+		driveID = &req.DriveIDs[0]
+	}
+
 	exp := &models.DriveExpense{
 		VehicleID:   vehicleID,
-		TripGroupID: req.TripGroupID,
-		DriveID:     req.DriveID,
+		TripGroupID: tripGroupID,
+		DriveID:     driveID,
 		Type:        expType,
 		Amount:      req.Amount,
 		Currency:    curr,

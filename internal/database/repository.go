@@ -434,10 +434,19 @@ func (r *Repository) CreateDriveExpense(ctx context.Context, exp *models.DriveEx
 
 func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([]models.DriveExpense, error) {
 	query := `
-		SELECT id, vehicle_id, trip_group_id, drive_id, type, amount, currency, date, notes, created_at
-		FROM drive_expenses
-		WHERE vehicle_id = $1
-		ORDER BY date DESC;
+		SELECT 
+			e.id, e.vehicle_id, e.trip_group_id, tg.name,
+			e.drive_id, 
+			CASE 
+				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
+				ELSE NULL 
+			END,
+			e.type, e.amount, e.currency, e.date, e.notes, e.created_at
+		FROM drive_expenses e
+		LEFT JOIN drives d ON e.drive_id = d.id
+		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id
+		WHERE e.vehicle_id = $1
+		ORDER BY e.date DESC;
 	`
 	rows, err := r.pool.Query(ctx, query, vehicleID)
 	if err != nil {
@@ -449,7 +458,8 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 	for rows.Next() {
 		var e models.DriveExpense
 		if err := rows.Scan(
-			&e.ID, &e.VehicleID, &e.TripGroupID, &e.DriveID, &e.Type,
+			&e.ID, &e.VehicleID, &e.TripGroupID, &e.TripGroupName,
+			&e.DriveID, &e.DriveTitle, &e.Type,
 			&e.Amount, &e.Currency, &e.Date, &e.Notes, &e.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -1410,17 +1420,48 @@ func (r *Repository) GetTollExpensesForDriveOrGroup(ctx context.Context, vehicle
 	if driveID != nil && *driveID != "" {
 		_ = r.pool.QueryRow(ctx, `
 			SELECT COALESCE(SUM(amount), 0)
-			FROM drive_expenses
-			WHERE vehicle_id = $1 AND drive_id = $2;
+			FROM (
+				SELECT DISTINCT de.id, de.amount
+				FROM drive_expenses de
+				LEFT JOIN trip_group_drives tgd ON de.trip_group_id = tgd.trip_group_id
+				WHERE de.vehicle_id = $1 
+				  AND (de.drive_id = $2 OR tgd.drive_id = $2)
+			) s;
 		`, vehicleID, *driveID).Scan(&total)
 	} else if tripGroupID != nil && *tripGroupID != "" {
 		_ = r.pool.QueryRow(ctx, `
 			SELECT COALESCE(SUM(amount), 0)
-			FROM drive_expenses
-			WHERE vehicle_id = $1 AND trip_group_id = $2;
+			FROM (
+				SELECT DISTINCT de.id, de.amount
+				FROM drive_expenses de
+				LEFT JOIN trip_group_drives tgd ON de.trip_group_id = tgd.trip_group_id
+				WHERE de.vehicle_id = $1 
+				  AND (
+				      de.trip_group_id = $2 
+				      OR de.drive_id IN (SELECT drive_id FROM trip_group_drives WHERE trip_group_id = $2)
+				  )
+			) s;
 		`, vehicleID, *tripGroupID).Scan(&total)
 	}
 	return total, nil
+}
+
+func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (float64, error) {
+	if len(driveIDs) == 0 {
+		return 0, nil
+	}
+	var total float64
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(amount), 0)
+		FROM (
+			SELECT DISTINCT de.id, de.amount
+			FROM drive_expenses de
+			LEFT JOIN trip_group_drives tgd ON de.trip_group_id = tgd.trip_group_id
+			WHERE de.vehicle_id = $1 
+			  AND (de.drive_id = ANY($2) OR tgd.drive_id = ANY($2))
+		) s;
+	`, vehicleID, driveIDs).Scan(&total)
+	return total, err
 }
 
 func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]float64, error) {
@@ -1452,10 +1493,20 @@ func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID str
 
 func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, driveID string) ([]models.DriveExpense, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, vehicle_id, trip_group_id, drive_id, type, amount, currency, date, notes, created_at
-		FROM drive_expenses
-		WHERE vehicle_id = $1 AND drive_id = $2
-		ORDER BY date ASC;
+		SELECT 
+			e.id, e.vehicle_id, e.trip_group_id, tg.name,
+			e.drive_id, 
+			CASE 
+				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
+				ELSE NULL 
+			END,
+			e.type, e.amount, e.currency, e.date, e.notes, e.created_at
+		FROM drive_expenses e
+		LEFT JOIN drives d ON e.drive_id = d.id
+		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id
+		LEFT JOIN trip_group_drives tgd ON e.trip_group_id = tgd.trip_group_id
+		WHERE e.vehicle_id = $1 AND (e.drive_id = $2 OR tgd.drive_id = $2)
+		ORDER BY e.date ASC;
 	`, vehicleID, driveID)
 	if err != nil {
 		return nil, err
@@ -1465,7 +1516,11 @@ func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, d
 	var list []models.DriveExpense
 	for rows.Next() {
 		var de models.DriveExpense
-		if err := rows.Scan(&de.ID, &de.VehicleID, &de.TripGroupID, &de.DriveID, &de.Type, &de.Amount, &de.Currency, &de.Date, &de.Notes, &de.CreatedAt); err == nil {
+		if err := rows.Scan(
+			&de.ID, &de.VehicleID, &de.TripGroupID, &de.TripGroupName,
+			&de.DriveID, &de.DriveTitle, &de.Type,
+			&de.Amount, &de.Currency, &de.Date, &de.Notes, &de.CreatedAt,
+		); err == nil {
 			list = append(list, de)
 		}
 	}

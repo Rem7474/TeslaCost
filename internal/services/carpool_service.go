@@ -149,10 +149,7 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 				}
 			}
 		}
-		tollsMap, _ := s.repo.GetTollExpensesForDrives(ctx, vehicleID, driveIDs)
-		for _, t := range tollsMap {
-			tolls += t
-		}
+		tolls, _ = s.repo.GetTotalTollExpensesForDrives(ctx, vehicleID, driveIDs)
 	} else {
 		distance = manualDistanceKm
 	}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import {
@@ -11,8 +12,15 @@ import {
   DollarSign,
   X,
   Repeat,
+  Navigation,
+  Layers,
+  Users,
+  CheckSquare,
+  Square,
+  ArrowRight,
 } from 'lucide-vue-next'
 
+const router = useRouter()
 const vehicleStore = useVehicleStore()
 const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'CHARGES'>('TOLLS')
 
@@ -25,10 +33,15 @@ const loading = ref(false)
 const showAddTollModal = ref(false)
 const showAddMaintModal = ref(false)
 
+const recentDrives = ref<any[]>([])
+const associationMode = ref<'NONE' | 'SINGLE' | 'MULTI'>('NONE')
+const selectedDriveId = ref('')
+const selectedDriveIds = ref<string[]>([])
+
 const tollForm = ref({
   type: 'TOLL',
   amount: '',
-  date: new Date().toISOString(),
+  date: new Date().toISOString().substring(0, 16),
   notes: '',
 })
 
@@ -61,6 +74,64 @@ async function loadData() {
   }
 }
 
+async function loadRecentDrives() {
+  if (!vehicleStore.activeVehicle) return
+  try {
+    const res = await api.getDrives(vehicleStore.activeVehicle.id, { limit: 40 })
+    recentDrives.value = res.drives || []
+  } catch (err) {
+    console.error('Failed to load recent drives', err)
+  }
+}
+
+function openAddTollModal() {
+  tollForm.value = {
+    type: 'TOLL',
+    amount: '',
+    date: new Date().toISOString().substring(0, 16),
+    notes: '',
+  }
+  associationMode.value = 'NONE'
+  selectedDriveId.value = ''
+  selectedDriveIds.value = []
+  showAddTollModal.value = true
+  loadRecentDrives()
+}
+
+function onSingleDriveChange() {
+  const d = recentDrives.value.find((dr) => dr.id === selectedDriveId.value)
+  if (d) {
+    tollForm.value.date = new Date(d.start_time).toISOString().substring(0, 16)
+    if (!tollForm.value.notes) {
+      const from = (d.start_address || 'Départ').split(',')[0]
+      const to = (d.end_address || 'Arrivée').split(',')[0]
+      tollForm.value.notes = `Péage ${from} → ${to}`
+    }
+  }
+}
+
+function toggleMultiDrive(id: string) {
+  const idx = selectedDriveIds.value.indexOf(id)
+  if (idx > -1) {
+    selectedDriveIds.value.splice(idx, 1)
+  } else {
+    selectedDriveIds.value.push(id)
+  }
+
+  const selected = recentDrives.value
+    .filter((d) => selectedDriveIds.value.includes(d.id))
+    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+
+  if (selected.length > 0) {
+    tollForm.value.date = new Date(selected[0].start_time).toISOString().substring(0, 16)
+    if (!tollForm.value.notes || tollForm.value.notes.startsWith('Péage ')) {
+      const first = (selected[0].start_address || 'Départ').split(',')[0]
+      const last = (selected[selected.length - 1].end_address || 'Arrivée').split(',')[0]
+      tollForm.value.notes = `Péage ${first} → ${last} (${selected.length} étapes)`
+    }
+  }
+}
+
 watch(
   () => [vehicleStore.activeVehicleId, activeTab.value, vehicleStore.lastSyncTimestamp],
   () => {
@@ -75,13 +146,21 @@ onMounted(() => {
 async function handleCreateToll() {
   if (!vehicleStore.activeVehicle) return
   try {
-    await api.createDriveExpense(vehicleStore.activeVehicle.id, {
-      ...tollForm.value,
+    const payload: any = {
+      type: tollForm.value.type,
       amount: Number(tollForm.value.amount),
-    })
+      date: new Date(tollForm.value.date).toISOString(),
+      notes: tollForm.value.notes,
+    }
+
+    if (associationMode.value === 'SINGLE' && selectedDriveId.value) {
+      payload.drive_id = selectedDriveId.value
+    } else if (associationMode.value === 'MULTI' && selectedDriveIds.value.length > 0) {
+      payload.drive_ids = selectedDriveIds.value
+    }
+
+    await api.createDriveExpense(vehicleStore.activeVehicle.id, payload)
     showAddTollModal.value = false
-    tollForm.value.amount = ''
-    tollForm.value.notes = ''
     await loadData()
   } catch (err: any) {
     alert(`Erreur : ${err.message}`)
@@ -112,6 +191,15 @@ function formatDate(dateStr: string) {
     year: 'numeric',
   })
 }
+
+function formatDriveTime(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 </script>
 
 <template>
@@ -126,7 +214,7 @@ function formatDate(dateStr: string) {
       <div class="flex items-center gap-2">
         <button
           v-if="activeTab === 'TOLLS'"
-          @click="showAddTollModal = true"
+          @click="openAddTollModal"
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
@@ -181,19 +269,36 @@ function formatDate(dateStr: string) {
         <div
           v-for="e in driveExpenses"
           :key="e.id"
-          class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between"
+          class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
         >
-          <div>
-            <div class="flex items-center gap-2">
+          <div class="space-y-1.5">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                 {{ e.type }}
               </span>
               <span class="text-xs text-slate-400">{{ formatDate(e.date) }}</span>
+              <span v-if="e.drive_title" class="text-xs px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                <Navigation class="w-3 h-3" /> {{ e.drive_title }}
+              </span>
+              <span v-else-if="e.trip_group_name" class="text-xs px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
+                <Layers class="w-3 h-3" /> {{ e.trip_group_name }}
+              </span>
             </div>
-            <p v-if="e.notes" class="text-sm text-slate-300 mt-1">{{ e.notes }}</p>
+            <p v-if="e.notes" class="text-sm text-slate-300">{{ e.notes }}</p>
           </div>
-          <div class="text-lg font-extrabold text-amber-400">
-            {{ e.amount.toFixed(2) }} {{ e.currency }}
+          <div class="flex items-center justify-between sm:justify-end gap-3">
+            <div class="text-lg font-extrabold text-amber-400">
+              {{ e.amount.toFixed(2) }} {{ e.currency }}
+            </div>
+            <button
+              v-if="e.drive_id || e.trip_group_id"
+              @click="router.push({ path: '/carpools', query: e.drive_id ? { new_drive_id: e.drive_id } : { new_trip_group_id: e.trip_group_id } })"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
+              title="Créer un covoiturage pour ce trajet"
+            >
+              <Users class="w-3.5 h-3.5 text-cyan-400" />
+              <span>Covoiturer</span>
+            </button>
           </div>
         </div>
       </div>
@@ -267,34 +372,122 @@ function formatDate(dateStr: string) {
       v-if="showAddTollModal"
       class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
         <div class="flex items-center justify-between">
-          <h3 class="text-base font-bold text-white">Ajouter un Péage / Parking</h3>
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <Receipt class="w-5 h-5 text-amber-400" />
+            Ajouter un Péage / Parking
+          </h3>
           <button @click="showAddTollModal = false" class="text-slate-400 hover:text-white">
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <form @submit.prevent="handleCreateToll" class="space-y-3">
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Type</label>
-            <select v-model="tollForm.type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
-              <option value="TOLL">Péage</option>
-              <option value="PARKING">Parking</option>
-              <option value="FERRY">Ferry</option>
-              <option value="OTHER">Autre</option>
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
-            <input v-model="tollForm.amount" type="number" step="0.01" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-          </div>
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Notes / Description</label>
-            <input v-model="tollForm.notes" placeholder="A10 Paris-Bordeaux..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        <form @submit.prevent="handleCreateToll" class="space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Type</label>
+              <select v-model="tollForm.type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                <option value="TOLL">Péage</option>
+                <option value="PARKING">Parking</option>
+                <option value="FERRY">Ferry</option>
+                <option value="OTHER">Autre</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
+              <input v-model="tollForm.amount" type="number" step="0.01" required placeholder="0.00" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
           </div>
 
-          <div class="flex justify-end gap-2 pt-2">
+          <!-- Association à un/des trajets TeslaMate -->
+          <div class="space-y-2 bg-slate-800/50 p-3.5 rounded-xl border border-slate-700/60">
+            <label class="block text-xs font-semibold text-slate-200">
+              Associer à un trajet TeslaMate
+            </label>
+            <p class="text-[11px] text-slate-400">
+              Permet de récupérer automatiquement ce montant pour le covoiturage (BlaBlaCar) et le coût du trajet.
+            </p>
+
+            <div class="grid grid-cols-3 gap-1.5 pt-1">
+              <button
+                type="button"
+                @click="associationMode = 'NONE'"
+                class="py-1.5 px-2 text-xs font-medium rounded-lg transition-colors text-center border"
+                :class="associationMode === 'NONE' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+              >
+                Sans trajet
+              </button>
+              <button
+                type="button"
+                @click="associationMode = 'SINGLE'"
+                class="py-1.5 px-2 text-xs font-medium rounded-lg transition-colors text-center border"
+                :class="associationMode === 'SINGLE' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+              >
+                Trajet unique
+              </button>
+              <button
+                type="button"
+                @click="associationMode = 'MULTI'"
+                class="py-1.5 px-2 text-xs font-medium rounded-lg transition-colors text-center border"
+                :class="associationMode === 'MULTI' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+              >
+                Multi-étapes
+              </button>
+            </div>
+
+            <!-- Single drive selection -->
+            <div v-if="associationMode === 'SINGLE'" class="pt-2 space-y-1.5">
+              <label class="block text-xs text-slate-400">Choisir le trajet :</label>
+              <select
+                v-model="selectedDriveId"
+                @change="onSingleDriveChange"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+              >
+                <option value="">-- Sélectionner un trajet récent --</option>
+                <option v-for="d in recentDrives" :key="d.id" :value="d.id">
+                  {{ formatDriveTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }} ({{ d.distance_km.toFixed(1) }} km)
+                </option>
+              </select>
+            </div>
+
+            <!-- Multi drives selection -->
+            <div v-if="associationMode === 'MULTI'" class="pt-2 space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-xs text-slate-400">Cocher les étapes composant le voyage :</label>
+                <span class="text-[11px] text-amber-400 font-semibold">{{ selectedDriveIds.length }} étape(s)</span>
+              </div>
+              <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                <div
+                  v-for="d in recentDrives"
+                  :key="d.id"
+                  @click="toggleMultiDrive(d.id)"
+                  class="flex items-center justify-between p-2 rounded-lg cursor-pointer text-xs border transition-colors"
+                  :class="selectedDriveIds.includes(d.id) ? 'bg-amber-500/10 border-amber-500/40 text-amber-200' : 'bg-slate-800/80 border-slate-700 text-slate-300 hover:bg-slate-800'"
+                >
+                  <div class="flex items-center gap-2">
+                    <CheckSquare v-if="selectedDriveIds.includes(d.id)" class="w-4 h-4 text-amber-400" />
+                    <Square v-else class="w-4 h-4 text-slate-500" />
+                    <span>{{ formatDriveTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}</span>
+                  </div>
+                  <span class="font-mono text-[11px] text-slate-400">{{ d.distance_km.toFixed(0) }} km</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
+              <input v-model="tollForm.date" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Notes / Description</label>
+              <input v-model="tollForm.notes" placeholder="A10 Paris-Bordeaux..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
             <button type="button" @click="showAddTollModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
               Annuler
             </button>

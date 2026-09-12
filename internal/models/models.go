@@ -94,16 +94,18 @@ type TripGroup struct {
 
 // DriveExpense holds costs directly attached to a drive or a trip group (tolls, parking).
 type DriveExpense struct {
-	ID          string    `json:"id"`
-	VehicleID   string    `json:"vehicle_id"`
-	TripGroupID *string   `json:"trip_group_id,omitempty"`
-	DriveID     *string   `json:"drive_id,omitempty"`
-	Type        string    `json:"type"` // TOLL, PARKING, etc.
-	Amount      float64   `json:"amount"`
-	Currency    string    `json:"currency"`
-	Date        time.Time `json:"date"`
-	Notes       *string   `json:"notes,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	VehicleID     string    `json:"vehicle_id"`
+	TripGroupID   *string   `json:"trip_group_id,omitempty"`
+	TripGroupName *string   `json:"trip_group_name,omitempty"`
+	DriveID       *string   `json:"drive_id,omitempty"`
+	DriveTitle    *string   `json:"drive_title,omitempty"`
+	Type          string    `json:"type"` // TOLL, PARKING, etc.
+	Amount        float64   `json:"amount"`
+	Currency      string    `json:"currency"`
+	Date          time.Time `json:"date"`
+	Notes         *string   `json:"notes,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // Tire represents an individual tire or set entry.
