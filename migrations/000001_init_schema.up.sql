@@ -8,9 +8,23 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Custom Enumerations
-CREATE TYPE tire_position AS ENUM ('FL', 'FR', 'RL', 'RR', 'STORAGE', 'DISPOSED');
-CREATE TYPE tire_season AS ENUM ('SUMMER', 'WINTER', 'ALL_SEASON');
-CREATE TYPE auth_mode AS ENUM ('BEARER', 'BASIC', 'NONE');
+DO $$ BEGIN
+    CREATE TYPE tire_position AS ENUM ('FL', 'FR', 'RL', 'RR', 'STORAGE', 'DISPOSED');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE tire_season AS ENUM ('SUMMER', 'WINTER', 'ALL_SEASON');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$ BEGIN
+    CREATE TYPE auth_mode AS ENUM ('BEARER', 'BASIC', 'NONE');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 -- 1. Users table (Local JWT authentication)
 CREATE TABLE IF NOT EXISTS users (

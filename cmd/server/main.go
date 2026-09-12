@@ -51,6 +51,9 @@ func main() {
 		log.Printf("[warning] Database connection failed: %v. Running in offline/unconnected mode for now.", err)
 	} else {
 		defer dbPool.Close()
+		if migErr := dbPool.Migrate(ctx); migErr != nil {
+			log.Printf("[warning] Database migration failed: %v", migErr)
+		}
 		repo = database.NewRepository(dbPool.Pool)
 		syncService = services.NewSyncService(repo, encryptor)
 		tireWearService = services.NewTireWearService(repo)

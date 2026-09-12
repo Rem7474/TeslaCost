@@ -19,10 +19,11 @@ services:
       retries: 5
 
   api:
+    image: ghcr.io/rem7474/teslacost:latest
     build:
       context: .
       dockerfile: Dockerfile
-      target: dev
+      target: prod
     container_name: teslacost-api
     restart: unless-stopped
     depends_on:
@@ -37,9 +38,6 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8080}
     ports:
       - "${PORT:-8080}:8080"
-    volumes:
-      - .:/app
-    working_dir: /app
 
 volumes:
   postgres_data:

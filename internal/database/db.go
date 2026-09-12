@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/teslacost/teslacost/migrations"
 )
 
 // DB encapsulates the pgx connection pool.
@@ -41,6 +42,22 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 
 	log.Println("[database] Connected successfully to PostgreSQL")
 	return &DB{Pool: pool}, nil
+}
+
+// Migrate executes embedded SQL migration scripts to ensure the database schema is up-to-date.
+func (db *DB) Migrate(ctx context.Context) error {
+	schemaSQL, err := migrations.FS.ReadFile("000001_init_schema.up.sql")
+	if err != nil {
+		return fmt.Errorf("failed to read embedded schema migration: %w", err)
+	}
+
+	_, err = db.Pool.Exec(ctx, string(schemaSQL))
+	if err != nil {
+		return fmt.Errorf("failed to execute schema migration: %w", err)
+	}
+
+	log.Println("[database] Schema migrations executed successfully")
+	return nil
 }
 
 // Close closes the connection pool.
