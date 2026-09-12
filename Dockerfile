@@ -1,7 +1,7 @@
 # ==============================================================================
 # Stage 1: Frontend Build (Vue 3 + Vite)
 # ==============================================================================
-FROM node:22-alpine AS frontend-builder
+FROM --platform=$BUILDPLATFORM node:22-alpine AS frontend-builder
 WORKDIR /app/web
 
 # Copy package descriptors first to leverage caching
@@ -27,7 +27,7 @@ CMD ["go", "run", "./cmd/server/main.go"]
 # ==============================================================================
 # Stage 3: Backend Build (Go binary)
 # ==============================================================================
-FROM golang:alpine AS backend-builder
+FROM --platform=$BUILDPLATFORM golang:alpine AS backend-builder
 WORKDIR /app
 ENV GOTOOLCHAIN=auto
 RUN apk add --no-cache ca-certificates git
@@ -39,8 +39,12 @@ COPY . .
 # Copy compiled frontend assets to web/dist
 COPY --from=frontend-builder /app/web/dist ./web/dist
 
+# Target architecture parameters provided by Docker Buildx
+ARG TARGETOS
+ARG TARGETARCH
+
 # Build statically linked Go binary
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/teslacost ./cmd/server
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -ldflags="-s -w" -o /app/teslacost ./cmd/server
 
 # ==============================================================================
 # Stage 4: Production Runner (Scratch or Minimal Alpine)
