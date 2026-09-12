@@ -48,7 +48,8 @@ func Load() *Config {
 		}
 		dbURL = u.String()
 	} else {
-		dbURL = getEnv("DATABASE_URL", "postgres://teslacost:teslacost_dev_secret@localhost:5432/teslacost?sslmode=disable")
+		rawURL := getEnv("DATABASE_URL", "postgres://teslacost:teslacost_dev_secret@localhost:5432/teslacost?sslmode=disable")
+		dbURL = NormalizeDatabaseURL(rawURL)
 	}
 
 	encKey := getEnv("APP_ENCRYPTION_KEY", "dev-default-32-byte-secret-key!!")
@@ -100,4 +101,52 @@ func getEnvBool(key string, defaultVal bool) bool {
 	}
 	val = strings.ToLower(strings.TrimSpace(val))
 	return val == "true" || val == "1" || val == "yes"
+}
+
+// NormalizeDatabaseURL ensures that any special characters in the password component
+// of a database URL (like '@', '&', '!', '#', '%') are properly percent-encoded,
+// preventing host parsing errors in libpq/pgx when passwords contain '@'.
+func NormalizeDatabaseURL(rawURL string) string {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return rawURL
+	}
+
+	schemeEnd := strings.Index(rawURL, "://")
+	if schemeEnd == -1 {
+		return rawURL
+	}
+	scheme := rawURL[:schemeEnd]
+	rest := rawURL[schemeEnd+3:]
+
+	authEnd := len(rest)
+	if idx := strings.IndexAny(rest, "/?"); idx != -1 {
+		authEnd = idx
+	}
+	authority := rest[:authEnd]
+	pathAndQuery := rest[authEnd:]
+
+	lastAt := strings.LastIndex(authority, "@")
+	if lastAt == -1 {
+		return rawURL
+	}
+
+	userInfo := authority[:lastAt]
+	hostPort := authority[lastAt+1:]
+
+	colonIdx := strings.Index(userInfo, ":")
+	if colonIdx == -1 {
+		return rawURL
+	}
+
+	user := userInfo[:colonIdx]
+	pass := userInfo[colonIdx+1:]
+
+	u := &url.URL{
+		Scheme: scheme,
+		User:   url.UserPassword(user, pass),
+		Host:   hostPort,
+	}
+
+	return u.String() + pathAndQuery
 }

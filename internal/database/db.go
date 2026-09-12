@@ -53,7 +53,7 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 
 		lastErr = err
 		if attempt < maxAttempts {
-			log.Printf("[database] Waiting for PostgreSQL to be ready (attempt %d/%d)...", attempt, maxAttempts)
+			log.Printf("[database] Waiting for PostgreSQL to be ready (attempt %d/%d): %v", attempt, maxAttempts, err)
 			time.Sleep(2 * time.Second)
 		}
 	}

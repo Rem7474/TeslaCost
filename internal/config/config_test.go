@@ -40,3 +40,23 @@ func TestSpecialCharactersInPassword(t *testing.T) {
 		t.Errorf("Expected user to be 'teslacost', got '%s'", pgxCfg.ConnConfig.User)
 	}
 }
+
+func TestNormalizeDatabaseURLWithUnescapedPassword(t *testing.T) {
+	raw := "postgres://teslacost:MyPasswordM&!@123@postgres:5432/teslacost?sslmode=disable"
+	normalized := config.NormalizeDatabaseURL(raw)
+
+	pgxCfg, err := pgxpool.ParseConfig(normalized)
+	if err != nil {
+		t.Fatalf("Failed to parse normalized DatabaseURL: %v", err)
+	}
+
+	if pgxCfg.ConnConfig.Host != "postgres" {
+		t.Errorf("Expected host to be 'postgres', got '%s'", pgxCfg.ConnConfig.Host)
+	}
+	if pgxCfg.ConnConfig.Password != "MyPasswordM&!@123" {
+		t.Errorf("Expected password to be 'MyPasswordM&!@123', got '%s'", pgxCfg.ConnConfig.Password)
+	}
+	if pgxCfg.ConnConfig.User != "teslacost" {
+		t.Errorf("Expected user to be 'teslacost', got '%s'", pgxCfg.ConnConfig.User)
+	}
+}
