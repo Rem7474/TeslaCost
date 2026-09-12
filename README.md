@@ -75,7 +75,26 @@ Vérification de l'API :
 curl http://localhost:8080/api/health
 ```
 
-### 4. Lancer les tests unitaires
+### 4. Utiliser l'image Docker pré-compilée (GHCR)
+
+L'image Docker officielle multi-architecture (`linux/amd64`, `linux/arm64`) est publiée sur **GitHub Container Registry** à chaque release :
+
+```bash
+docker pull ghcr.io/rem7474/teslacost:latest
+```
+
+Exemple de déploiement autonome :
+```bash
+docker run -d \
+  --name teslacost \
+  -p 8080:8080 \
+  -e DATABASE_URL="postgres://user:password@db-host:5432/teslacost?sslmode=disable" \
+  -e JWT_SECRET="votre_clef_secrete_jwt" \
+  -e ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+  ghcr.io/rem7474/teslacost:latest
+```
+
+### 5. Lancer les tests unitaires
 ```bash
 go test -v ./...
 ```
