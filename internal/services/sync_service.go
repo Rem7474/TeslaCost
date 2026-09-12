@@ -403,3 +403,56 @@ func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) 
 
 	return teslamate.NewClient(cfg)
 }
+
+// StartBackgroundWorker runs periodic incremental sync for all vehicles with TeslaMate configured.
+func (s *SyncService) StartBackgroundWorker(ctx context.Context, intervalMinutes int) {
+	if intervalMinutes <= 0 {
+		log.Println("[auto-sync] Background auto-sync worker disabled (interval <= 0)")
+		return
+	}
+
+	interval := time.Duration(intervalMinutes) * time.Minute
+	log.Printf("[auto-sync] Background auto-sync worker started (running every %v)", interval)
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("[auto-sync] Background auto-sync worker stopped.")
+			return
+		case <-ticker.C:
+			s.runBackgroundSyncCycle(ctx)
+		}
+	}
+}
+
+func (s *SyncService) runBackgroundSyncCycle(ctx context.Context) {
+	if s.repo == nil {
+		return
+	}
+
+	vehicles, err := s.repo.ListAllVehiclesWithTeslaMate(ctx)
+	if err != nil {
+		log.Printf("[auto-sync] Failed to list vehicles: %v", err)
+		return
+	}
+
+	for _, v := range vehicles {
+		// Individual timeout per vehicle so one stuck instance doesn't block the whole worker
+		vCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
+		res, err := s.SyncVehicle(vCtx, &v)
+		cancel()
+
+		if err != nil {
+			log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v", v.Name, v.ID, err)
+		} else if res != nil {
+			if res.DrivesAdded > 0 || res.ChargesAdded > 0 {
+				log.Printf("[auto-sync] Vehicle %s (%s): +%d new drives, +%d new charges (odometer: %.0f km)",
+					v.Name, v.ID, res.DrivesAdded, res.ChargesAdded, res.CurrentOdometer)
+			}
+		}
+	}
+}
+

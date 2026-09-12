@@ -21,6 +21,7 @@ type Config struct {
 	InitialAdminEmail    string
 	InitialAdminPassword string
 	AllowedOrigins       []string
+	SyncIntervalMinutes  int
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -72,6 +73,11 @@ func Load() *Config {
 		}
 	}
 
+	syncIntervalMinutes, _ := strconv.Atoi(getEnv("SYNC_INTERVAL_MINUTES", "30"))
+	if syncIntervalMinutes < 0 {
+		syncIntervalMinutes = 0
+	}
+
 	return &Config{
 		Port:                 port,
 		AppBaseURL:           appBaseURL,
@@ -84,6 +90,7 @@ func Load() *Config {
 		InitialAdminEmail:    initialAdminEmail,
 		InitialAdminPassword: initialAdminPassword,
 		AllowedOrigins:       allowedOrigins,
+		SyncIntervalMinutes:  syncIntervalMinutes,
 	}
 }
 

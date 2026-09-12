@@ -98,4 +98,21 @@ export const api = {
 
   // TCO Analytics
   getTCO: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/tco`),
+
+  // Carpooling / BlaBlaCar
+  getCarpools: (vehicleId: string) => request<{ trips: any[]; summary: any }>(`/vehicles/${vehicleId}/carpools`),
+  getCarpool: (vehicleId: string, id: string) => request<any>(`/vehicles/${vehicleId}/carpools/${id}`),
+  createCarpool: (vehicleId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/carpools`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCarpool: (vehicleId: string, id: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/carpools/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCarpool: (vehicleId: string, id: string) =>
+    request<any>(`/vehicles/${vehicleId}/carpools/${id}`, { method: 'DELETE' }),
+  estimateCarpoolCosts: (vehicleId: string, params: { drive_id?: string; trip_group_id?: string; distance_km?: number }) => {
+    const q = new URLSearchParams()
+    if (params.drive_id) q.set('drive_id', params.drive_id)
+    if (params.trip_group_id) q.set('trip_group_id', params.trip_group_id)
+    if (params.distance_km !== undefined) q.set('distance_km', params.distance_km.toString())
+    return request<any>(`/vehicles/${vehicleId}/carpools/estimate?${q.toString()}`)
+  },
 }

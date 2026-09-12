@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import {
@@ -15,8 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Users,
 } from 'lucide-vue-next'
 
+const router = useRouter()
 const vehicleStore = useVehicleStore()
 const drives = ref<any[]>([])
 const total = ref(0)
@@ -293,6 +296,14 @@ function formatDate(dateStr: string) {
             "
           >
             Perso
+          </button>
+          <button
+            @click="router.push({ path: '/carpools', query: { new_drive_id: d.id } })"
+            class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40 flex items-center gap-1.5 transition-all"
+            title="Créer un covoiturage depuis ce trajet"
+          >
+            <Users class="w-3.5 h-3.5 text-rose-500" />
+            <span class="hidden md:inline">Covoiturer</span>
           </button>
         </div>
       </div>

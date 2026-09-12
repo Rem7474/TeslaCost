@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -131,6 +132,36 @@ func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list vehicles: %w", err)
+	}
+	defer rows.Close()
+
+	var list []models.Vehicle
+	for rows.Next() {
+		var v models.Vehicle
+		if err := rows.Scan(
+			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
+			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
+			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc, &v.CreatedAt, &v.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, v)
+	}
+	return list, nil
+}
+
+func (r *Repository) ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models.Vehicle, error) {
+	query := `
+		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
+		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
+		       teslamate_basic_user, teslamate_basic_pass_encrypted, created_at, updated_at
+		FROM vehicles
+		WHERE teslamate_api_url IS NOT NULL AND teslamate_api_url != ''
+		ORDER BY created_at ASC;
+	`
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list vehicles with teslamate: %w", err)
 	}
 	defer rows.Close()
 
@@ -683,3 +714,349 @@ func (r *Repository) ListCharges(ctx context.Context, vehicleID string, limit, o
 	}
 	return list, total, nil
 }
+
+// ============================================================================
+// Carpooling / BlaBlaCar Module
+// ============================================================================
+
+func (r *Repository) CreateCarpoolTrip(ctx context.Context, trip *models.CarpoolTrip, passengers []models.CarpoolPassenger) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	// Calculate totals
+	var revenue float64
+	for _, p := range passengers {
+		revenue += p.AmountPaid
+	}
+	trip.TotalRevenue = revenue
+	trip.TotalCost = trip.ElectricityCost + trip.TollsCost + trip.TiresCost + trip.MaintenanceCost + trip.InsuranceCost + trip.OtherCost
+	trip.NetCost = trip.TotalCost - trip.TotalRevenue
+
+	query := `
+		INSERT INTO carpool_trips (
+			vehicle_id, drive_id, trip_group_id, title, date, distance_km,
+			electricity_cost, tolls_cost, tires_cost, maintenance_cost, insurance_cost, other_cost,
+			total_cost, total_revenue, net_cost, notes
+		) VALUES (
+			$1, $2, $3, $4, $5, $6,
+			$7, $8, $9, $10, $11, $12,
+			$13, $14, $15, $16
+		)
+		RETURNING id, created_at, updated_at;
+	`
+	err = tx.QueryRow(ctx, query,
+		trip.VehicleID, trip.DriveID, trip.TripGroupID, trip.Title, trip.Date, trip.DistanceKm,
+		trip.ElectricityCost, trip.TollsCost, trip.TiresCost, trip.MaintenanceCost, trip.InsuranceCost, trip.OtherCost,
+		trip.TotalCost, trip.TotalRevenue, trip.NetCost, trip.Notes,
+	).Scan(&trip.ID, &trip.CreatedAt, &trip.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to insert carpool trip: %w", err)
+	}
+
+	for i := range passengers {
+		p := &passengers[i]
+		p.CarpoolTripID = trip.ID
+		pQuery := `
+			INSERT INTO carpool_passengers (
+				carpool_trip_id, passenger_name, origin, destination, seats, amount_paid, notes
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id, created_at;
+		`
+		if err := tx.QueryRow(ctx, pQuery,
+			p.CarpoolTripID, p.PassengerName, p.Origin, p.Destination, p.Seats, p.AmountPaid, p.Notes,
+		).Scan(&p.ID, &p.CreatedAt); err != nil {
+			return fmt.Errorf("failed to insert carpool passenger: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) ListCarpoolTrips(ctx context.Context, vehicleID string) ([]models.CarpoolTripWithPassengers, error) {
+	query := `
+		SELECT id, vehicle_id, drive_id, trip_group_id, title, date, distance_km,
+		       electricity_cost, tolls_cost, tires_cost, maintenance_cost, insurance_cost, other_cost,
+		       total_cost, total_revenue, net_cost, notes, created_at, updated_at
+		FROM carpool_trips
+		WHERE vehicle_id = $1
+		ORDER BY date DESC;
+	`
+	rows, err := r.pool.Query(ctx, query, vehicleID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list carpool trips: %w", err)
+	}
+	defer rows.Close()
+
+	var trips []models.CarpoolTripWithPassengers
+	for rows.Next() {
+		var t models.CarpoolTripWithPassengers
+		if err := rows.Scan(
+			&t.ID, &t.VehicleID, &t.DriveID, &t.TripGroupID, &t.Title, &t.Date, &t.DistanceKm,
+			&t.ElectricityCost, &t.TollsCost, &t.TiresCost, &t.MaintenanceCost, &t.InsuranceCost, &t.OtherCost,
+			&t.TotalCost, &t.TotalRevenue, &t.NetCost, &t.Notes, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		t.Passengers = []models.CarpoolPassenger{}
+		trips = append(trips, t)
+	}
+
+	// Fetch passengers for all trips
+	for i := range trips {
+		pRows, err := r.pool.Query(ctx, `
+			SELECT id, carpool_trip_id, passenger_name, origin, destination, seats, amount_paid, notes, created_at
+			FROM carpool_passengers
+			WHERE carpool_trip_id = $1
+			ORDER BY created_at ASC;
+		`, trips[i].ID)
+		if err == nil {
+			for pRows.Next() {
+				var p models.CarpoolPassenger
+				if err := pRows.Scan(
+					&p.ID, &p.CarpoolTripID, &p.PassengerName, &p.Origin, &p.Destination,
+					&p.Seats, &p.AmountPaid, &p.Notes, &p.CreatedAt,
+				); err == nil {
+					trips[i].Passengers = append(trips[i].Passengers, p)
+				}
+			}
+			pRows.Close()
+		}
+	}
+
+	if trips == nil {
+		trips = []models.CarpoolTripWithPassengers{}
+	}
+	return trips, nil
+}
+
+func (r *Repository) GetCarpoolTrip(ctx context.Context, id, vehicleID string) (*models.CarpoolTripWithPassengers, error) {
+	query := `
+		SELECT id, vehicle_id, drive_id, trip_group_id, title, date, distance_km,
+		       electricity_cost, tolls_cost, tires_cost, maintenance_cost, insurance_cost, other_cost,
+		       total_cost, total_revenue, net_cost, notes, created_at, updated_at
+		FROM carpool_trips
+		WHERE id = $1 AND vehicle_id = $2;
+	`
+	var t models.CarpoolTripWithPassengers
+	err := r.pool.QueryRow(ctx, query, id, vehicleID).Scan(
+		&t.ID, &t.VehicleID, &t.DriveID, &t.TripGroupID, &t.Title, &t.Date, &t.DistanceKm,
+		&t.ElectricityCost, &t.TollsCost, &t.TiresCost, &t.MaintenanceCost, &t.InsuranceCost, &t.OtherCost,
+		&t.TotalCost, &t.TotalRevenue, &t.NetCost, &t.Notes, &t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("failed to get carpool trip: %w", err)
+	}
+
+	t.Passengers = []models.CarpoolPassenger{}
+	pRows, err := r.pool.Query(ctx, `
+		SELECT id, carpool_trip_id, passenger_name, origin, destination, seats, amount_paid, notes, created_at
+		FROM carpool_passengers
+		WHERE carpool_trip_id = $1
+		ORDER BY created_at ASC;
+	`, t.ID)
+	if err == nil {
+		defer pRows.Close()
+		for pRows.Next() {
+			var p models.CarpoolPassenger
+			if err := pRows.Scan(
+				&p.ID, &p.CarpoolTripID, &p.PassengerName, &p.Origin, &p.Destination,
+				&p.Seats, &p.AmountPaid, &p.Notes, &p.CreatedAt,
+			); err == nil {
+				t.Passengers = append(t.Passengers, p)
+			}
+		}
+	}
+
+	return &t, nil
+}
+
+func (r *Repository) UpdateCarpoolTrip(ctx context.Context, trip *models.CarpoolTrip, passengers []models.CarpoolPassenger) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var revenue float64
+	for _, p := range passengers {
+		revenue += p.AmountPaid
+	}
+	trip.TotalRevenue = revenue
+	trip.TotalCost = trip.ElectricityCost + trip.TollsCost + trip.TiresCost + trip.MaintenanceCost + trip.InsuranceCost + trip.OtherCost
+	trip.NetCost = trip.TotalCost - trip.TotalRevenue
+
+	query := `
+		UPDATE carpool_trips
+		SET drive_id = $1, trip_group_id = $2, title = $3, date = $4, distance_km = $5,
+		    electricity_cost = $6, tolls_cost = $7, tires_cost = $8, maintenance_cost = $9,
+		    insurance_cost = $10, other_cost = $11, total_cost = $12, total_revenue = $13,
+		    net_cost = $14, notes = $15, updated_at = NOW()
+		WHERE id = $16 AND vehicle_id = $17
+		RETURNING updated_at;
+	`
+	err = tx.QueryRow(ctx, query,
+		trip.DriveID, trip.TripGroupID, trip.Title, trip.Date, trip.DistanceKm,
+		trip.ElectricityCost, trip.TollsCost, trip.TiresCost, trip.MaintenanceCost,
+		trip.InsuranceCost, trip.OtherCost, trip.TotalCost, trip.TotalRevenue,
+		trip.NetCost, trip.Notes, trip.ID, trip.VehicleID,
+	).Scan(&trip.UpdatedAt)
+	if err != nil {
+		return fmt.Errorf("failed to update carpool trip: %w", err)
+	}
+
+	// Delete and recreate passengers
+	if _, err := tx.Exec(ctx, `DELETE FROM carpool_passengers WHERE carpool_trip_id = $1;`, trip.ID); err != nil {
+		return fmt.Errorf("failed to clear old passengers: %w", err)
+	}
+
+	for i := range passengers {
+		p := &passengers[i]
+		p.CarpoolTripID = trip.ID
+		pQuery := `
+			INSERT INTO carpool_passengers (
+				carpool_trip_id, passenger_name, origin, destination, seats, amount_paid, notes
+			) VALUES ($1, $2, $3, $4, $5, $6, $7)
+			RETURNING id, created_at;
+		`
+		if err := tx.QueryRow(ctx, pQuery,
+			p.CarpoolTripID, p.PassengerName, p.Origin, p.Destination, p.Seats, p.AmountPaid, p.Notes,
+		).Scan(&p.ID, &p.CreatedAt); err != nil {
+			return fmt.Errorf("failed to insert passenger: %w", err)
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) DeleteCarpoolTrip(ctx context.Context, id, vehicleID string) error {
+	query := `DELETE FROM carpool_trips WHERE id = $1 AND vehicle_id = $2;`
+	cmd, err := r.pool.Exec(ctx, query, id, vehicleID)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Repository) GetCarpoolSummary(ctx context.Context, vehicleID string) (*models.CarpoolSummary, error) {
+	query := `
+		SELECT
+			COUNT(*) AS total_trips,
+			COALESCE(SUM(distance_km), 0) AS total_distance,
+			COALESCE(SUM(total_cost), 0) AS total_cost,
+			COALESCE(SUM(total_revenue), 0) AS total_revenue,
+			COALESCE(SUM(net_cost), 0) AS total_net_cost
+		FROM carpool_trips
+		WHERE vehicle_id = $1;
+	`
+	var s models.CarpoolSummary
+	err := r.pool.QueryRow(ctx, query, vehicleID).Scan(
+		&s.TotalTrips, &s.TotalDistanceKm, &s.TotalRealCost, &s.TotalRevenue, &s.TotalNetCost,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Count passengers
+	_ = r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)
+		FROM carpool_passengers cp
+		JOIN carpool_trips ct ON cp.carpool_trip_id = ct.id
+		WHERE ct.vehicle_id = $1;
+	`, vehicleID).Scan(&s.TotalPassengers)
+
+	if s.TotalRealCost > 0 {
+		s.CoverageRatePct = math.Round((s.TotalRevenue/s.TotalRealCost)*1000) / 10
+		s.TotalSaved = s.TotalRevenue
+	}
+	if s.TotalDistanceKm > 0 {
+		s.NetCostPerKm = math.Round((s.TotalNetCost/s.TotalDistanceKm)*1000) / 1000
+	}
+
+	return &s, nil
+}
+
+func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string) (*models.Drive, error) {
+	query := `
+		SELECT id, vehicle_id, teslamate_drive_id, start_time, end_time,
+		       start_odometer, end_odometer, distance_km, duration_min,
+		       speed_avg, start_address, end_address, energy_consumed_kwh,
+		       consumption_kwh_100km, tags, is_manual, created_at, updated_at
+		FROM drives
+		WHERE id = $1 AND vehicle_id = $2;
+	`
+	var d models.Drive
+	err := r.pool.QueryRow(ctx, query, driveID, vehicleID).Scan(
+		&d.ID, &d.VehicleID, &d.TeslaMateDriveID, &d.StartTime, &d.EndTime,
+		&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
+		&d.SpeedAvg, &d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
+		&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &d, nil
+}
+
+func (r *Repository) GetTripGroupDrives(ctx context.Context, tripGroupID string) ([]models.Drive, error) {
+	query := `
+		SELECT d.id, d.vehicle_id, d.teslamate_drive_id, d.start_time, d.end_time,
+		       d.start_odometer, d.end_odometer, d.distance_km, d.duration_min,
+		       d.speed_avg, d.start_address, d.end_address, d.energy_consumed_kwh,
+		       d.consumption_kwh_100km, d.tags, d.is_manual, d.created_at, d.updated_at
+		FROM drives d
+		JOIN trip_group_drives tgd ON d.id = tgd.drive_id
+		WHERE tgd.trip_group_id = $1
+		ORDER BY tgd.order_index ASC;
+	`
+	rows, err := r.pool.Query(ctx, query, tripGroupID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.Drive
+	for rows.Next() {
+		var d models.Drive
+		if err := rows.Scan(
+			&d.ID, &d.VehicleID, &d.TeslaMateDriveID, &d.StartTime, &d.EndTime,
+			&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
+			&d.SpeedAvg, &d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
+			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, d)
+	}
+	return list, nil
+}
+
+func (r *Repository) GetTollExpensesForDriveOrGroup(ctx context.Context, vehicleID string, driveID, tripGroupID *string) (float64, error) {
+	var total float64
+	if driveID != nil && *driveID != "" {
+		_ = r.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(amount), 0)
+			FROM drive_expenses
+			WHERE vehicle_id = $1 AND drive_id = $2;
+		`, vehicleID, *driveID).Scan(&total)
+	} else if tripGroupID != nil && *tripGroupID != "" {
+		_ = r.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(amount), 0)
+			FROM drive_expenses
+			WHERE vehicle_id = $1 AND trip_group_id = $2;
+		`, vehicleID, *tripGroupID).Scan(&total)
+	}
+	return total, nil
+}
+

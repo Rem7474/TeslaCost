@@ -179,3 +179,75 @@ type ChargeLog struct {
 	IsManual          bool       `json:"is_manual"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
+
+// CarpoolTrip represents a shared trip (e.g. BlaBlaCar) with detailed real cost breakdown and passenger revenues.
+type CarpoolTrip struct {
+	ID              string    `json:"id"`
+	VehicleID       string    `json:"vehicle_id"`
+	DriveID         *string   `json:"drive_id,omitempty"`
+	TripGroupID     *string   `json:"trip_group_id,omitempty"`
+	Title           string    `json:"title"`
+	Date            time.Time `json:"date"`
+	DistanceKm      float64   `json:"distance_km"`
+	ElectricityCost float64   `json:"electricity_cost"`
+	TollsCost       float64   `json:"tolls_cost"`
+	TiresCost       float64   `json:"tires_cost"`
+	MaintenanceCost float64   `json:"maintenance_cost"`
+	InsuranceCost   float64   `json:"insurance_cost"`
+	OtherCost       float64   `json:"other_cost"`
+	TotalCost       float64   `json:"total_cost"`
+	TotalRevenue    float64   `json:"total_revenue"`
+	NetCost         float64   `json:"net_cost"`
+	Notes           *string   `json:"notes,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+}
+
+// CarpoolPassenger represents a booking / passenger contribution for a full trip or sub-leg ("bout de trajet").
+type CarpoolPassenger struct {
+	ID            string    `json:"id"`
+	CarpoolTripID string    `json:"carpool_trip_id"`
+	PassengerName string    `json:"passenger_name"`
+	Origin        *string   `json:"origin,omitempty"`
+	Destination   *string   `json:"destination,omitempty"`
+	Seats         int       `json:"seats"`
+	AmountPaid    float64   `json:"amount_paid"`
+	Notes         *string   `json:"notes,omitempty"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+// CarpoolTripWithPassengers bundles a trip with its passengers.
+type CarpoolTripWithPassengers struct {
+	CarpoolTrip
+	Passengers []CarpoolPassenger `json:"passengers"`
+}
+
+// CarpoolCostEstimate provides suggested real cost breakdown based on vehicle TCO metrics.
+type CarpoolCostEstimate struct {
+	DistanceKm            float64 `json:"distance_km"`
+	ElectricityCost       float64 `json:"electricity_cost"`
+	TollsCost             float64 `json:"tolls_cost"`
+	TiresCost             float64 `json:"tires_cost"`
+	MaintenanceCost       float64 `json:"maintenance_cost"`
+	InsuranceCost         float64 `json:"insurance_cost"`
+	OtherCost             float64 `json:"other_cost"`
+	TotalCost             float64 `json:"total_cost"`
+	ElectricityRatePerKwh float64 `json:"electricity_rate_per_kwh"`
+	TiresRatePerKm        float64 `json:"tires_rate_per_km"`
+	MaintenanceRatePerKm  float64 `json:"maintenance_rate_per_km"`
+	InsuranceRatePerKm    float64 `json:"insurance_rate_per_km"`
+}
+
+// CarpoolSummary aggregates global carpooling KPIs for the vehicle.
+type CarpoolSummary struct {
+	TotalTrips      int     `json:"total_trips"`
+	TotalPassengers int     `json:"total_passengers"`
+	TotalDistanceKm float64 `json:"total_distance_km"`
+	TotalRealCost   float64 `json:"total_real_cost"`
+	TotalRevenue    float64 `json:"total_revenue"`
+	TotalNetCost    float64 `json:"total_net_cost"`
+	TotalSaved      float64 `json:"total_saved"`
+	CoverageRatePct float64 `json:"coverage_rate_pct"`
+	NetCostPerKm    float64 `json:"net_cost_per_km"`
+}
+

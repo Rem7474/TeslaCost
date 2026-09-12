@@ -5,6 +5,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   LayoutDashboard,
   Navigation as NavIcon,
+  Users,
   Disc,
   Receipt,
   Car,
@@ -19,6 +20,7 @@ const authStore = useAuthStore()
 const navItems = [
   { name: 'dashboard', label: 'Tableau de bord', path: '/', icon: LayoutDashboard },
   { name: 'drives', label: 'Trajets', path: '/drives', icon: NavIcon },
+  { name: 'carpools', label: 'Covoiturage', path: '/carpools', icon: Users },
   { name: 'tires', label: 'Pneus', path: '/tires', icon: Disc },
   { name: 'expenses', label: 'Dépenses', path: '/expenses', icon: Receipt },
   { name: 'vehicles', label: 'Véhicules', path: '/vehicles', icon: Car },

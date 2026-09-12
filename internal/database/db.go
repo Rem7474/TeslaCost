@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -63,14 +65,30 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 
 // Migrate executes embedded SQL migration scripts to ensure the database schema is up-to-date.
 func (db *DB) Migrate(ctx context.Context) error {
-	schemaSQL, err := migrations.FS.ReadFile("000001_init_schema.up.sql")
+	entries, err := migrations.FS.ReadDir(".")
 	if err != nil {
-		return fmt.Errorf("failed to read embedded schema migration: %w", err)
+		return fmt.Errorf("failed to read embedded migrations directory: %w", err)
 	}
 
-	_, err = db.Pool.Exec(ctx, string(schemaSQL))
-	if err != nil {
-		return fmt.Errorf("failed to execute schema migration: %w", err)
+	var upFiles []string
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".up.sql") {
+			upFiles = append(upFiles, entry.Name())
+		}
+	}
+	sort.Strings(upFiles)
+
+	for _, file := range upFiles {
+		schemaSQL, err := migrations.FS.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read embedded schema migration %s: %w", file, err)
+		}
+
+		_, err = db.Pool.Exec(ctx, string(schemaSQL))
+		if err != nil {
+			return fmt.Errorf("failed to execute schema migration %s: %w", file, err)
+		}
+		log.Printf("[database] Applied migration: %s", file)
 	}
 
 	log.Println("[database] Schema migrations executed successfully")

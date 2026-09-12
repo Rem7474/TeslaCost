@@ -47,6 +47,7 @@ func main() {
 	var syncService *services.SyncService
 	var tireWearService *services.TireWearService
 	var tcoService *services.TCOService
+	var carpoolService *services.CarpoolService
 
 	if err != nil {
 		log.Printf("[warning] Database connection failed: %v. Running in offline/unconnected mode for now.", err)
@@ -76,6 +77,7 @@ func main() {
 		syncService = services.NewSyncService(repo, encryptor)
 		tireWearService = services.NewTireWearService(repo)
 		tcoService = services.NewTCOService(dbPool.Pool)
+		carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
 	}
 
 	// 4. Setup Chi router
@@ -123,6 +125,7 @@ func main() {
 		tireHandler := handlers.NewTireHandler(repo, tireWearService)
 		expenseHandler := handlers.NewExpenseHandler(repo)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
+		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
 
 		// Public Auth
 		r.Route("/api/auth", func(r chi.Router) {
@@ -153,6 +156,14 @@ func main() {
 				r.Patch("/{vehicleId}/drives/{driveId}/tags", driveHandler.UpdateTags)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
+
+				// Carpooling / BlaBlaCar
+				r.Get("/{vehicleId}/carpools", carpoolHandler.List)
+				r.Post("/{vehicleId}/carpools", carpoolHandler.Create)
+				r.Get("/{vehicleId}/carpools/estimate", carpoolHandler.Estimate)
+				r.Get("/{vehicleId}/carpools/{id}", carpoolHandler.Get)
+				r.Put("/{vehicleId}/carpools/{id}", carpoolHandler.Update)
+				r.Delete("/{vehicleId}/carpools/{id}", carpoolHandler.Delete)
 
 				// Tires
 				r.Get("/{vehicleId}/tires", tireHandler.List)
@@ -189,6 +200,14 @@ func main() {
 	stopChan := make(chan os.Signal, 1)
 	signal.Notify(stopChan, os.Interrupt, syscall.SIGTERM)
 
+	// Background workers (Auto-sync)
+	bgCtx, cancelBg := context.WithCancel(context.Background())
+	defer cancelBg()
+
+	if syncService != nil && cfg.SyncIntervalMinutes > 0 {
+		go syncService.StartBackgroundWorker(bgCtx, cfg.SyncIntervalMinutes)
+	}
+
 	go func() {
 		log.Printf("TeslaCost API & Web listening on port %s (Base URL: %s)", cfg.Port, cfg.AppBaseURL)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -198,6 +217,7 @@ func main() {
 
 	<-stopChan
 	log.Println("Shutting down server...")
+	cancelBg()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
