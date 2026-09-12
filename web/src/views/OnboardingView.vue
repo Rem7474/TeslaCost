@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
@@ -32,6 +32,18 @@ const teslamateApiKey = ref('')
 const teslamateUser = ref('')
 const teslamatePass = ref('')
 const testResult = ref<{ ok: boolean; message: string } | null>(null)
+
+onMounted(async () => {
+  if (authStore.isAuthenticated) {
+    await vehicleStore.fetchVehicles()
+    if (vehicleStore.vehicles.length > 0) {
+      router.push('/')
+      return
+    }
+    // Admin account already exists & logged in, proceed to vehicle setup
+    currentStep.value = 2
+  }
+})
 
 async function handleStep1Submit() {
   error.value = ''
