@@ -121,7 +121,7 @@ func main() {
 	if repo != nil {
 		authHandler := handlers.NewAuthHandler(repo, cfg.JWTSecret, cfg.JWTExpirationHours, cfg.DisableRegistration)
 		vehicleHandler := handlers.NewVehicleHandler(repo, encryptor, syncService)
-		driveHandler := handlers.NewDriveHandler(repo)
+		driveHandler := handlers.NewDriveHandler(repo, carpoolService)
 		tireHandler := handlers.NewTireHandler(repo, tireWearService)
 		expenseHandler := handlers.NewExpenseHandler(repo)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
@@ -153,6 +153,7 @@ func main() {
 
 				// Drives
 				r.Get("/{vehicleId}/drives", driveHandler.List)
+				r.Get("/{vehicleId}/drives/{driveId}/expenses", driveHandler.GetDriveExpenses)
 				r.Patch("/{vehicleId}/drives/{driveId}/tags", driveHandler.UpdateTags)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)

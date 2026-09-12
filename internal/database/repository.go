@@ -1423,3 +1423,53 @@ func (r *Repository) GetTollExpensesForDriveOrGroup(ctx context.Context, vehicle
 	return total, nil
 }
 
+func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]float64, error) {
+	result := make(map[string]float64)
+	if len(driveIDs) == 0 {
+		return result, nil
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT drive_id, COALESCE(SUM(amount), 0)
+		FROM drive_expenses
+		WHERE vehicle_id = $1 AND drive_id = ANY($2)
+		GROUP BY drive_id;
+	`, vehicleID, driveIDs)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dID string
+		var amt float64
+		if err := rows.Scan(&dID, &amt); err == nil {
+			result[dID] = amt
+		}
+	}
+	return result, nil
+}
+
+func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, driveID string) ([]models.DriveExpense, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, vehicle_id, trip_group_id, drive_id, type, amount, currency, date, notes, created_at
+		FROM drive_expenses
+		WHERE vehicle_id = $1 AND drive_id = $2
+		ORDER BY date ASC;
+	`, vehicleID, driveID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.DriveExpense
+	for rows.Next() {
+		var de models.DriveExpense
+		if err := rows.Scan(&de.ID, &de.VehicleID, &de.TripGroupID, &de.DriveID, &de.Type, &de.Amount, &de.Currency, &de.Date, &de.Notes, &de.CreatedAt); err == nil {
+			list = append(list, de)
+		}
+	}
+	return list, nil
+}
+
+

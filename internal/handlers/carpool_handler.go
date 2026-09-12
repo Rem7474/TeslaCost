@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -280,9 +281,15 @@ func (h *CarpoolHandler) Estimate(w http.ResponseWriter, r *http.Request) {
 		tripGroupID = &tripGroupIDParam
 	}
 
+	var driveIDs []string
+	driveIDsParam := r.URL.Query().Get("drive_ids")
+	if driveIDsParam != "" {
+		driveIDs = strings.Split(driveIDsParam, ",")
+	}
+
 	distanceKm, _ := strconv.ParseFloat(r.URL.Query().Get("distance_km"), 64)
 
-	estimate, err := h.carpoolService.EstimateCosts(r.Context(), vehicleID, driveID, tripGroupID, distanceKm)
+	estimate, err := h.carpoolService.EstimateCosts(r.Context(), vehicleID, driveID, tripGroupID, driveIDs, distanceKm)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to estimate costs: "+err.Error())
 		return

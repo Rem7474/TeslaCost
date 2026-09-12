@@ -9,14 +9,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// MonthlyCost represents monthly expenditure breakdown.
+// MonthlyCost represents monthly expenditure and mileage breakdown.
 type MonthlyCost struct {
 	Month       string  `json:"month"` // YYYY-MM
+	DistanceKm  float64 `json:"distance_km"`
 	Energy      float64 `json:"energy"`
 	Tolls       float64 `json:"tolls"`
 	Maintenance float64 `json:"maintenance"`
 	Tires       float64 `json:"tires"`
 	Total       float64 `json:"total"`
+	CostPerKm   float64 `json:"cost_per_km"`
 }
 
 // TagCostBreakdown represents costs split by tag (e.g. Pro vs Perso).
@@ -241,10 +243,55 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		mRows.Close()
 	}
 
-	// Sort monthly costs chronologically
+	// Tires by month
+	tireRows, _ := s.pool.Query(ctx, `
+		SELECT TO_CHAR(purchase_date, 'YYYY-MM') AS m, COALESCE(SUM(purchase_price), 0)
+		FROM tires
+		WHERE vehicle_id = $1
+		GROUP BY m;
+	`, vehicleID)
+	if tireRows != nil {
+		for tireRows.Next() {
+			var m string
+			var val float64
+			if err := tireRows.Scan(&m, &val); err == nil {
+				if _, exists := monthlyMap[m]; !exists {
+					monthlyMap[m] = &MonthlyCost{Month: m}
+				}
+				monthlyMap[m].Tires = math.Round(val*100) / 100
+			}
+		}
+		tireRows.Close()
+	}
+
+	// Distance driven by month
+	dRows, _ := s.pool.Query(ctx, `
+		SELECT TO_CHAR(start_time, 'YYYY-MM') AS m, COALESCE(SUM(distance_km), 0)
+		FROM drives
+		WHERE vehicle_id = $1
+		GROUP BY m;
+	`, vehicleID)
+	if dRows != nil {
+		for dRows.Next() {
+			var m string
+			var val float64
+			if err := dRows.Scan(&m, &val); err == nil {
+				if _, exists := monthlyMap[m]; !exists {
+					monthlyMap[m] = &MonthlyCost{Month: m}
+				}
+				monthlyMap[m].DistanceKm = math.Round(val*10) / 10
+			}
+		}
+		dRows.Close()
+	}
+
+	// Sort monthly costs chronologically and calculate monthly CostPerKm
 	var monthlyCosts []MonthlyCost
 	for _, mc := range monthlyMap {
 		mc.Total = math.Round((mc.Energy+mc.Tolls+mc.Maintenance+mc.Tires)*100) / 100
+		if mc.DistanceKm > 0 {
+			mc.CostPerKm = math.Round((mc.Total/mc.DistanceKm)*1000) / 1000
+		}
 		monthlyCosts = append(monthlyCosts, *mc)
 	}
 	sort.Slice(monthlyCosts, func(i, j int) bool {

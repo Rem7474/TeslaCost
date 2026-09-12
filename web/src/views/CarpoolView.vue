@@ -23,13 +23,16 @@ import {
   Receipt,
   Sparkles,
   HelpCircle,
+  Layers,
+  CheckSquare,
+  Square,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
 const route = useRoute()
 const router = useRouter()
 
-const loading = ref(false)
+const loading = ref(true)
 const trips = ref<any[]>([])
 const summary = ref<any>({
   total_trips: 0,
@@ -134,9 +137,19 @@ const liveNetCostPerKm = computed(() => {
   return Math.round((liveNetCost.value / form.value.distance_km) * 1000) / 1000
 })
 
+const sourceMode = ref<'SINGLE' | 'MULTI' | 'MANUAL'>('SINGLE')
+const selectedMultiDriveIds = ref<string[]>([])
+const multiSteps = computed(() => {
+  return recentDrives.value
+    .filter((d) => selectedMultiDriveIds.value.includes(d.id))
+    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+})
+
 function openCreateModal(preselectedDriveId?: string) {
   editingTripId.value = null
   selectedDriveId.value = preselectedDriveId || ''
+  selectedMultiDriveIds.value = []
+  sourceMode.value = preselectedDriveId ? 'SINGLE' : 'SINGLE'
   form.value = {
     title: '',
     date: new Date().toISOString().substring(0, 10),
@@ -169,9 +182,116 @@ function openCreateModal(preselectedDriveId?: string) {
   }
 }
 
+async function openCreateModalForTripGroup(tripGroupId: string) {
+  editingTripId.value = null
+  selectedDriveId.value = ''
+  selectedMultiDriveIds.value = []
+  sourceMode.value = 'MULTI'
+  form.value = {
+    title: 'Voyage multi-étapes',
+    date: new Date().toISOString().substring(0, 10),
+    distance_km: 0,
+    drive_id: null,
+    trip_group_id: tripGroupId,
+    electricity_cost: 0,
+    tolls_cost: 0,
+    tires_cost: 0,
+    maintenance_cost: 0,
+    insurance_cost: 0,
+    other_cost: 0,
+    notes: 'Voyage regroupant plusieurs trajets TeslaMate',
+    passengers: [
+      {
+        passenger_name: 'Passager 1 (BlaBlaCar)',
+        origin: '',
+        destination: '',
+        seats: 1,
+        amount_paid: 0,
+        notes: '',
+      },
+    ],
+  }
+  showModal.value = true
+  await loadRecentDrives()
+
+  if (!vehicleStore.activeVehicle) return
+  estimating.value = true
+  try {
+    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, { trip_group_id: tripGroupId })
+    currentRates.value = est
+    form.value.distance_km = est.distance_km
+    form.value.electricity_cost = est.electricity_cost
+    form.value.tolls_cost = est.tolls_cost
+    form.value.tires_cost = est.tires_cost
+    form.value.maintenance_cost = est.maintenance_cost
+    form.value.insurance_cost = est.insurance_cost
+
+    const groups = await api.getTripGroups(vehicleStore.activeVehicle.id)
+    const g = (groups || []).find((grp: any) => grp.id === tripGroupId)
+    if (g && g.name) {
+      form.value.title = g.name
+    }
+  } catch (err) {
+    console.error('Failed to estimate costs for trip group', err)
+  } finally {
+    estimating.value = false
+  }
+}
+
+async function toggleMultiDrive(driveId: string) {
+  const idx = selectedMultiDriveIds.value.indexOf(driveId)
+  if (idx > -1) {
+    selectedMultiDriveIds.value.splice(idx, 1)
+  } else {
+    selectedMultiDriveIds.value.push(driveId)
+  }
+
+  if (!selectedMultiDriveIds.value.length) {
+    form.value.distance_km = 0
+    form.value.electricity_cost = 0
+    form.value.tolls_cost = 0
+    form.value.tires_cost = 0
+    form.value.maintenance_cost = 0
+    form.value.insurance_cost = 0
+    return
+  }
+
+  const steps = recentDrives.value
+    .filter((d) => selectedMultiDriveIds.value.includes(d.id))
+    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+
+  if (steps.length > 0) {
+    const firstCity = (steps[0].start_address || 'Départ').split(',')[0]
+    const lastCity = (steps[steps.length - 1].end_address || 'Arrivée').split(',')[0]
+    form.value.title = `${firstCity} → ${lastCity} (${steps.length} étapes)`
+    form.value.date = new Date(steps[0].start_time).toISOString().substring(0, 10)
+  }
+
+  if (!vehicleStore.activeVehicle) return
+  estimating.value = true
+  try {
+    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, {
+      drive_ids: selectedMultiDriveIds.value,
+    })
+    currentRates.value = est
+    form.value.distance_km = est.distance_km
+    form.value.electricity_cost = est.electricity_cost
+    form.value.tolls_cost = est.tolls_cost
+    form.value.tires_cost = est.tires_cost
+    form.value.maintenance_cost = est.maintenance_cost
+    form.value.insurance_cost = est.insurance_cost
+  } catch (err) {
+    console.error('Failed to estimate costs for multi drives', err)
+  } finally {
+    estimating.value = false
+  }
+}
+
 function openEditModal(trip: any) {
   editingTripId.value = trip.id
   selectedDriveId.value = trip.drive_id || ''
+  selectedMultiDriveIds.value = []
+  sourceMode.value = trip.trip_group_id ? 'MULTI' : trip.drive_id ? 'SINGLE' : 'MANUAL'
   form.value = {
     title: trip.title,
     date: new Date(trip.date).toISOString().substring(0, 10),
@@ -272,6 +392,16 @@ async function handleSave() {
 
   modalSubmitting.value = true
   try {
+    // If multi-drives selected directly without existing trip_group_id, create trip group first
+    if (sourceMode.value === 'MULTI' && !form.value.trip_group_id && selectedMultiDriveIds.value.length > 1) {
+      const tg = await api.createTripGroup(vehicleStore.activeVehicle.id, {
+        name: form.value.title,
+        drive_ids: selectedMultiDriveIds.value,
+      })
+      form.value.trip_group_id = tg.id
+      form.value.drive_id = null
+    }
+
     const payload = {
       ...form.value,
       date: new Date(form.value.date).toISOString(),
@@ -321,10 +451,12 @@ watch(
 
 onMounted(() => {
   loadData()
-  // Check if routed with new_drive_id query
   const newDriveId = route.query.new_drive_id as string
+  const newTripGroupId = route.query.new_trip_group_id as string
   if (newDriveId) {
     openCreateModal(newDriveId)
+  } else if (newTripGroupId) {
+    openCreateModalForTripGroup(newTripGroupId)
   }
 })
 </script>
@@ -438,9 +570,25 @@ onMounted(() => {
       </div>
     </div>
 
+    <!-- SKELETON LOADING STATE -->
+    <div v-if="loading" class="space-y-6 animate-pulse">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div v-for="i in 5" :key="i" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl h-24 flex flex-col justify-between">
+          <div class="h-3 w-20 bg-slate-800 rounded"></div>
+          <div class="h-6 w-24 bg-slate-800 rounded"></div>
+        </div>
+      </div>
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 h-64 flex flex-col justify-between">
+        <div class="h-4 w-40 bg-slate-800 rounded"></div>
+        <div class="space-y-3">
+          <div v-for="j in 3" :key="j" class="h-12 bg-slate-800/50 rounded-xl"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- Empty State -->
     <div
-      v-if="!loading && trips.length === 0"
+      v-else-if="trips.length === 0"
       class="bg-slate-900/60 border border-slate-800 rounded-3xl p-12 text-center max-w-2xl mx-auto space-y-4"
     >
       <div class="w-16 h-16 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
@@ -646,21 +794,104 @@ onMounted(() => {
           </button>
         </div>
 
-        <!-- Drive selection (Optional link to TeslaMate drive) -->
-        <div v-if="!editingTripId" class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl space-y-2">
-          <label class="block text-xs font-semibold text-slate-300">
-            Lier à un trajet récent TeslaMate (remplissage automatique des km, kWh et péages) :
-          </label>
-          <select
-            v-model="selectedDriveId"
-            @change="onSelectDrive(selectedDriveId)"
-            class="w-full bg-slate-900 text-slate-200 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
-          >
-            <option value="">-- Saisie manuelle libre (sans lier de trajet) --</option>
-            <option v-for="d in recentDrives" :key="d.id" :value="d.id">
-              {{ formatDate(d.start_time) }} : {{ d.start_address?.split(',')[0] || 'Départ' }} → {{ d.end_address?.split(',')[0] || 'Arrivée' }} ({{ d.distance_km }} km, {{ d.energy_consumed_kwh ? d.energy_consumed_kwh + ' kWh' : '' }})
-            </option>
-          </select>
+        <!-- Trip Origin Selection (Single Drive, Multi-Drive Journey, or Manual) -->
+        <div v-if="!editingTripId" class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl space-y-3">
+          <div class="flex items-center justify-between flex-wrap gap-2">
+            <label class="text-xs font-semibold text-slate-300">Origine des données du trajet :</label>
+            <!-- Tabs -->
+            <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-lg text-xs">
+              <button
+                type="button"
+                @click="sourceMode = 'SINGLE'"
+                class="px-2.5 py-1 rounded-md transition-all font-semibold"
+                :class="sourceMode === 'SINGLE' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
+              >
+                Trajet unique
+              </button>
+              <button
+                type="button"
+                @click="sourceMode = 'MULTI'"
+                class="px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1"
+                :class="sourceMode === 'MULTI' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
+              >
+                <Layers class="w-3 h-3" />
+                Multi-étapes (arrêts)
+              </button>
+              <button
+                type="button"
+                @click="sourceMode = 'MANUAL'"
+                class="px-2.5 py-1 rounded-md transition-all font-semibold"
+                :class="sourceMode === 'MANUAL' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
+              >
+                Saisie libre
+              </button>
+            </div>
+          </div>
+
+          <!-- Mode 1: Single Drive -->
+          <div v-if="sourceMode === 'SINGLE'" class="space-y-2">
+            <select
+              v-model="selectedDriveId"
+              @change="onSelectDrive(selectedDriveId)"
+              class="w-full bg-slate-900 text-slate-200 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
+            >
+              <option value="">-- Choisir un trajet récent dans la liste --</option>
+              <option v-for="d in recentDrives" :key="d.id" :value="d.id">
+                {{ formatDate(d.start_time) }} : {{ d.start_address?.split(',')[0] || 'Départ' }} → {{ d.end_address?.split(',')[0] || 'Arrivée' }} ({{ d.distance_km }} km, {{ d.energy_consumed_kwh ? d.energy_consumed_kwh + ' kWh' : '' }})
+              </option>
+            </select>
+          </div>
+
+          <!-- Mode 2: Multi-stage Drive (Arrêts recharge / pauses) -->
+          <div v-else-if="sourceMode === 'MULTI'" class="space-y-2.5">
+            <p class="text-[11px] text-slate-400">
+              Cochez les trajets consécutifs composant votre voyage (ex: Paris → Beaune puis Beaune → Lyon) :
+            </p>
+            <div class="max-h-44 overflow-y-auto space-y-1.5 pr-1">
+              <div
+                v-for="d in recentDrives"
+                :key="d.id"
+                @click="toggleMultiDrive(d.id)"
+                class="flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer border transition-all"
+                :class="selectedMultiDriveIds.includes(d.id) ? 'bg-rose-500/15 border-rose-500/40 text-white' : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800/60'"
+              >
+                <div class="flex items-center gap-2 truncate pr-2">
+                  <component :is="selectedMultiDriveIds.includes(d.id) ? CheckSquare : Square" class="w-4 h-4 text-rose-400 shrink-0" />
+                  <span class="text-slate-400 font-mono text-[11px]">{{ formatDate(d.start_time) }}</span>
+                  <span class="truncate">{{ d.start_address?.split(',')[0] || 'Départ' }} → {{ d.end_address?.split(',')[0] || 'Arrivée' }}</span>
+                </div>
+                <div class="shrink-0 text-right">
+                  <span class="font-bold text-rose-400">{{ d.distance_km }} km</span>
+                  <span v-if="d.energy_consumed_kwh" class="text-sky-400 ml-1.5 font-mono text-[10px]">({{ d.energy_consumed_kwh }} kWh)</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Steps summary -->
+            <div v-if="multiSteps.length" class="bg-slate-900 border border-slate-800 p-2.5 rounded-xl space-y-1.5">
+              <div class="text-[11px] font-bold text-rose-400 flex items-center gap-1.5">
+                <Layers class="w-3.5 h-3.5" />
+                <span>{{ multiSteps.length }} étape(s) combinée(s) : {{ form.distance_km }} km au total</span>
+              </div>
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span
+                  v-for="(step, idx) in multiSteps"
+                  :key="step.id"
+                  class="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded-lg text-[10px] text-slate-300 flex items-center gap-1"
+                >
+                  <span class="text-rose-400 font-bold">Étape {{ idx + 1 }}:</span>
+                  <span>{{ step.start_address?.split(',')[0] || 'Dép' }} → {{ step.end_address?.split(',')[0] || 'Arr' }}</span>
+                  <span class="text-slate-500">({{ step.distance_km }} km)</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mode 3: Manual Free Input -->
+          <div v-else class="text-[11px] text-slate-400">
+            Saisissez manuellement le titre, la distance et vos estimations de frais ci-dessous.
+          </div>
+
           <div v-if="estimating" class="text-[11px] text-rose-400 flex items-center gap-1.5">
             <Sparkles class="w-3.5 h-3.5 animate-spin" />
             <span>Calcul automatique des coûts réels selon les taux de votre Tesla...</span>

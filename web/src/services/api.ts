@@ -110,6 +110,9 @@ export const api = {
   getCharges: (vehicleId: string, page = 1, limit = 50) =>
     request<any>(`/vehicles/${vehicleId}/charges?page=${page}&limit=${limit}`),
 
+  getDriveExpensesForDrive: (vehicleId: string, driveId: string) =>
+    request<any[]>(`/vehicles/${vehicleId}/drives/${driveId}/expenses`),
+
   // TCO Analytics
   getTCO: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/tco`),
 
@@ -122,10 +125,11 @@ export const api = {
     request<any>(`/vehicles/${vehicleId}/carpools/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCarpool: (vehicleId: string, id: string) =>
     request<any>(`/vehicles/${vehicleId}/carpools/${id}`, { method: 'DELETE' }),
-  estimateCarpoolCosts: (vehicleId: string, params: { drive_id?: string; trip_group_id?: string; distance_km?: number }) => {
+  estimateCarpoolCosts: (vehicleId: string, params: { drive_id?: string; trip_group_id?: string; drive_ids?: string[]; distance_km?: number }) => {
     const q = new URLSearchParams()
     if (params.drive_id) q.set('drive_id', params.drive_id)
     if (params.trip_group_id) q.set('trip_group_id', params.trip_group_id)
+    if (params.drive_ids && params.drive_ids.length > 0) q.set('drive_ids', params.drive_ids.join(','))
     if (params.distance_km !== undefined) q.set('distance_km', params.distance_km.toString())
     return request<any>(`/vehicles/${vehicleId}/carpools/estimate?${q.toString()}`)
   },

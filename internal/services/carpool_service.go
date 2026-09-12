@@ -107,7 +107,7 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 }
 
 // EstimateCosts calculates suggested cost components for a trip.
-func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, driveID, tripGroupID *string, manualDistanceKm float64) (*models.CarpoolCostEstimate, error) {
+func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, driveID, tripGroupID *string, driveIDs []string, manualDistanceKm float64) (*models.CarpoolCostEstimate, error) {
 	rates, err := s.GetVehicleUnitRates(ctx, vehicleID)
 	if err != nil {
 		return nil, err
@@ -137,6 +137,22 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 			}
 		}
 		tolls, _ = s.repo.GetTollExpensesForDriveOrGroup(ctx, vehicleID, nil, tripGroupID)
+	} else if len(driveIDs) > 0 {
+		for _, did := range driveIDs {
+			drive, err := s.repo.GetDriveByID(ctx, did, vehicleID)
+			if err == nil && drive != nil {
+				distance += drive.DistanceKm
+				if drive.EnergyConsumedKwh != nil {
+					kwhConsumed += *drive.EnergyConsumedKwh
+				} else if drive.ConsumptionKwh100km != nil {
+					kwhConsumed += (drive.DistanceKm * *drive.ConsumptionKwh100km) / 100.0
+				}
+			}
+		}
+		tollsMap, _ := s.repo.GetTollExpensesForDrives(ctx, vehicleID, driveIDs)
+		for _, t := range tollsMap {
+			tolls += t
+		}
 	} else {
 		distance = manualDistanceKm
 	}
