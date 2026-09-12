@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Zap, Lock, Mail, AlertCircle, ShieldAlert } from 'lucide-vue-next'
+import { APP_VERSION } from '@/version'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -134,6 +135,10 @@ async function handleSubmit() {
       <div v-if="registrationEnabled" class="mt-6 text-center text-sm text-slate-400">
         Déjà un compte ?
         <router-link to="/login" class="text-rose-400 hover:text-rose-300 font-medium">Se connecter</router-link>
+      </div>
+
+      <div class="mt-6 pt-4 border-t border-slate-800 text-center">
+        <span class="text-[11px] font-mono text-slate-400">TeslaCost {{ APP_VERSION }}</span>
       </div>
     </div>
   </div>

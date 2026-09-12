@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { RefreshCw, Car, Gauge, Plus, AlertCircle, AlertTriangle, X, CheckCircle2 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
+import { APP_VERSION } from '@/version'
 
 const vehicleStore = useVehicleStore()
 const router = useRouter()
@@ -99,6 +100,10 @@ function onVehicleChange(event: Event) {
             <X class="w-3 h-3" />
           </button>
         </div>
+
+        <span class="text-[10px] font-mono px-2 py-1 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700/50 font-medium">
+          {{ APP_VERSION }}
+        </span>
       </div>
     </header>
 

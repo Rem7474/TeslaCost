@@ -100,6 +100,8 @@ func main() {
 		MaxAge:           300,
 	}))
 
+	const AppVersion = "1.3.3"
+
 	// Public Health Check Endpoint
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -111,11 +113,17 @@ func main() {
 			"status":    "healthy",
 			"database":  dbStatus,
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
-			"version":   "1.0.0",
+			"version":   AppVersion,
 		})
 	}
 	r.Get("/api/health", healthHandler)
 	r.Get("/healthz", healthHandler)
+	r.Get("/api/version", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"version": AppVersion,
+		})
+	})
 
 	// API Routes
 	if repo != nil {

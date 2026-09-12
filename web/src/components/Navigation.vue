@@ -12,6 +12,7 @@ import {
   LogOut,
   Zap,
 } from 'lucide-vue-next'
+import { APP_VERSION } from '@/version'
 
 const route = useRoute()
 const router = useRouter()
@@ -42,9 +43,14 @@ function handleLogout() {
         <Zap class="w-6 h-6 text-white" />
       </div>
       <div>
-        <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-          TeslaCost
-        </h1>
+        <div class="flex items-center gap-2">
+          <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+            TeslaCost
+          </h1>
+          <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-semibold">
+            {{ APP_VERSION }}
+          </span>
+        </div>
         <p class="text-xs text-slate-400">TCO & Fleet Manager</p>
       </div>
     </div>
@@ -66,8 +72,8 @@ function handleLogout() {
       </router-link>
     </nav>
 
-    <div class="pt-4 border-t border-slate-800 mt-auto">
-      <div class="flex items-center justify-between px-3 py-2">
+    <div class="pt-4 border-t border-slate-800 mt-auto space-y-2">
+      <div class="flex items-center justify-between px-3 py-1">
         <div class="truncate">
           <p class="text-xs font-semibold text-slate-200 truncate">{{ authStore.user?.email }}</p>
           <p class="text-[10px] text-slate-400">Connecté</p>
@@ -79,6 +85,10 @@ function handleLogout() {
         >
           <LogOut class="w-4 h-4" />
         </button>
+      </div>
+      <div class="px-3 pt-2 text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-800/60">
+        <span>Version</span>
+        <span class="font-mono text-slate-400 font-medium">{{ APP_VERSION }}</span>
       </div>
     </div>
   </aside>
