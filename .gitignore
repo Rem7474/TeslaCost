@@ -1,6 +1,6 @@
 # Binaries and build artifacts
-bin/
-dist/
+/bin/
+/dist/
 /teslacost
 *.exe
 *.exe~
@@ -16,6 +16,7 @@ dist/
 .env
 .env.local
 
+# Node & Frontend dependencies
 web/node_modules/
 web/dist/*
 !web/dist/index.html
