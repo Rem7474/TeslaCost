@@ -149,9 +149,14 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		}
 	}
 
-	// 2. Sync Drives in smaller batches of 50 up to 4 pages (max 200) to prevent slow SQL joins from timing out
+	// 2. Sync Drives (fetch until all history is imported, or until we reach already-synced drives)
+	var latestDriveTime *time.Time
+	if s.repo != nil {
+		latestDriveTime, _ = s.repo.GetLatestTeslaMateDriveStartTime(ctx, v.ID)
+	}
+
 	drivesCount := 0
-	for page := 1; page <= 4; page++ {
+	for page := 1; page <= 500; page++ {
 		driveList, driveUnits, err := client.GetDrives(ctx, carID, teslamate.DriveFilterOptions{
 			Page: page,
 			Show: 50,
@@ -166,6 +171,7 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			break
 		}
 
+		hasOlderThanLatest := false
 		for _, td := range driveList {
 			startTime, _ := td.ParsedStartTime()
 			endTime, _ := td.ParsedEndTime()
@@ -174,6 +180,10 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			}
 			if endTime.IsZero() {
 				endTime = startTime.Add(time.Duration(td.DurationMin) * time.Minute)
+			}
+
+			if latestDriveTime != nil && !startTime.After(*latestDriveTime) {
+				hasOlderThanLatest = true
 			}
 
 			distKm := td.OdometerDetails.OdometerDistance
@@ -216,19 +226,30 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				Tags:                []string{},
 			}
 
-			if err := s.repo.UpsertTeslaMateDrive(ctx, d); err == nil {
-				drivesCount++
+			if s.repo != nil {
+				if err := s.repo.UpsertTeslaMateDrive(ctx, d); err == nil {
+					drivesCount++
+				}
 			}
 		}
 
 		if len(driveList) < 50 {
 			break
 		}
+
+		if latestDriveTime != nil && hasOlderThanLatest {
+			break
+		}
 	}
 
-	// 3. Sync Charges in smaller batches of 50 up to 4 pages (max 200)
+	// 3. Sync Charges (fetch until all history is imported, or until we reach already-synced charges)
+	var latestChargeTime *time.Time
+	if s.repo != nil {
+		latestChargeTime, _ = s.repo.GetLatestTeslaMateChargeDate(ctx, v.ID)
+	}
+
 	chargesCount := 0
-	for page := 1; page <= 4; page++ {
+	for page := 1; page <= 500; page++ {
 		chargeList, chargeUnits, err := client.GetCharges(ctx, carID, teslamate.ChargeFilterOptions{
 			Page: page,
 			Show: 50,
@@ -243,11 +264,16 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			break
 		}
 
+		hasOlderThanLatest := false
 		for _, tc := range chargeList {
 			startDate, _ := tc.ParsedStartTime()
 			endDate, _ := tc.ParsedEndTime()
 			if startDate.IsZero() {
 				startDate = time.Now()
+			}
+
+			if latestChargeTime != nil && !startDate.After(*latestChargeTime) {
+				hasOlderThanLatest = true
 			}
 
 			odo := tc.Odometer
@@ -288,12 +314,18 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				Odometer:          odoPtr,
 			}
 
-			if err := s.repo.UpsertTeslaMateCharge(ctx, c); err == nil {
-				chargesCount++
+			if s.repo != nil {
+				if err := s.repo.UpsertTeslaMateCharge(ctx, c); err == nil {
+					chargesCount++
+				}
 			}
 		}
 
 		if len(chargeList) < 50 {
+			break
+		}
+
+		if latestChargeTime != nil && hasOlderThanLatest {
 			break
 		}
 	}

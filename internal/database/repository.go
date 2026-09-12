@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -249,6 +250,25 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		d.SpeedAvg, d.StartAddress, d.EndAddress, d.EnergyConsumedKwh,
 		d.ConsumptionKwh100km, d.Tags,
 	).Scan(&d.ID)
+}
+
+func (r *Repository) GetLatestTeslaMateDriveStartTime(ctx context.Context, vehicleID string) (*time.Time, error) {
+	query := `
+		SELECT start_time
+		FROM drives
+		WHERE vehicle_id = $1 AND teslamate_drive_id IS NOT NULL
+		ORDER BY start_time DESC
+		LIMIT 1;
+	`
+	var t time.Time
+	err := r.pool.QueryRow(ctx, query, vehicleID).Scan(&t)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &t, nil
 }
 
 func (r *Repository) ListDrives(ctx context.Context, vehicleID string, tag string, limit, offset int) ([]models.Drive, int, error) {
@@ -604,6 +624,25 @@ func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.Charge
 		c.VehicleID, c.TeslaMateChargeID, c.Date, c.EndDate,
 		c.Address, c.KwhAdded, c.KwhUsed, c.Cost, c.Currency, c.Odometer,
 	).Scan(&c.ID)
+}
+
+func (r *Repository) GetLatestTeslaMateChargeDate(ctx context.Context, vehicleID string) (*time.Time, error) {
+	query := `
+		SELECT date
+		FROM charge_logs
+		WHERE vehicle_id = $1 AND teslamate_charge_id IS NOT NULL
+		ORDER BY date DESC
+		LIMIT 1;
+	`
+	var t time.Time
+	err := r.pool.QueryRow(ctx, query, vehicleID).Scan(&t)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &t, nil
 }
 
 func (r *Repository) ListCharges(ctx context.Context, vehicleID string, limit, offset int) ([]models.ChargeLog, int, error) {
