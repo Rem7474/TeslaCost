@@ -1,0 +1,92 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useVehicleStore } from '@/stores/vehicle'
+import { Zap, Lock, Mail, AlertCircle } from 'lucide-vue-next'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const email = ref('')
+const password = ref('')
+const error = ref('')
+const loading = ref(false)
+
+async function handleSubmit() {
+  error.value = ''
+  loading.value = true
+  try {
+    await authStore.login({ email: email.value, password: password.value })
+    const vehicleStore = useVehicleStore()
+    await vehicleStore.fetchVehicles()
+    router.push('/')
+  } catch (err: any) {
+    error.value = err.message || 'Identifiants invalides'
+  } finally {
+    loading.value = false
+  }
+}
+</script>
+
+<template>
+  <div class="min-h-screen flex items-center justify-center p-4 bg-slate-950">
+    <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
+      <div class="text-center mb-8">
+        <div class="inline-flex p-3 bg-gradient-to-tr from-rose-500 to-amber-500 rounded-2xl shadow-lg shadow-rose-500/20 mb-3">
+          <Zap class="w-8 h-8 text-white" />
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-white">Connexion à TeslaCost</h1>
+        <p class="text-sm text-slate-400 mt-1">Suivi du coût total de possession (TCO) & entretien</p>
+      </div>
+
+      <div v-if="error" class="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-sm text-rose-400">
+        <AlertCircle class="w-4 h-4 shrink-0" />
+        <span>{{ error }}</span>
+      </div>
+
+      <form @submit.prevent="handleSubmit" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email</label>
+          <div class="relative">
+            <Mail class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              v-model="email"
+              type="email"
+              required
+              placeholder="votre@email.com"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe</label>
+          <div class="relative">
+            <Lock class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              v-model="password"
+              type="password"
+              required
+              placeholder="••••••••"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          :disabled="loading"
+          class="w-full py-3 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {{ loading ? 'Connexion en cours...' : 'Se connecter' }}
+        </button>
+      </form>
+
+      <div class="mt-6 text-center text-sm text-slate-400">
+        Pas encore de compte ?
+        <router-link to="/register" class="text-rose-400 hover:text-rose-300 font-medium">Créer un compte</router-link>
+      </div>
+    </div>
+  </div>
+</template>
