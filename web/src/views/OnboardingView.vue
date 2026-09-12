@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
-import { Zap, ShieldCheck, Car, KeyRound, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-vue-next'
+import { Zap, ShieldCheck, Car, KeyRound, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, Link2 } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -80,9 +80,24 @@ async function testConnection() {
   testResult.value = null
   loading.value = true
   try {
-    // Basic format test
-    if (!teslamateUrl.value) throw new Error('URL requise')
-    testResult.value = { ok: true, message: 'Configuration prête' }
+    if (!teslamateUrl.value) throw new Error("Veuillez saisir l'URL de l'API TeslaMate")
+    const payload: any = {
+      teslamate_api_url: teslamateUrl.value,
+      teslamate_auth_type: teslamateAuthType.value,
+      teslamate_car_id: 1,
+    }
+    if (teslamateAuthType.value === 'BEARER') {
+      payload.teslamate_api_key = teslamateApiKey.value
+    } else if (teslamateAuthType.value === 'BASIC') {
+      payload.teslamate_basic_user = teslamateUser.value
+      payload.teslamate_basic_pass = teslamatePass.value
+    }
+    const res = await api.testTeslaMateRaw(payload)
+    const st = res.status
+    testResult.value = {
+      ok: true,
+      message: `Connexion réussie ! Statut : ${st?.state || 'En ligne'} (${Math.round(st?.odometer || 0).toLocaleString('fr-FR')} km)`,
+    }
   } catch (err: any) {
     testResult.value = { ok: false, message: err.message }
   } finally {
@@ -298,9 +313,12 @@ function finishOnboarding() {
               <input
                 v-model="teslamateUrl"
                 type="url"
-                placeholder="http://teslamateapi:8080 ou http://192.168.1.50:8080"
+                placeholder="http://192.168.1.50:8080 ou http://host.docker.internal:8080"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
               />
+              <p class="text-[11px] text-slate-400 mt-1.5">
+                💡 Si TeslaCost s'exécute dans Docker, utilisez <code class="text-rose-300">http://host.docker.internal:PORT</code> ou l'IP locale (ex: <code class="text-rose-300">192.168.x.x</code>) au lieu de <code class="text-slate-500">localhost</code>.
+              </p>
             </div>
 
             <div>
@@ -340,9 +358,33 @@ function finishOnboarding() {
                 <input
                   v-model="teslamatePass"
                   type="password"
-                  placeholder=""
+                  placeholder="••••••••"
                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
                 />
+              </div>
+            </div>
+
+            <!-- Test Connection Button -->
+            <div class="pt-2">
+              <button
+                type="button"
+                @click="testConnection"
+                :disabled="loading || !teslamateUrl"
+                class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 border border-slate-700 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw v-if="loading" class="w-3.5 h-3.5 animate-spin text-rose-400" />
+                <Link2 v-else class="w-3.5 h-3.5 text-rose-400" />
+                <span>{{ loading ? 'Test de connexion en cours...' : 'Tester la connexion TeslaMate' }}</span>
+              </button>
+
+              <div
+                v-if="testResult"
+                class="mt-2.5 p-3 rounded-xl text-xs flex items-start gap-2.5"
+                :class="testResult.ok ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'"
+              >
+                <CheckCircle2 v-if="testResult.ok" class="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+                <AlertCircle v-else class="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                <span>{{ testResult.message }}</span>
               </div>
             </div>
           </div>

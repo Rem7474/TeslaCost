@@ -181,6 +181,59 @@ func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Vehicle deleted successfully"})
 }
 
+type TestConnectionRequest struct {
+	TeslaMateAPIURL    string          `json:"teslamate_api_url"`
+	TeslaMateAuthType  models.AuthMode `json:"teslamate_auth_type"`
+	TeslaMateAPIKey    *string         `json:"teslamate_api_key"`
+	TeslaMateBasicUser *string         `json:"teslamate_basic_user"`
+	TeslaMateBasicPass *string         `json:"teslamate_basic_pass"`
+	TeslaMateCarID     *int            `json:"teslamate_car_id"`
+}
+
+func (h *VehicleHandler) TestTeslaMateRaw(w http.ResponseWriter, r *http.Request) {
+	var req TestConnectionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Corps de requête invalide")
+		return
+	}
+
+	apiKey := ""
+	if req.TeslaMateAPIKey != nil {
+		apiKey = *req.TeslaMateAPIKey
+	}
+	basicUser := ""
+	if req.TeslaMateBasicUser != nil {
+		basicUser = *req.TeslaMateBasicUser
+	}
+	basicPass := ""
+	if req.TeslaMateBasicPass != nil {
+		basicPass = *req.TeslaMateBasicPass
+	}
+	carID := 1
+	if req.TeslaMateCarID != nil && *req.TeslaMateCarID > 0 {
+		carID = *req.TeslaMateCarID
+	}
+
+	status, err := h.syncService.TestConnectionRaw(
+		r.Context(),
+		req.TeslaMateAPIURL,
+		req.TeslaMateAuthType,
+		apiKey,
+		basicUser,
+		basicPass,
+		carID,
+	)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"status":  status,
+	})
+}
+
 func (h *VehicleHandler) TestTeslaMate(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "id")
@@ -193,7 +246,7 @@ func (h *VehicleHandler) TestTeslaMate(w http.ResponseWriter, r *http.Request) {
 
 	status, err := h.syncService.TestConnection(r.Context(), v)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Connection test failed: "+err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -215,7 +268,7 @@ func (h *VehicleHandler) Sync(w http.ResponseWriter, r *http.Request) {
 
 	res, err := h.syncService.SyncVehicle(r.Context(), v)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Sync failed: "+err.Error())
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

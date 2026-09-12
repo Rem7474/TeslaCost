@@ -60,6 +60,8 @@ export const api = {
   updateVehicle: (id: string, data: any) => request<any>(`/vehicles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteVehicle: (id: string) => request<any>(`/vehicles/${id}`, { method: 'DELETE' }),
   testTeslaMate: (id: string) => request<any>(`/vehicles/${id}/teslamate/test`, { method: 'POST' }),
+  testTeslaMateRaw: (payload: any) =>
+    request<any>('/vehicles/test-connection', { method: 'POST', body: JSON.stringify(payload) }),
   syncVehicle: (id: string) => request<any>(`/vehicles/${id}/sync`, { method: 'POST' }),
 
   // Drives

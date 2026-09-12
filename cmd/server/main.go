@@ -141,6 +141,7 @@ func main() {
 			r.Route("/api/vehicles", func(r chi.Router) {
 				r.Get("/", vehicleHandler.List)
 				r.Post("/", vehicleHandler.Create)
+				r.Post("/test-connection", vehicleHandler.TestTeslaMateRaw)
 				r.Get("/{id}", vehicleHandler.Get)
 				r.Put("/{id}", vehicleHandler.Update)
 				r.Delete("/{id}", vehicleHandler.Delete)

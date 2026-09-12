@@ -7,6 +7,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
   const activeVehicleId = ref<string | null>(localStorage.getItem('teslacost_active_vehicle'))
   const isSyncing = ref(false)
   const syncResult = ref<any | null>(null)
+  const syncError = ref<string | null>(null)
 
   const activeVehicle = computed(() => {
     if (!vehicles.value.length) return null
@@ -34,15 +35,21 @@ export const useVehicleStore = defineStore('vehicle', () => {
     if (!activeVehicle.value) return
     isSyncing.value = true
     syncResult.value = null
+    syncError.value = null
     try {
       const res = await api.syncVehicle(activeVehicle.value.id)
       syncResult.value = res
       await fetchVehicles()
     } catch (err: any) {
-      alert(`Erreur de synchronisation : ${err.message}`)
+      syncError.value = err.message || 'Erreur inconnue lors de la synchronisation'
     } finally {
       isSyncing.value = false
     }
+  }
+
+  function clearSyncStatus() {
+    syncResult.value = null
+    syncError.value = null
   }
 
   return {
@@ -51,8 +58,10 @@ export const useVehicleStore = defineStore('vehicle', () => {
     activeVehicle,
     isSyncing,
     syncResult,
+    syncError,
     fetchVehicles,
     setActiveVehicle,
     syncActiveVehicle,
+    clearSyncStatus,
   }
 })

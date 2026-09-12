@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/teslacost/teslacost/internal/crypto"
@@ -14,10 +15,27 @@ import (
 
 // SyncResult returns metrics about what was synchronized.
 type SyncResult struct {
-	CurrentOdometer float64 `json:"current_odometer"`
-	DrivesSynced    int     `json:"drives_synced"`
-	ChargesSynced   int     `json:"charges_synced"`
-	SyncedAt        string  `json:"synced_at"`
+	CurrentOdometer float64  `json:"current_odometer"`
+	DrivesSynced    int      `json:"drives_synced"`
+	ChargesSynced   int      `json:"charges_synced"`
+	SyncedAt        string   `json:"synced_at"`
+	Warnings        []string `json:"warnings,omitempty"`
+}
+
+// formatTeslaMateError enriches error messages with actionable troubleshooting hints.
+func formatTeslaMateError(err error, rawURL string) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	isDockerLocalhost := strings.Contains(rawURL, "localhost") || strings.Contains(rawURL, "127.0.0.1")
+	if isDockerLocalhost && (strings.Contains(msg, "connection refused") || strings.Contains(msg, "dial tcp")) {
+		return fmt.Errorf("%s (Remarque : dans Docker, 'localhost' désigne le conteneur TeslaCost lui-même. Utilisez 'http://host.docker.internal:PORT' ou l'IP locale de votre machine)", msg)
+	}
+	if strings.Contains(msg, "Client.Timeout exceeded") || strings.Contains(msg, "context deadline exceeded") {
+		return fmt.Errorf("%s (Délai d'attente dépassé : vérifiez que l'adresse et le port sont joignables et que TeslaMate répond)", msg)
+	}
+	return err
 }
 
 // SyncService orchestrates synchronization from TeslaMate to TeslaCost.
@@ -48,7 +66,49 @@ func (s *SyncService) TestConnection(ctx context.Context, v *models.Vehicle) (*t
 
 	status, _, err := client.GetCarStatus(ctx, carID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch status from teslamate: %w", err)
+		rawURL := ""
+		if v.TeslaMateAPIURL != nil {
+			rawURL = *v.TeslaMateAPIURL
+		}
+		return nil, formatTeslaMateError(err, rawURL)
+	}
+
+	return status, nil
+}
+
+// TestConnectionRaw verifies if connection to TeslaMate works using raw credentials without existing vehicle.
+func (s *SyncService) TestConnectionRaw(ctx context.Context, apiURL string, authType models.AuthMode, apiKey, basicUser, basicPass string, carID int) (*teslamate.StatusDetails, error) {
+	apiURL = strings.TrimSpace(apiURL)
+	if apiURL == "" {
+		return nil, fmt.Errorf("l'URL de l'API TeslaMate est requise")
+	}
+
+	cfg := teslamate.Config{
+		BaseURL:  apiURL,
+		AuthType: teslamate.AuthType(authType),
+		Timeout:  15 * time.Second,
+	}
+
+	switch cfg.AuthType {
+	case teslamate.AuthBearer:
+		cfg.APIToken = apiKey
+	case teslamate.AuthBasic:
+		cfg.Username = basicUser
+		cfg.Password = basicPass
+	}
+
+	client, err := teslamate.NewClient(cfg)
+	if err != nil {
+		return nil, formatTeslaMateError(err, apiURL)
+	}
+
+	if carID <= 0 {
+		carID = 1
+	}
+
+	status, _, err := client.GetCarStatus(ctx, carID)
+	if err != nil {
+		return nil, formatTeslaMateError(err, apiURL)
 	}
 
 	return status, nil
@@ -57,7 +117,7 @@ func (s *SyncService) TestConnection(ctx context.Context, v *models.Vehicle) (*t
 // SyncVehicle runs a full sync cycle for a specific vehicle.
 func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*SyncResult, error) {
 	if v.TeslaMateAPIURL == nil || *v.TeslaMateAPIURL == "" {
-		return nil, fmt.Errorf("vehicle does not have a TeslaMate API URL configured")
+		return nil, fmt.Errorf("le véhicule n'a pas d'URL TeslaMate configurée")
 	}
 
 	client, err := s.buildClient(v)
@@ -70,10 +130,14 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		carID = *v.TeslaMateCarID
 	}
 
+	var syncWarnings []string
+
 	// 1. Sync live Status & Odometer
 	status, units, err := client.GetCarStatus(ctx, carID)
 	if err != nil {
-		log.Printf("[sync] Warning: Could not fetch car status: %v", err)
+		formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
+		log.Printf("[sync] Error fetching car status: %v", formattedErr)
+		return nil, fmt.Errorf("impossible de joindre TeslaMate (%s) : %w", *v.TeslaMateAPIURL, formattedErr)
 	} else if status != nil {
 		odometer := status.Odometer
 		if units != nil {
@@ -85,15 +149,23 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		}
 	}
 
-	// 2. Sync Drives (fetch latest 200 drives)
-	driveList, driveUnits, err := client.GetDrives(ctx, carID, teslamate.DriveFilterOptions{
-		Page: 1,
-		Show: 200,
-	})
+	// 2. Sync Drives in smaller batches of 50 up to 4 pages (max 200) to prevent slow SQL joins from timing out
 	drivesCount := 0
-	if err != nil {
-		log.Printf("[sync] Warning: Could not fetch drives: %v", err)
-	} else {
+	for page := 1; page <= 4; page++ {
+		driveList, driveUnits, err := client.GetDrives(ctx, carID, teslamate.DriveFilterOptions{
+			Page: page,
+			Show: 50,
+		})
+		if err != nil {
+			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
+			log.Printf("[sync] Warning: Could not fetch drives (page %d): %v", page, formattedErr)
+			syncWarnings = append(syncWarnings, fmt.Sprintf("Trajets : %v", formattedErr))
+			break
+		}
+		if len(driveList) == 0 {
+			break
+		}
+
 		for _, td := range driveList {
 			startTime, _ := td.ParsedStartTime()
 			endTime, _ := td.ParsedEndTime()
@@ -148,17 +220,29 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				drivesCount++
 			}
 		}
+
+		if len(driveList) < 50 {
+			break
+		}
 	}
 
-	// 3. Sync Charges (fetch latest 200 charges)
-	chargeList, chargeUnits, err := client.GetCharges(ctx, carID, teslamate.ChargeFilterOptions{
-		Page: 1,
-		Show: 200,
-	})
+	// 3. Sync Charges in smaller batches of 50 up to 4 pages (max 200)
 	chargesCount := 0
-	if err != nil {
-		log.Printf("[sync] Warning: Could not fetch charges: %v", err)
-	} else {
+	for page := 1; page <= 4; page++ {
+		chargeList, chargeUnits, err := client.GetCharges(ctx, carID, teslamate.ChargeFilterOptions{
+			Page: page,
+			Show: 50,
+		})
+		if err != nil {
+			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
+			log.Printf("[sync] Warning: Could not fetch charges (page %d): %v", page, formattedErr)
+			syncWarnings = append(syncWarnings, fmt.Sprintf("Recharges : %v", formattedErr))
+			break
+		}
+		if len(chargeList) == 0 {
+			break
+		}
+
 		for _, tc := range chargeList {
 			startDate, _ := tc.ParsedStartTime()
 			endDate, _ := tc.ParsedEndTime()
@@ -208,6 +292,15 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				chargesCount++
 			}
 		}
+
+		if len(chargeList) < 50 {
+			break
+		}
+	}
+
+	// If there were warnings and 0 items synced at all: report as error
+	if len(syncWarnings) > 0 && drivesCount == 0 && chargesCount == 0 {
+		return nil, fmt.Errorf("échec de la synchronisation : %s", strings.Join(syncWarnings, " ; "))
 	}
 
 	return &SyncResult{
@@ -215,6 +308,7 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		DrivesSynced:    drivesCount,
 		ChargesSynced:   chargesCount,
 		SyncedAt:        time.Now().UTC().Format(time.RFC3339),
+		Warnings:        syncWarnings,
 	}, nil
 }
 
@@ -226,7 +320,7 @@ func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) 
 	cfg := teslamate.Config{
 		BaseURL:  *v.TeslaMateAPIURL,
 		AuthType: teslamate.AuthType(v.TeslaMateAuthType),
-		Timeout:  20 * time.Second,
+		Timeout:  60 * time.Second,
 	}
 
 	switch cfg.AuthType {

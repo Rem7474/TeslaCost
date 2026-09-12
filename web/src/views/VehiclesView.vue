@@ -18,8 +18,9 @@ import {
 const vehicleStore = useVehicleStore()
 const showModal = ref(false)
 const isEditing = ref(false)
-const testLoading = ref(false)
-const testResult = ref<any | null>(null)
+const modalTestLoading = ref(false)
+const modalTestResult = ref<{ success: boolean; status?: any; error?: string } | null>(null)
+const cardTestResults = ref<Record<string, { loading: boolean; success?: boolean; status?: any; error?: string }>>({})
 const editingId = ref<string | null>(null)
 
 const form = ref({
@@ -27,7 +28,7 @@ const form = ref({
   vin: '',
   current_odometer: 0,
   teslamate_car_id: 1,
-  teslamate_api_url: 'http://localhost:8080',
+  teslamate_api_url: '',
   teslamate_auth_type: 'NONE',
   teslamate_api_key: '',
   teslamate_basic_user: '',
@@ -41,7 +42,7 @@ onMounted(() => {
 function openCreateModal() {
   isEditing.value = false
   editingId.value = null
-  testResult.value = null
+  modalTestResult.value = null
   form.value = {
     name: 'Tesla Model 3',
     vin: '',
@@ -59,7 +60,7 @@ function openCreateModal() {
 function openEditModal(v: any) {
   isEditing.value = true
   editingId.value = v.id
-  testResult.value = null
+  modalTestResult.value = null
   form.value = {
     name: v.name,
     vin: v.vin || '',
@@ -98,17 +99,35 @@ async function handleDelete(id: string) {
   }
 }
 
-async function testConnection(id: string) {
-  testLoading.value = true
-  testResult.value = null
+async function testModalConnection() {
+  if (!form.value.teslamate_api_url) {
+    modalTestResult.value = { success: false, error: "Veuillez d'abord renseigner l'URL de l'API TeslaMate" }
+    return
+  }
+  modalTestLoading.value = true
+  modalTestResult.value = null
+  try {
+    const res = await api.testTeslaMateRaw(form.value)
+    modalTestResult.value = { success: true, status: res.status }
+  } catch (err: any) {
+    modalTestResult.value = { success: false, error: err.message }
+  } finally {
+    modalTestLoading.value = false
+  }
+}
+
+async function testCardConnection(id: string) {
+  cardTestResults.value[id] = { loading: true }
   try {
     const res = await api.testTeslaMate(id)
-    testResult.value = { success: true, status: res.status }
+    cardTestResults.value[id] = { loading: false, success: true, status: res.status }
   } catch (err: any) {
-    testResult.value = { success: false, error: err.message }
-  } finally {
-    testLoading.value = false
+    cardTestResults.value[id] = { loading: false, success: false, error: err.message }
   }
+}
+
+function clearCardTestResult(id: string) {
+  delete cardTestResults.value[id]
 }
 </script>
 
@@ -179,8 +198,27 @@ async function testConnection(id: string) {
 
           <div>
             <span class="text-slate-400">Connexion TeslaMate</span>
-            <p class="text-sm font-semibold mt-0.5" :class="v.teslamate_api_url ? 'text-emerald-400' : 'text-slate-500'">
-              {{ v.teslamate_api_url ? 'Active' : 'Non configurée' }}
+            <p
+              class="text-sm font-semibold mt-0.5"
+              :class="
+                cardTestResults[v.id]?.success
+                  ? 'text-emerald-400'
+                  : cardTestResults[v.id]?.error
+                  ? 'text-rose-400'
+                  : v.teslamate_api_url
+                  ? 'text-emerald-400/80'
+                  : 'text-slate-500'
+              "
+            >
+              {{
+                cardTestResults[v.id]?.success
+                  ? 'En ligne'
+                  : cardTestResults[v.id]?.error
+                  ? 'Erreur de connexion'
+                  : v.teslamate_api_url
+                  ? 'Configurée'
+                  : 'Non configurée'
+              }}
             </p>
           </div>
         </div>
@@ -189,12 +227,13 @@ async function testConnection(id: string) {
         <div class="mt-4 pt-3 flex items-center justify-between gap-2">
           <button
             v-if="v.teslamate_api_url"
-            @click="testConnection(v.id)"
-            :disabled="testLoading"
-            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5"
+            @click="testCardConnection(v.id)"
+            :disabled="cardTestResults[v.id]?.loading"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
           >
-            <Link2 class="w-3.5 h-3.5" />
-            Tester l'API
+            <RefreshCw v-if="cardTestResults[v.id]?.loading" class="w-3.5 h-3.5 animate-spin text-rose-400" />
+            <Link2 v-else class="w-3.5 h-3.5" />
+            <span>{{ cardTestResults[v.id]?.loading ? 'Test...' : 'Tester l\'API' }}</span>
           </button>
 
           <button
@@ -209,12 +248,25 @@ async function testConnection(id: string) {
           </span>
         </div>
 
-        <!-- Test feedback -->
-        <div v-if="testResult" class="mt-3 p-3 rounded-xl text-xs" :class="testResult.success ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border border-rose-500/20'">
-          <span v-if="testResult.success">
-            Connexion réussie ! Statut : {{ testResult.status?.state }} (Odomètre : {{ Math.round(testResult.status?.odometer) }} km)
-          </span>
-          <span v-else>{{ testResult.error }}</span>
+        <!-- Test feedback per card -->
+        <div
+          v-if="cardTestResults[v.id] && !cardTestResults[v.id].loading"
+          class="mt-3 p-3 rounded-xl text-xs flex items-start justify-between gap-2"
+          :class="cardTestResults[v.id].success ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'"
+        >
+          <div class="flex items-start gap-2">
+            <CheckCircle2 v-if="cardTestResults[v.id].success" class="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+            <AlertCircle v-else class="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+            <div>
+              <span v-if="cardTestResults[v.id].success">
+                Connexion réussie ! Statut : {{ cardTestResults[v.id].status?.state || 'En ligne' }} ({{ Math.round(cardTestResults[v.id].status?.odometer || 0).toLocaleString('fr-FR') }} km)
+              </span>
+              <span v-else>{{ cardTestResults[v.id].error }}</span>
+            </div>
+          </div>
+          <button @click="clearCardTestResult(v.id)" class="text-slate-400 hover:text-white p-0.5">
+            <X class="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </div>
@@ -256,6 +308,9 @@ async function testConnection(id: string) {
             <div>
               <label class="block text-xs font-semibold text-slate-300 mb-1">URL de base teslamateapi</label>
               <input v-model="form.teslamate_api_url" placeholder="http://192.168.1.50:8080 ou https://tm.mondomaine.com" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <p class="text-[11px] text-slate-400 mt-1">
+                💡 Si TeslaCost s'exécute dans Docker, utilisez <code class="text-rose-300">http://host.docker.internal:PORT</code> ou l'IP locale (ex: <code class="text-rose-300">192.168.x.x</code>) au lieu de <code class="text-slate-500">localhost</code>.
+              </p>
             </div>
 
             <div class="grid grid-cols-2 gap-3">
@@ -286,6 +341,41 @@ async function testConnection(id: string) {
               <div>
                 <label class="block text-xs font-semibold text-slate-300 mb-1">Mot de passe Basic Auth</label>
                 <input v-model="form.teslamate_basic_pass" type="password" placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+
+            <!-- Test Connection inside modal -->
+            <div v-if="form.teslamate_api_url" class="pt-2">
+              <button
+                type="button"
+                @click="testModalConnection"
+                :disabled="modalTestLoading"
+                class="w-full py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center justify-center gap-2 border border-slate-700 disabled:opacity-50 transition-colors"
+              >
+                <RefreshCw v-if="modalTestLoading" class="w-3.5 h-3.5 animate-spin text-rose-400" />
+                <Link2 v-else class="w-3.5 h-3.5 text-rose-400" />
+                <span>{{ modalTestLoading ? 'Test de connexion en cours...' : 'Tester la connexion TeslaMate' }}</span>
+              </button>
+
+              <div
+                v-if="modalTestResult"
+                class="mt-2.5 p-3 rounded-xl text-xs flex items-start gap-2"
+                :class="modalTestResult.success ? 'bg-emerald-500/10 text-emerald-300 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-300 border border-rose-500/20'"
+              >
+                <CheckCircle2 v-if="modalTestResult.success" class="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+                <AlertCircle v-else class="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+                <div class="flex-1">
+                  <div v-if="modalTestResult.success">
+                    <strong class="font-semibold">Connexion réussie !</strong>
+                    <p class="text-[11px] text-emerald-200/80 mt-0.5">
+                      Statut : {{ modalTestResult.status?.state || 'En ligne' }} • Odomètre : {{ Math.round(modalTestResult.status?.odometer || 0).toLocaleString('fr-FR') }} km
+                    </p>
+                  </div>
+                  <div v-else>
+                    <strong class="font-semibold">Échec de la connexion :</strong>
+                    <p class="text-[11px] text-rose-200/90 mt-0.5">{{ modalTestResult.error }}</p>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
