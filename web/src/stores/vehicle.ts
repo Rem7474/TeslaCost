@@ -8,6 +8,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
   const isSyncing = ref(false)
   const syncResult = ref<any | null>(null)
   const syncError = ref<string | null>(null)
+  const lastSyncTimestamp = ref<number>(Date.now())
 
   const activeVehicle = computed(() => {
     if (!vehicles.value.length) return null
@@ -40,6 +41,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
       const res = await api.syncVehicle(activeVehicle.value.id)
       syncResult.value = res
       await fetchVehicles()
+      lastSyncTimestamp.value = Date.now()
     } catch (err: any) {
       syncError.value = err.message || 'Erreur inconnue lors de la synchronisation'
     } finally {
@@ -59,6 +61,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
     isSyncing,
     syncResult,
     syncError,
+    lastSyncTimestamp,
     fetchVehicles,
     setActiveVehicle,
     syncActiveVehicle,

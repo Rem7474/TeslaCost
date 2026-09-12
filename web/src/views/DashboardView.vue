@@ -42,7 +42,7 @@ async function loadTCO() {
 }
 
 watch(
-  () => vehicleStore.activeVehicleId,
+  () => [vehicleStore.activeVehicleId, vehicleStore.lastSyncTimestamp],
   () => {
     loadTCO()
   }

@@ -62,7 +62,7 @@ async function loadData() {
 }
 
 watch(
-  () => [vehicleStore.activeVehicleId, activeTab.value],
+  () => [vehicleStore.activeVehicleId, activeTab.value, vehicleStore.lastSyncTimestamp],
   () => {
     loadData()
   }

@@ -51,7 +51,7 @@ async function loadDrives() {
 }
 
 watch(
-  () => [vehicleStore.activeVehicleId, selectedTag.value],
+  () => [vehicleStore.activeVehicleId, selectedTag.value, vehicleStore.lastSyncTimestamp],
   () => {
     page.value = 1
     selectedDriveIds.value = []

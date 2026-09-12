@@ -88,7 +88,7 @@ async function loadTires() {
 }
 
 watch(
-  () => vehicleStore.activeVehicleId,
+  () => [vehicleStore.activeVehicleId, vehicleStore.lastSyncTimestamp],
   () => {
     loadTires()
   }
