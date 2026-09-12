@@ -221,7 +221,7 @@ func (r *Repository) DeleteVehicle(ctx context.Context, id, userID string) error
 // Drives & Trip Groups
 // ============================================================================
 
-func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) error {
+func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) (bool, error) {
 	query := `
 		INSERT INTO drives (
 			vehicle_id, teslamate_drive_id, start_time, end_time,
@@ -242,14 +242,16 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		    energy_consumed_kwh = EXCLUDED.energy_consumed_kwh,
 		    consumption_kwh_100km = EXCLUDED.consumption_kwh_100km,
 		    updated_at = NOW()
-		RETURNING id;
+		RETURNING id, (xmax = 0) AS is_inserted;
 	`
-	return r.pool.QueryRow(ctx, query,
+	var isInserted bool
+	err := r.pool.QueryRow(ctx, query,
 		d.VehicleID, d.TeslaMateDriveID, d.StartTime, d.EndTime,
 		d.StartOdometer, d.EndOdometer, d.DistanceKm, d.DurationMin,
 		d.SpeedAvg, d.StartAddress, d.EndAddress, d.EnergyConsumedKwh,
 		d.ConsumptionKwh100km, d.Tags,
-	).Scan(&d.ID)
+	).Scan(&d.ID, &isInserted)
+	return isInserted, err
 }
 
 func (r *Repository) GetLatestTeslaMateDriveStartTime(ctx context.Context, vehicleID string) (*time.Time, error) {
@@ -603,7 +605,7 @@ func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID stri
 // Charges
 // ============================================================================
 
-func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.ChargeLog) error {
+func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.ChargeLog) (bool, error) {
 	query := `
 		INSERT INTO charge_logs (
 			vehicle_id, teslamate_charge_id, date, end_date,
@@ -618,12 +620,14 @@ func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.Charge
 		    cost = EXCLUDED.cost,
 		    currency = EXCLUDED.currency,
 		    odometer = EXCLUDED.odometer
-		RETURNING id;
+		RETURNING id, (xmax = 0) AS is_inserted;
 	`
-	return r.pool.QueryRow(ctx, query,
+	var isInserted bool
+	err := r.pool.QueryRow(ctx, query,
 		c.VehicleID, c.TeslaMateChargeID, c.Date, c.EndDate,
 		c.Address, c.KwhAdded, c.KwhUsed, c.Cost, c.Currency, c.Odometer,
-	).Scan(&c.ID)
+	).Scan(&c.ID, &isInserted)
+	return isInserted, err
 }
 
 func (r *Repository) GetLatestTeslaMateChargeDate(ctx context.Context, vehicleID string) (*time.Time, error) {

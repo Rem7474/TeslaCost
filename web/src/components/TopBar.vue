@@ -1,10 +1,25 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { RefreshCw, Car, Gauge, Plus, AlertCircle, AlertTriangle, X, CheckCircle2 } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 
 const vehicleStore = useVehicleStore()
 const router = useRouter()
+
+const syncSummary = computed(() => {
+  const res = vehicleStore.syncResult
+  if (!res) return ''
+  const drives = res.drives_added !== undefined ? res.drives_added : res.drives_synced
+  const charges = res.charges_added !== undefined ? res.charges_added : res.charges_synced
+  const parts: string[] = []
+  if (drives > 0) parts.push(`+${drives} trajet${drives > 1 ? 's' : ''}`)
+  if (charges > 0) parts.push(`+${charges} charge${charges > 1 ? 's' : ''}`)
+  if (parts.length > 0) {
+    return parts.join(', ')
+  }
+  return 'À jour (aucun nouveau trajet)'
+})
 
 function onVehicleChange(event: Event) {
   const target = event.target as HTMLSelectElement
@@ -79,7 +94,7 @@ function onVehicleChange(event: Event) {
           class="hidden md:flex items-center gap-1.5 text-[11px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-lg"
         >
           <CheckCircle2 class="w-3 h-3 shrink-0" />
-          <span>+{{ vehicleStore.syncResult.drives_synced }} trajets, +{{ vehicleStore.syncResult.charges_synced }} charges</span>
+          <span>{{ syncSummary }}</span>
           <button @click="vehicleStore.clearSyncStatus" class="ml-1 text-slate-400 hover:text-slate-200">
             <X class="w-3 h-3" />
           </button>
@@ -112,7 +127,7 @@ function onVehicleChange(event: Event) {
       <div class="flex items-center gap-2">
         <AlertTriangle class="w-4 h-4 shrink-0 text-amber-400" />
         <span>
-          <strong>Synchronisation partielle :</strong> +{{ vehicleStore.syncResult.drives_synced }} trajets, +{{ vehicleStore.syncResult.charges_synced }} charges synchronisés.
+          <strong>Synchronisation partielle :</strong> {{ syncSummary }}.
           <span class="text-amber-200/80">({{ vehicleStore.syncResult.warnings.join(' ; ') }})</span>
         </span>
       </div>

@@ -17,7 +17,11 @@ import (
 type SyncResult struct {
 	CurrentOdometer float64  `json:"current_odometer"`
 	DrivesSynced    int      `json:"drives_synced"`
+	DrivesAdded     int      `json:"drives_added"`
+	DrivesUpdated   int      `json:"drives_updated"`
 	ChargesSynced   int      `json:"charges_synced"`
+	ChargesAdded    int      `json:"charges_added"`
+	ChargesUpdated  int      `json:"charges_updated"`
 	SyncedAt        string   `json:"synced_at"`
 	Warnings        []string `json:"warnings,omitempty"`
 }
@@ -156,6 +160,8 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 	}
 
 	drivesCount := 0
+	drivesAdded := 0
+	drivesUpdated := 0
 	for page := 1; page <= 500; page++ {
 		driveList, driveUnits, err := client.GetDrives(ctx, carID, teslamate.DriveFilterOptions{
 			Page: page,
@@ -227,8 +233,14 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			}
 
 			if s.repo != nil {
-				if err := s.repo.UpsertTeslaMateDrive(ctx, d); err == nil {
+				isInserted, err := s.repo.UpsertTeslaMateDrive(ctx, d)
+				if err == nil {
 					drivesCount++
+					if isInserted {
+						drivesAdded++
+					} else {
+						drivesUpdated++
+					}
 				}
 			}
 		}
@@ -249,6 +261,8 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 	}
 
 	chargesCount := 0
+	chargesAdded := 0
+	chargesUpdated := 0
 	for page := 1; page <= 500; page++ {
 		chargeList, chargeUnits, err := client.GetCharges(ctx, carID, teslamate.ChargeFilterOptions{
 			Page: page,
@@ -315,8 +329,14 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			}
 
 			if s.repo != nil {
-				if err := s.repo.UpsertTeslaMateCharge(ctx, c); err == nil {
+				isInserted, err := s.repo.UpsertTeslaMateCharge(ctx, c)
+				if err == nil {
 					chargesCount++
+					if isInserted {
+						chargesAdded++
+					} else {
+						chargesUpdated++
+					}
 				}
 			}
 		}
@@ -338,7 +358,11 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 	return &SyncResult{
 		CurrentOdometer: v.CurrentOdometer,
 		DrivesSynced:    drivesCount,
+		DrivesAdded:     drivesAdded,
+		DrivesUpdated:   drivesUpdated,
 		ChargesSynced:   chargesCount,
+		ChargesAdded:    chargesAdded,
+		ChargesUpdated:  chargesUpdated,
 		SyncedAt:        time.Now().UTC().Format(time.RFC3339),
 		Warnings:        syncWarnings,
 	}, nil
