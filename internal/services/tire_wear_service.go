@@ -10,18 +10,23 @@ import (
 
 // TireWearStats provides detailed wear analytics for a tire.
 type TireWearStats struct {
-	Tire                 models.Tire `json:"tire"`
-	CurrentDepthMm       float64     `json:"current_depth_mm"`
-	InitialDepthMm       float64     `json:"initial_depth_mm"`
-	MinLegalDepthMm      float64     `json:"min_legal_depth_mm"`
-	UsableDepthMm        float64     `json:"usable_depth_mm"`
-	RemainingDepthMm     float64     `json:"remaining_depth_mm"`
-	WearPercentage       float64     `json:"wear_percentage"`
-	DistanceTraveledKm   float64     `json:"distance_traveled_km"`
-	WearRatePer10kKm     float64     `json:"wear_rate_per_10k_km"`
-	EstimatedRemainingKm float64     `json:"estimated_remaining_km"`
-	Condition            string      `json:"condition"` // "GOOD", "WARNING", "CRITICAL"
-	LogsCount            int         `json:"logs_count"`
+	Tire                 models.Tire               `json:"tire"`
+	CurrentDepthMm       float64                   `json:"current_depth_mm"`
+	InitialDepthMm       float64                   `json:"initial_depth_mm"`
+	MinLegalDepthMm      float64                   `json:"min_legal_depth_mm"`
+	UsableDepthMm        float64                   `json:"usable_depth_mm"`
+	RemainingDepthMm     float64                   `json:"remaining_depth_mm"`
+	WearPercentage       float64                   `json:"wear_percentage"`
+	DistanceTraveledKm   float64                   `json:"distance_traveled_km"`
+	TotalDistanceKm      float64                   `json:"total_distance_km"`
+	EstimatedLifespanKm  int                       `json:"estimated_lifespan_km"`
+	LifeProgressPct      float64                   `json:"life_progress_pct"`
+	CostPerKm            float64                   `json:"cost_per_km"`
+	WearRatePer10kKm     float64                   `json:"wear_rate_per_10k_km"`
+	EstimatedRemainingKm float64                   `json:"estimated_remaining_km"`
+	Condition            string                    `json:"condition"` // "GOOD", "WARNING", "CRITICAL"
+	LogsCount            int                       `json:"logs_count"`
+	Sessions             []models.TireMountSession `json:"sessions"`
 }
 
 // TireWearService calculates wear projections and stats for tires.
@@ -34,12 +39,14 @@ func NewTireWearService(repo *database.Repository) *TireWearService {
 	return &TireWearService{repo: repo}
 }
 
-// CalculateTireWear computes wear metrics based on depth logs.
+// CalculateTireWear computes wear metrics based on depth logs and mount sessions.
 func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Tire, vehicleCurrentOdometer float64) (*TireWearStats, error) {
 	logs, err := s.repo.ListTireLogs(ctx, tire.ID)
 	if err != nil {
 		return nil, err
 	}
+
+	sessions, _ := s.repo.ListTireMountSessions(ctx, tire.ID)
 
 	initialDepth := tire.InitialDepthMm
 	if initialDepth <= 0 {
@@ -68,6 +75,28 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 			distanceTraveled = vehicleCurrentOdometer - latestLog.Odometer
 		}
 	}
+
+	// Calculate lifetime distance
+	currentRunKm := 0.0
+	isMounted := tire.CurrentPosition != models.TirePosStorage && tire.CurrentPosition != models.TirePosDisposed
+	if isMounted && tire.MountedOdometer != nil && vehicleCurrentOdometer > *tire.MountedOdometer {
+		currentRunKm = vehicleCurrentOdometer - *tire.MountedOdometer
+	}
+	totalDistance := tire.AccumulatedDistanceKm + currentRunKm
+
+	// Update active session distance in-memory for display
+	for i := range sessions {
+		if sessions[i].DismountedDate == nil && isMounted {
+			sessions[i].DistanceKm = math.Round(currentRunKm*10) / 10
+		}
+	}
+
+	lifespan := tire.EstimatedLifespanKm
+	if lifespan <= 0 {
+		lifespan = 40000
+	}
+	lifeProgressPct := math.Min(100.0, math.Round((totalDistance/float64(lifespan))*1000)/10)
+	costPerKm := math.Round((tire.PurchasePrice/float64(lifespan))*10000) / 10000
 
 	wornDepth := math.Max(0, initialDepth-currentDepth)
 	remainingDepth := math.Max(0, currentDepth-minLegal)
@@ -103,9 +132,15 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		RemainingDepthMm:     math.Round(remainingDepth*10) / 10,
 		WearPercentage:       math.Round(wearPct*10) / 10,
 		DistanceTraveledKm:   math.Round(distanceTraveled),
+		TotalDistanceKm:      math.Round(totalDistance*10) / 10,
+		EstimatedLifespanKm:  lifespan,
+		LifeProgressPct:      lifeProgressPct,
+		CostPerKm:            costPerKm,
 		WearRatePer10kKm:     math.Round(wearRatePer10k*100) / 100,
 		EstimatedRemainingKm: math.Round(estimatedRemainingKm),
 		Condition:            condition,
 		LogsCount:            len(logs),
+		Sessions:             sessions,
 	}, nil
 }
+

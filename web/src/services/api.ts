@@ -81,6 +81,20 @@ export const api = {
   // Tires
   getTires: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/tires`),
   createTire: (vehicleId: string, data: any) => request<any>(`/vehicles/${vehicleId}/tires`, { method: 'POST', body: JSON.stringify(data) }),
+  batchCreateTires: (vehicleId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/tires/batch`, { method: 'POST', body: JSON.stringify(data) }),
+  updateTire: (vehicleId: string, tireId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  quickRotateTires: (vehicleId: string, data: { mode: string; odometer: number; swap_with_pack_tire_ids?: string[] }) =>
+    request<any>(`/vehicles/${vehicleId}/tires/quick-rotate`, { method: 'POST', body: JSON.stringify(data) }),
+  getTireHistory: (vehicleId: string, tireId: string) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/history`),
+  createTireSession: (vehicleId: string, tireId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/sessions`, { method: 'POST', body: JSON.stringify(data) }),
+  updateTireSession: (vehicleId: string, tireId: string, sessionId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/sessions/${sessionId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTireSession: (vehicleId: string, tireId: string, sessionId: string) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/sessions/${sessionId}`, { method: 'DELETE' }),
   addTireLog: (vehicleId: string, tireId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/tires/${tireId}/logs`, { method: 'POST', body: JSON.stringify(data) }),
   rotateTires: (vehicleId: string, data: any) =>

@@ -464,19 +464,40 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 // ============================================================================
 
 func (r *Repository) CreateTire(ctx context.Context, t *models.Tire) error {
+	lifespan := t.EstimatedLifespanKm
+	if lifespan <= 0 {
+		lifespan = 40000
+	}
 	query := `
 		INSERT INTO tires (
 			vehicle_id, brand, model, dimension, season,
 			purchase_date, purchase_price, current_position,
-			initial_depth_mm, min_legal_depth_mm, dot_code
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			initial_depth_mm, min_legal_depth_mm, dot_code,
+			mounted_odometer, accumulated_distance_km, estimated_lifespan_km
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING id, created_at, updated_at;
 	`
-	return r.pool.QueryRow(ctx, query,
+	err := r.pool.QueryRow(ctx, query,
 		t.VehicleID, t.Brand, t.Model, t.Dimension, t.Season,
 		t.PurchaseDate, t.PurchasePrice, t.CurrentPosition,
 		t.InitialDepthMm, t.MinLegalDepthMm, t.DotCode,
+		t.MountedOdometer, t.AccumulatedDistanceKm, lifespan,
 	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	// If mounted immediately, create initial mount session
+	if t.CurrentPosition != models.TirePosStorage && t.CurrentPosition != models.TirePosDisposed && t.MountedOdometer != nil && t.VehicleID != nil {
+		sessionQuery := `
+			INSERT INTO tire_mount_sessions (
+				tire_id, vehicle_id, position, mounted_date, mounted_odometer
+			) VALUES ($1, $2, $3, $4, $5);
+		`
+		_, _ = r.pool.Exec(ctx, sessionQuery, t.ID, *t.VehicleID, t.CurrentPosition, t.PurchaseDate, *t.MountedOdometer)
+	}
+
+	return nil
 }
 
 func (r *Repository) ListTires(ctx context.Context, vehicleID string) ([]models.Tire, error) {
@@ -484,6 +505,7 @@ func (r *Repository) ListTires(ctx context.Context, vehicleID string) ([]models.
 		SELECT id, vehicle_id, brand, model, dimension, season,
 		       purchase_date, purchase_price, current_position,
 		       initial_depth_mm, min_legal_depth_mm, dot_code, is_archived,
+		       mounted_odometer, accumulated_distance_km, estimated_lifespan_km,
 		       created_at, updated_at
 		FROM tires
 		WHERE vehicle_id = $1 AND is_archived = FALSE
@@ -502,6 +524,7 @@ func (r *Repository) ListTires(ctx context.Context, vehicleID string) ([]models.
 			&t.ID, &t.VehicleID, &t.Brand, &t.Model, &t.Dimension, &t.Season,
 			&t.PurchaseDate, &t.PurchasePrice, &t.CurrentPosition,
 			&t.InitialDepthMm, &t.MinLegalDepthMm, &t.DotCode, &t.IsArchived,
+			&t.MountedOdometer, &t.AccumulatedDistanceKm, &t.EstimatedLifespanKm,
 			&t.CreatedAt, &t.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -509,6 +532,346 @@ func (r *Repository) ListTires(ctx context.Context, vehicleID string) ([]models.
 		list = append(list, t)
 	}
 	return list, nil
+}
+
+func (r *Repository) GetTireByID(ctx context.Context, id, vehicleID string) (*models.Tire, error) {
+	query := `
+		SELECT id, vehicle_id, brand, model, dimension, season,
+		       purchase_date, purchase_price, current_position,
+		       initial_depth_mm, min_legal_depth_mm, dot_code, is_archived,
+		       mounted_odometer, accumulated_distance_km, estimated_lifespan_km,
+		       created_at, updated_at
+		FROM tires
+		WHERE id = $1 AND vehicle_id = $2;
+	`
+	var t models.Tire
+	err := r.pool.QueryRow(ctx, query, id, vehicleID).Scan(
+		&t.ID, &t.VehicleID, &t.Brand, &t.Model, &t.Dimension, &t.Season,
+		&t.PurchaseDate, &t.PurchasePrice, &t.CurrentPosition,
+		&t.InitialDepthMm, &t.MinLegalDepthMm, &t.DotCode, &t.IsArchived,
+		&t.MountedOdometer, &t.AccumulatedDistanceKm, &t.EstimatedLifespanKm,
+		&t.CreatedAt, &t.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &t, nil
+}
+
+func (r *Repository) UpdateTire(ctx context.Context, t *models.Tire) error {
+	lifespan := t.EstimatedLifespanKm
+	if lifespan <= 0 {
+		lifespan = 40000
+	}
+	query := `
+		UPDATE tires
+		SET brand = $1, model = $2, dimension = $3, season = $4,
+		    purchase_date = $5, purchase_price = $6, current_position = $7,
+		    initial_depth_mm = $8, min_legal_depth_mm = $9, dot_code = $10,
+		    mounted_odometer = $11, accumulated_distance_km = $12, estimated_lifespan_km = $13,
+		    updated_at = NOW()
+		WHERE id = $14;
+	`
+	_, err := r.pool.Exec(ctx, query,
+		t.Brand, t.Model, t.Dimension, t.Season,
+		t.PurchaseDate, t.PurchasePrice, t.CurrentPosition,
+		t.InitialDepthMm, t.MinLegalDepthMm, t.DotCode,
+		t.MountedOdometer, t.AccumulatedDistanceKm, lifespan,
+		t.ID,
+	)
+	return err
+}
+
+func (r *Repository) CreateTiresBatch(ctx context.Context, tires []*models.Tire) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	for _, t := range tires {
+		lifespan := t.EstimatedLifespanKm
+		if lifespan <= 0 {
+			lifespan = 40000
+		}
+		query := `
+			INSERT INTO tires (
+				vehicle_id, brand, model, dimension, season,
+				purchase_date, purchase_price, current_position,
+				initial_depth_mm, min_legal_depth_mm, dot_code,
+				mounted_odometer, accumulated_distance_km, estimated_lifespan_km
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			RETURNING id, created_at, updated_at;
+		`
+		if err := tx.QueryRow(ctx, query,
+			t.VehicleID, t.Brand, t.Model, t.Dimension, t.Season,
+			t.PurchaseDate, t.PurchasePrice, t.CurrentPosition,
+			t.InitialDepthMm, t.MinLegalDepthMm, t.DotCode,
+			t.MountedOdometer, t.AccumulatedDistanceKm, lifespan,
+		).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return fmt.Errorf("failed to batch insert tire: %w", err)
+		}
+
+		if t.CurrentPosition != models.TirePosStorage && t.CurrentPosition != models.TirePosDisposed && t.MountedOdometer != nil && t.VehicleID != nil {
+			sessionQuery := `
+				INSERT INTO tire_mount_sessions (
+					tire_id, vehicle_id, position, mounted_date, mounted_odometer
+				) VALUES ($1, $2, $3, $4, $5);
+			`
+			if _, err := tx.Exec(ctx, sessionQuery, t.ID, *t.VehicleID, t.CurrentPosition, t.PurchaseDate, *t.MountedOdometer); err != nil {
+				return fmt.Errorf("failed to create mount session: %w", err)
+			}
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) ListTireMountSessions(ctx context.Context, tireID string) ([]models.TireMountSession, error) {
+	query := `
+		SELECT id, tire_id, vehicle_id, position, mounted_date, mounted_odometer,
+		       dismounted_date, dismounted_odometer, distance_km, notes, created_at, updated_at
+		FROM tire_mount_sessions
+		WHERE tire_id = $1
+		ORDER BY mounted_date DESC;
+	`
+	rows, err := r.pool.Query(ctx, query, tireID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.TireMountSession
+	for rows.Next() {
+		var s models.TireMountSession
+		if err := rows.Scan(
+			&s.ID, &s.TireID, &s.VehicleID, &s.Position, &s.MountedDate, &s.MountedOdometer,
+			&s.DismountedDate, &s.DismountedOdometer, &s.DistanceKm, &s.Notes, &s.CreatedAt, &s.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, s)
+	}
+	if list == nil {
+		list = []models.TireMountSession{}
+	}
+	return list, nil
+}
+
+func (r *Repository) CreateTireMountSession(ctx context.Context, s *models.TireMountSession) error {
+	if s.DistanceKm == 0 && s.DismountedOdometer != nil && *s.DismountedOdometer > s.MountedOdometer {
+		s.DistanceKm = *s.DismountedOdometer - s.MountedOdometer
+	}
+	query := `
+		INSERT INTO tire_mount_sessions (
+			tire_id, vehicle_id, position, mounted_date, mounted_odometer,
+			dismounted_date, dismounted_odometer, distance_km, notes
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id, created_at, updated_at;
+	`
+	err := r.pool.QueryRow(ctx, query,
+		s.TireID, s.VehicleID, s.Position, s.MountedDate, s.MountedOdometer,
+		s.DismountedDate, s.DismountedOdometer, s.DistanceKm, s.Notes,
+	).Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		return err
+	}
+	return r.RecalculateTireLifetimeDistance(ctx, s.TireID)
+}
+
+func (r *Repository) UpdateTireMountSession(ctx context.Context, s *models.TireMountSession) error {
+	if s.DistanceKm == 0 && s.DismountedOdometer != nil && *s.DismountedOdometer > s.MountedOdometer {
+		s.DistanceKm = *s.DismountedOdometer - s.MountedOdometer
+	}
+	query := `
+		UPDATE tire_mount_sessions
+		SET position = $1, mounted_date = $2, mounted_odometer = $3,
+		    dismounted_date = $4, dismounted_odometer = $5, distance_km = $6, notes = $7,
+		    updated_at = NOW()
+		WHERE id = $8 AND tire_id = $9;
+	`
+	_, err := r.pool.Exec(ctx, query,
+		s.Position, s.MountedDate, s.MountedOdometer,
+		s.DismountedDate, s.DismountedOdometer, s.DistanceKm, s.Notes,
+		s.ID, s.TireID,
+	)
+	if err != nil {
+		return err
+	}
+	return r.RecalculateTireLifetimeDistance(ctx, s.TireID)
+}
+
+func (r *Repository) DeleteTireMountSession(ctx context.Context, sessionID, tireID string) error {
+	query := `DELETE FROM tire_mount_sessions WHERE id = $1 AND tire_id = $2;`
+	cmd, err := r.pool.Exec(ctx, query, sessionID, tireID)
+	if err != nil {
+		return err
+	}
+	if cmd.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return r.RecalculateTireLifetimeDistance(ctx, tireID)
+}
+
+func (r *Repository) RecalculateTireLifetimeDistance(ctx context.Context, tireID string) error {
+	var totalFinishedKm float64
+	_ = r.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(distance_km), 0)
+		FROM tire_mount_sessions
+		WHERE tire_id = $1 AND dismounted_date IS NOT NULL;
+	`, tireID).Scan(&totalFinishedKm)
+
+	var activeMountedOdometer *float64
+	_ = r.pool.QueryRow(ctx, `
+		SELECT mounted_odometer
+		FROM tire_mount_sessions
+		WHERE tire_id = $1 AND dismounted_date IS NULL
+		ORDER BY mounted_date DESC LIMIT 1;
+	`, tireID).Scan(&activeMountedOdometer)
+
+	_, err := r.pool.Exec(ctx, `
+		UPDATE tires
+		SET accumulated_distance_km = $1,
+		    mounted_odometer = $2,
+		    updated_at = NOW()
+		WHERE id = $3;
+	`, totalFinishedKm, activeMountedOdometer, tireID)
+	return err
+}
+
+func (r *Repository) QuickRotateTires(ctx context.Context, vehicleID string, mode string, odometer float64, swapWithPackTireIDs []string) error {
+	currentTires, err := r.ListTires(ctx, vehicleID)
+	if err != nil {
+		return err
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	mountedMap := make(map[models.TirePosition]*models.Tire)
+	for i := range currentTires {
+		t := &currentTires[i]
+		if t.CurrentPosition != models.TirePosStorage && t.CurrentPosition != models.TirePosDisposed {
+			mountedMap[t.CurrentPosition] = t
+		}
+	}
+
+	newPositions := make(map[string]models.TirePosition)
+	now := time.Now().UTC()
+
+	switch mode {
+	case "FRONT_BACK":
+		if fl, ok := mountedMap[models.TirePosFL]; ok {
+			newPositions[fl.ID] = models.TirePosRL
+		}
+		if rl, ok := mountedMap[models.TirePosRL]; ok {
+			newPositions[rl.ID] = models.TirePosFL
+		}
+		if fr, ok := mountedMap[models.TirePosFR]; ok {
+			newPositions[fr.ID] = models.TirePosRR
+		}
+		if rr, ok := mountedMap[models.TirePosRR]; ok {
+			newPositions[rr.ID] = models.TirePosFR
+		}
+	case "CROSS":
+		if fl, ok := mountedMap[models.TirePosFL]; ok {
+			newPositions[fl.ID] = models.TirePosRR
+		}
+		if rr, ok := mountedMap[models.TirePosRR]; ok {
+			newPositions[rr.ID] = models.TirePosFL
+		}
+		if fr, ok := mountedMap[models.TirePosFR]; ok {
+			newPositions[fr.ID] = models.TirePosRL
+		}
+		if rl, ok := mountedMap[models.TirePosRL]; ok {
+			newPositions[rl.ID] = models.TirePosFR
+		}
+	case "SWAP_PACK":
+		for _, t := range mountedMap {
+			newPositions[t.ID] = models.TirePosStorage
+		}
+		positions := []models.TirePosition{models.TirePosFL, models.TirePosFR, models.TirePosRL, models.TirePosRR}
+		for i, tireID := range swapWithPackTireIDs {
+			if i < len(positions) {
+				newPositions[tireID] = positions[i]
+			}
+		}
+	default:
+		return fmt.Errorf("unknown rotation mode: %s", mode)
+	}
+
+	mappingJSON := make(map[string]any)
+	for tireID, newPos := range newPositions {
+		mappingJSON[string(newPos)] = tireID
+
+		var currentTire *models.Tire
+		for i := range currentTires {
+			if currentTires[i].ID == tireID {
+				currentTire = &currentTires[i]
+				break
+			}
+		}
+
+		if currentTire != nil {
+			if currentTire.CurrentPosition != models.TirePosStorage && newPos == models.TirePosStorage {
+				var runKm float64
+				if currentTire.MountedOdometer != nil && odometer > *currentTire.MountedOdometer {
+					runKm = odometer - *currentTire.MountedOdometer
+				}
+				_, _ = tx.Exec(ctx, `
+					UPDATE tire_mount_sessions
+					SET dismounted_date = $1, dismounted_odometer = $2, distance_km = $3, updated_at = NOW()
+					WHERE tire_id = $4 AND dismounted_date IS NULL;
+				`, now, odometer, runKm, tireID)
+
+				newAcc := currentTire.AccumulatedDistanceKm + runKm
+				_, _ = tx.Exec(ctx, `
+					UPDATE tires
+					SET current_position = $1, mounted_odometer = NULL, accumulated_distance_km = $2, updated_at = NOW()
+					WHERE id = $3;
+				`, newPos, newAcc, tireID)
+			} else if newPos != models.TirePosStorage {
+				if currentTire.CurrentPosition != models.TirePosStorage {
+					var runKm float64
+					if currentTire.MountedOdometer != nil && odometer > *currentTire.MountedOdometer {
+						runKm = odometer - *currentTire.MountedOdometer
+					}
+					_, _ = tx.Exec(ctx, `
+						UPDATE tire_mount_sessions
+						SET dismounted_date = $1, dismounted_odometer = $2, distance_km = $3, updated_at = NOW()
+						WHERE tire_id = $4 AND dismounted_date IS NULL;
+					`, now, odometer, runKm, tireID)
+					currentTire.AccumulatedDistanceKm += runKm
+				}
+
+				_, _ = tx.Exec(ctx, `
+					INSERT INTO tire_mount_sessions (
+						tire_id, vehicle_id, position, mounted_date, mounted_odometer
+					) VALUES ($1, $2, $3, $4, $5);
+				`, tireID, vehicleID, newPos, now, odometer)
+
+				_, _ = tx.Exec(ctx, `
+					UPDATE tires
+					SET current_position = $1, mounted_odometer = $2, accumulated_distance_km = $3, updated_at = NOW()
+					WHERE id = $4;
+				`, newPos, odometer, currentTire.AccumulatedDistanceKm, tireID)
+			}
+		}
+	}
+
+	mapBytes, _ := json.Marshal(mappingJSON)
+	_, _ = tx.Exec(ctx, `
+		INSERT INTO tire_rotations (vehicle_id, date, odometer, mapping_json, notes)
+		VALUES ($1, $2, $3, $4, $5);
+	`, vehicleID, now, odometer, mapBytes, fmt.Sprintf("Permutation rapide: %s", mode))
+
+	return tx.Commit(ctx)
 }
 
 func (r *Repository) UpdateTirePosition(ctx context.Context, tireID string, pos models.TirePosition) error {

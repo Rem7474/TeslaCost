@@ -168,6 +168,13 @@ func main() {
 				// Tires
 				r.Get("/{vehicleId}/tires", tireHandler.List)
 				r.Post("/{vehicleId}/tires", tireHandler.Create)
+				r.Post("/{vehicleId}/tires/batch", tireHandler.BatchCreate)
+				r.Post("/{vehicleId}/tires/quick-rotate", tireHandler.QuickRotate)
+				r.Put("/{vehicleId}/tires/{tireId}", tireHandler.Update)
+				r.Get("/{vehicleId}/tires/{tireId}/history", tireHandler.GetHistory)
+				r.Post("/{vehicleId}/tires/{tireId}/sessions", tireHandler.CreateSession)
+				r.Put("/{vehicleId}/tires/{tireId}/sessions/{sessionId}", tireHandler.UpdateSession)
+				r.Delete("/{vehicleId}/tires/{tireId}/sessions/{sessionId}", tireHandler.DeleteSession)
 				r.Post("/{vehicleId}/tires/{tireId}/logs", tireHandler.AddLog)
 				r.Post("/{vehicleId}/tire-rotations", tireHandler.Rotate)
 

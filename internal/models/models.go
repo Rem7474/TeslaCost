@@ -119,10 +119,29 @@ type Tire struct {
 	CurrentPosition TirePosition `json:"current_position"`
 	InitialDepthMm  float64      `json:"initial_depth_mm"`
 	MinLegalDepthMm float64      `json:"min_legal_depth_mm"`
-	DotCode         *string      `json:"dot_code,omitempty"`
-	IsArchived      bool         `json:"is_archived"`
-	CreatedAt       time.Time    `json:"created_at"`
-	UpdatedAt       time.Time    `json:"updated_at"`
+	DotCode               *string      `json:"dot_code,omitempty"`
+	IsArchived            bool         `json:"is_archived"`
+	MountedOdometer       *float64     `json:"mounted_odometer,omitempty"`
+	AccumulatedDistanceKm float64      `json:"accumulated_distance_km"`
+	EstimatedLifespanKm   int          `json:"estimated_lifespan_km"`
+	CreatedAt             time.Time    `json:"created_at"`
+	UpdatedAt             time.Time    `json:"updated_at"`
+}
+
+// TireMountSession logs a specific period where a tire was mounted on a vehicle wheel.
+type TireMountSession struct {
+	ID                 string       `json:"id"`
+	TireID             string       `json:"tire_id"`
+	VehicleID          string       `json:"vehicle_id"`
+	Position           TirePosition `json:"position"`
+	MountedDate        time.Time    `json:"mounted_date"`
+	MountedOdometer    float64      `json:"mounted_odometer"`
+	DismountedDate     *time.Time   `json:"dismounted_date,omitempty"`
+	DismountedOdometer *float64     `json:"dismounted_odometer,omitempty"`
+	DistanceKm         float64      `json:"distance_km"`
+	Notes              *string      `json:"notes,omitempty"`
+	CreatedAt          time.Time    `json:"created_at"`
+	UpdatedAt          time.Time    `json:"updated_at"`
 }
 
 // TireLog records a tread depth measurement.

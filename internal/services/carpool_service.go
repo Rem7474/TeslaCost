@@ -50,7 +50,14 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		elecRate = totalEnergyCost / totalKwhAdded
 	}
 
-	// Tires rate (€/km)
+	// Tires rate (€/km): based on mounted tires purchase_price / estimated_lifespan_km
+	var totalMountedTireRate float64
+	_ = s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(purchase_price / NULLIF(estimated_lifespan_km, 0)), 0)
+		FROM tires
+		WHERE vehicle_id = $1 AND current_position IN ('FL', 'FR', 'RL', 'RR');
+	`, vehicleID).Scan(&totalMountedTireRate)
+
 	var totalTiresCost float64
 	_ = s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(purchase_price), 0)
@@ -58,8 +65,10 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		WHERE vehicle_id = $1;
 	`, vehicleID).Scan(&totalTiresCost)
 
-	tiresRate := 0.020 // Default fallback ~2.0 cent/km
-	if totalDistance > 500 && totalTiresCost > 0 {
+	tiresRate := 0.020 // Default fallback ~2.0 cent/km for 4 wheels
+	if totalMountedTireRate > 0 {
+		tiresRate = totalMountedTireRate
+	} else if totalDistance > 500 && totalTiresCost > 0 {
 		tiresRate = totalTiresCost / totalDistance
 	}
 
