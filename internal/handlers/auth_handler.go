@@ -10,16 +10,18 @@ import (
 )
 
 type AuthHandler struct {
-	repo               *database.Repository
-	jwtSecret          string
-	jwtExpirationHours int
+	repo                *database.Repository
+	jwtSecret           string
+	jwtExpirationHours  int
+	disableRegistration bool
 }
 
-func NewAuthHandler(repo *database.Repository, jwtSecret string, jwtExpirationHours int) *AuthHandler {
+func NewAuthHandler(repo *database.Repository, jwtSecret string, jwtExpirationHours int, disableRegistration bool) *AuthHandler {
 	return &AuthHandler{
-		repo:               repo,
-		jwtSecret:          jwtSecret,
-		jwtExpirationHours: jwtExpirationHours,
+		repo:                repo,
+		jwtSecret:           jwtSecret,
+		jwtExpirationHours:  jwtExpirationHours,
+		disableRegistration: disableRegistration,
 	}
 }
 
@@ -38,7 +40,30 @@ type AuthResponse struct {
 	User  any    `json:"user"`
 }
 
+// GetConfig returns public authentication configuration (e.g. whether registration is open)
+func (h *AuthHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
+	regEnabled := !h.disableRegistration
+	if !regEnabled {
+		count, err := h.repo.GetUserCount(r.Context())
+		if err == nil && count == 0 {
+			regEnabled = true
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"registration_enabled": regEnabled,
+	})
+}
+
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if h.disableRegistration {
+		count, err := h.repo.GetUserCount(r.Context())
+		if err != nil || count > 0 {
+			writeError(w, http.StatusForbidden, "La création de compte est désactivée sur cette instance")
+			return
+		}
+	}
+
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")

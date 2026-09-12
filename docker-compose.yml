@@ -39,6 +39,9 @@ services:
       DB_SSLMODE: disable
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-change-this-to-a-secure-32-byte-key-in-prod!}
       JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_signing_key_for_teslacost_app}
+      DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5173,http://localhost:8080}
     ports:
       - "${PORT:-8080}:8080"

@@ -10,14 +10,17 @@ import (
 
 // Config stores application configuration loaded from environment variables.
 type Config struct {
-	Port               string
-	AppBaseURL         string
-	Environment        string
-	DatabaseURL        string
-	AppEncryptionKey   string
-	JWTSecret          string
-	JWTExpirationHours int
-	AllowedOrigins     []string
+	Port                 string
+	AppBaseURL           string
+	Environment          string
+	DatabaseURL          string
+	AppEncryptionKey     string
+	JWTSecret            string
+	JWTExpirationHours   int
+	DisableRegistration  bool
+	InitialAdminEmail    string
+	InitialAdminPassword string
+	AllowedOrigins       []string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -55,6 +58,10 @@ func Load() *Config {
 		jwtExpHours = 72
 	}
 
+	disableRegistration := getEnvBool("DISABLE_REGISTRATION", false)
+	initialAdminEmail := getEnv("INITIAL_ADMIN_EMAIL", "")
+	initialAdminPassword := getEnv("INITIAL_ADMIN_PASSWORD", "")
+
 	originsRaw := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8080")
 	var allowedOrigins []string
 	for _, origin := range strings.Split(originsRaw, ",") {
@@ -65,14 +72,17 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:               port,
-		AppBaseURL:         appBaseURL,
-		Environment:        env,
-		DatabaseURL:        dbURL,
-		AppEncryptionKey:   encKey,
-		JWTSecret:          jwtSecret,
-		JWTExpirationHours: jwtExpHours,
-		AllowedOrigins:     allowedOrigins,
+		Port:                 port,
+		AppBaseURL:           appBaseURL,
+		Environment:          env,
+		DatabaseURL:          dbURL,
+		AppEncryptionKey:     encKey,
+		JWTSecret:            jwtSecret,
+		JWTExpirationHours:   jwtExpHours,
+		DisableRegistration:  disableRegistration,
+		InitialAdminEmail:    initialAdminEmail,
+		InitialAdminPassword: initialAdminPassword,
+		AllowedOrigins:       allowedOrigins,
 	}
 }
 
@@ -81,4 +91,13 @@ func getEnv(key, defaultVal string) string {
 		return val
 	}
 	return defaultVal
+}
+
+func getEnvBool(key string, defaultVal bool) bool {
+	val, exists := os.LookupEnv(key)
+	if !exists || val == "" {
+		return defaultVal
+	}
+	val = strings.ToLower(strings.TrimSpace(val))
+	return val == "true" || val == "1" || val == "yes"
 }

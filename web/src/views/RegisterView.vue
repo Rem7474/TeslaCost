@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { Zap, Lock, Mail, AlertCircle } from 'lucide-vue-next'
+import { Zap, Lock, Mail, AlertCircle, ShieldAlert } from 'lucide-vue-next'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -12,6 +12,19 @@ const password = ref('')
 const confirmPassword = ref('')
 const error = ref('')
 const loading = ref(false)
+const registrationEnabled = ref(true)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/auth/config')
+    if (res.ok) {
+      const data = await res.json()
+      registrationEnabled.value = data.registration_enabled
+    }
+  } catch {
+    // default true
+  }
+})
 
 async function handleSubmit() {
   error.value = ''
@@ -52,7 +65,21 @@ async function handleSubmit() {
         <span>{{ error }}</span>
       </div>
 
-      <form @submit.prevent="handleSubmit" class="space-y-4">
+      <div v-if="!registrationEnabled" class="text-center py-4">
+        <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex flex-col items-center gap-2 text-amber-400 text-sm mb-6">
+          <ShieldAlert class="w-8 h-8 text-amber-400" />
+          <p class="font-medium">Inscriptions désactivées</p>
+          <p class="text-xs text-amber-300/80">La création de compte est fermée sur cette instance par l'administrateur.</p>
+        </div>
+        <router-link
+          to="/login"
+          class="w-full inline-block py-3 px-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors"
+        >
+          Retour à la page de connexion
+        </router-link>
+      </div>
+
+      <form v-else @submit.prevent="handleSubmit" class="space-y-4">
         <div>
           <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email</label>
           <div class="relative">
@@ -104,7 +131,7 @@ async function handleSubmit() {
         </button>
       </form>
 
-      <div class="mt-6 text-center text-sm text-slate-400">
+      <div v-if="registrationEnabled" class="mt-6 text-center text-sm text-slate-400">
         Déjà un compte ?
         <router-link to="/login" class="text-rose-400 hover:text-rose-300 font-medium">Se connecter</router-link>
       </div>

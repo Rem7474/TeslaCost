@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
@@ -12,6 +12,19 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+const registrationEnabled = ref(true)
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/auth/config')
+    if (res.ok) {
+      const data = await res.json()
+      registrationEnabled.value = data.registration_enabled
+    }
+  } catch {
+    // default true
+  }
+})
 
 async function handleSubmit() {
   error.value = ''
@@ -83,7 +96,7 @@ async function handleSubmit() {
         </button>
       </form>
 
-      <div class="mt-6 text-center text-sm text-slate-400">
+      <div v-if="registrationEnabled" class="mt-6 text-center text-sm text-slate-400">
         Pas encore de compte ?
         <router-link to="/register" class="text-rose-400 hover:text-rose-300 font-medium">Créer un compte</router-link>
       </div>

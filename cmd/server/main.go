@@ -16,6 +16,7 @@ import (
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
+	"github.com/teslacost/teslacost/internal/auth"
 	"github.com/teslacost/teslacost/internal/config"
 	"github.com/teslacost/teslacost/internal/crypto"
 	"github.com/teslacost/teslacost/internal/database"
@@ -55,6 +56,23 @@ func main() {
 			log.Printf("[warning] Database migration failed: %v", migErr)
 		}
 		repo = database.NewRepository(dbPool.Pool)
+
+		// Seed initial admin if configured and user does not exist
+		if cfg.InitialAdminEmail != "" && cfg.InitialAdminPassword != "" {
+			_, err := repo.GetUserByEmail(ctx, cfg.InitialAdminEmail)
+			if err != nil && errors.Is(err, database.ErrNotFound) {
+				hash, err := auth.HashPassword(cfg.InitialAdminPassword)
+				if err == nil {
+					adminUser, err := repo.CreateUser(ctx, cfg.InitialAdminEmail, hash)
+					if err == nil {
+						log.Printf("[auth] Initial admin account created successfully (%s)", adminUser.Email)
+					} else {
+						log.Printf("[auth] Failed to create initial admin account: %v", err)
+					}
+				}
+			}
+		}
+
 		syncService = services.NewSyncService(repo, encryptor)
 		tireWearService = services.NewTireWearService(repo)
 		tcoService = services.NewTCOService(dbPool.Pool)
@@ -99,7 +117,7 @@ func main() {
 
 	// API Routes
 	if repo != nil {
-		authHandler := handlers.NewAuthHandler(repo, cfg.JWTSecret, cfg.JWTExpirationHours)
+		authHandler := handlers.NewAuthHandler(repo, cfg.JWTSecret, cfg.JWTExpirationHours, cfg.DisableRegistration)
 		vehicleHandler := handlers.NewVehicleHandler(repo, encryptor, syncService)
 		driveHandler := handlers.NewDriveHandler(repo)
 		tireHandler := handlers.NewTireHandler(repo, tireWearService)
@@ -108,6 +126,7 @@ func main() {
 
 		// Public Auth
 		r.Route("/api/auth", func(r chi.Router) {
+			r.Get("/config", authHandler.GetConfig)
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
 		})
