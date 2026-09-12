@@ -15,8 +15,9 @@ RUN if [ -f package.json ]; then npm run build; else mkdir -p dist && echo "<h1>
 # ==============================================================================
 # Stage 2: Development environment for Go
 # ==============================================================================
-FROM golang:1.25-alpine AS dev
+FROM golang:alpine AS dev
 WORKDIR /app
+ENV GOTOOLCHAIN=auto
 RUN apk add --no-cache git curl build-base
 COPY go.mod go.sum* ./
 RUN go mod download
@@ -26,9 +27,10 @@ CMD ["go", "run", "./cmd/server/main.go"]
 # ==============================================================================
 # Stage 3: Backend Build (Go binary)
 # ==============================================================================
-FROM golang:1.25-alpine AS backend-builder
+FROM golang:alpine AS backend-builder
 WORKDIR /app
-RUN apk add --no-cache ca-certificates
+ENV GOTOOLCHAIN=auto
+RUN apk add --no-cache ca-certificates git
 
 COPY go.mod go.sum* ./
 RUN go mod download
