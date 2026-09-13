@@ -24,6 +24,7 @@ type DriveCostBreakdown struct {
 	MaintenanceRate float64 `json:"maintenance_rate"`
 	InsuranceCost   float64 `json:"insurance_cost"`
 	InsuranceRate   float64 `json:"insurance_rate"`
+	InsuranceSource string  `json:"insurance_source"`
 	TollsCost       float64 `json:"tolls_cost"`
 	TotalCost       float64 `json:"total_cost"`
 	CostPerKm       float64 `json:"cost_per_km"`
@@ -132,6 +133,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 				MaintenanceRate: rates.MaintenancePerKm,
 				InsuranceCost:   insCost,
 				InsuranceRate:   rates.InsurancePerKm,
+				InsuranceSource: rates.InsuranceSource,
 				TollsCost:       tollsCost,
 				TotalCost:       totalCost,
 				CostPerKm:       costPerKm,

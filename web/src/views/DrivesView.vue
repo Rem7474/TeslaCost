@@ -75,7 +75,7 @@ async function loadDrives() {
 }
 
 watch(
-  () => [vehicleStore.activeVehicleId, selectedTag.value, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, selectedTag.value, vehicleStore.lastSyncTimestamp],
   () => {
     page.value = 1
     selectedDriveIds.value = []
@@ -600,7 +600,23 @@ function formatDate(dateStr: string) {
                 <Shield class="w-4 h-4" />
               </div>
               <div>
-                <div class="text-xs font-semibold text-white">Quote-part Assurance</div>
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-semibold text-white">Quote-part Assurance</span>
+                  <span
+                    v-if="selectedCostDrive.costs?.insurance_source === 'VEHICLE_SETTINGS'"
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
+                    title="Basé sur la prime annuelle renseignée dans votre fiche véhicule"
+                  >
+                    Contrat réel
+                  </span>
+                  <span
+                    v-else-if="selectedCostDrive.costs?.insurance_source === 'EXPENSES'"
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
+                    title="Basé sur vos dépenses réelles d'assurance"
+                  >
+                    Dépenses réelles
+                  </span>
+                </div>
                 <div class="text-[11px] text-slate-400 font-mono">
                   {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.insurance_rate || 0.035).toFixed(3) }} €/km
                 </div>

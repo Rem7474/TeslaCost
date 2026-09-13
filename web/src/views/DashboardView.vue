@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick, computed } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import {
@@ -58,17 +58,19 @@ async function loadTCO() {
   loading.value = true
   try {
     tco.value = await api.getTCO(vehicleStore.activeVehicle.id)
-    await nextTick()
-    renderCharts()
   } catch (err) {
     console.error('Failed to load TCO', err)
   } finally {
     loading.value = false
+    await nextTick()
+    setTimeout(() => {
+      renderCharts()
+    }, 50)
   }
 }
 
 watch(
-  () => [vehicleStore.activeVehicleId, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, vehicleStore.lastSyncTimestamp],
   () => {
     loadTCO()
   }
@@ -76,6 +78,12 @@ watch(
 
 onMounted(() => {
   loadTCO()
+})
+
+onUnmounted(() => {
+  if (monthlyChartInstance) monthlyChartInstance.destroy()
+  if (mileageChartInstance) mileageChartInstance.destroy()
+  if (donutChartInstance) donutChartInstance.destroy()
 })
 
 function renderCharts() {

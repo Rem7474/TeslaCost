@@ -33,7 +33,12 @@ onMounted(async () => {
     <div class="flex-1 flex flex-col min-w-0 overflow-y-auto pb-16 md:pb-0">
       <TopBar />
       <main class="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto">
-        <router-view />
+        <!-- Attente de l'initialisation du store véhicule pour éviter un affichage vide au refresh -->
+        <div v-if="!vehicleStore.isInitialized" class="flex flex-col items-center justify-center py-28 space-y-4">
+          <div class="w-9 h-9 border-3 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+          <p class="text-xs font-medium text-slate-400">Chargement de votre Tesla...</p>
+        </div>
+        <router-view v-else />
       </main>
     </div>
   </div>

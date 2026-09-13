@@ -28,15 +28,17 @@ func NewVehicleHandler(repo *database.Repository, encryptor *crypto.Encryptor, s
 }
 
 type SaveVehicleRequest struct {
-	Name               string          `json:"name"`
-	Vin                *string         `json:"vin"`
-	TeslaMateCarID     *int            `json:"teslamate_car_id"`
-	CurrentOdometer    float64         `json:"current_odometer"`
-	TeslaMateAPIURL    *string         `json:"teslamate_api_url"`
-	TeslaMateAuthType  models.AuthMode `json:"teslamate_auth_type"`
-	TeslaMateAPIKey    *string         `json:"teslamate_api_key"` // Plain text from frontend
-	TeslaMateBasicUser *string         `json:"teslamate_basic_user"`
-	TeslaMateBasicPass *string         `json:"teslamate_basic_pass"` // Plain text from frontend
+	Name                  string          `json:"name"`
+	Vin                   *string         `json:"vin"`
+	TeslaMateCarID        *int            `json:"teslamate_car_id"`
+	CurrentOdometer       float64         `json:"current_odometer"`
+	TeslaMateAPIURL       *string         `json:"teslamate_api_url"`
+	TeslaMateAuthType     models.AuthMode `json:"teslamate_auth_type"`
+	TeslaMateAPIKey       *string         `json:"teslamate_api_key"` // Plain text from frontend
+	TeslaMateBasicUser    *string         `json:"teslamate_basic_user"`
+	TeslaMateBasicPass    *string         `json:"teslamate_basic_pass"` // Plain text from frontend
+	AnnualInsuranceCost   *float64        `json:"annual_insurance_cost"`
+	AnnualExpectedMileage *float64        `json:"annual_expected_mileage"`
 }
 
 func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +56,7 @@ func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
+
 	var req SaveVehicleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
@@ -95,6 +98,8 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TeslaMateAPIKeyEncrypted: encKey,
 		TeslaMateBasicUser:       req.TeslaMateBasicUser,
 		TeslaMateBasicPassEnc:    encPass,
+		AnnualInsuranceCost:      req.AnnualInsuranceCost,
+		AnnualExpectedMileage:    req.AnnualExpectedMileage,
 	}
 
 	if err := h.repo.CreateVehicle(r.Context(), v); err != nil {
@@ -160,6 +165,9 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 			existing.TeslaMateBasicPassEnc = &encrypted
 		}
 	}
+
+	existing.AnnualInsuranceCost = req.AnnualInsuranceCost
+	existing.AnnualExpectedMileage = req.AnnualExpectedMileage
 
 	if err := h.repo.UpdateVehicle(r.Context(), existing); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update vehicle")

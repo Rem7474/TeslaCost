@@ -170,7 +170,7 @@ function toggleMultiDrive(id: string) {
 }
 
 watch(
-  () => [vehicleStore.activeVehicleId, activeTab.value, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, activeTab.value, vehicleStore.lastSyncTimestamp],
   () => {
     loadData()
   }

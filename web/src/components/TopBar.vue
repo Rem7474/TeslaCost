@@ -60,6 +60,11 @@ function onVehicleChange(event: Event) {
           </div>
         </div>
 
+        <div v-else-if="!vehicleStore.isInitialized || vehicleStore.isLoading" class="flex items-center gap-2">
+          <div class="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-xs text-slate-400">Chargement...</span>
+        </div>
+
         <div v-else>
           <button
             @click="router.push('/vehicles')"

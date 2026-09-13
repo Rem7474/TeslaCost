@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
@@ -27,6 +29,16 @@ type TireWearStats struct {
 	Condition            string                    `json:"condition"` // "GOOD", "WARNING", "CRITICAL"
 	LogsCount            int                       `json:"logs_count"`
 	Sessions             []models.TireMountSession `json:"sessions"`
+
+	// Dynamic TeslaMate driving telemetry analytics
+	DrivingStressIndex     float64 `json:"driving_stress_index"`
+	DrivingStyle           string  `json:"driving_style"` // "ECO", "BALANCED", "SPORT"
+	AvgPowerMaxKw          float64 `json:"avg_power_max_kw"`
+	AvgPowerMinKw          float64 `json:"avg_power_min_kw"`
+	AvgConsumptionKwh100km float64 `json:"avg_consumption_kwh_100km"`
+	DynamicLifespanKm      int     `json:"dynamic_lifespan_km"`
+	DynamicRemainingKm     float64 `json:"dynamic_remaining_km"`
+	WearExplanation        string  `json:"wear_explanation"`
 }
 
 // TireWearService calculates wear projections and stats for tires.
@@ -39,7 +51,19 @@ func NewTireWearService(repo *database.Repository) *TireWearService {
 	return &TireWearService{repo: repo}
 }
 
-// CalculateTireWear computes wear metrics based on depth logs and mount sessions.
+func formatNumber(n int) string {
+	in := strconv.Itoa(n)
+	out := ""
+	for i, c := range in {
+		if i > 0 && (len(in)-i)%3 == 0 {
+			out += " "
+		}
+		out += string(c)
+	}
+	return out
+}
+
+// CalculateTireWear computes wear metrics based on depth logs, mount sessions, and TeslaMate power telemetry.
 func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Tire, vehicleCurrentOdometer float64) (*TireWearStats, error) {
 	logs, err := s.repo.ListTireLogs(ctx, tire.ID)
 	if err != nil {
@@ -116,6 +140,85 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		estimatedRemainingKm = (remainingDepth / 1.2) * 10000.0
 	}
 
+	// TeslaMate dynamic telemetry & power stress calculation
+	var avgPowerMax, avgPowerMin, avgConsumption float64
+	var drivesCount int
+	if tire.VehicleID != nil && *tire.VehicleID != "" {
+		avgPowerMax, avgPowerMin, avgConsumption, drivesCount, _ = s.repo.GetDrivingTelemetryStats(ctx, *tire.VehicleID, tire.MountedOdometer)
+	}
+
+	accelFactor := 1.0
+	if avgPowerMax > 80 {
+		accelFactor = 1.0 + (avgPowerMax-80.0)*0.002
+	} else if avgPowerMax > 0 {
+		accelFactor = 0.90 + (avgPowerMax/80.0)*0.10
+	}
+
+	absPowerMin := math.Abs(avgPowerMin)
+	regenFactor := 1.0
+	if absPowerMin > 35 {
+		regenFactor = 1.0 + (absPowerMin-35.0)*0.003
+	} else if absPowerMin > 0 {
+		regenFactor = 0.95 + (absPowerMin/35.0)*0.05
+	}
+
+	consumptionFactor := 1.0
+	if avgConsumption > 0 {
+		consumptionFactor = math.Max(0.85, math.Min(1.35, avgConsumption/16.0))
+	}
+
+	positionWeight := 1.0
+	if tire.CurrentPosition == models.TirePosRL || tire.CurrentPosition == models.TirePosRR {
+		positionWeight = 1.15 // Rear axle takes major acceleration torque and regen torque on Tesla
+	} else if tire.CurrentPosition == models.TirePosFL || tire.CurrentPosition == models.TirePosFR {
+		positionWeight = 0.92 // Front axle takes steering and braking transfer
+	}
+
+	stressIndex := 1.0
+	drivingStyle := "BALANCED"
+	if drivesCount > 0 {
+		stressIndex = (0.45*accelFactor + 0.30*regenFactor + 0.25*consumptionFactor) * positionWeight
+		stressIndex = math.Max(0.75, math.Min(1.60, stressIndex))
+		stressIndex = math.Round(stressIndex*100) / 100
+
+		if stressIndex <= 0.93 {
+			drivingStyle = "ECO"
+		} else if stressIndex >= 1.12 {
+			drivingStyle = "SPORT"
+		}
+	}
+
+	dynamicLifespan := int(math.Round(float64(lifespan) / stressIndex))
+	dynamicWearRatePer10k := wearRatePer10k * stressIndex
+	dynamicRemainingKm := math.Max(0, (remainingDepth/dynamicWearRatePer10k)*10000.0)
+
+	var wearExplanation string
+	if drivesCount > 0 {
+		var styleDesc string
+		switch drivingStyle {
+		case "ECO":
+			styleDesc = "Conduite douce / éco"
+		case "SPORT":
+			styleDesc = "Conduite dynamique / soutenue"
+		default:
+			styleDesc = "Conduite équilibrée"
+		}
+
+		var posDesc string
+		if positionWeight > 1.0 {
+			posDesc = " (essieu arrière moteur)"
+		} else if positionWeight < 1.0 {
+			posDesc = " (essieu avant directeur)"
+		}
+
+		wearExplanation = fmt.Sprintf(
+			"%s%s : pointes de puissance moyennes de +%.0f kW et %.0f kW en régénération, consommation %.1f kWh/100km. Indice de contrainte : x%.2f (longévité estimée ajustée à ~%s km).",
+			styleDesc, posDesc, avgPowerMax, avgPowerMin, avgConsumption, stressIndex, formatNumber(dynamicLifespan),
+		)
+	} else {
+		wearExplanation = "Aucune télémétrie de trajet TeslaMate disponible pour l'instant. Estimation basée sur le profil théorique standard."
+	}
+
 	condition := "GOOD"
 	if currentDepth <= 2.5 {
 		condition = "CRITICAL"
@@ -124,23 +227,31 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 	}
 
 	return &TireWearStats{
-		Tire:                 *tire,
-		CurrentDepthMm:       math.Round(currentDepth*10) / 10,
-		InitialDepthMm:       initialDepth,
-		MinLegalDepthMm:      minLegal,
-		UsableDepthMm:        math.Round(usableDepth*10) / 10,
-		RemainingDepthMm:     math.Round(remainingDepth*10) / 10,
-		WearPercentage:       math.Round(wearPct*10) / 10,
-		DistanceTraveledKm:   math.Round(distanceTraveled),
-		TotalDistanceKm:      math.Round(totalDistance*10) / 10,
-		EstimatedLifespanKm:  lifespan,
-		LifeProgressPct:      lifeProgressPct,
-		CostPerKm:            costPerKm,
-		WearRatePer10kKm:     math.Round(wearRatePer10k*100) / 100,
-		EstimatedRemainingKm: math.Round(estimatedRemainingKm),
-		Condition:            condition,
-		LogsCount:            len(logs),
-		Sessions:             sessions,
+		Tire:                   *tire,
+		CurrentDepthMm:         math.Round(currentDepth*10) / 10,
+		InitialDepthMm:         initialDepth,
+		MinLegalDepthMm:        minLegal,
+		UsableDepthMm:          math.Round(usableDepth*10) / 10,
+		RemainingDepthMm:       math.Round(remainingDepth*10) / 10,
+		WearPercentage:         math.Round(wearPct*10) / 10,
+		DistanceTraveledKm:     math.Round(distanceTraveled),
+		TotalDistanceKm:        math.Round(totalDistance*10) / 10,
+		EstimatedLifespanKm:    lifespan,
+		LifeProgressPct:        lifeProgressPct,
+		CostPerKm:              costPerKm,
+		WearRatePer10kKm:       math.Round(wearRatePer10k*100) / 100,
+		EstimatedRemainingKm:   math.Round(estimatedRemainingKm),
+		Condition:              condition,
+		LogsCount:              len(logs),
+		Sessions:               sessions,
+		DrivingStressIndex:     stressIndex,
+		DrivingStyle:           drivingStyle,
+		AvgPowerMaxKw:          math.Round(avgPowerMax),
+		AvgPowerMinKw:          math.Round(avgPowerMin),
+		AvgConsumptionKwh100km: math.Round(avgConsumption*10) / 10,
+		DynamicLifespanKm:      dynamicLifespan,
+		DynamicRemainingKm:     math.Round(dynamicRemainingKm),
+		WearExplanation:        wearExplanation,
 	}, nil
 }
 

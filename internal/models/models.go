@@ -56,6 +56,8 @@ type Vehicle struct {
 	TeslaMateAPIKeyEncrypted *string   `json:"-"`
 	TeslaMateBasicUser       *string   `json:"teslamate_basic_user,omitempty"`
 	TeslaMateBasicPassEnc    *string   `json:"-"`
+	AnnualInsuranceCost      *float64  `json:"annual_insurance_cost,omitempty"`
+	AnnualExpectedMileage    *float64  `json:"annual_expected_mileage,omitempty"`
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
 }
@@ -72,6 +74,9 @@ type Drive struct {
 	DistanceKm          float64   `json:"distance_km"`
 	DurationMin         int       `json:"duration_min"`
 	SpeedAvg            *float64  `json:"speed_avg,omitempty"`
+	SpeedMax            *int      `json:"speed_max,omitempty"`
+	PowerMax            *int      `json:"power_max,omitempty"`
+	PowerMin            *int      `json:"power_min,omitempty"`
 	StartAddress        *string   `json:"start_address,omitempty"`
 	EndAddress          *string   `json:"end_address,omitempty"`
 	EnergyConsumedKwh   *float64  `json:"energy_consumed_kwh,omitempty"`
@@ -253,10 +258,13 @@ type CarpoolCostEstimate struct {
 	InsuranceCost         float64 `json:"insurance_cost"`
 	OtherCost             float64 `json:"other_cost"`
 	TotalCost             float64 `json:"total_cost"`
-	ElectricityRatePerKwh float64 `json:"electricity_rate_per_kwh"`
-	TiresRatePerKm        float64 `json:"tires_rate_per_km"`
-	MaintenanceRatePerKm  float64 `json:"maintenance_rate_per_km"`
-	InsuranceRatePerKm    float64 `json:"insurance_rate_per_km"`
+	ElectricityRatePerKwh float64  `json:"electricity_rate_per_kwh"`
+	TiresRatePerKm        float64  `json:"tires_rate_per_km"`
+	MaintenanceRatePerKm  float64  `json:"maintenance_rate_per_km"`
+	InsuranceRatePerKm    float64  `json:"insurance_rate_per_km"`
+	InsuranceSource       string   `json:"insurance_source"` // "VEHICLE_SETTINGS", "RECORDED_EXPENSES", "DEFAULT"
+	AnnualInsuranceCost   *float64 `json:"annual_insurance_cost,omitempty"`
+	AnnualExpectedMileage *float64 `json:"annual_expected_mileage,omitempty"`
 }
 
 // CarpoolSummary aggregates global carpooling KPIs for the vehicle.

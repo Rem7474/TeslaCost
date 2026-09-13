@@ -105,14 +105,16 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 		INSERT INTO vehicles (
 			user_id, name, vin, teslamate_car_id, current_odometer,
 			teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-			teslamate_basic_user, teslamate_basic_pass_encrypted
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			teslamate_basic_user, teslamate_basic_pass_encrypted,
+			annual_insurance_cost, annual_expected_mileage
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id, created_at, updated_at;
 	`
 	err := r.pool.QueryRow(ctx, query,
 		v.UserID, v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
+		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
 	).Scan(&v.ID, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create vehicle: %w", err)
@@ -124,7 +126,8 @@ func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([
 	query := `
 		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
 		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted, created_at, updated_at
+		       teslamate_basic_user, teslamate_basic_pass_encrypted,
+		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
 		FROM vehicles
 		WHERE user_id = $1
 		ORDER BY created_at ASC;
@@ -141,7 +144,8 @@ func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([
 		if err := rows.Scan(
 			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
 			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc, &v.CreatedAt, &v.UpdatedAt,
+			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
+			&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -154,7 +158,8 @@ func (r *Repository) ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models
 	query := `
 		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
 		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted, created_at, updated_at
+		       teslamate_basic_user, teslamate_basic_pass_encrypted,
+		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
 		FROM vehicles
 		WHERE teslamate_api_url IS NOT NULL AND teslamate_api_url != ''
 		ORDER BY created_at ASC;
@@ -171,7 +176,8 @@ func (r *Repository) ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models
 		if err := rows.Scan(
 			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
 			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc, &v.CreatedAt, &v.UpdatedAt,
+			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
+			&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -184,7 +190,8 @@ func (r *Repository) GetVehicleByID(ctx context.Context, id, userID string) (*mo
 	query := `
 		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
 		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted, created_at, updated_at
+		       teslamate_basic_user, teslamate_basic_pass_encrypted,
+		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
 		FROM vehicles
 		WHERE id = $1 AND user_id = $2;
 	`
@@ -192,7 +199,8 @@ func (r *Repository) GetVehicleByID(ctx context.Context, id, userID string) (*mo
 	err := r.pool.QueryRow(ctx, query, id, userID).Scan(
 		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
 		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc, &v.CreatedAt, &v.UpdatedAt,
+		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
+		&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -209,13 +217,17 @@ func (r *Repository) UpdateVehicle(ctx context.Context, v *models.Vehicle) error
 		SET name = $1, vin = $2, teslamate_car_id = $3, current_odometer = $4,
 		    teslamate_api_url = $5, teslamate_auth_type = $6,
 		    teslamate_api_key_encrypted = $7, teslamate_basic_user = $8,
-		    teslamate_basic_pass_encrypted = $9, updated_at = NOW()
-		WHERE id = $10 AND user_id = $11;
+		    teslamate_basic_pass_encrypted = $9,
+		    annual_insurance_cost = $10, annual_expected_mileage = $11,
+		    updated_at = NOW()
+		WHERE id = $12 AND user_id = $13;
 	`
 	tag, err := r.pool.Exec(ctx, query,
 		v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
-		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc, v.ID, v.UserID,
+		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
+		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
+		v.ID, v.UserID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update vehicle: %w", err)
@@ -257,9 +269,9 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		INSERT INTO drives (
 			vehicle_id, teslamate_drive_id, start_time, end_time,
 			start_odometer, end_odometer, distance_km, duration_min,
-			speed_avg, start_address, end_address, energy_consumed_kwh,
+			speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
 			consumption_kwh_100km, tags, is_manual
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, FALSE)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, FALSE)
 		ON CONFLICT (vehicle_id, teslamate_drive_id) DO UPDATE
 		SET start_time = EXCLUDED.start_time,
 		    end_time = EXCLUDED.end_time,
@@ -268,6 +280,9 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		    distance_km = EXCLUDED.distance_km,
 		    duration_min = EXCLUDED.duration_min,
 		    speed_avg = EXCLUDED.speed_avg,
+		    speed_max = EXCLUDED.speed_max,
+		    power_max = EXCLUDED.power_max,
+		    power_min = EXCLUDED.power_min,
 		    start_address = EXCLUDED.start_address,
 		    end_address = EXCLUDED.end_address,
 		    energy_consumed_kwh = EXCLUDED.energy_consumed_kwh,
@@ -279,7 +294,8 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 	err := r.pool.QueryRow(ctx, query,
 		d.VehicleID, d.TeslaMateDriveID, d.StartTime, d.EndTime,
 		d.StartOdometer, d.EndOdometer, d.DistanceKm, d.DurationMin,
-		d.SpeedAvg, d.StartAddress, d.EndAddress, d.EnergyConsumedKwh,
+		d.SpeedAvg, d.SpeedMax, d.PowerMax, d.PowerMin,
+		d.StartAddress, d.EndAddress, d.EnergyConsumedKwh,
 		d.ConsumptionKwh100km, d.Tags,
 	).Scan(&d.ID, &isInserted)
 	return isInserted, err
@@ -318,7 +334,7 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, tag strin
 	query := `
 		SELECT id, vehicle_id, teslamate_drive_id, start_time, end_time,
 		       start_odometer, end_odometer, distance_km, duration_min,
-		       speed_avg, start_address, end_address, energy_consumed_kwh,
+		       speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
 		       consumption_kwh_100km, tags, is_manual, created_at, updated_at
 		FROM drives
 		WHERE vehicle_id = $1 AND ($2 = '' OR $2 = ANY(tags))
@@ -337,7 +353,8 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, tag strin
 		if err := rows.Scan(
 			&d.ID, &d.VehicleID, &d.TeslaMateDriveID, &d.StartTime, &d.EndTime,
 			&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
-			&d.SpeedAvg, &d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
+			&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
+			&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
 			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
@@ -1439,7 +1456,7 @@ func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string
 	query := `
 		SELECT id, vehicle_id, teslamate_drive_id, start_time, end_time,
 		       start_odometer, end_odometer, distance_km, duration_min,
-		       speed_avg, start_address, end_address, energy_consumed_kwh,
+		       speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
 		       consumption_kwh_100km, tags, is_manual, created_at, updated_at
 		FROM drives
 		WHERE id = $1 AND vehicle_id = $2;
@@ -1448,7 +1465,8 @@ func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string
 	err := r.pool.QueryRow(ctx, query, driveID, vehicleID).Scan(
 		&d.ID, &d.VehicleID, &d.TeslaMateDriveID, &d.StartTime, &d.EndTime,
 		&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
-		&d.SpeedAvg, &d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
+		&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
+		&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
 		&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {
@@ -1464,7 +1482,7 @@ func (r *Repository) GetTripGroupDrives(ctx context.Context, tripGroupID string)
 	query := `
 		SELECT d.id, d.vehicle_id, d.teslamate_drive_id, d.start_time, d.end_time,
 		       d.start_odometer, d.end_odometer, d.distance_km, d.duration_min,
-		       d.speed_avg, d.start_address, d.end_address, d.energy_consumed_kwh,
+		       d.speed_avg, d.speed_max, d.power_max, d.power_min, d.start_address, d.end_address, d.energy_consumed_kwh,
 		       d.consumption_kwh_100km, d.tags, d.is_manual, d.created_at, d.updated_at
 		FROM drives d
 		JOIN trip_group_drives tgd ON d.id = tgd.drive_id
@@ -1483,7 +1501,8 @@ func (r *Repository) GetTripGroupDrives(ctx context.Context, tripGroupID string)
 		if err := rows.Scan(
 			&d.ID, &d.VehicleID, &d.TeslaMateDriveID, &d.StartTime, &d.EndTime,
 			&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
-			&d.SpeedAvg, &d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
+			&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
+			&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
 			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -1603,6 +1622,34 @@ func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, d
 		}
 	}
 	return list, nil
+}
+
+func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID string, minOdometer *float64) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error) {
+	query := `
+		SELECT 
+			COALESCE(AVG(NULLIF(power_max, 0)), 0),
+			COALESCE(AVG(NULLIF(power_min, 0)), 0),
+			COALESCE(AVG(NULLIF(consumption_kwh_100km, 0)), 0),
+			COUNT(*)
+		FROM drives
+		WHERE vehicle_id = $1
+	`
+	args := []any{vehicleID}
+	if minOdometer != nil && *minOdometer > 0 {
+		query += " AND (end_odometer IS NULL OR end_odometer >= $2)"
+		args = append(args, *minOdometer)
+	}
+
+	err = r.pool.QueryRow(ctx, query, args...).Scan(&avgPowerMax, &avgPowerMin, &avgConsumption, &count)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	if count == 0 && minOdometer != nil && *minOdometer > 0 {
+		return r.GetDrivingTelemetryStats(ctx, vehicleID, nil)
+	}
+
+	return avgPowerMax, avgPowerMin, avgConsumption, count, nil
 }
 
 

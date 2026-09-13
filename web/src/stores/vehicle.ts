@@ -5,6 +5,8 @@ import { api } from '@/services/api'
 export const useVehicleStore = defineStore('vehicle', () => {
   const vehicles = ref<any[]>([])
   const activeVehicleId = ref<string | null>(localStorage.getItem('teslacost_active_vehicle'))
+  const isInitialized = ref(false)
+  const isLoading = ref(false)
   const isSyncing = ref(false)
   const syncResult = ref<any | null>(null)
   const syncError = ref<string | null>(null)
@@ -16,14 +18,19 @@ export const useVehicleStore = defineStore('vehicle', () => {
   })
 
   async function fetchVehicles() {
+    isLoading.value = true
     try {
       const list = await api.getVehicles()
       vehicles.value = list
       if (list.length > 0 && (!activeVehicleId.value || !list.some((v) => v.id === activeVehicleId.value))) {
         setActiveVehicle(list[0].id)
       }
+      lastSyncTimestamp.value = Date.now()
     } catch (err) {
       console.error('Failed to fetch vehicles', err)
+    } finally {
+      isLoading.value = false
+      isInitialized.value = true
     }
   }
 
@@ -62,6 +69,8 @@ export const useVehicleStore = defineStore('vehicle', () => {
     syncResult,
     syncError,
     lastSyncTimestamp,
+    isInitialized,
+    isLoading,
     fetchVehicles,
     setActiveVehicle,
     syncActiveVehicle,

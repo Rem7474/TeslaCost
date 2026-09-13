@@ -22,10 +22,13 @@ func NewCarpoolService(pool *pgxpool.Pool, repo *database.Repository) *CarpoolSe
 }
 
 type UnitRates struct {
-	ElectricityPerKwh float64
-	TiresPerKm        float64
-	MaintenancePerKm  float64
-	InsurancePerKm    float64
+	ElectricityPerKwh     float64
+	TiresPerKm            float64
+	MaintenancePerKm      float64
+	InsurancePerKm        float64
+	InsuranceSource       string // "VEHICLE_SETTINGS", "RECORDED_EXPENSES", "DEFAULT"
+	AnnualInsuranceCost   *float64
+	AnnualExpectedMileage *float64
 }
 
 // GetVehicleUnitRates calculates real cost rates based on vehicle history, with sensible fallbacks.
@@ -85,24 +88,82 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		maintRate = totalMaintCost / totalDistance
 	}
 
-	// Insurance rate (€/km)
-	var totalInsCost float64
+	// Real Insurance calculation (€/km):
+	// Priority 1: Direct vehicle insurance settings (annual insurance premium / annual expected mileage)
+	var vAnnualIns *float64
+	var vAnnualKm *float64
 	_ = s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount), 0)
-		FROM maintenance_expenses
-		WHERE vehicle_id = $1 AND category = 'INSURANCE';
-	`, vehicleID).Scan(&totalInsCost)
+		SELECT annual_insurance_cost, annual_expected_mileage
+		FROM vehicles
+		WHERE id = $1;
+	`, vehicleID).Scan(&vAnnualIns, &vAnnualKm)
 
-	insRate := 0.035 // Default fallback ~3.5 cent/km
-	if totalDistance > 500 && totalInsCost > 0 {
-		insRate = totalInsCost / totalDistance
+	insRate := 0.035
+	insSource := "DEFAULT"
+	var finalAnnualIns *float64
+	var finalAnnualKm *float64
+
+	if vAnnualIns != nil && *vAnnualIns > 0 {
+		expectedKm := 15000.0
+		if vAnnualKm != nil && *vAnnualKm > 0 {
+			expectedKm = *vAnnualKm
+		}
+		insRate = *vAnnualIns / expectedKm
+		insSource = "VEHICLE_SETTINGS"
+		finalAnnualIns = vAnnualIns
+		finalAnnualKm = &expectedKm
+	} else {
+		// Priority 2: Check recorded INSURANCE expenses and annualize them
+		rows, err := s.pool.Query(ctx, `
+			SELECT amount, is_recurring, recurrence_interval_months
+			FROM maintenance_expenses
+			WHERE vehicle_id = $1 AND category = 'INSURANCE'
+			ORDER BY date DESC;
+		`, vehicleID)
+		if err == nil {
+			defer rows.Close()
+			var annualizedSum float64
+			hasEntries := false
+			for rows.Next() {
+				var amt float64
+				var isRec bool
+				var recMonths *int
+				if err := rows.Scan(&amt, &isRec, &recMonths); err == nil {
+					hasEntries = true
+					if isRec {
+						interval := 1
+						if recMonths != nil && *recMonths > 0 {
+							interval = *recMonths
+						}
+						annualizedSum += amt * (12.0 / float64(interval))
+					} else {
+						annualizedSum += amt
+					}
+				}
+			}
+			if hasEntries && annualizedSum > 0 {
+				expectedKm := 15000.0
+				if vAnnualKm != nil && *vAnnualKm > 0 {
+					expectedKm = *vAnnualKm
+				} else if totalDistance > 5000 {
+					expectedKm = totalDistance
+				}
+				insRate = annualizedSum / expectedKm
+				insSource = "RECORDED_EXPENSES"
+				finalAnnualIns = &annualizedSum
+				finalAnnualKm = &expectedKm
+			}
+		}
 	}
 
 	return &UnitRates{
-		ElectricityPerKwh: math.Round(elecRate*1000) / 1000,
-		TiresPerKm:        math.Round(tiresRate*1000) / 1000,
-		MaintenancePerKm:  math.Round(maintRate*1000) / 1000,
-		InsurancePerKm:    math.Round(insRate*1000) / 1000,
+		ElectricityPerKwh:     math.Round(elecRate*1000) / 1000,
+		TiresPerKm:            math.Round(tiresRate*1000) / 1000,
+		MaintenancePerKm:      math.Round(maintRate*1000) / 1000,
+		InsurancePerKm:        math.Round(insRate*1000) / 1000,
+		InsuranceSource:       insSource,
+		AnnualInsuranceCost:   finalAnnualIns,
+		AnnualExpectedMileage: finalAnnualKm,
 	}, nil
 }
 
@@ -178,5 +239,8 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		TiresRatePerKm:        rates.TiresPerKm,
 		MaintenanceRatePerKm:  rates.MaintenancePerKm,
 		InsuranceRatePerKm:    rates.InsurancePerKm,
+		InsuranceSource:       rates.InsuranceSource,
+		AnnualInsuranceCost:   rates.AnnualInsuranceCost,
+		AnnualExpectedMileage: rates.AnnualExpectedMileage,
 	}, nil
 }

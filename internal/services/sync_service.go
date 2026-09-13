@@ -214,6 +214,17 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				endAddr = &td.EndAddress
 			}
 
+			var speedMax, powerMax, powerMin *int
+			if td.SpeedMax > 0 {
+				speedMax = &td.SpeedMax
+			}
+			if td.PowerMax != 0 {
+				powerMax = &td.PowerMax
+			}
+			if td.PowerMin != 0 {
+				powerMin = &td.PowerMin
+			}
+
 			tmDriveID := td.DriveID
 			d := &models.Drive{
 				VehicleID:           v.ID,
@@ -225,6 +236,9 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				DistanceKm:          distKm,
 				DurationMin:         td.DurationMin,
 				SpeedAvg:            speedAvg,
+				SpeedMax:            speedMax,
+				PowerMax:            powerMax,
+				PowerMin:            powerMin,
 				StartAddress:        startAddr,
 				EndAddress:          endAddr,
 				EnergyConsumedKwh:   td.EnergyConsumedNet,

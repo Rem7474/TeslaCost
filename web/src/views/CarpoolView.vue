@@ -443,7 +443,7 @@ function formatDate(dateStr: string) {
 }
 
 watch(
-  () => [vehicleStore.activeVehicleId, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, vehicleStore.lastSyncTimestamp],
   () => {
     loadData()
   }
@@ -996,7 +996,23 @@ onMounted(() => {
               />
             </div>
             <div>
-              <label class="block text-[11px] text-slate-400 mb-1">🛡️ Assurance (€)</label>
+              <div class="flex items-center justify-between mb-1">
+                <label class="text-[11px] text-slate-400">🛡️ Assurance (€)</label>
+                <span
+                  v-if="currentRates?.insurance_source === 'VEHICLE_SETTINGS'"
+                  class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
+                  title="Calculé selon la prime annuelle du véhicule"
+                >
+                  Contrat réel
+                </span>
+                <span
+                  v-else-if="currentRates?.insurance_source === 'EXPENSES'"
+                  class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
+                  title="Calculé d'après vos dépenses d'assurance"
+                >
+                  Dépenses
+                </span>
+              </div>
               <input
                 v-model.number="form.insurance_cost"
                 type="number"

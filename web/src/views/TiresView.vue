@@ -26,6 +26,7 @@ import {
   Wrench,
   Check,
   ChevronRight,
+  Zap,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
@@ -163,7 +164,7 @@ async function loadTires() {
 }
 
 watch(
-  () => [vehicleStore.activeVehicleId, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, vehicleStore.lastSyncTimestamp],
   () => {
     loadTires()
   }
@@ -577,6 +578,33 @@ function formatDate(d: string) {
             </div>
           </div>
 
+          <!-- TeslaMate Telemetry & Stress Index -->
+          <div v-if="mountedTires.FL.avg_power_max_kw || mountedTires.FL.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                <Zap class="w-3 h-3 text-amber-400" />
+                Télémétrie TeslaMate
+              </span>
+              <span
+                class="px-2 py-0.5 rounded text-[10px] font-bold border"
+                :class="
+                  mountedTires.FL.driving_style === 'SPORT'
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    : mountedTires.FL.driving_style === 'ECO'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                "
+              >
+                {{ mountedTires.FL.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.FL.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.FL.driving_stress_index }})
+              </span>
+            </div>
+            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+              <div>Accél : <strong class="text-white">+{{ mountedTires.FL.avg_power_max_kw }} kW</strong></div>
+              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.FL.avg_power_min_kw }} kW</strong></div>
+              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.FL.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
+            </div>
+          </div>
+
           <!-- Lifespan progress bar -->
           <div class="space-y-1.5">
             <div class="flex items-center justify-between text-xs text-slate-400">
@@ -649,6 +677,33 @@ function formatDate(d: string) {
               <div class="text-[10px] text-slate-500 uppercase">Coût / km</div>
               <div class="text-sm font-bold text-amber-400">{{ Number(mountedTires.FR.cost_per_km).toFixed(4) }} €</div>
               <div class="text-[10px] text-slate-400">/ pneu</div>
+            </div>
+          </div>
+
+          <!-- TeslaMate Telemetry & Stress Index -->
+          <div v-if="mountedTires.FR.avg_power_max_kw || mountedTires.FR.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                <Zap class="w-3 h-3 text-amber-400" />
+                Télémétrie TeslaMate
+              </span>
+              <span
+                class="px-2 py-0.5 rounded text-[10px] font-bold border"
+                :class="
+                  mountedTires.FR.driving_style === 'SPORT'
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    : mountedTires.FR.driving_style === 'ECO'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                "
+              >
+                {{ mountedTires.FR.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.FR.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.FR.driving_stress_index }})
+              </span>
+            </div>
+            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+              <div>Accél : <strong class="text-white">+{{ mountedTires.FR.avg_power_max_kw }} kW</strong></div>
+              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.FR.avg_power_min_kw }} kW</strong></div>
+              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.FR.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
             </div>
           </div>
 
@@ -725,6 +780,33 @@ function formatDate(d: string) {
             </div>
           </div>
 
+          <!-- TeslaMate Telemetry & Stress Index -->
+          <div v-if="mountedTires.RL.avg_power_max_kw || mountedTires.RL.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                <Zap class="w-3 h-3 text-amber-400" />
+                Télémétrie TeslaMate
+              </span>
+              <span
+                class="px-2 py-0.5 rounded text-[10px] font-bold border"
+                :class="
+                  mountedTires.RL.driving_style === 'SPORT'
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    : mountedTires.RL.driving_style === 'ECO'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                "
+              >
+                {{ mountedTires.RL.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.RL.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.RL.driving_stress_index }})
+              </span>
+            </div>
+            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+              <div>Accél : <strong class="text-white">+{{ mountedTires.RL.avg_power_max_kw }} kW</strong></div>
+              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.RL.avg_power_min_kw }} kW</strong></div>
+              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.RL.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
+            </div>
+          </div>
+
           <div class="space-y-1.5">
             <div class="flex items-center justify-between text-xs text-slate-400">
               <span>Usure durée de vie estimée ({{ mountedTires.RL.estimated_lifespan_km.toLocaleString('fr-FR') }} km)</span>
@@ -795,6 +877,33 @@ function formatDate(d: string) {
               <div class="text-[10px] text-slate-500 uppercase">Coût / km</div>
               <div class="text-sm font-bold text-amber-400">{{ Number(mountedTires.RR.cost_per_km).toFixed(4) }} €</div>
               <div class="text-[10px] text-slate-400">/ pneu</div>
+            </div>
+          </div>
+
+          <!-- TeslaMate Telemetry & Stress Index -->
+          <div v-if="mountedTires.RR.avg_power_max_kw || mountedTires.RR.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                <Zap class="w-3 h-3 text-amber-400" />
+                Télémétrie TeslaMate
+              </span>
+              <span
+                class="px-2 py-0.5 rounded text-[10px] font-bold border"
+                :class="
+                  mountedTires.RR.driving_style === 'SPORT'
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
+                    : mountedTires.RR.driving_style === 'ECO'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
+                "
+              >
+                {{ mountedTires.RR.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.RR.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.RR.driving_stress_index }})
+              </span>
+            </div>
+            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+              <div>Accél : <strong class="text-white">+{{ mountedTires.RR.avg_power_max_kw }} kW</strong></div>
+              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.RR.avg_power_min_kw }} kW</strong></div>
+              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.RR.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
             </div>
           </div>
 
@@ -1174,6 +1283,51 @@ function formatDate(d: string) {
               <div class="font-bold text-amber-400">{{ Number(selectedTireStats?.cost_per_km).toFixed(4) }} €</div>
             </div>
           </div>
+        </div>
+
+        <!-- TeslaMate Driving Telemetry & Stress Analysis Card -->
+        <div v-if="selectedTireStats?.avg_power_max_kw || selectedTireStats?.driving_stress_index" class="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <Zap class="w-4 h-4 text-amber-400" />
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">Télémétrie Dynamique TeslaMate</h4>
+            </div>
+            <span
+              class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
+              :class="
+                selectedTireStats.driving_style === 'SPORT'
+                  ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                  : selectedTireStats.driving_style === 'ECO'
+                  ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                  : 'bg-sky-500/15 text-sky-400 border-sky-500/30'
+              "
+            >
+              {{ selectedTireStats.driving_style === 'SPORT' ? 'Contrainte Sportive' : selectedTireStats.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (Indice : x{{ selectedTireStats.driving_stress_index }})
+            </span>
+          </div>
+
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+            <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-500 uppercase">Pointe Accélération</div>
+              <div class="font-bold text-rose-400 text-sm mt-0.5">+{{ selectedTireStats.avg_power_max_kw }} kW</div>
+            </div>
+            <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-500 uppercase">Pointe Régénération</div>
+              <div class="font-bold text-emerald-400 text-sm mt-0.5">{{ selectedTireStats.avg_power_min_kw }} kW</div>
+            </div>
+            <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-500 uppercase">Conso moyenne</div>
+              <div class="font-bold text-sky-400 text-sm mt-0.5">{{ selectedTireStats.avg_consumption_kwh_100km }} kWh</div>
+            </div>
+            <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
+              <div class="text-[10px] text-slate-500 uppercase">Longévité ajustée</div>
+              <div class="font-bold text-indigo-300 text-sm mt-0.5">~{{ (selectedTireStats.dynamic_lifespan_km || selectedTire.estimated_lifespan_km).toLocaleString('fr-FR') }} km</div>
+            </div>
+          </div>
+
+          <p class="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
+            💡 <strong>Analyse d'usure :</strong> {{ selectedTireStats.wear_explanation }}
+          </p>
         </div>
 
         <!-- Timeline: Mount/Dismount Sessions -->
