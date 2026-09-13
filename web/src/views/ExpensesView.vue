@@ -20,6 +20,7 @@ import {
   ArrowRight,
   Pencil,
   Trash2,
+  AlertTriangle,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -29,6 +30,8 @@ const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'CHARGES'>('TOLLS')
 const driveExpenses = ref<any[]>([])
 const maintenanceExpenses = ref<any[]>([])
 const charges = ref<any[]>([])
+const chargesWithoutCost = ref(0)
+const missingCostOnly = ref(false)
 const loading = ref(false)
 
 // Modals
@@ -42,22 +45,54 @@ const associationMode = ref<'NONE' | 'SINGLE' | 'MULTI'>('NONE')
 const selectedDriveId = ref('')
 const selectedDriveIds = ref<string[]>([])
 
+const CURRENCIES = ['EUR', 'CHF', 'GBP', 'USD']
+
 const tollForm = ref({
   type: 'TOLL',
   amount: '',
-  date: new Date().toISOString().substring(0, 16),
+  currency: 'EUR',
+  fx_rate: '',
+  date: toLocalDateTimeInput(new Date()),
   notes: '',
 })
 
 const maintForm = ref({
   category: 'MAINTENANCE',
   amount: '',
+  currency: 'EUR',
+  fx_rate: '',
   date: new Date().toISOString().substring(0, 10),
   odometer: 0,
   is_recurring: false,
   recurrence_interval_months: 12,
+  recurrence_end_date: '',
   description: '',
 })
+
+// Charges: manual entry and cost completion
+const showChargeModal = ref(false)
+const editingCharge = ref<any | null>(null)
+const chargeForm = ref({
+  date: toLocalDateTimeInput(new Date()),
+  kwh_added: '',
+  cost: '',
+  currency: 'EUR',
+  fx_rate: '',
+  address: '',
+  odometer: '',
+  notes: '',
+})
+
+// datetime-local inputs expect local time, not UTC
+function toLocalDateTimeInput(d: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function currencyPayload(form: { currency: string; fx_rate: string }) {
+  if (form.currency === 'EUR') return { currency: 'EUR', fx_rate: null }
+  return { currency: form.currency, fx_rate: form.fx_rate ? Number(form.fx_rate) : null }
+}
 
 async function loadData() {
   if (!vehicleStore.activeVehicle) return
@@ -68,8 +103,9 @@ async function loadData() {
     } else if (activeTab.value === 'MAINTENANCE') {
       maintenanceExpenses.value = await api.getMaintenance(vehicleStore.activeVehicle.id)
     } else if (activeTab.value === 'CHARGES') {
-      const res = await api.getCharges(vehicleStore.activeVehicle.id)
+      const res = await api.getCharges(vehicleStore.activeVehicle.id, { missingCost: missingCostOnly.value })
       charges.value = res.charges
+      chargesWithoutCost.value = res.charges_without_cost || 0
     }
   } catch (err) {
     console.error('Failed to load expenses', err)
@@ -93,7 +129,9 @@ function openAddTollModal() {
   tollForm.value = {
     type: 'TOLL',
     amount: '',
-    date: new Date().toISOString().substring(0, 16),
+    currency: 'EUR',
+    fx_rate: '',
+    date: toLocalDateTimeInput(new Date()),
     notes: '',
   }
   associationMode.value = 'NONE'
@@ -108,10 +146,17 @@ function openEditTollModal(e: any) {
   tollForm.value = {
     type: e.type || 'TOLL',
     amount: String(e.amount),
-    date: new Date(e.date).toISOString().substring(0, 16),
+    currency: e.currency || 'EUR',
+    fx_rate: e.fx_rate ? String(e.fx_rate) : '',
+    date: toLocalDateTimeInput(new Date(e.date)),
     notes: e.notes || '',
   }
-  if (e.drive_id) {
+  if (e.trip_group_id) {
+    // Keep the trip group link: its drives are preselected in multi-step mode
+    associationMode.value = 'MULTI'
+    selectedDriveId.value = ''
+    selectedDriveIds.value = [...(e.trip_group_drive_ids || [])]
+  } else if (e.drive_id) {
     associationMode.value = 'SINGLE'
     selectedDriveId.value = e.drive_id
     selectedDriveIds.value = []
@@ -186,13 +231,16 @@ async function handleCreateToll() {
     const payload: any = {
       type: tollForm.value.type,
       amount: Number(tollForm.value.amount),
+      ...currencyPayload(tollForm.value),
       date: new Date(tollForm.value.date).toISOString(),
       notes: tollForm.value.notes,
     }
 
     if (associationMode.value === 'SINGLE' && selectedDriveId.value) {
       payload.drive_id = selectedDriveId.value
-    } else if (associationMode.value === 'MULTI' && selectedDriveIds.value.length > 0) {
+    } else if (associationMode.value === 'MULTI' && selectedDriveIds.value.length === 1) {
+      payload.drive_id = selectedDriveIds.value[0]
+    } else if (associationMode.value === 'MULTI' && selectedDriveIds.value.length > 1) {
       payload.drive_ids = selectedDriveIds.value
     }
 
@@ -213,10 +261,13 @@ function openAddMaintModal() {
   maintForm.value = {
     category: 'MAINTENANCE',
     amount: '',
+    currency: 'EUR',
+    fx_rate: '',
     date: new Date().toISOString().substring(0, 10),
     odometer: 0,
     is_recurring: false,
     recurrence_interval_months: 12,
+    recurrence_end_date: '',
     description: '',
   }
   showAddMaintModal.value = true
@@ -227,10 +278,13 @@ function openEditMaintModal(m: any) {
   maintForm.value = {
     category: m.category || 'MAINTENANCE',
     amount: String(m.amount),
+    currency: m.currency || 'EUR',
+    fx_rate: m.fx_rate ? String(m.fx_rate) : '',
     date: new Date(m.date).toISOString().substring(0, 10),
     odometer: m.odometer ? Math.round(m.odometer) : 0,
     is_recurring: Boolean(m.is_recurring),
     recurrence_interval_months: m.recurrence_interval_months || 12,
+    recurrence_end_date: m.recurrence_end_date ? new Date(m.recurrence_end_date).toISOString().substring(0, 10) : '',
     description: m.description || '',
   }
   showAddMaintModal.value = true
@@ -252,9 +306,14 @@ async function handleCreateMaint() {
   try {
     const payload = {
       ...maintForm.value,
+      ...currencyPayload(maintForm.value),
       amount: Number(maintForm.value.amount),
       odometer: maintForm.value.odometer ? Number(maintForm.value.odometer) : null,
       date: new Date(maintForm.value.date).toISOString(),
+      recurrence_end_date:
+        maintForm.value.is_recurring && maintForm.value.recurrence_end_date
+          ? new Date(maintForm.value.recurrence_end_date).toISOString()
+          : null,
     }
     if (editingMaintId.value) {
       await api.updateMaintenance(vehicleStore.activeVehicle.id, editingMaintId.value, payload)
@@ -265,6 +324,76 @@ async function handleCreateMaint() {
     await loadData()
   } catch (err: any) {
     alert(`Erreur : ${err.message}`)
+  }
+}
+
+function toggleMissingCostFilter() {
+  missingCostOnly.value = !missingCostOnly.value
+  loadData()
+}
+
+function openAddChargeModal() {
+  editingCharge.value = null
+  chargeForm.value = {
+    date: toLocalDateTimeInput(new Date()),
+    kwh_added: '',
+    cost: '',
+    currency: 'EUR',
+    fx_rate: '',
+    address: '',
+    odometer: vehicleStore.activeVehicle?.current_odometer ? String(Math.round(vehicleStore.activeVehicle.current_odometer)) : '',
+    notes: '',
+  }
+  showChargeModal.value = true
+}
+
+function openEditChargeModal(c: any) {
+  editingCharge.value = c
+  chargeForm.value = {
+    date: toLocalDateTimeInput(new Date(c.date)),
+    kwh_added: String(c.kwh_added),
+    cost: c.cost !== null && c.cost !== undefined ? String(c.cost) : '',
+    currency: c.currency || 'EUR',
+    fx_rate: c.fx_rate ? String(c.fx_rate) : '',
+    address: c.address || '',
+    odometer: c.odometer ? String(Math.round(c.odometer)) : '',
+    notes: c.notes || '',
+  }
+  showChargeModal.value = true
+}
+
+async function handleSaveCharge() {
+  if (!vehicleStore.activeVehicle) return
+  const payload = {
+    date: new Date(chargeForm.value.date).toISOString(),
+    kwh_added: Number(chargeForm.value.kwh_added),
+    cost: Number(chargeForm.value.cost),
+    ...currencyPayload(chargeForm.value),
+    address: chargeForm.value.address || null,
+    odometer: chargeForm.value.odometer ? Number(chargeForm.value.odometer) : null,
+    notes: chargeForm.value.notes || null,
+  }
+  try {
+    if (editingCharge.value) {
+      await api.updateCharge(vehicleStore.activeVehicle.id, editingCharge.value.id, payload)
+    } else {
+      await api.createCharge(vehicleStore.activeVehicle.id, payload)
+    }
+    showChargeModal.value = false
+    await loadData()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function handleDeleteCharge(c: any) {
+  if (!vehicleStore.activeVehicle) return
+  if (!confirm(`Supprimer cette recharge manuelle de ${c.kwh_added} kWh ?`)) return
+  try {
+    await api.deleteCharge(vehicleStore.activeVehicle.id, c.id)
+    await loadData()
+  } catch (err: any) {
+    alert(`Erreur lors de la suppression : ${err.message}`)
   }
 }
 
@@ -311,6 +440,14 @@ function formatDriveTime(dateStr: string) {
         >
           <Plus class="w-3.5 h-3.5" />
           Entretien / Fixe
+        </button>
+        <button
+          v-if="activeTab === 'CHARGES'"
+          @click="openAddChargeModal"
+          class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          Recharge hors TeslaMate
         </button>
       </div>
     </div>
@@ -424,6 +561,7 @@ function formatDriveTime(dateStr: string) {
               <span class="text-xs text-slate-400">{{ formatDate(m.date) }}</span>
               <span v-if="m.is_recurring" class="text-xs text-slate-400 flex items-center gap-1">
                 <Repeat class="w-3 h-3 text-pink-400" /> tous les {{ m.recurrence_interval_months }} mois
+                <template v-if="m.recurrence_end_date">jusqu'au {{ formatDate(m.recurrence_end_date) }}</template>
               </span>
             </div>
             <p class="text-sm font-semibold text-slate-200">{{ m.description }}</p>
@@ -455,31 +593,68 @@ function formatDriveTime(dateStr: string) {
     </div>
 
     <!-- Content: Charges -->
-    <div v-if="activeTab === 'CHARGES'">
+    <div v-if="activeTab === 'CHARGES'" class="space-y-3">
+      <button
+        v-if="chargesWithoutCost > 0 || missingCostOnly"
+        @click="toggleMissingCostFilter"
+        class="w-full p-3 rounded-2xl text-left text-xs font-semibold flex items-center gap-2 border transition-colors"
+        :class="missingCostOnly ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/15'"
+      >
+        <AlertTriangle class="w-4 h-4 shrink-0" />
+        <span v-if="missingCostOnly">Affichage des recharges sans coût uniquement — cliquer pour tout afficher</span>
+        <span v-else>{{ chargesWithoutCost }} recharge(s) sans coût : le TCO est sous-estimé. Cliquer pour les compléter.</span>
+      </button>
       <div v-if="loading" class="text-center py-12 text-slate-400">Chargement...</div>
       <div v-else-if="!charges.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-        Aucune recharge enregistrée. Synchronisez votre véhicule avec TeslaMate !
+        Aucune recharge enregistrée. Synchronisez votre véhicule avec TeslaMate ou ajoutez une recharge manuelle.
       </div>
       <div v-else class="space-y-3">
         <div
           v-for="c in charges"
           :key="c.id"
-          class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between"
+          class="bg-slate-900 border p-4 rounded-2xl flex items-center justify-between gap-3"
+          :class="c.cost === null ? 'border-amber-500/40' : 'border-slate-800'"
         >
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20">
                 +{{ c.kwh_added }} kWh
               </span>
               <span class="text-xs text-slate-400">{{ formatDate(c.date) }}</span>
+              <span v-if="c.is_manual" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Manuelle</span>
+              <span v-else-if="c.cost_source === 'MANUAL'" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Coût corrigé</span>
             </div>
             <p class="text-sm text-slate-300 mt-1">{{ c.address || 'Lieu de recharge inconnu' }}</p>
           </div>
-          <div class="text-right">
-            <span class="text-lg font-extrabold text-sky-400">{{ c.cost.toFixed(2) }} {{ c.currency }}</span>
-            <p v-if="c.kwh_added > 0" class="text-[11px] text-slate-400">
-              {{ (c.cost / c.kwh_added).toFixed(3) }} €/kWh
-            </p>
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <template v-if="c.cost !== null">
+                <span class="text-lg font-extrabold text-sky-400">{{ c.cost.toFixed(2) }} {{ c.currency }}</span>
+                <p v-if="c.kwh_added > 0" class="text-[11px] text-slate-400">
+                  {{ (c.cost / c.kwh_added).toFixed(3) }} {{ c.currency }}/kWh
+                </p>
+              </template>
+              <span v-else class="text-xs font-bold text-amber-400 flex items-center gap-1">
+                <AlertTriangle class="w-3.5 h-3.5" /> Coût manquant
+              </span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button
+                @click="openEditChargeModal(c)"
+                class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-sky-400 rounded-xl transition-colors border border-slate-700/60"
+                :title="c.is_manual ? 'Modifier cette recharge' : 'Renseigner / corriger le coût'"
+              >
+                <Pencil class="w-3.5 h-3.5" />
+              </button>
+              <button
+                v-if="c.is_manual"
+                @click="handleDeleteCharge(c)"
+                class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
+                title="Supprimer cette recharge"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -513,9 +688,18 @@ function formatDriveTime(dateStr: string) {
               </select>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
-              <input v-model="tollForm.amount" type="number" step="0.01" required placeholder="0.00" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
+              <div class="flex gap-1.5">
+                <input v-model="tollForm.amount" type="number" step="0.01" min="0.01" required placeholder="0.00" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <select v-model="tollForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+                  <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
+                </select>
+              </div>
             </div>
+          </div>
+          <div v-if="tollForm.currency !== 'EUR'">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ tollForm.currency }} = ? €)</label>
+            <input v-model="tollForm.fx_rate" type="number" step="0.000001" min="0.000001" required placeholder="ex: 1.05" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <!-- Association à un/des trajets TeslaMate -->
@@ -656,9 +840,18 @@ function formatDriveTime(dateStr: string) {
               <input v-model="maintForm.date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
-              <input v-model="maintForm.amount" type="number" step="0.01" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
+              <div class="flex gap-1.5">
+                <input v-model="maintForm.amount" type="number" step="0.01" min="0.01" required class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <select v-model="maintForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+                  <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
+                </select>
+              </div>
             </div>
+          </div>
+          <div v-if="maintForm.currency !== 'EUR'">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ maintForm.currency }} = ? €)</label>
+            <input v-model="maintForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div>
@@ -671,9 +864,18 @@ function formatDriveTime(dateStr: string) {
               <input v-model="maintForm.is_recurring" type="checkbox" id="rec" class="rounded border-slate-700 bg-slate-800 text-rose-600 focus:ring-rose-500" />
               <label for="rec" class="text-xs text-slate-300 font-medium">Dépense récurrente</label>
             </div>
-            <div v-if="maintForm.is_recurring" class="pt-1">
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Intervalle de récurrence (mois)</label>
-              <input v-model.number="maintForm.recurrence_interval_months" type="number" min="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <div v-if="maintForm.is_recurring" class="pt-1 grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Intervalle (mois)</label>
+                <input v-model.number="maintForm.recurrence_interval_months" type="number" min="1" max="120" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Fin (optionnelle)</label>
+                <input v-model="maintForm.recurrence_end_date" type="date" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+              <p class="col-span-2 text-[11px] text-slate-400">
+                Chaque échéance est comptée dans le TCO jusqu'à aujourd'hui (ou jusqu'à la date de fin).
+              </p>
             </div>
           </div>
 
@@ -683,6 +885,80 @@ function formatDriveTime(dateStr: string) {
             </button>
             <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl font-medium">
               {{ editingMaintId ? 'Mettre à jour' : 'Enregistrer' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Manual charge / cost completion -->
+    <div
+      v-if="showChargeModal"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <Zap class="w-5 h-5 text-sky-400" />
+            {{ !editingCharge ? 'Recharge hors TeslaMate' : editingCharge.is_manual ? 'Modifier la recharge' : 'Coût de la recharge' }}
+          </h3>
+          <button @click="showChargeModal = false" class="text-slate-400 hover:text-white">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <p v-if="editingCharge && !editingCharge.is_manual" class="text-[11px] text-slate-400">
+          Recharge TeslaMate du {{ formatDate(editingCharge.date) }} (+{{ editingCharge.kwh_added }} kWh). Le coût saisi ici ne sera pas écrasé par les synchronisations.
+        </p>
+
+        <form @submit.prevent="handleSaveCharge" class="space-y-3">
+          <template v-if="!editingCharge || editingCharge.is_manual">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
+                <input v-model="chargeForm.date" type="datetime-local" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Énergie ajoutée (kWh)</label>
+                <input v-model="chargeForm.kwh_added" type="number" step="0.001" min="0.001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Lieu (optionnel)</label>
+                <input v-model="chargeForm.address" placeholder="Borne, domicile..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
+                <input v-model="chargeForm.odometer" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+          </template>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Coût</label>
+            <div class="flex gap-1.5">
+              <input v-model="chargeForm.cost" type="number" step="0.01" min="0" required placeholder="0.00 si gratuite" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <select v-model="chargeForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+                <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
+              </select>
+            </div>
+          </div>
+          <div v-if="chargeForm.currency !== 'EUR'">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ chargeForm.currency }} = ? €)</label>
+            <input v-model="chargeForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Notes (optionnel)</label>
+            <input v-model="chargeForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          </div>
+
+          <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <button type="button" @click="showChargeModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
+              Annuler
+            </button>
+            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl font-medium">
+              Enregistrer
             </button>
           </div>
         </form>

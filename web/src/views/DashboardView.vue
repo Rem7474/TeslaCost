@@ -15,6 +15,7 @@ import {
   ArrowRight,
   Activity,
   Calendar,
+  AlertTriangle,
 } from 'lucide-vue-next'
 import { Chart, registerables } from 'chart.js'
 
@@ -27,6 +28,17 @@ const loading = ref(true)
 const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
 const mileageChartRef = ref<HTMLCanvasElement | null>(null)
 const donutChartRef = ref<HTMLCanvasElement | null>(null)
+
+const insuranceSourceLabel = computed(() => {
+  switch (tco.value?.insurance_source) {
+    case 'RECORDED_EXPENSES':
+      return 'dépenses enregistrées'
+    case 'VEHICLE_SETTINGS':
+      return 'prime annuelle au prorata'
+    default:
+      return 'non renseignée'
+  }
+})
 
 let monthlyChartInstance: Chart | null = null
 let mileageChartInstance: Chart | null = null
@@ -100,6 +112,8 @@ function renderCharts() {
     const tollsData = monthlyList.map((m: any) => m.tolls)
     const tiresData = monthlyList.map((m: any) => m.tires || 0)
     const maintData = monthlyList.map((m: any) => m.maintenance)
+    const insuranceData = monthlyList.map((m: any) => m.insurance || 0)
+    const otherData = monthlyList.map((m: any) => m.other || 0)
 
     monthlyChartInstance = new Chart(monthlyChartRef.value, {
       type: 'bar',
@@ -110,6 +124,8 @@ function renderCharts() {
           { label: 'Péages & Parkings (€)', data: tollsData, backgroundColor: '#f59e0b', borderRadius: 4 },
           { label: 'Pneus (€)', data: tiresData, backgroundColor: '#10b981', borderRadius: 4 },
           { label: 'Entretien (€)', data: maintData, backgroundColor: '#ec4899', borderRadius: 4 },
+          { label: 'Assurance (€)', data: insuranceData, backgroundColor: '#a855f7', borderRadius: 4 },
+          { label: 'Abonnements, taxes & autres (€)', data: otherData, backgroundColor: '#64748b', borderRadius: 4 },
         ],
       },
       options: {
@@ -228,16 +244,18 @@ function renderCharts() {
     donutChartInstance = new Chart(donutChartRef.value, {
       type: 'doughnut',
       data: {
-        labels: ['Énergie', 'Péages & Parkings', 'Pneus', 'Entretien'],
+        labels: ['Énergie', 'Péages & Parkings', 'Pneus (usure amortie)', 'Entretien', 'Assurance', 'Abonnements, taxes & autres'],
         datasets: [
           {
             data: [
               tco.value.energy_cost || 0,
               tco.value.tolls_cost || 0,
-              tco.value.tires_cost || 0,
+              tco.value.tires_amortized_cost || 0,
               tco.value.maintenance_cost || 0,
+              tco.value.insurance_cost || 0,
+              (tco.value.subscription_cost || 0) + (tco.value.tax_cost || 0) + (tco.value.other_cost || 0),
             ],
-            backgroundColor: ['#38bdf8', '#f59e0b', '#10b981', '#ec4899'],
+            backgroundColor: ['#38bdf8', '#f59e0b', '#10b981', '#ec4899', '#a855f7', '#64748b'],
             borderWidth: 0,
           },
         ],
@@ -329,6 +347,43 @@ function renderCharts() {
 
     <!-- REAL CONTENT WHEN LOADED -->
     <div v-else class="space-y-6">
+      <!-- Data completeness -->
+      <div
+        v-if="tco?.completeness && !tco.completeness.is_complete"
+        class="bg-amber-500/10 border border-amber-500/30 p-4 rounded-2xl space-y-2"
+      >
+        <div class="flex items-center gap-2 text-sm font-bold text-amber-400">
+          <AlertTriangle class="w-4 h-4" />
+          Données partielles : les montants ci-dessous sont sous-estimés
+        </div>
+        <ul class="text-xs text-amber-200/90 space-y-1 list-disc pl-6">
+          <li v-for="w in tco.completeness.warnings" :key="w">{{ w }}</li>
+        </ul>
+        <div class="flex flex-wrap gap-2 pt-1">
+          <router-link
+            v-if="tco.completeness.charges_without_cost > 0"
+            to="/expenses"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+          >
+            Compléter les recharges
+          </router-link>
+          <router-link
+            v-if="tco.completeness.unqualified_drives > 0"
+            to="/drives"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+          >
+            Qualifier les trajets
+          </router-link>
+          <router-link
+            v-if="tco.completeness.insurance_missing"
+            to="/vehicles"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+          >
+            Renseigner l'assurance
+          </router-link>
+        </div>
+      </div>
+
       <!-- TCO Metrics Grid -->
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <!-- Total Cost -->
@@ -342,21 +397,28 @@ function renderCharts() {
           <div class="text-2xl sm:text-3xl font-extrabold text-white">
             {{ (tco?.total_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
           </div>
-          <p class="text-xs text-slate-400 mt-1">Dépenses globales cumulées</p>
+          <p class="text-xs text-slate-400 mt-1">
+            Décaissé cumulé • coût complet (pneus amortis) :
+            {{ (tco?.full_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+          </p>
         </div>
 
         <!-- Cost per km -->
         <div class="bg-gradient-to-br from-slate-900 to-slate-900/50 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Coût au km</span>
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Coût complet au km</span>
             <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
               <TrendingUp class="w-5 h-5" />
             </div>
           </div>
           <div class="text-2xl sm:text-3xl font-extrabold text-emerald-400">
-            {{ (tco?.total_cost_per_km || 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }} €<span class="text-xs font-normal text-slate-400">/km</span>
+            {{ (tco?.full_cost_per_km || 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }} €<span class="text-xs font-normal text-slate-400">/km</span>
           </div>
-          <p class="text-xs text-slate-400 mt-1">Sur {{ Math.round(tco?.total_distance_km || 0).toLocaleString('fr-FR') }} km parcourus</p>
+          <p class="text-xs text-slate-400 mt-1">
+            Usage direct (énergie + péages) : {{ (tco?.usage_cost_per_km || 0).toFixed(3) }} €/km
+            • sur {{ Math.round(tco?.distance_basis_km || 0).toLocaleString('fr-FR') }} km
+          </p>
+          <p class="text-[11px] text-slate-500 mt-0.5">Assurance : {{ insuranceSourceLabel }}</p>
         </div>
 
         <!-- Energy Cost -->
@@ -372,6 +434,9 @@ function renderCharts() {
           </div>
           <p class="text-xs text-slate-400 mt-1">
             {{ (tco?.energy_cost_per_km || 0).toFixed(3) }} €/km ({{ Math.round(tco?.total_kwh_added || 0).toLocaleString('fr-FR') }} kWh)
+          </p>
+          <p v-if="tco?.completeness?.charges_without_cost" class="text-[11px] text-amber-400 mt-0.5">
+            {{ tco.completeness.charges_without_cost }} recharge(s) sans coût
           </p>
         </div>
 
@@ -421,7 +486,7 @@ function renderCharts() {
         <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
           <h3 class="text-sm font-bold text-white mb-4 flex items-center justify-between">
             <span>Évolution mensuelle des dépenses (€)</span>
-            <span class="text-xs text-slate-400 font-normal">Historique mensuel</span>
+            <span class="text-xs text-slate-400 font-normal">Montants décaissés par mois</span>
           </h3>
           <div class="h-64 sm:h-72">
             <canvas ref="monthlyChartRef"></canvas>
@@ -430,7 +495,7 @@ function renderCharts() {
 
         <!-- Donut Cost Breakdown -->
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <h3 class="text-sm font-bold text-white mb-4">Répartition des dépenses</h3>
+          <h3 class="text-sm font-bold text-white mb-4">Répartition du coût complet</h3>
           <div class="h-56 sm:h-64">
             <canvas ref="donutChartRef"></canvas>
           </div>
@@ -481,6 +546,7 @@ function renderCharts() {
                 <span class="text-sm font-bold text-white">{{ item.tag }}</span>
               </div>
               <p class="text-xs text-slate-400 mt-1">{{ item.distance_km.toLocaleString('fr-FR') }} km ({{ item.energy_kwh }} kWh)</p>
+              <p v-if="item.tolls_amount" class="text-xs text-amber-400">{{ item.tolls_amount.toFixed(2) }} € de péages & parkings</p>
             </div>
             <div class="text-right">
               <span class="text-lg font-extrabold text-white">{{ item.percentage }}%</span>

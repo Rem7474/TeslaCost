@@ -65,15 +65,18 @@ export const api = {
   syncVehicle: (id: string) => request<any>(`/vehicles/${id}/sync`, { method: 'POST' }),
 
   // Drives
-  getDrives: (vehicleId: string, params?: { tag?: string; page?: number; limit?: number }) => {
+  getDrives: (vehicleId: string, params?: { tag?: string; page?: number; limit?: number; unqualified?: boolean }) => {
     const q = new URLSearchParams()
     if (params?.tag) q.set('tag', params.tag)
+    if (params?.unqualified) q.set('unqualified', 'true')
     if (params?.page) q.set('page', params.page.toString())
     if (params?.limit) q.set('limit', params.limit.toString())
     return request<any>(`/vehicles/${vehicleId}/drives?${q.toString()}`)
   },
   updateDriveTags: (vehicleId: string, driveId: string, tags: string[]) =>
     request<any>(`/vehicles/${vehicleId}/drives/${driveId}/tags`, { method: 'PATCH', body: JSON.stringify({ tags }) }),
+  setDriveTollReview: (vehicleId: string, driveId: string, reviewed: boolean) =>
+    request<any>(`/vehicles/${vehicleId}/drives/${driveId}/toll-review`, { method: 'PATCH', body: JSON.stringify({ reviewed }) }),
   createTripGroup: (vehicleId: string, payload: { name: string; notes?: string; drive_ids: string[] }) =>
     request<any>(`/vehicles/${vehicleId}/trip-groups`, { method: 'POST', body: JSON.stringify(payload) }),
   getTripGroups: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-groups`),
@@ -115,8 +118,17 @@ export const api = {
     request<any>(`/vehicles/${vehicleId}/maintenance/${maintenanceId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteMaintenance: (vehicleId: string, maintenanceId: string) =>
     request<void>(`/vehicles/${vehicleId}/maintenance/${maintenanceId}`, { method: 'DELETE' }),
-  getCharges: (vehicleId: string, page = 1, limit = 50) =>
-    request<any>(`/vehicles/${vehicleId}/charges?page=${page}&limit=${limit}`),
+  getCharges: (vehicleId: string, params: { page?: number; limit?: number; missingCost?: boolean } = {}) => {
+    const q = new URLSearchParams({ page: String(params.page || 1), limit: String(params.limit || 50) })
+    if (params.missingCost) q.set('missing_cost', 'true')
+    return request<any>(`/vehicles/${vehicleId}/charges?${q.toString()}`)
+  },
+  createCharge: (vehicleId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/charges`, { method: 'POST', body: JSON.stringify(data) }),
+  updateCharge: (vehicleId: string, chargeId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteCharge: (vehicleId: string, chargeId: string) =>
+    request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'DELETE' }),
 
   getDriveExpensesForDrive: (vehicleId: string, driveId: string) =>
     request<any[]>(`/vehicles/${vehicleId}/drives/${driveId}/expenses`),

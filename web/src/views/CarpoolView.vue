@@ -1006,11 +1006,18 @@ onMounted(() => {
                   Contrat réel
                 </span>
                 <span
-                  v-else-if="currentRates?.insurance_source === 'EXPENSES'"
+                  v-else-if="currentRates?.insurance_source === 'RECORDED_EXPENSES'"
                   class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
                   title="Calculé d'après vos dépenses d'assurance"
                 >
                   Dépenses
+                </span>
+                <span
+                  v-else-if="currentRates?.insurance_source === 'DEFAULT'"
+                  class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
+                  title="Aucune assurance renseignée : valeur par défaut"
+                >
+                  estimation
                 </span>
               </div>
               <input
