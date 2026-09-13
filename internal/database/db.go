@@ -63,7 +63,11 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 	return nil, fmt.Errorf("database connection failed after %d attempts: %w", maxAttempts, lastErr)
 }
 
-// Migrate executes embedded SQL migration scripts to ensure the database schema is up-to-date.
+// migrationLockID is the advisory lock key serializing concurrent migration runs.
+const migrationLockID = 7474_2026
+
+// Migrate applies pending embedded SQL migrations, each one inside its own transaction,
+// and records applied versions in schema_migrations.
 func (db *DB) Migrate(ctx context.Context) error {
 	entries, err := migrations.FS.ReadDir(".")
 	if err != nil {
@@ -78,20 +82,74 @@ func (db *DB) Migrate(ctx context.Context) error {
 	}
 	sort.Strings(upFiles)
 
+	conn, err := db.Pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to acquire connection for migrations: %w", err)
+	}
+	defer conn.Release()
+
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, migrationLockID); err != nil {
+		return fmt.Errorf("failed to acquire migration lock: %w", err)
+	}
+	defer conn.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, migrationLockID)
+
+	if _, err := conn.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version VARCHAR(255) PRIMARY KEY,
+			applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		);
+	`); err != nil {
+		return fmt.Errorf("failed to create schema_migrations table: %w", err)
+	}
+
+	applied := make(map[string]bool)
+	rows, err := conn.Query(ctx, `SELECT version FROM schema_migrations`)
+	if err != nil {
+		return fmt.Errorf("failed to read applied migrations: %w", err)
+	}
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			rows.Close()
+			return err
+		}
+		applied[v] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
 	for _, file := range upFiles {
+		version := strings.TrimSuffix(file, ".up.sql")
+		if applied[version] {
+			continue
+		}
+
 		schemaSQL, err := migrations.FS.ReadFile(file)
 		if err != nil {
 			return fmt.Errorf("failed to read embedded schema migration %s: %w", file, err)
 		}
 
-		_, err = db.Pool.Exec(ctx, string(schemaSQL))
+		tx, err := conn.Begin(ctx)
 		if err != nil {
+			return fmt.Errorf("failed to begin migration %s: %w", file, err)
+		}
+		if _, err := tx.Exec(ctx, string(schemaSQL)); err != nil {
+			_ = tx.Rollback(ctx)
 			return fmt.Errorf("failed to execute schema migration %s: %w", file, err)
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO schema_migrations (version) VALUES ($1)`, version); err != nil {
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("failed to record migration %s: %w", file, err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("failed to commit migration %s: %w", file, err)
 		}
 		log.Printf("[database] Applied migration: %s", file)
 	}
 
-	log.Println("[database] Schema migrations executed successfully")
+	log.Println("[database] Schema is up-to-date")
 	return nil
 }
 

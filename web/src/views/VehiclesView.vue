@@ -36,7 +36,25 @@ const form = ref({
   teslamate_basic_pass: '',
   annual_insurance_cost: null as number | null,
   annual_expected_mileage: 15000 as number | null,
+  ...emptyAcquisition(),
 })
+
+function emptyAcquisition() {
+  return {
+    acquisition_type: '' as string,
+    purchase_price: null as number | null,
+    purchase_date: '' as string,
+    purchase_odometer: null as number | null,
+    purchase_incentives: null as number | null,
+    expected_resale_value: null as number | null,
+    expected_holding_months: null as number | null,
+  }
+}
+
+// Empty numeric inputs are sent as null, never as ""
+function nullIfEmpty(v: any) {
+  return v === '' || v === undefined ? null : v
+}
 
 onMounted(() => {
   vehicleStore.fetchVehicles()
@@ -58,6 +76,7 @@ function openCreateModal() {
     teslamate_basic_pass: '',
     annual_insurance_cost: null,
     annual_expected_mileage: 15000,
+    ...emptyAcquisition(),
   }
   showModal.value = true
 }
@@ -78,16 +97,36 @@ function openEditModal(v: any) {
     teslamate_basic_pass: '',
     annual_insurance_cost: v.annual_insurance_cost || null,
     annual_expected_mileage: v.annual_expected_mileage || 15000,
+    acquisition_type: v.acquisition_type || '',
+    purchase_price: v.purchase_price ?? null,
+    purchase_date: v.purchase_date ? new Date(v.purchase_date).toISOString().substring(0, 10) : '',
+    purchase_odometer: v.purchase_odometer ?? null,
+    purchase_incentives: v.purchase_incentives ?? null,
+    expected_resale_value: v.expected_resale_value ?? null,
+    expected_holding_months: v.expected_holding_months ?? null,
   }
   showModal.value = true
 }
 
 async function handleSave() {
   try {
+    const f = form.value
+    const payload = {
+      ...f,
+      annual_insurance_cost: nullIfEmpty(f.annual_insurance_cost),
+      annual_expected_mileage: nullIfEmpty(f.annual_expected_mileage),
+      acquisition_type: f.acquisition_type || null,
+      purchase_price: nullIfEmpty(f.purchase_price),
+      purchase_date: f.purchase_date || null,
+      purchase_odometer: nullIfEmpty(f.purchase_odometer),
+      purchase_incentives: nullIfEmpty(f.purchase_incentives),
+      expected_resale_value: nullIfEmpty(f.expected_resale_value),
+      expected_holding_months: nullIfEmpty(f.expected_holding_months),
+    }
     if (isEditing.value && editingId.value) {
-      await api.updateVehicle(editingId.value, form.value)
+      await api.updateVehicle(editingId.value, payload)
     } else {
-      await api.createVehicle(form.value)
+      await api.createVehicle(payload)
     }
     showModal.value = false
     await vehicleStore.fetchVehicles()
@@ -416,8 +455,8 @@ function clearCardTestResult(id: string) {
 
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Prime d'assurance (€/an)</label>
-                <input
+                <label for="vehicle-annual-insurance-cost" class="block text-xs font-semibold text-slate-300 mb-1">Prime d'assurance (€/an)</label>
+                <input id="vehicle-annual-insurance-cost"
                   v-model.number="form.annual_insurance_cost"
                   type="number"
                   step="0.01"
@@ -426,8 +465,8 @@ function clearCardTestResult(id: string) {
                 />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage annuel prévu (km/an)</label>
-                <input
+                <label for="vehicle-annual-expected-mileage" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage annuel prévu (km/an)</label>
+                <input id="vehicle-annual-expected-mileage"
                   v-model.number="form.annual_expected_mileage"
                   type="number"
                   placeholder="ex: 15000"
@@ -437,6 +476,56 @@ function clearCardTestResult(id: string) {
             </div>
             <p class="text-[11px] text-slate-400">
               💡 Cette valeur permet de calculer exactement la quote-part d'assurance réelle pour chaque trajet et covoiturage (Taux = Prime / Kilomètres).
+            </p>
+          </div>
+
+          <!-- Acquisition -->
+          <div class="pt-2 border-t border-slate-800 space-y-3">
+            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Acquisition & décote</h4>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="vehicle-acquisition-type" class="block text-xs font-semibold text-slate-300 mb-1">Mode d'acquisition</label>
+                <select id="vehicle-acquisition-type" v-model="form.acquisition_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
+                  <option value="">Non renseigné</option>
+                  <option value="PURCHASE">Achat (comptant ou crédit)</option>
+                  <option value="LEASE">Location (LOA / LLD)</option>
+                </select>
+              </div>
+              <div v-if="form.acquisition_type">
+                <label for="vehicle-purchase-date" class="block text-xs font-semibold text-slate-300 mb-1">Date d'acquisition</label>
+                <input id="vehicle-purchase-date" v-model="form.purchase_date" type="date" :required="form.acquisition_type === 'PURCHASE'" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+              </div>
+            </div>
+            <div v-if="form.acquisition_type" class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="vehicle-purchase-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre à l'acquisition (km)</label>
+                <input id="vehicle-purchase-odometer" v-model.number="form.purchase_odometer" type="number" min="0" placeholder="ex: 0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+              </div>
+              <div v-if="form.acquisition_type === 'PURCHASE'">
+                <label for="vehicle-purchase-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix d'achat TTC (€)</label>
+                <input id="vehicle-purchase-price" v-model.number="form.purchase_price" type="number" step="0.01" min="0" required placeholder="ex: 42990" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+              </div>
+            </div>
+            <div v-if="form.acquisition_type === 'PURCHASE'" class="grid grid-cols-3 gap-3">
+              <div>
+                <label for="vehicle-purchase-incentives" class="block text-xs font-semibold text-slate-300 mb-1">Aides / remises (€)</label>
+                <input id="vehicle-purchase-incentives" v-model.number="form.purchase_incentives" type="number" step="0.01" min="0" placeholder="Bonus écologique" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+              </div>
+              <div>
+                <label for="vehicle-expected-resale-value" class="block text-xs font-semibold text-slate-300 mb-1">Revente estimée (€)</label>
+                <input id="vehicle-expected-resale-value" v-model.number="form.expected_resale_value" type="number" step="0.01" min="0" placeholder="ex: 22000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+              </div>
+              <div>
+                <label for="vehicle-expected-holding-months" class="block text-xs font-semibold text-slate-300 mb-1">Détention (mois)</label>
+                <input id="vehicle-expected-holding-months" v-model.number="form.expected_holding_months" type="number" min="1" max="360" placeholder="ex: 60" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+              </div>
+            </div>
+            <p v-if="form.acquisition_type === 'PURCHASE'" class="text-[11px] text-slate-400">
+              La décote (prix net des aides − revente estimée) est répartie linéairement sur la durée de détention.
+              Pour un crédit, enregistrez uniquement les intérêts et l'assurance emprunteur en dépense récurrente « Financement » : le capital est déjà compté dans la décote.
+            </p>
+            <p v-else-if="form.acquisition_type === 'LEASE'" class="text-[11px] text-slate-400">
+              Enregistrez les loyers en dépense récurrente « Financement » et le premier loyer majoré en dépense ponctuelle de la même catégorie.
             </p>
           </div>
 

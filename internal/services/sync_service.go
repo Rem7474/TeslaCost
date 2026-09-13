@@ -10,6 +10,7 @@ import (
 	"github.com/teslacost/teslacost/internal/crypto"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/teslamate"
 )
 
@@ -22,6 +23,8 @@ type SyncResult struct {
 	ChargesSynced   int      `json:"charges_synced"`
 	ChargesAdded    int      `json:"charges_added"`
 	ChargesUpdated  int      `json:"charges_updated"`
+	DrivesDeleted   int      `json:"drives_deleted_upstream"`
+	ChargesDeleted  int      `json:"charges_deleted_upstream"`
 	SyncedAt        string   `json:"synced_at"`
 	Warnings        []string `json:"warnings,omitempty"`
 }
@@ -42,18 +45,43 @@ func formatTeslaMateError(err error, rawURL string) error {
 	return err
 }
 
+const (
+	syncPageSize = 50
+	syncMaxPages = 500
+	// Already imported records younger than this window are re-read on every incremental sync,
+	// so that costs completed later in TeslaMate are picked up.
+	resyncOverlap = 30 * 24 * time.Hour
+	// Upsert failures reported individually before being summarized.
+	maxDetailedSyncWarnings = 5
+)
+
+// syncStore is the persistence used by the synchronization.
+type syncStore interface {
+	UpdateVehicleOdometer(ctx context.Context, vehicleID string, odometer float64) error
+	GetLatestTeslaMateDriveStartTime(ctx context.Context, vehicleID string) (*time.Time, error)
+	GetLatestTeslaMateChargeDate(ctx context.Context, vehicleID string) (*time.Time, error)
+	UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) (bool, error)
+	UpsertTeslaMateCharge(ctx context.Context, c *models.ChargeLog) (bool, error)
+	IsFullImportCompleted(ctx context.Context, vehicleID, resource string) (bool, error)
+	MarkSyncSuccess(ctx context.Context, vehicleID, resource string, fullImport bool) error
+	ReconcileTeslaMateRecords(ctx context.Context, resource, vehicleID string, coveredAfter *time.Time, seenIDs []int) (*database.ReconcileResult, error)
+	ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models.Vehicle, error)
+}
+
 // SyncService orchestrates synchronization from TeslaMate to TeslaCost.
 type SyncService struct {
-	repo      *database.Repository
+	repo      syncStore
 	encryptor *crypto.Encryptor
+	jobs      syncJobs
 }
 
 // NewSyncService creates a new SyncService.
 func NewSyncService(repo *database.Repository, encryptor *crypto.Encryptor) *SyncService {
-	return &SyncService{
-		repo:      repo,
-		encryptor: encryptor,
+	s := &SyncService{encryptor: encryptor}
+	if repo != nil {
+		s.repo = repo
 	}
+	return s
 }
 
 // TestConnection verifies if connection to TeslaMate works for a given vehicle config.
@@ -148,238 +176,347 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			odometer = teslamate.ConvertDistanceToKm(odometer, units.UnitOfLength)
 		}
 		if odometer > v.CurrentOdometer {
-			_ = s.repo.UpdateVehicleOdometer(ctx, v.ID, odometer)
+			if s.repo != nil {
+				if err := s.repo.UpdateVehicleOdometer(ctx, v.ID, odometer); err != nil {
+					syncWarnings = append(syncWarnings, fmt.Sprintf("Odomètre : %v", err))
+				}
+			}
 			v.CurrentOdometer = odometer
+		} else if odometer > 0 && odometer+1 < v.CurrentOdometer {
+			syncWarnings = append(syncWarnings, fmt.Sprintf(
+				"Odomètre TeslaMate (%.0f km) inférieur à l'odomètre enregistré (%.0f km) : vérifiez la saisie manuelle du véhicule",
+				odometer, v.CurrentOdometer))
 		}
 	}
 
-	// 2. Sync Drives (fetch until all history is imported, or until we reach already-synced drives)
-	var latestDriveTime *time.Time
-	if s.repo != nil {
-		latestDriveTime, _ = s.repo.GetLatestTeslaMateDriveStartTime(ctx, v.ID)
-	}
-
-	drivesCount := 0
-	drivesAdded := 0
-	drivesUpdated := 0
-	for page := 1; page <= 500; page++ {
-		driveList, driveUnits, err := client.GetDrives(ctx, carID, teslamate.DriveFilterOptions{
-			Page: page,
-			Show: 50,
-		})
-		if err != nil {
-			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
-			log.Printf("[sync] Warning: Could not fetch drives (page %d): %v", page, formattedErr)
-			syncWarnings = append(syncWarnings, fmt.Sprintf("Trajets : %v", formattedErr))
-			break
-		}
-		if len(driveList) == 0 {
-			break
-		}
-
-		hasOlderThanLatest := false
-		for _, td := range driveList {
-			startTime, _ := td.ParsedStartTime()
-			endTime, _ := td.ParsedEndTime()
-			if startTime.IsZero() {
-				startTime = time.Now()
-			}
-			if endTime.IsZero() {
-				endTime = startTime.Add(time.Duration(td.DurationMin) * time.Minute)
-			}
-
-			if latestDriveTime != nil && !startTime.After(*latestDriveTime) {
-				hasOlderThanLatest = true
-			}
-
-			distKm := td.OdometerDetails.OdometerDistance
-			startOdo := td.OdometerDetails.OdometerStart
-			endOdo := td.OdometerDetails.OdometerEnd
-			if driveUnits != nil {
-				distKm = teslamate.ConvertDistanceToKm(distKm, driveUnits.UnitOfLength)
-				startOdo = teslamate.ConvertDistanceToKm(startOdo, driveUnits.UnitOfLength)
-				endOdo = teslamate.ConvertDistanceToKm(endOdo, driveUnits.UnitOfLength)
-			}
-
-			var speedAvg *float64
-			if td.SpeedAvg > 0 {
-				speedAvg = &td.SpeedAvg
-			}
-
-			var startAddr, endAddr *string
-			if td.StartAddress != "" {
-				startAddr = &td.StartAddress
-			}
-			if td.EndAddress != "" {
-				endAddr = &td.EndAddress
-			}
-
-			var speedMax, powerMax, powerMin *int
-			if td.SpeedMax > 0 {
-				speedMax = &td.SpeedMax
-			}
-			if td.PowerMax != 0 {
-				powerMax = &td.PowerMax
-			}
-			if td.PowerMin != 0 {
-				powerMin = &td.PowerMin
-			}
-
-			tmDriveID := td.DriveID
-			d := &models.Drive{
-				VehicleID:           v.ID,
-				TeslaMateDriveID:    &tmDriveID,
-				StartTime:           startTime,
-				EndTime:             endTime,
-				StartOdometer:       &startOdo,
-				EndOdometer:         &endOdo,
-				DistanceKm:          distKm,
-				DurationMin:         td.DurationMin,
-				SpeedAvg:            speedAvg,
-				SpeedMax:            speedMax,
-				PowerMax:            powerMax,
-				PowerMin:            powerMin,
-				StartAddress:        startAddr,
-				EndAddress:          endAddr,
-				EnergyConsumedKwh:   td.EnergyConsumedNet,
-				ConsumptionKwh100km: td.ConsumptionNet,
-				Tags:                []string{},
-			}
-
-			if s.repo != nil {
-				isInserted, err := s.repo.UpsertTeslaMateDrive(ctx, d)
-				if err == nil {
-					drivesCount++
-					if isInserted {
-						drivesAdded++
-					} else {
-						drivesUpdated++
-					}
-				}
-			}
-		}
-
-		if len(driveList) < 50 {
-			break
-		}
-
-		if latestDriveTime != nil && hasOlderThanLatest {
-			break
-		}
-	}
-
-	// 3. Sync Charges (fetch until all history is imported, or until we reach already-synced charges)
-	var latestChargeTime *time.Time
-	if s.repo != nil {
-		latestChargeTime, _ = s.repo.GetLatestTeslaMateChargeDate(ctx, v.ID)
-	}
-
-	chargesCount := 0
-	chargesAdded := 0
-	chargesUpdated := 0
-	for page := 1; page <= 500; page++ {
-		chargeList, chargeUnits, err := client.GetCharges(ctx, carID, teslamate.ChargeFilterOptions{
-			Page: page,
-			Show: 50,
-		})
-		if err != nil {
-			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
-			log.Printf("[sync] Warning: Could not fetch charges (page %d): %v", page, formattedErr)
-			syncWarnings = append(syncWarnings, fmt.Sprintf("Recharges : %v", formattedErr))
-			break
-		}
-		if len(chargeList) == 0 {
-			break
-		}
-
-		hasOlderThanLatest := false
-		for _, tc := range chargeList {
-			startDate, _ := tc.ParsedStartTime()
-			endDate, _ := tc.ParsedEndTime()
-			if startDate.IsZero() {
-				startDate = time.Now()
-			}
-
-			if latestChargeTime != nil && !startDate.After(*latestChargeTime) {
-				hasOlderThanLatest = true
-			}
-
-			odo := tc.Odometer
-			if chargeUnits != nil && odo > 0 {
-				odo = teslamate.ConvertDistanceToKm(odo, chargeUnits.UnitOfLength)
-			}
-			var odoPtr *float64
-			if odo > 0 {
-				odoPtr = &odo
-			}
-
-			var endPtr *time.Time
-			if !endDate.IsZero() {
-				endPtr = &endDate
-			}
-
-			var addrPtr *string
-			if tc.Address != "" {
-				addrPtr = &tc.Address
-			}
-
-			var kwhUsedPtr *float64
-			if tc.ChargeEnergyUsed > 0 {
-				kwhUsedPtr = &tc.ChargeEnergyUsed
-			}
-
-			tmChargeID := tc.ChargeID
-			c := &models.ChargeLog{
-				VehicleID:         v.ID,
-				TeslaMateChargeID: &tmChargeID,
-				Date:              startDate,
-				EndDate:           endPtr,
-				Address:           addrPtr,
-				KwhAdded:          tc.ChargeEnergyAdded,
-				KwhUsed:           kwhUsedPtr,
-				Cost:              tc.Cost,
-				Currency:          "EUR",
-				Odometer:          odoPtr,
-			}
-
-			if s.repo != nil {
-				isInserted, err := s.repo.UpsertTeslaMateCharge(ctx, c)
-				if err == nil {
-					chargesCount++
-					if isInserted {
-						chargesAdded++
-					} else {
-						chargesUpdated++
-					}
-				}
-			}
-		}
-
-		if len(chargeList) < 50 {
-			break
-		}
-
-		if latestChargeTime != nil && hasOlderThanLatest {
-			break
-		}
-	}
+	drives := s.syncDrives(ctx, client, v, carID)
+	charges := s.syncCharges(ctx, client, v, carID)
+	syncWarnings = append(syncWarnings, drives.warnings...)
+	syncWarnings = append(syncWarnings, charges.warnings...)
 
 	// If there were warnings and 0 items synced at all: report as error
-	if len(syncWarnings) > 0 && drivesCount == 0 && chargesCount == 0 {
+	if len(syncWarnings) > 0 && drives.count == 0 && charges.count == 0 {
 		return nil, fmt.Errorf("échec de la synchronisation : %s", strings.Join(syncWarnings, " ; "))
 	}
 
 	return &SyncResult{
 		CurrentOdometer: v.CurrentOdometer,
-		DrivesSynced:    drivesCount,
-		DrivesAdded:     drivesAdded,
-		DrivesUpdated:   drivesUpdated,
-		ChargesSynced:   chargesCount,
-		ChargesAdded:    chargesAdded,
-		ChargesUpdated:  chargesUpdated,
+		DrivesSynced:    drives.count,
+		DrivesAdded:     drives.added,
+		DrivesUpdated:   drives.updated,
+		ChargesSynced:   charges.count,
+		ChargesAdded:    charges.added,
+		ChargesUpdated:  charges.updated,
+		DrivesDeleted:   drives.deletedUpstream,
+		ChargesDeleted:  charges.deletedUpstream,
 		SyncedAt:        time.Now().UTC().Format(time.RFC3339),
 		Warnings:        syncWarnings,
 	}, nil
+}
+
+type resourceSyncStats struct {
+	count, added, updated, failed, deletedUpstream int
+	warnings                                       []string
+	seenIDs                                        []int
+	oldestSeen                                     *time.Time
+}
+
+func (st *resourceSyncStats) see(id int, start time.Time) {
+	st.seenIDs = append(st.seenIDs, id)
+	if st.oldestSeen == nil || start.Before(*st.oldestSeen) {
+		t := start
+		st.oldestSeen = &t
+	}
+}
+
+// reconcile flags records deleted in TeslaMate over the window covered by a completed pass:
+// the whole history for a full import, otherwise everything strictly newer than the oldest record read.
+func (s *SyncService) reconcile(ctx context.Context, st *resourceSyncStats, vehicleID, resource, label string, fullPass bool) {
+	coveredAfter := st.oldestSeen
+	if fullPass {
+		coveredAfter = nil
+	} else if coveredAfter == nil {
+		return
+	}
+	res, err := s.repo.ReconcileTeslaMateRecords(ctx, resource, vehicleID, coveredAfter, st.seenIDs)
+	switch {
+	case err != nil:
+		st.warnings = append(st.warnings, fmt.Sprintf("%s : rapprochement avec TeslaMate impossible (%v)", label, err))
+	case res.Skipped:
+		st.warnings = append(st.warnings, fmt.Sprintf(
+			"%s : %d éléments absents de TeslaMate, suppression ignorée par sécurité (vérifiez l'identifiant du véhicule TeslaMate)", label, res.Missing))
+	case res.Marked > 0:
+		st.deletedUpstream = res.Marked
+		st.warnings = append(st.warnings, fmt.Sprintf("%s : %d élément(s) supprimé(s) dans TeslaMate, exclu(s) des calculs", label, res.Marked))
+	}
+}
+
+func (st *resourceSyncStats) recordUpsert(isInserted bool, err error, label string) {
+	if err != nil {
+		st.failed++
+		if st.failed <= maxDetailedSyncWarnings {
+			st.warnings = append(st.warnings, fmt.Sprintf("%s non importé : %v", label, err))
+		}
+		return
+	}
+	st.count++
+	if isInserted {
+		st.added++
+	} else {
+		st.updated++
+	}
+}
+
+func (st *resourceSyncStats) finalize(resourceLabel string) {
+	if st.failed > maxDetailedSyncWarnings {
+		st.warnings = append(st.warnings, fmt.Sprintf("%s : %d éléments non importés au total", resourceLabel, st.failed))
+	}
+}
+
+// incrementalStopBefore returns the date before which pagination can stop, or nil when the complete
+// history has never been imported successfully (an interrupted import is resumed from scratch).
+func (s *SyncService) incrementalStopBefore(ctx context.Context, vehicleID, resource string, latest func(context.Context, string) (*time.Time, error)) *time.Time {
+	fullImportDone, err := s.repo.IsFullImportCompleted(ctx, vehicleID, resource)
+	if err != nil || !fullImportDone {
+		return nil
+	}
+	latestTime, err := latest(ctx, vehicleID)
+	if err != nil || latestTime == nil {
+		return nil
+	}
+	stop := latestTime.Add(-resyncOverlap)
+	return &stop
+}
+
+func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, v *models.Vehicle, carID int) resourceSyncStats {
+	var st resourceSyncStats
+	if s.repo == nil {
+		return st
+	}
+	stopBefore := s.incrementalStopBefore(ctx, v.ID, "drives", s.repo.GetLatestTeslaMateDriveStartTime)
+
+	completed := false
+	for page := 1; page <= syncMaxPages; page++ {
+		driveList, driveUnits, err := client.GetDrives(ctx, carID, teslamate.DriveFilterOptions{
+			Page: page,
+			Show: syncPageSize,
+		})
+		if err != nil {
+			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
+			log.Printf("[sync] Warning: Could not fetch drives (page %d): %v", page, formattedErr)
+			st.warnings = append(st.warnings, fmt.Sprintf("Trajets (page %d) : %v — l'import reprendra à la prochaine synchronisation", page, formattedErr))
+			break
+		}
+		if len(driveList) == 0 {
+			completed = true
+			break
+		}
+
+		reachedKnownHistory := false
+		for _, td := range driveList {
+			startTime, err := td.ParsedStartTime()
+			if err != nil || startTime.IsZero() {
+				st.recordUpsert(false, fmt.Errorf("date de début invalide (%q)", td.StartDate), fmt.Sprintf("Trajet TeslaMate #%d", td.DriveID))
+				continue
+			}
+			endTime, _ := td.ParsedEndTime()
+			if endTime.IsZero() {
+				endTime = startTime.Add(time.Duration(td.DurationMin) * time.Minute)
+			}
+
+			if stopBefore != nil && startTime.Before(*stopBefore) {
+				reachedKnownHistory = true
+			}
+			st.see(td.DriveID, startTime)
+
+			isInserted, err := s.repo.UpsertTeslaMateDrive(ctx, buildDrive(v.ID, td, driveUnits, startTime, endTime))
+			st.recordUpsert(isInserted, err, fmt.Sprintf("Trajet TeslaMate #%d", td.DriveID))
+		}
+
+		if len(driveList) < syncPageSize || reachedKnownHistory {
+			completed = true
+			break
+		}
+		if page == syncMaxPages {
+			st.warnings = append(st.warnings, fmt.Sprintf("Trajets : limite de %d pages atteinte, historique partiellement importé", syncMaxPages))
+		}
+	}
+
+	st.finalize("Trajets")
+	if completed && st.failed == 0 {
+		s.reconcile(ctx, &st, v.ID, "drives", "Trajets", stopBefore == nil)
+		if err := s.repo.MarkSyncSuccess(ctx, v.ID, "drives", true); err != nil {
+			st.warnings = append(st.warnings, fmt.Sprintf("Trajets : état de synchronisation non enregistré (%v)", err))
+		}
+	}
+	return st
+}
+
+func buildDrive(vehicleID string, td teslamate.Drive, units *teslamate.Units, startTime, endTime time.Time) *models.Drive {
+	distKm := td.OdometerDetails.OdometerDistance
+	startOdo := td.OdometerDetails.OdometerStart
+	endOdo := td.OdometerDetails.OdometerEnd
+	if units != nil {
+		distKm = teslamate.ConvertDistanceToKm(distKm, units.UnitOfLength)
+		startOdo = teslamate.ConvertDistanceToKm(startOdo, units.UnitOfLength)
+		endOdo = teslamate.ConvertDistanceToKm(endOdo, units.UnitOfLength)
+	}
+
+	var speedAvg *float64
+	if td.SpeedAvg > 0 {
+		speedAvg = &td.SpeedAvg
+	}
+
+	var startAddr, endAddr *string
+	if td.StartAddress != "" {
+		startAddr = &td.StartAddress
+	}
+	if td.EndAddress != "" {
+		endAddr = &td.EndAddress
+	}
+
+	var speedMax, powerMax, powerMin *int
+	if td.SpeedMax > 0 {
+		speedMax = &td.SpeedMax
+	}
+	if td.PowerMax != 0 {
+		powerMax = &td.PowerMax
+	}
+	if td.PowerMin != 0 {
+		powerMin = &td.PowerMin
+	}
+
+	tmDriveID := td.DriveID
+	return &models.Drive{
+		VehicleID:           vehicleID,
+		TeslaMateDriveID:    &tmDriveID,
+		StartTime:           startTime,
+		EndTime:             endTime,
+		StartOdometer:       &startOdo,
+		EndOdometer:         &endOdo,
+		DistanceKm:          distKm,
+		DurationMin:         td.DurationMin,
+		SpeedAvg:            speedAvg,
+		SpeedMax:            speedMax,
+		PowerMax:            powerMax,
+		PowerMin:            powerMin,
+		StartAddress:        startAddr,
+		EndAddress:          endAddr,
+		EnergyConsumedKwh:   td.EnergyConsumedNet,
+		ConsumptionKwh100km: td.ConsumptionNet,
+		Tags:                []string{},
+	}
+}
+
+func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client, v *models.Vehicle, carID int) resourceSyncStats {
+	var st resourceSyncStats
+	if s.repo == nil {
+		return st
+	}
+	stopBefore := s.incrementalStopBefore(ctx, v.ID, "charges", s.repo.GetLatestTeslaMateChargeDate)
+
+	completed := false
+	for page := 1; page <= syncMaxPages; page++ {
+		chargeList, chargeUnits, err := client.GetCharges(ctx, carID, teslamate.ChargeFilterOptions{
+			Page: page,
+			Show: syncPageSize,
+		})
+		if err != nil {
+			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
+			log.Printf("[sync] Warning: Could not fetch charges (page %d): %v", page, formattedErr)
+			st.warnings = append(st.warnings, fmt.Sprintf("Recharges (page %d) : %v — l'import reprendra à la prochaine synchronisation", page, formattedErr))
+			break
+		}
+		if len(chargeList) == 0 {
+			completed = true
+			break
+		}
+
+		reachedKnownHistory := false
+		for _, tc := range chargeList {
+			startDate, err := tc.ParsedStartTime()
+			if err != nil || startDate.IsZero() {
+				st.recordUpsert(false, fmt.Errorf("date de début invalide (%q)", tc.StartDate), fmt.Sprintf("Recharge TeslaMate #%d", tc.ChargeID))
+				continue
+			}
+			if stopBefore != nil && startDate.Before(*stopBefore) {
+				reachedKnownHistory = true
+			}
+			st.see(tc.ChargeID, startDate)
+
+			isInserted, err := s.repo.UpsertTeslaMateCharge(ctx, buildCharge(v.ID, tc, chargeUnits, startDate))
+			st.recordUpsert(isInserted, err, fmt.Sprintf("Recharge TeslaMate #%d", tc.ChargeID))
+		}
+
+		if len(chargeList) < syncPageSize || reachedKnownHistory {
+			completed = true
+			break
+		}
+		if page == syncMaxPages {
+			st.warnings = append(st.warnings, fmt.Sprintf("Recharges : limite de %d pages atteinte, historique partiellement importé", syncMaxPages))
+		}
+	}
+
+	st.finalize("Recharges")
+	if completed && st.failed == 0 {
+		s.reconcile(ctx, &st, v.ID, "charges", "Recharges", stopBefore == nil)
+		if err := s.repo.MarkSyncSuccess(ctx, v.ID, "charges", true); err != nil {
+			st.warnings = append(st.warnings, fmt.Sprintf("Recharges : état de synchronisation non enregistré (%v)", err))
+		}
+	}
+	return st
+}
+
+// costCents converts a TeslaMate cost; nil (no tariff configured) stays nil.
+func costCents(cost *float64) *money.Cents {
+	if cost == nil {
+		return nil
+	}
+	c := money.FromFloat(*cost)
+	return &c
+}
+
+func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, startDate time.Time) *models.ChargeLog {
+	endDate, _ := tc.ParsedEndTime()
+
+	odo := tc.Odometer
+	if units != nil && odo > 0 {
+		odo = teslamate.ConvertDistanceToKm(odo, units.UnitOfLength)
+	}
+	var odoPtr *float64
+	if odo > 0 {
+		odoPtr = &odo
+	}
+
+	var endPtr *time.Time
+	if !endDate.IsZero() {
+		endPtr = &endDate
+	}
+
+	var addrPtr *string
+	if tc.Address != "" {
+		addrPtr = &tc.Address
+	}
+
+	var kwhUsedPtr *float64
+	if tc.ChargeEnergyUsed > 0 {
+		kwhUsedPtr = &tc.ChargeEnergyUsed
+	}
+
+	tmChargeID := tc.ChargeID
+	return &models.ChargeLog{
+		VehicleID:         vehicleID,
+		TeslaMateChargeID: &tmChargeID,
+		Date:              startDate,
+		EndDate:           endPtr,
+		Address:           addrPtr,
+		KwhAdded:          tc.ChargeEnergyAdded,
+		KwhUsed:           kwhUsedPtr,
+		Cost:              costCents(tc.Cost),
+		CostSource:        "TESLAMATE",
+		Currency:          "EUR",
+		Odometer:          odoPtr,
+	}
 }
 
 func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) {
@@ -454,19 +591,6 @@ func (s *SyncService) runBackgroundSyncCycle(ctx context.Context) {
 	}
 
 	for _, v := range vehicles {
-		// Individual timeout per vehicle so one stuck instance doesn't block the whole worker
-		vCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
-		res, err := s.SyncVehicle(vCtx, &v)
-		cancel()
-
-		if err != nil {
-			log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v", v.Name, v.ID, err)
-		} else if res != nil {
-			if res.DrivesAdded > 0 || res.ChargesAdded > 0 {
-				log.Printf("[auto-sync] Vehicle %s (%s): +%d new drives, +%d new charges (odometer: %.0f km)",
-					v.Name, v.ID, res.DrivesAdded, res.ChargesAdded, res.CurrentOdometer)
-			}
-		}
+		s.runScheduledSync(ctx, v)
 	}
 }
-

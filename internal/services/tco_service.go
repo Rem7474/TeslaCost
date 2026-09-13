@@ -2,325 +2,646 @@ package services
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sort"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"github.com/teslacost/teslacost/internal/database"
+	"github.com/teslacost/teslacost/internal/money"
 )
 
-// MonthlyCost represents monthly expenditure and mileage breakdown.
+// Cost ledger categories (see the cost_ledger view).
+const (
+	LedgerEnergy      = "ENERGY"
+	LedgerToll        = "TOLL"
+	LedgerParking     = "PARKING"
+	LedgerTravelOther = "TRAVEL_OTHER"
+	LedgerTires       = "TIRES"
+	LedgerMaintenance = "MAINTENANCE"
+	LedgerInsurance   = "INSURANCE"
+	LedgerFinancing   = "FINANCING"
+	LedgerTax         = "TAX"
+	LedgerSubscr      = "SUBSCRIPTION"
+	LedgerAcquisition = "ACQUISITION"
+)
+
+// Insurance sources.
+const (
+	InsuranceSourceRecordedExpenses = "RECORDED_EXPENSES"
+	InsuranceSourceVehicleSettings  = "VEHICLE_SETTINGS"
+	InsuranceSourceNone             = "NONE"
+	InsuranceSourceDefault          = "DEFAULT"
+)
+
+// MonthlyCost represents monthly expenditure (cash basis, acquisition excluded) and mileage.
 type MonthlyCost struct {
-	Month       string  `json:"month"` // YYYY-MM
-	DistanceKm  float64 `json:"distance_km"`
-	Energy      float64 `json:"energy"`
-	Tolls       float64 `json:"tolls"`
-	Maintenance float64 `json:"maintenance"`
-	Tires       float64 `json:"tires"`
-	Total       float64 `json:"total"`
-	CostPerKm   float64 `json:"cost_per_km"`
+	Month       string      `json:"month"` // YYYY-MM
+	DistanceKm  float64     `json:"distance_km"`
+	Energy      money.Cents `json:"energy"`
+	Tolls       money.Cents `json:"tolls"`
+	Maintenance money.Cents `json:"maintenance"`
+	Insurance   money.Cents `json:"insurance"`
+	Financing   money.Cents `json:"financing"`
+	Other       money.Cents `json:"other"` // Subscriptions, taxes, accessories, other
+	Tires       money.Cents `json:"tires"`
+	Total       money.Cents `json:"total"`
+	CostPerKm   float64     `json:"cost_per_km"`
 }
 
 // TagCostBreakdown represents costs split by tag (e.g. Pro vs Perso).
 type TagCostBreakdown struct {
-	Tag         string  `json:"tag"`
-	DistanceKm  float64 `json:"distance_km"`
-	EnergyKwh   float64 `json:"energy_kwh"`
-	TollsAmount float64 `json:"tolls_amount"`
-	Percentage  float64 `json:"percentage"`
+	Tag         string      `json:"tag"`
+	DistanceKm  float64     `json:"distance_km"`
+	EnergyKwh   float64     `json:"energy_kwh"`
+	TollsAmount money.Cents `json:"tolls_amount"`
+	Percentage  float64     `json:"percentage"`
 }
 
-// TCOSummary represents the global TCO calculation.
+// TCOCompleteness lists the known gaps of the TCO figures.
+type TCOCompleteness struct {
+	IsComplete          bool     `json:"is_complete"`
+	ChargesWithoutCost  int      `json:"charges_without_cost"`
+	KwhWithoutCost      float64  `json:"kwh_without_cost"`
+	UnconvertedExpenses int      `json:"unconverted_expenses"`
+	UnqualifiedDrives   int      `json:"unqualified_drives"`
+	UntrackedDistanceKm float64  `json:"untracked_distance_km"`
+	OdometerGaps        int      `json:"odometer_gaps"`
+	OdometerAnomalies   int      `json:"odometer_anomalies"`
+	InsuranceMissing    bool     `json:"insurance_missing"`
+	AcquisitionMissing  bool     `json:"acquisition_missing"`
+	Warnings            []string `json:"warnings"`
+	// ScorePct is a weighted completeness score (0-100) over the dimensions below.
+	ScorePct   int                     `json:"score_pct"`
+	Dimensions []CompletenessDimension `json:"dimensions"`
+}
+
+// CompletenessDimension is one weighted component of the completeness score.
+type CompletenessDimension struct {
+	Key      string  `json:"key"`
+	Label    string  `json:"label"`
+	ScorePct int     `json:"score_pct"`
+	Weight   float64 `json:"weight"`
+}
+
+// completenessInputs gathers the ratios used by the completeness score.
+type completenessInputs struct {
+	kwhAdded, kwhPriced float64
+	highwayDrives       int
+	unqualifiedDrives   int
+	trackedKm, basisKm  float64
+	insurancePresent    bool
+	acquisitionComplete bool
+	pricedEntries       int
+	unconvertedEntries  int
+	drivesWithOdometer  int
+	odometerAnomalies   int
+}
+
+func ratio(part, total float64) float64 {
+	if total <= 0 {
+		return 1
+	}
+	return math.Max(0, math.Min(1, part/total))
+}
+
+func boolScore(ok bool) float64 {
+	if ok {
+		return 1
+	}
+	return 0
+}
+
+// completenessScore weights how much of the TCO rests on complete data.
+func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
+	distance := 0.0
+	if in.basisKm > 0 {
+		distance = ratio(in.trackedKm, in.basisKm)
+	}
+	dims := []struct {
+		key, label string
+		weight     float64
+		score      float64
+	}{
+		{"energy", "Recharges avec coût (kWh)", 0.30, ratio(in.kwhPriced, in.kwhAdded)},
+		{"distance", "Kilomètres couverts par des trajets", 0.20, distance},
+		{"tolls", "Trajets autoroutiers qualifiés", 0.15, 1 - ratio(float64(in.unqualifiedDrives), float64(in.highwayDrives))},
+		{"insurance", "Assurance renseignée", 0.10, boolScore(in.insurancePresent)},
+		{"acquisition", "Acquisition et décote renseignées", 0.10, boolScore(in.acquisitionComplete)},
+		{"odometer", "Continuité de l'odomètre", 0.10, 1 - ratio(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))},
+		{"currency", "Dépenses converties en euros", 0.05, 1 - ratio(float64(in.unconvertedEntries), float64(in.pricedEntries+in.unconvertedEntries))},
+	}
+	var total float64
+	out := make([]CompletenessDimension, 0, len(dims))
+	for _, d := range dims {
+		total += d.weight * d.score
+		out = append(out, CompletenessDimension{Key: d.key, Label: d.label, ScorePct: int(math.Round(d.score * 100)), Weight: d.weight})
+	}
+	return int(math.Round(total * 100)), out
+}
+
+// TCOSummary represents the global TCO calculation, built from the cost_ledger view.
+//
+//   - TotalCost: running costs actually paid (tires at purchase), acquisition excluded.
+//   - FullCost: economic cost of ownership: running costs with tires amortized per km, plus depreciation.
+//   - Per-km figures use DistanceBasisKm: the largest of the distance tracked by drives, the odometer span
+//     of those drives and the distance driven since acquisition.
+//   - UsageCostPerKm is the marginal cost of driving (energy + tolls/parking).
 type TCOSummary struct {
-	TotalDistanceKm float64 `json:"total_distance_km"`
-	TotalCost       float64 `json:"total_cost"`
-	TotalCostPerKm  float64 `json:"total_cost_per_km"`
+	TotalDistanceKm    float64     `json:"total_distance_km"`
+	OdometerDistanceKm float64     `json:"odometer_distance_km"`
+	DistanceBasisKm    float64     `json:"distance_basis_km"`
+	TotalCost          money.Cents `json:"total_cost"`
+	TotalCostPerKm     float64     `json:"total_cost_per_km"`
+	UsageCostPerKm     float64     `json:"usage_cost_per_km"`
+	FullCost           money.Cents `json:"full_cost"`
+	FullCostPerKm      float64     `json:"full_cost_per_km"`
 
-	// Category breakdowns
-	EnergyCost        float64 `json:"energy_cost"`
-	EnergyCostPerKm   float64 `json:"energy_cost_per_km"`
-	TotalKwhAdded     float64 `json:"total_kwh_added"`
-	AvgCostPerKwh     float64 `json:"avg_cost_per_kwh"`
+	AcquisitionType       string      `json:"acquisition_type"`
+	AcquisitionCost       money.Cents `json:"acquisition_cost"` // Purchase price net of incentives
+	DepreciationCost      money.Cents `json:"depreciation_cost"`
+	DepreciationCostPerKm float64     `json:"depreciation_cost_per_km"`
 
-	TollsCost         float64 `json:"tolls_cost"`
-	TollsCostPerKm    float64 `json:"tolls_cost_per_km"`
+	CarpoolRevenue   money.Cents `json:"carpool_revenue"`
+	FullCostNet      money.Cents `json:"full_cost_net"` // Full cost minus carpool revenue
+	FullCostNetPerKm float64     `json:"full_cost_net_per_km"`
 
-	TiresCost         float64 `json:"tires_cost"`
-	TiresCostPerKm    float64 `json:"tires_cost_per_km"`
+	EnergyCost      money.Cents `json:"energy_cost"`
+	EnergyCostPerKm float64     `json:"energy_cost_per_km"`
+	TotalKwhAdded   float64     `json:"total_kwh_added"`
+	AvgCostPerKwh   float64     `json:"avg_cost_per_kwh"`
 
-	MaintenanceCost   float64 `json:"maintenance_cost"`
-	MaintenanceCostPerKm float64 `json:"maintenance_cost_per_km"`
+	TollsCost      money.Cents `json:"tolls_cost"` // Tolls, parking, ferries
+	TollsCostPerKm float64     `json:"tolls_cost_per_km"`
 
-	// Tag analysis (Pro / Perso)
+	TiresCost               money.Cents `json:"tires_cost"`
+	TiresCostPerKm          float64     `json:"tires_cost_per_km"`
+	TiresAmortizedCost      money.Cents `json:"tires_amortized_cost"`
+	TiresAmortizedCostPerKm float64     `json:"tires_amortized_cost_per_km"`
+
+	MaintenanceCost      money.Cents `json:"maintenance_cost"`
+	MaintenanceCostPerKm float64     `json:"maintenance_cost_per_km"`
+
+	InsuranceCost      money.Cents `json:"insurance_cost"`
+	InsuranceCostPerKm float64     `json:"insurance_cost_per_km"`
+	InsuranceSource    string      `json:"insurance_source"`
+
+	FinancingCost      money.Cents `json:"financing_cost"` // Lease rents, loan interest
+	FinancingCostPerKm float64     `json:"financing_cost_per_km"`
+
+	SubscriptionCost money.Cents `json:"subscription_cost"`
+	TaxCost          money.Cents `json:"tax_cost"`
+	OtherCost        money.Cents `json:"other_cost"`
+	OtherCostPerKm   float64     `json:"other_cost_per_km"` // Subscriptions + taxes + other
+
 	TagBreakdown []TagCostBreakdown `json:"tag_breakdown"`
+	MonthlyCosts []MonthlyCost      `json:"monthly_costs"`
 
-	// Timeline
-	MonthlyCosts []MonthlyCost `json:"monthly_costs"`
+	Completeness TCOCompleteness `json:"completeness"`
 }
 
-// TCOService computes TCO metrics using optimized SQL queries.
+// TCOService computes TCO metrics from the cost ledger.
 type TCOService struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	timezone string
 }
 
-// NewTCOService creates a new TCOService.
-func NewTCOService(pool *pgxpool.Pool) *TCOService {
-	return &TCOService{pool: pool}
+// NewTCOService creates a new TCOService; timezone (IANA name) is used for monthly buckets.
+func NewTCOService(pool *pgxpool.Pool, timezone string) *TCOService {
+	if timezone == "" {
+		timezone = "UTC"
+	}
+	return &TCOService{pool: pool, timezone: timezone}
+}
+
+func round3(v float64) float64 { return math.Round(v*1000) / 1000 }
+func round1(v float64) float64 { return math.Round(v*10) / 10 }
+
+func perKm(amount money.Cents, km float64) float64 {
+	if km <= 0 {
+		return 0
+	}
+	return round3(amount.Float() / km)
+}
+
+// vehicleAcquisition is the acquisition configuration used for depreciation.
+type vehicleAcquisition struct {
+	acquisitionType  *string
+	purchasePrice    *money.Cents
+	purchaseDate     *time.Time
+	purchaseOdometer *float64
+	incentives       *money.Cents
+	resaleValue      *money.Cents
+	holdingMonths    *int
+	currentOdometer  float64
+	annualInsurance  *money.Cents
+}
+
+// Depreciation spreads the purchase price net of incentives and expected resale value linearly
+// over the expected holding period. ok is false when the settings needed are missing.
+func (a vehicleAcquisition) Depreciation(now time.Time) (amount money.Cents, ok bool) {
+	if a.purchasePrice == nil || a.purchaseDate == nil || a.resaleValue == nil || a.holdingMonths == nil || *a.holdingMonths <= 0 {
+		return 0, false
+	}
+	depreciable := *a.purchasePrice - *a.resaleValue
+	if a.incentives != nil {
+		depreciable -= *a.incentives
+	}
+	if depreciable <= 0 {
+		return 0, true
+	}
+	elapsedMonths := now.Sub(*a.purchaseDate).Hours() / 24 / (365.25 / 12)
+	ratio := math.Max(0, math.Min(1, elapsedMonths/float64(*a.holdingMonths)))
+	return money.FromFloat(depreciable.Float() * ratio), true
 }
 
 // ComputeVehicleTCO calculates complete TCO for a given vehicle.
 func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*TCOSummary, error) {
-	// 1. Total distance from drives or vehicle
-	var totalDistance float64
-	err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(distance_km), 0)
+	sum := &TCOSummary{}
+	comp := &sum.Completeness
+	now := time.Now()
+
+	// 1. Vehicle acquisition settings
+	var acq vehicleAcquisition
+	if err := s.pool.QueryRow(ctx, `
+		SELECT acquisition_type, purchase_price, purchase_date, purchase_odometer, purchase_incentives,
+		       expected_resale_value, expected_holding_months, current_odometer, annual_insurance_cost
+		FROM vehicles WHERE id = $1;
+	`, vehicleID).Scan(&acq.acquisitionType, &acq.purchasePrice, &acq.purchaseDate, &acq.purchaseOdometer, &acq.incentives,
+		&acq.resaleValue, &acq.holdingMonths, &acq.currentOdometer, &acq.annualInsurance); err != nil {
+		return nil, fmt.Errorf("vehicle: %w", err)
+	}
+
+	// 2. Distance: tracked drives, odometer span, distance since acquisition
+	var trackedKm, odometerSpan float64
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(distance_km), 0),
+		       COALESCE(MAX(end_odometer) FILTER (WHERE end_odometer > 0) - MIN(start_odometer) FILTER (WHERE start_odometer > 0), 0)
 		FROM drives
-		WHERE vehicle_id = $1;
-	`, vehicleID).Scan(&totalDistance)
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
+	`, vehicleID).Scan(&trackedKm, &odometerSpan); err != nil {
+		return nil, fmt.Errorf("distance: %w", err)
+	}
+	basisKm := math.Max(trackedKm, odometerSpan)
+	if acq.purchaseOdometer != nil && acq.currentOdometer > *acq.purchaseOdometer {
+		basisKm = math.Max(basisKm, acq.currentOdometer-*acq.purchaseOdometer)
+	}
+	if untracked := basisKm - trackedKm; untracked > 50 && untracked > 0.01*basisKm {
+		comp.UntrackedDistanceKm = round1(untracked)
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%.0f km parcourus n'apparaissent dans aucun trajet (avant TeslaMate ou TeslaMate hors ligne) : le coût au km utilise la distance odométrique", untracked))
+	}
+
+	// 3. Ledger totals per category
+	byCategory := map[string]money.Cents{}
+	rows, err := s.pool.Query(ctx, `
+		SELECT category, COALESCE(SUM(amount_eur), 0) FROM cost_ledger WHERE vehicle_id = $1 GROUP BY category;
+	`, vehicleID)
 	if err != nil {
+		return nil, fmt.Errorf("ledger: %w", err)
+	}
+	for rows.Next() {
+		var category string
+		var amount money.Cents
+		if err := rows.Scan(&category, &amount); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		byCategory[category] = amount
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	// 2. Charging costs
-	var totalEnergyCost, totalKwhAdded float64
-	err = s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(cost), 0), COALESCE(SUM(kwh_added), 0)
+	// 4. Energy volume and gaps
+	var kwhAdded, kwhPriced float64
+	var unconvertedCharges int
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(kwh_added), 0),
+		       COALESCE(SUM(kwh_added) FILTER (WHERE cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL)), 0),
+		       COUNT(*) FILTER (WHERE cost IS NULL),
+		       COALESCE(SUM(kwh_added) FILTER (WHERE cost IS NULL), 0),
+		       COUNT(*) FILTER (WHERE cost IS NOT NULL AND currency <> 'EUR' AND fx_rate IS NULL)
 		FROM charge_logs
-		WHERE vehicle_id = $1;
-	`, vehicleID).Scan(&totalEnergyCost, &totalKwhAdded)
-	if err != nil {
-		return nil, err
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
+	`, vehicleID).Scan(&kwhAdded, &kwhPriced, &comp.ChargesWithoutCost, &comp.KwhWithoutCost, &unconvertedCharges); err != nil {
+		return nil, fmt.Errorf("energy: %w", err)
+	}
+	if comp.ChargesWithoutCost > 0 {
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%d recharge(s) sans coût (%.0f kWh) : coût énergétique sous-estimé", comp.ChargesWithoutCost, comp.KwhWithoutCost))
 	}
 
-	// 3. Tolls and parkings costs
-	var totalTollsCost float64
-	err = s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount), 0)
-		FROM drive_expenses
-		WHERE vehicle_id = $1;
-	`, vehicleID).Scan(&totalTollsCost)
-	if err != nil {
-		return nil, err
+	// 5. Unconverted foreign amounts, insurance expenses, carpool revenue
+	var unconvertedOther, insuranceEntries int
+	if err := s.pool.QueryRow(ctx, `
+		SELECT (SELECT COUNT(*) FROM drive_expenses WHERE vehicle_id = $1 AND currency <> 'EUR' AND fx_rate IS NULL)
+		     + (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND currency <> 'EUR' AND fx_rate IS NULL),
+		       (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND category = 'INSURANCE'),
+		       (SELECT COALESCE(SUM(total_revenue), 0) FROM carpool_trips WHERE vehicle_id = $1);
+	`, vehicleID).Scan(&unconvertedOther, &insuranceEntries, &sum.CarpoolRevenue); err != nil {
+		return nil, fmt.Errorf("completeness: %w", err)
+	}
+	comp.UnconvertedExpenses = unconvertedCharges + unconvertedOther
+	if comp.UnconvertedExpenses > 0 {
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%d dépense(s) en devise étrangère sans taux de conversion : exclues des totaux", comp.UnconvertedExpenses))
+	}
+	switch {
+	case insuranceEntries > 0:
+		sum.InsuranceSource = InsuranceSourceRecordedExpenses
+	case acq.annualInsurance != nil && *acq.annualInsurance > 0:
+		sum.InsuranceSource = InsuranceSourceVehicleSettings
+	default:
+		sum.InsuranceSource = InsuranceSourceNone
+		comp.InsuranceMissing = true
+		comp.Warnings = append(comp.Warnings, "Aucune assurance enregistrée (dépense « Assurance » ou montant annuel dans la fiche véhicule)")
 	}
 
-	// 4. Tires purchase cost
-	var totalTiresCost float64
-	err = s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(purchase_price), 0)
-		FROM tires
-		WHERE vehicle_id = $1;
-	`, vehicleID).Scan(&totalTiresCost)
-	if err != nil {
-		return nil, err
+	// 6. Tires amortized by kilometers actually driven on each tire
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(
+		           CASE
+		               WHEN t.current_position = 'DISPOSED' OR t.is_archived THEN t.purchase_price
+		               ELSE t.purchase_price * LEAST(1.0, GREATEST(0,
+		                   (t.accumulated_distance_km - t.initial_distance_km
+		                    + CASE WHEN t.current_position IN ('FL', 'FR', 'RL', 'RR') AND t.mounted_odometer IS NOT NULL
+		                           THEN GREATEST(v.current_odometer - t.mounted_odometer, 0) ELSE 0 END)
+		                   / GREATEST(t.estimated_lifespan_km - t.initial_distance_km, 1)))
+		           END
+		       ), 0)
+		FROM tires t
+		JOIN vehicles v ON v.id = t.vehicle_id
+		WHERE t.vehicle_id = $1;
+	`, vehicleID).Scan(&sum.TiresAmortizedCost); err != nil {
+		return nil, fmt.Errorf("tires: %w", err)
 	}
 
-	// 5. Maintenance and recurring costs
-	var totalMaintenanceCost float64
-	err = s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount), 0)
-		FROM maintenance_expenses
-		WHERE vehicle_id = $1;
-	`, vehicleID).Scan(&totalMaintenanceCost)
-	if err != nil {
-		return nil, err
+	// 7. Acquisition and depreciation
+	switch {
+	case acq.acquisitionType == nil:
+		comp.AcquisitionMissing = true
+		comp.Warnings = append(comp.Warnings, "Mode d'acquisition non renseigné (achat ou location) : décote ou loyers absents du coût complet")
+	case *acq.acquisitionType == "PURCHASE":
+		sum.AcquisitionType = "PURCHASE"
+		sum.AcquisitionCost = byCategory[LedgerAcquisition]
+		dep, ok := acq.Depreciation(now)
+		if !ok {
+			comp.AcquisitionMissing = true
+			comp.Warnings = append(comp.Warnings, "Valeur de revente estimée ou durée de détention non renseignée : décote exclue du coût complet")
+		}
+		sum.DepreciationCost = dep
+	case *acq.acquisitionType == "LEASE":
+		sum.AcquisitionType = "LEASE"
+		if byCategory[LedgerFinancing] == 0 {
+			comp.AcquisitionMissing = true
+			comp.Warnings = append(comp.Warnings, "Véhicule en location sans loyer enregistré (dépense récurrente « Financement »)")
+		}
 	}
 
-	// Total TCO
-	totalCost := totalEnergyCost + totalTollsCost + totalTiresCost + totalMaintenanceCost
-
-	costPerKm := 0.0
-	energyPerKm := 0.0
-	tollsPerKm := 0.0
-	tiresPerKm := 0.0
-	maintPerKm := 0.0
-
-	if totalDistance > 0 {
-		costPerKm = totalCost / totalDistance
-		energyPerKm = totalEnergyCost / totalDistance
-		tollsPerKm = totalTollsCost / totalDistance
-		tiresPerKm = totalTiresCost / totalDistance
-		maintPerKm = totalMaintenanceCost / totalDistance
+	// 8. Toll qualification backlog
+	var highwayDrives, drivesWithOdometer, ledgerEntries int
+	if err := s.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FILTER (WHERE `+database.UnqualifiedDrivePredicate+`),
+		       COUNT(*) FILTER (WHERE `+database.HighwayDrivePredicate+`),
+		       COUNT(*) FILTER (WHERE start_odometer > 0 AND end_odometer > 0),
+		       (SELECT COUNT(*) FROM cost_ledger WHERE vehicle_id = $1)
+		FROM drives
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
+	`, vehicleID).Scan(&comp.UnqualifiedDrives, &highwayDrives, &drivesWithOdometer, &ledgerEntries); err != nil {
+		return nil, fmt.Errorf("unqualified drives: %w", err)
+	}
+	if comp.UnqualifiedDrives > 0 {
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%d trajet(s) de type autoroutier sans péage renseigné ni qualification « sans péage »", comp.UnqualifiedDrives))
+	}
+	if basisKm <= 0 {
+		comp.Warnings = append(comp.Warnings, "Aucun kilométrage enregistré : le coût au kilomètre ne peut pas être calculé")
 	}
 
-	avgCostKwh := 0.0
-	if totalKwhAdded > 0 {
-		avgCostKwh = totalEnergyCost / totalKwhAdded
+	// 9. Odometer continuity
+	var gapKm float64
+	if err := s.pool.QueryRow(ctx, database.OdometerContinuitySummarySQL, vehicleID).Scan(&comp.OdometerGaps, &gapKm, &comp.OdometerAnomalies); err != nil {
+		return nil, fmt.Errorf("odometer continuity: %w", err)
+	}
+	if comp.OdometerGaps > 0 {
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%d trou(s) d'odomètre entre trajets consécutifs (%.0f km sans trajet enregistré)", comp.OdometerGaps, gapKm))
+	}
+	if comp.OdometerAnomalies > 0 {
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%d incohérence(s) d'odomètre (odomètre en recul ou distance différente du relevé) à vérifier dans TeslaMate", comp.OdometerAnomalies))
 	}
 
-	// 6. Tag breakdown (Pro / Perso / Other)
-	tagRows, err := s.pool.Query(ctx, `
-		SELECT COALESCE(tag, 'Non tagué') AS tag_name,
-		       COALESCE(SUM(distance_km), 0) AS total_km,
-		       COALESCE(SUM(energy_consumed_kwh), 0) AS total_kwh
+	comp.IsComplete = len(comp.Warnings) == 0
+	if comp.Warnings == nil {
+		comp.Warnings = []string{}
+	}
+	comp.ScorePct, comp.Dimensions = completenessScore(completenessInputs{
+		kwhAdded:            kwhAdded,
+		kwhPriced:           kwhPriced,
+		highwayDrives:       highwayDrives,
+		unqualifiedDrives:   comp.UnqualifiedDrives,
+		trackedKm:           trackedKm,
+		basisKm:             basisKm,
+		insurancePresent:    !comp.InsuranceMissing,
+		acquisitionComplete: !comp.AcquisitionMissing,
+		pricedEntries:       ledgerEntries,
+		unconvertedEntries:  comp.UnconvertedExpenses,
+		drivesWithOdometer:  drivesWithOdometer,
+		odometerAnomalies:   comp.OdometerAnomalies + comp.OdometerGaps,
+	})
+
+	// 10. Aggregates
+	energy := byCategory[LedgerEnergy]
+	travel := byCategory[LedgerToll] + byCategory[LedgerParking] + byCategory[LedgerTravelOther]
+	tires := byCategory[LedgerTires]
+	maintenance := byCategory[LedgerMaintenance]
+	insurance := byCategory[LedgerInsurance]
+	financing := byCategory[LedgerFinancing]
+	subscription, tax := byCategory[LedgerSubscr], byCategory[LedgerTax]
+	var other money.Cents
+	for category, amount := range byCategory {
+		switch category {
+		case LedgerEnergy, LedgerToll, LedgerParking, LedgerTravelOther, LedgerTires, LedgerMaintenance,
+			LedgerInsurance, LedgerFinancing, LedgerTax, LedgerSubscr, LedgerAcquisition:
+		default:
+			other += amount
+		}
+	}
+	otherTotal := subscription + tax + other
+
+	running := energy + travel + maintenance + insurance + financing + otherTotal
+	sum.TotalCost = running + tires
+	sum.FullCost = running + sum.TiresAmortizedCost + sum.DepreciationCost
+	sum.FullCostNet = sum.FullCost - sum.CarpoolRevenue
+
+	sum.TotalDistanceKm = round1(trackedKm)
+	sum.OdometerDistanceKm = round1(odometerSpan)
+	sum.DistanceBasisKm = round1(basisKm)
+	sum.TotalCostPerKm = perKm(sum.TotalCost, basisKm)
+	sum.UsageCostPerKm = perKm(energy+travel, basisKm)
+	sum.FullCostPerKm = perKm(sum.FullCost, basisKm)
+	sum.FullCostNetPerKm = perKm(sum.FullCostNet, basisKm)
+	sum.DepreciationCostPerKm = perKm(sum.DepreciationCost, basisKm)
+	sum.EnergyCost = energy
+	sum.EnergyCostPerKm = perKm(energy, basisKm)
+	sum.TotalKwhAdded = round1(kwhAdded)
+	if kwhPriced > 0 {
+		sum.AvgCostPerKwh = round3(energy.Float() / kwhPriced)
+	}
+	sum.TollsCost = travel
+	sum.TollsCostPerKm = perKm(travel, basisKm)
+	sum.TiresCost = tires
+	sum.TiresCostPerKm = perKm(tires, basisKm)
+	sum.TiresAmortizedCostPerKm = perKm(sum.TiresAmortizedCost, basisKm)
+	sum.MaintenanceCost = maintenance
+	sum.MaintenanceCostPerKm = perKm(maintenance, basisKm)
+	sum.InsuranceCost = insurance
+	sum.InsuranceCostPerKm = perKm(insurance, basisKm)
+	sum.FinancingCost = financing
+	sum.FinancingCostPerKm = perKm(financing, basisKm)
+	sum.SubscriptionCost = subscription
+	sum.TaxCost = tax
+	sum.OtherCost = other
+	sum.OtherCostPerKm = perKm(otherTotal, basisKm)
+
+	if sum.TagBreakdown, err = s.tagBreakdown(ctx, vehicleID, trackedKm); err != nil {
+		return nil, fmt.Errorf("tag breakdown: %w", err)
+	}
+	if sum.MonthlyCosts, err = s.monthlyCosts(ctx, vehicleID, now); err != nil {
+		return nil, fmt.Errorf("monthly costs: %w", err)
+	}
+	return sum, nil
+}
+
+func (s *TCOService) tagBreakdown(ctx context.Context, vehicleID string, totalDistance float64) ([]TagCostBreakdown, error) {
+	rows, err := s.pool.Query(ctx, database.DriveTollAllocationCTE+`,
+		per_drive AS (
+			SELECT drive_id, SUM(allocated) AS amount FROM allocations GROUP BY drive_id
+		)
+		SELECT sub.tag,
+		       COALESCE(SUM(sub.distance_km), 0),
+		       COALESCE(SUM(sub.energy_consumed_kwh), 0),
+		       COALESCE(SUM(pd.amount), 0)
 		FROM (
-			SELECT unnest(CASE WHEN tags = '{}' OR tags IS NULL THEN ARRAY['Non tagué'] ELSE tags END) AS tag,
-			       distance_km, energy_consumed_kwh
-			FROM drives
-			WHERE vehicle_id = $1
+			SELECT d.id,
+			       unnest(CASE WHEN d.tags = '{}' OR d.tags IS NULL THEN ARRAY['Non tagué'] ELSE d.tags END) AS tag,
+			       d.distance_km, d.energy_consumed_kwh
+			FROM drives d
+			WHERE d.vehicle_id = $1 AND d.deleted_upstream_at IS NULL
 		) sub
-		GROUP BY tag_name
-		ORDER BY total_km DESC;
+		LEFT JOIN per_drive pd ON pd.drive_id = sub.id
+		GROUP BY sub.tag
+		ORDER BY 2 DESC;
 	`, vehicleID)
-	var tagBreakdown []TagCostBreakdown
-	if err == nil {
-		defer tagRows.Close()
-		for tagRows.Next() {
-			var tb TagCostBreakdown
-			if err := tagRows.Scan(&tb.Tag, &tb.DistanceKm, &tb.EnergyKwh); err == nil {
-				if totalDistance > 0 {
-					tb.Percentage = math.Round((tb.DistanceKm/totalDistance)*1000) / 10
-				}
-				tb.DistanceKm = math.Round(tb.DistanceKm*10) / 10
-				tb.EnergyKwh = math.Round(tb.EnergyKwh*10) / 10
-				tagBreakdown = append(tagBreakdown, tb)
-			}
-		}
+	if err != nil {
+		return nil, err
 	}
+	defer rows.Close()
 
-	// 7. Monthly time series (last 12 months)
+	list := []TagCostBreakdown{}
+	for rows.Next() {
+		var tb TagCostBreakdown
+		if err := rows.Scan(&tb.Tag, &tb.DistanceKm, &tb.EnergyKwh, &tb.TollsAmount); err != nil {
+			return nil, err
+		}
+		if totalDistance > 0 {
+			tb.Percentage = round1(tb.DistanceKm / totalDistance * 100)
+		}
+		tb.DistanceKm = round1(tb.DistanceKm)
+		tb.EnergyKwh = round1(tb.EnergyKwh)
+		list = append(list, tb)
+	}
+	return list, rows.Err()
+}
+
+// monthlyCosts builds the cash-basis monthly timeline (acquisition excluded) in the reporting timezone.
+func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, now time.Time) ([]MonthlyCost, error) {
 	monthlyMap := make(map[string]*MonthlyCost)
-
-	// Charges by month
-	cRows, _ := s.pool.Query(ctx, `
-		SELECT TO_CHAR(date, 'YYYY-MM') AS m, COALESCE(SUM(cost), 0)
-		FROM charge_logs
-		WHERE vehicle_id = $1
-		GROUP BY m;
-	`, vehicleID)
-	if cRows != nil {
-		for cRows.Next() {
-			var m string
-			var val float64
-			if err := cRows.Scan(&m, &val); err == nil {
-				if _, exists := monthlyMap[m]; !exists {
-					monthlyMap[m] = &MonthlyCost{Month: m}
-				}
-				monthlyMap[m].Energy = math.Round(val*100) / 100
-			}
+	get := func(m string) *MonthlyCost {
+		if _, ok := monthlyMap[m]; !ok {
+			monthlyMap[m] = &MonthlyCost{Month: m}
 		}
-		cRows.Close()
+		return monthlyMap[m]
 	}
 
-	// Tolls by month
-	tRows, _ := s.pool.Query(ctx, `
-		SELECT TO_CHAR(date, 'YYYY-MM') AS m, COALESCE(SUM(amount), 0)
-		FROM drive_expenses
-		WHERE vehicle_id = $1
-		GROUP BY m;
-	`, vehicleID)
-	if tRows != nil {
-		for tRows.Next() {
-			var m string
-			var val float64
-			if err := tRows.Scan(&m, &val); err == nil {
-				if _, exists := monthlyMap[m]; !exists {
-					monthlyMap[m] = &MonthlyCost{Month: m}
-				}
-				monthlyMap[m].Tolls = math.Round(val*100) / 100
-			}
+	rows, err := s.pool.Query(ctx, `
+		SELECT TO_CHAR(entry_date AT TIME ZONE $2, 'YYYY-MM') AS m, category, SUM(amount_eur)
+		FROM cost_ledger
+		WHERE vehicle_id = $1 AND category <> 'ACQUISITION'
+		GROUP BY m, category;
+	`, vehicleID, s.timezone)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var m, category string
+		var amount money.Cents
+		if err := rows.Scan(&m, &category, &amount); err != nil {
+			rows.Close()
+			return nil, err
 		}
-		tRows.Close()
+		mc := get(m)
+		switch category {
+		case LedgerEnergy:
+			mc.Energy += amount
+		case LedgerToll, LedgerParking, LedgerTravelOther:
+			mc.Tolls += amount
+		case LedgerTires:
+			mc.Tires += amount
+		case LedgerMaintenance:
+			mc.Maintenance += amount
+		case LedgerInsurance:
+			mc.Insurance += amount
+		case LedgerFinancing:
+			mc.Financing += amount
+		default:
+			mc.Other += amount
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
-	// Maintenance by month
-	mRows, _ := s.pool.Query(ctx, `
-		SELECT TO_CHAR(date, 'YYYY-MM') AS m, COALESCE(SUM(amount), 0)
-		FROM maintenance_expenses
-		WHERE vehicle_id = $1
-		GROUP BY m;
-	`, vehicleID)
-	if mRows != nil {
-		for mRows.Next() {
-			var m string
-			var val float64
-			if err := mRows.Scan(&m, &val); err == nil {
-				if _, exists := monthlyMap[m]; !exists {
-					monthlyMap[m] = &MonthlyCost{Month: m}
-				}
-				monthlyMap[m].Maintenance = math.Round(val*100) / 100
-			}
+	distRows, err := s.pool.Query(ctx, `
+		SELECT TO_CHAR(start_time AT TIME ZONE $2, 'YYYY-MM') AS m, COALESCE(SUM(distance_km), 0)
+		FROM drives WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL GROUP BY m;
+	`, vehicleID, s.timezone)
+	if err != nil {
+		return nil, err
+	}
+	for distRows.Next() {
+		var m string
+		var km float64
+		if err := distRows.Scan(&m, &km); err != nil {
+			distRows.Close()
+			return nil, err
 		}
-		mRows.Close()
+		get(m).DistanceKm += km
+	}
+	distRows.Close()
+	if err := distRows.Err(); err != nil {
+		return nil, err
 	}
 
-	// Tires by month
-	tireRows, _ := s.pool.Query(ctx, `
-		SELECT TO_CHAR(purchase_date, 'YYYY-MM') AS m, COALESCE(SUM(purchase_price), 0)
-		FROM tires
-		WHERE vehicle_id = $1
-		GROUP BY m;
-	`, vehicleID)
-	if tireRows != nil {
-		for tireRows.Next() {
-			var m string
-			var val float64
-			if err := tireRows.Scan(&m, &val); err == nil {
-				if _, exists := monthlyMap[m]; !exists {
-					monthlyMap[m] = &MonthlyCost{Month: m}
-				}
-				monthlyMap[m].Tires = math.Round(val*100) / 100
-			}
-		}
-		tireRows.Close()
-	}
-
-	// Distance driven by month
-	dRows, _ := s.pool.Query(ctx, `
-		SELECT TO_CHAR(start_time, 'YYYY-MM') AS m, COALESCE(SUM(distance_km), 0)
-		FROM drives
-		WHERE vehicle_id = $1
-		GROUP BY m;
-	`, vehicleID)
-	if dRows != nil {
-		for dRows.Next() {
-			var m string
-			var val float64
-			if err := dRows.Scan(&m, &val); err == nil {
-				if _, exists := monthlyMap[m]; !exists {
-					monthlyMap[m] = &MonthlyCost{Month: m}
-				}
-				monthlyMap[m].DistanceKm = math.Round(val*10) / 10
-			}
-		}
-		dRows.Close()
-	}
-
-	// Sort monthly costs chronologically and calculate monthly CostPerKm
-	var monthlyCosts []MonthlyCost
+	monthlyCosts := make([]MonthlyCost, 0, len(monthlyMap))
 	for _, mc := range monthlyMap {
-		mc.Total = math.Round((mc.Energy+mc.Tolls+mc.Maintenance+mc.Tires)*100) / 100
-		if mc.DistanceKm > 0 {
-			mc.CostPerKm = math.Round((mc.Total/mc.DistanceKm)*1000) / 1000
-		}
+		mc.DistanceKm = round1(mc.DistanceKm)
+		mc.Total = mc.Energy + mc.Tolls + mc.Maintenance + mc.Insurance + mc.Financing + mc.Other + mc.Tires
+		mc.CostPerKm = perKm(mc.Total, mc.DistanceKm)
 		monthlyCosts = append(monthlyCosts, *mc)
 	}
 	sort.Slice(monthlyCosts, func(i, j int) bool {
 		return monthlyCosts[i].Month < monthlyCosts[j].Month
 	})
 
-	// If no data, provide current month
 	if len(monthlyCosts) == 0 {
-		currentMonth := time.Now().Format("2006-01")
-		monthlyCosts = append(monthlyCosts, MonthlyCost{
-			Month: currentMonth,
-		})
+		monthlyCosts = append(monthlyCosts, MonthlyCost{Month: now.Format("2006-01")})
 	}
-
-	return &TCOSummary{
-		TotalDistanceKm:      math.Round(totalDistance*10) / 10,
-		TotalCost:            math.Round(totalCost*100) / 100,
-		TotalCostPerKm:       math.Round(costPerKm*1000) / 1000,
-		EnergyCost:           math.Round(totalEnergyCost*100) / 100,
-		EnergyCostPerKm:      math.Round(energyPerKm*1000) / 1000,
-		TotalKwhAdded:        math.Round(totalKwhAdded*10) / 10,
-		AvgCostPerKwh:        math.Round(avgCostKwh*1000) / 1000,
-		TollsCost:            math.Round(totalTollsCost*100) / 100,
-		TollsCostPerKm:       math.Round(tollsPerKm*1000) / 1000,
-		TiresCost:            math.Round(totalTiresCost*100) / 100,
-		TiresCostPerKm:       math.Round(tiresPerKm*1000) / 1000,
-		MaintenanceCost:      math.Round(totalMaintenanceCost*100) / 100,
-		MaintenanceCostPerKm: math.Round(maintPerKm*1000) / 1000,
-		TagBreakdown:         tagBreakdown,
-		MonthlyCosts:         monthlyCosts,
-	}, nil
+	return monthlyCosts, nil
 }

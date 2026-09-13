@@ -24,6 +24,8 @@ import {
   Plus,
   ArrowRight,
   TrendingUp,
+  AlertTriangle,
+  Ban,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -33,6 +35,8 @@ const total = ref(0)
 const page = ref(1)
 const limit = ref(20)
 const selectedTag = ref('')
+const unqualifiedOnly = ref(false)
+const unqualifiedCount = ref(0)
 const loading = ref(true)
 
 // Multi-selection for trip grouping & tolls & carpooling
@@ -64,9 +68,11 @@ async function loadDrives() {
       tag: selectedTag.value,
       page: page.value,
       limit: limit.value,
+      unqualified: unqualifiedOnly.value,
     })
     drives.value = res.drives
     total.value = res.total
+    unqualifiedCount.value = res.unqualified_count || 0
   } catch (err) {
     console.error('Failed to load drives', err)
   } finally {
@@ -75,7 +81,7 @@ async function loadDrives() {
 }
 
 watch(
-  () => [vehicleStore.activeVehicle?.id, selectedTag.value, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, selectedTag.value, unqualifiedOnly.value, vehicleStore.lastSyncTimestamp],
   () => {
     page.value = 1
     selectedDriveIds.value = []
@@ -86,6 +92,31 @@ watch(
 onMounted(() => {
   loadDrives()
 })
+
+// Highway-like drive with no toll attached and not reviewed yet (same rule as the backend queue)
+function needsTollQualification(d: any) {
+  return !d.toll_reviewed_at && d.distance_km >= 40 && (d.speed_avg || 0) >= 70 && !(d.costs?.tolls_cost > 0)
+}
+
+async function markNoToll(d: any) {
+  if (!vehicleStore.activeVehicle) return
+  try {
+    await api.setDriveTollReview(vehicleStore.activeVehicle.id, d.id, true)
+    d.toll_reviewed_at = new Date().toISOString()
+    unqualifiedCount.value = Math.max(0, unqualifiedCount.value - 1)
+    if (unqualifiedOnly.value) {
+      drives.value = drives.value.filter((x) => x.id !== d.id)
+      total.value = Math.max(0, total.value - 1)
+    }
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+function openTollEntry(d: any) {
+  openCostModal(d)
+  showAddTollInline.value = true
+}
 
 function toggleSelectDrive(id: string) {
   const idx = selectedDriveIds.value.indexOf(id)
@@ -136,19 +167,24 @@ async function handleCreateGroupAndExpense() {
   }
 
   try {
-    const tg = await api.createTripGroup(vehicleStore.activeVehicle.id, {
-      name: groupName.value,
-      drive_ids: selectedDriveIds.value,
-    })
-
     if (tollAmount.value && Number(tollAmount.value) > 0) {
+      // Group and expense are created atomically by the backend; the expense is dated at the trip start
+      const firstStart = drives.value
+        .filter((d) => selectedDriveIds.value.includes(d.id))
+        .map((d) => new Date(d.start_time).getTime())
+        .sort((a, b) => a - b)[0]
       await api.createDriveExpense(vehicleStore.activeVehicle.id, {
-        trip_group_id: tg.id,
+        drive_ids: selectedDriveIds.value,
         type: expenseType.value,
         amount: Number(tollAmount.value),
         currency: 'EUR',
-        date: new Date().toISOString(),
-        notes: `Assigné au groupe ${groupName.value}`,
+        date: new Date(firstStart || Date.now()).toISOString(),
+        notes: groupName.value,
+      })
+    } else {
+      await api.createTripGroup(vehicleStore.activeVehicle.id, {
+        name: groupName.value,
+        drive_ids: selectedDriveIds.value,
       })
     }
 
@@ -237,6 +273,9 @@ async function handleAddTollToDrive() {
 
     // Update local costs
     if (selectedCostDrive.value.costs) {
+      if (needsTollQualification(selectedCostDrive.value)) {
+        unqualifiedCount.value = Math.max(0, unqualifiedCount.value - 1)
+      }
       selectedCostDrive.value.costs.tolls_cost = (selectedCostDrive.value.costs.tolls_cost || 0) + amountNum
       selectedCostDrive.value.costs.total_cost = (selectedCostDrive.value.costs.total_cost || 0) + amountNum
       if (selectedCostDrive.value.distance_km > 0) {
@@ -273,12 +312,22 @@ function formatDate(dateStr: string) {
       <div>
         <h2 class="text-2xl font-bold tracking-tight text-white">Trajets & Voyages</h2>
         <p class="text-sm text-slate-400">
-          {{ total }} trajets enregistrés • Coûts réels de revient calculés en temps réel
+          {{ total }} trajets • Énergie et péages réels, usure et charges fixes réparties au kilomètre
         </p>
       </div>
 
       <!-- Tag Filters -->
-      <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start sm:self-auto">
+      <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start sm:self-auto flex-wrap">
+        <button
+          v-if="unqualifiedCount > 0 || unqualifiedOnly"
+          @click="unqualifiedOnly = !unqualifiedOnly"
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+          :class="unqualifiedOnly ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-amber-400/80 hover:text-amber-300'"
+          title="Trajets de type autoroutier sans péage renseigné"
+        >
+          <AlertTriangle class="w-3.5 h-3.5" />
+          À qualifier ({{ unqualifiedCount }})
+        </button>
         <button
           @click="selectedTag = ''"
           class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
@@ -422,6 +471,24 @@ function formatDate(dateStr: string) {
 
         <!-- Right Side: Cost Badge & Actions -->
         <div class="flex items-center gap-2.5 self-end sm:self-auto flex-wrap sm:flex-nowrap">
+          <!-- Toll qualification: 2 taps -->
+          <div v-if="needsTollQualification(d)" class="flex items-center gap-1">
+            <button
+              @click="openTollEntry(d)"
+              class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 flex items-center gap-1"
+              title="Renseigner le péage de ce trajet"
+            >
+              <Plus class="w-3.5 h-3.5" /> Péage
+            </button>
+            <button
+              @click="markNoToll(d)"
+              class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-white flex items-center gap-1"
+              title="Confirmer que ce trajet n'a pas de péage"
+            >
+              <Ban class="w-3.5 h-3.5" /> Sans péage
+            </button>
+          </div>
+
           <!-- Real Cost Badge (Clickable for full breakdown) -->
           <button
             @click="openCostModal(d)"
@@ -433,7 +500,7 @@ function formatDate(dateStr: string) {
             </div>
             <div>
               <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
-                <span>{{ (d.costs?.total_cost || 0).toFixed(2) }} €</span>
+                <span>{{ d.costs?.has_estimates ? '~' : '' }}{{ (d.costs?.total_cost || 0).toFixed(2) }} €</span>
                 <span class="text-[10px] font-normal text-emerald-400 font-mono">
                   {{ (d.costs?.cost_per_km || 0).toFixed(3) }} €/km
                 </span>
@@ -537,6 +604,11 @@ function formatDate(dateStr: string) {
           </div>
         </div>
 
+        <p v-if="selectedCostDrive.costs?.has_estimates" class="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 flex items-start gap-2">
+          <AlertTriangle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <span>Certains postes utilisent une valeur par défaut faute d'historique (marqués « estimation ») : complétez recharges, pneus, entretien et assurance pour un coût réel.</span>
+        </p>
+
         <!-- Cost Breakdown List -->
         <div class="space-y-2.5">
           <!-- 1. Électricité -->
@@ -546,7 +618,10 @@ function formatDate(dateStr: string) {
                 <Zap class="w-4 h-4" />
               </div>
               <div>
-                <div class="text-xs font-semibold text-white">Énergie Électrique</div>
+                <div class="text-xs font-semibold text-white flex items-center gap-1.5">
+                  Énergie Électrique
+                  <span v-if="selectedCostDrive.costs?.energy_source === 'DEFAULT' || selectedCostDrive.costs?.electricity_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">estimation</span>
+                </div>
                 <div class="text-[11px] text-slate-400 font-mono">
                   {{ selectedCostDrive.costs?.electricity_kwh || 0 }} kWh × {{ (selectedCostDrive.costs?.electricity_rate || 0.22).toFixed(3) }} €/kWh
                 </div>
@@ -564,7 +639,10 @@ function formatDate(dateStr: string) {
                 <Disc class="w-4 h-4" />
               </div>
               <div>
-                <div class="text-xs font-semibold text-white">Usure des Pneumatiques</div>
+                <div class="text-xs font-semibold text-white flex items-center gap-1.5">
+                  Usure des Pneumatiques
+                  <span v-if="selectedCostDrive.costs?.tires_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">estimation</span>
+                </div>
                 <div class="text-[11px] text-slate-400 font-mono">
                   {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.tires_rate || 0.02).toFixed(3) }} €/km
                 </div>
@@ -582,7 +660,10 @@ function formatDate(dateStr: string) {
                 <Wrench class="w-4 h-4" />
               </div>
               <div>
-                <div class="text-xs font-semibold text-white">Provision Entretien</div>
+                <div class="text-xs font-semibold text-white flex items-center gap-1.5">
+                  Provision Entretien
+                  <span v-if="selectedCostDrive.costs?.maintenance_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">estimation</span>
+                </div>
                 <div class="text-[11px] text-slate-400 font-mono">
                   {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.maintenance_rate || 0.015).toFixed(3) }} €/km
                 </div>
@@ -610,11 +691,17 @@ function formatDate(dateStr: string) {
                     Contrat réel
                   </span>
                   <span
-                    v-else-if="selectedCostDrive.costs?.insurance_source === 'EXPENSES'"
+                    v-else-if="selectedCostDrive.costs?.insurance_source === 'RECORDED_EXPENSES'"
                     class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
                     title="Basé sur vos dépenses réelles d'assurance"
                   >
                     Dépenses réelles
+                  </span>
+                  <span
+                    v-else-if="selectedCostDrive.costs?.insurance_source === 'DEFAULT'"
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
+                  >
+                    estimation
                   </span>
                 </div>
                 <div class="text-[11px] text-slate-400 font-mono">
@@ -662,8 +749,12 @@ function formatDate(dateStr: string) {
                 :key="exp.id"
                 class="flex items-center justify-between text-[11px] text-slate-300 pl-9"
               >
-                <span>{{ exp.type === 'TOLL' ? 'Péage' : exp.type }} <span v-if="exp.notes" class="text-slate-500">({{ exp.notes }})</span></span>
-                <span class="font-mono text-amber-400">{{ exp.amount.toFixed(2) }} €</span>
+                <span>
+                  {{ exp.type === 'TOLL' ? 'Péage' : exp.type }}
+                  <span v-if="exp.notes" class="text-slate-500">({{ exp.notes }})</span>
+                  <span v-if="exp.trip_group_id" class="text-indigo-400"> • part du voyage sur {{ exp.amount.toFixed(2) }} {{ exp.currency }}</span>
+                </span>
+                <span class="font-mono text-amber-400">{{ (exp.allocated_amount ?? exp.amount).toFixed(2) }} €</span>
               </div>
             </div>
 
@@ -764,7 +855,7 @@ function formatDate(dateStr: string) {
         </div>
 
         <p class="text-xs text-slate-400">
-          Vous allez fusionner <strong>{{ selectedDriveIds.length }} trajets</strong> consécutifs (ex: trajet segmenté par des arrêts recharge/déjeuner) et lui assigner un péage ou parking global.
+          Vous allez fusionner <strong>{{ selectedDriveIds.length }} trajets</strong> consécutifs (ex: trajet segmenté par des arrêts recharge/déjeuner) et lui assigner un péage ou parking global, réparti entre les étapes au prorata des kilomètres.
         </p>
 
         <div>

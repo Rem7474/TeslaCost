@@ -39,20 +39,59 @@ export const useVehicleStore = defineStore('vehicle', () => {
     localStorage.setItem('teslacost_active_vehicle', id)
   }
 
-  async function syncActiveVehicle() {
-    if (!activeVehicle.value) return
+  const SYNC_POLL_INTERVAL_MS = 1500
+  const SYNC_POLL_MAX_MS = 20 * 60 * 1000
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+  // Follows a background synchronization job until it finishes
+  async function followSyncJob(vehicleId: string, job: any) {
     isSyncing.value = true
     syncResult.value = null
     syncError.value = null
+    const startedAt = Date.now()
     try {
-      const res = await api.syncVehicle(activeVehicle.value.id)
-      syncResult.value = res
-      await fetchVehicles()
-      lastSyncTimestamp.value = Date.now()
+      while (job?.status === 'RUNNING') {
+        if (Date.now() - startedAt > SYNC_POLL_MAX_MS) {
+          throw new Error('La synchronisation prend plus de temps que prévu, elle continue en arrière-plan')
+        }
+        await sleep(SYNC_POLL_INTERVAL_MS)
+        job = await api.getSyncStatus(vehicleId)
+      }
+      if (job?.status === 'FAILED') {
+        syncError.value = job.error || 'Erreur inconnue lors de la synchronisation'
+      } else if (job?.status === 'SUCCEEDED') {
+        syncResult.value = job.result
+        await fetchVehicles()
+        lastSyncTimestamp.value = Date.now()
+      }
     } catch (err: any) {
       syncError.value = err.message || 'Erreur inconnue lors de la synchronisation'
     } finally {
       isSyncing.value = false
+    }
+  }
+
+  async function syncActiveVehicle() {
+    if (!activeVehicle.value || isSyncing.value) return
+    const vehicleId = activeVehicle.value.id
+    try {
+      const job = await api.syncVehicle(vehicleId)
+      await followSyncJob(vehicleId, job)
+    } catch (err: any) {
+      syncError.value = err.message || 'Erreur inconnue lors de la synchronisation'
+    }
+  }
+
+  // Resumes the progress indicator when a synchronization (manual or scheduled) is already running
+  async function resumeRunningSync() {
+    if (!activeVehicle.value || isSyncing.value) return
+    try {
+      const job = await api.getSyncStatus(activeVehicle.value.id)
+      if (job?.status === 'RUNNING') {
+        await followSyncJob(activeVehicle.value.id, job)
+      }
+    } catch {
+      // No sync information: nothing to resume
     }
   }
 
@@ -74,6 +113,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
     fetchVehicles,
     setActiveVehicle,
     syncActiveVehicle,
+    resumeRunningSync,
     clearSyncStatus,
   }
 })

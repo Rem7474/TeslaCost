@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // reporting timezone available even in minimal container images
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -54,7 +55,7 @@ func main() {
 	} else {
 		defer dbPool.Close()
 		if migErr := dbPool.Migrate(ctx); migErr != nil {
-			log.Printf("[warning] Database migration failed: %v", migErr)
+			log.Fatalf("Database migration failed: %v", migErr)
 		}
 		repo = database.NewRepository(dbPool.Pool)
 
@@ -76,7 +77,7 @@ func main() {
 
 		syncService = services.NewSyncService(repo, encryptor)
 		tireWearService = services.NewTireWearService(repo)
-		tcoService = services.NewTCOService(dbPool.Pool)
+		tcoService = services.NewTCOService(dbPool.Pool, cfg.ReportingTimezone)
 		carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
 	}
 
@@ -94,7 +95,7 @@ func main() {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Idempotency-Key"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -145,6 +146,7 @@ func main() {
 		// Protected Routes
 		r.Group(func(r chi.Router) {
 			r.Use(appMiddleware.AuthenticateJWT(cfg.JWTSecret))
+			r.Use(handlers.Idempotency(repo))
 
 			r.Get("/api/auth/me", authHandler.Me)
 
@@ -158,11 +160,14 @@ func main() {
 				r.Delete("/{id}", vehicleHandler.Delete)
 				r.Post("/{id}/teslamate/test", vehicleHandler.TestTeslaMate)
 				r.Post("/{id}/sync", vehicleHandler.Sync)
+				r.Get("/{id}/sync", vehicleHandler.GetSyncStatus)
+				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
 
 				// Drives
 				r.Get("/{vehicleId}/drives", driveHandler.List)
 				r.Get("/{vehicleId}/drives/{driveId}/expenses", driveHandler.GetDriveExpenses)
 				r.Patch("/{vehicleId}/drives/{driveId}/tags", driveHandler.UpdateTags)
+				r.Patch("/{vehicleId}/drives/{driveId}/toll-review", driveHandler.SetTollReview)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
 
@@ -197,6 +202,9 @@ func main() {
 				r.Put("/{vehicleId}/maintenance/{maintenanceId}", expenseHandler.UpdateMaintenance)
 				r.Delete("/{vehicleId}/maintenance/{maintenanceId}", expenseHandler.DeleteMaintenance)
 				r.Get("/{vehicleId}/charges", expenseHandler.ListCharges)
+				r.Post("/{vehicleId}/charges", expenseHandler.CreateManualCharge)
+				r.Put("/{vehicleId}/charges/{chargeId}", expenseHandler.UpdateCharge)
+				r.Delete("/{vehicleId}/charges/{chargeId}", expenseHandler.DeleteManualCharge)
 
 				// TCO Analytics
 				r.Get("/{vehicleId}/tco", tcoHandler.GetTCO)
@@ -213,7 +221,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%s", cfg.Port),
 		Handler:      r,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 75 * time.Second, // above the 60s request timeout so long syncs can still respond
 		IdleTimeout:  60 * time.Second,
 	}
 

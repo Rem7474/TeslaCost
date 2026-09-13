@@ -22,6 +22,7 @@ type Config struct {
 	InitialAdminPassword string
 	AllowedOrigins       []string
 	SyncIntervalMinutes  int
+	ReportingTimezone    string
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -78,6 +79,8 @@ func Load() *Config {
 		syncIntervalMinutes = 0
 	}
 
+	reportingTimezone := getEnv("APP_TIMEZONE", "Europe/Paris")
+
 	return &Config{
 		Port:                 port,
 		AppBaseURL:           appBaseURL,
@@ -91,6 +94,7 @@ func Load() *Config {
 		InitialAdminPassword: initialAdminPassword,
 		AllowedOrigins:       allowedOrigins,
 		SyncIntervalMinutes:  syncIntervalMinutes,
+		ReportingTimezone:    reportingTimezone,
 	}
 }
 

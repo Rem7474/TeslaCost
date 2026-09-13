@@ -63,6 +63,22 @@ func formatNumber(n int) string {
 	return out
 }
 
+// TireDistanceAtOdometer returns the distance driven by a tire (mount sessions only) when the vehicle
+// odometer read odometer. Periods in storage do not count.
+func TireDistanceAtOdometer(sessions []models.TireMountSession, odometer float64) float64 {
+	total := 0.0
+	for _, s := range sessions {
+		end := odometer
+		if s.DismountedOdometer != nil && *s.DismountedOdometer < end {
+			end = *s.DismountedOdometer
+		}
+		if end > s.MountedOdometer {
+			total += end - s.MountedOdometer
+		}
+	}
+	return total
+}
+
 // CalculateTireWear computes wear metrics based on depth logs, mount sessions, and TeslaMate power telemetry.
 func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Tire, vehicleCurrentOdometer float64) (*TireWearStats, error) {
 	logs, err := s.repo.ListTireLogs(ctx, tire.ID)
@@ -70,7 +86,10 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		return nil, err
 	}
 
-	sessions, _ := s.repo.ListTireMountSessions(ctx, tire.ID)
+	sessions, err := s.repo.ListTireMountSessions(ctx, tire.ID)
+	if err != nil {
+		return nil, err
+	}
 
 	initialDepth := tire.InitialDepthMm
 	if initialDepth <= 0 {
@@ -85,18 +104,23 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 	usableDepth := math.Max(0.1, initialDepth-minLegal)
 	currentDepth := initialDepth
 	distanceTraveled := 0.0
+	measuredWear := 0.0
 
 	if len(logs) > 0 {
 		// Latest log is first due to ORDER BY date DESC
 		latestLog := logs[0]
 		currentDepth = latestLog.DepthMm
 
-		// Oldest log is last
+		// Oldest log is last. Wear is measured against the distance driven by this tire only
+		// (vehicle odometer readings converted through mount sessions, storage periods excluded).
 		oldestLog := logs[len(logs)-1]
 		if len(logs) >= 2 {
-			distanceTraveled = math.Max(0, latestLog.Odometer-oldestLog.Odometer)
-		} else if vehicleCurrentOdometer > latestLog.Odometer {
-			distanceTraveled = vehicleCurrentOdometer - latestLog.Odometer
+			distanceTraveled = math.Max(0, TireDistanceAtOdometer(sessions, latestLog.Odometer)-TireDistanceAtOdometer(sessions, oldestLog.Odometer))
+			measuredWear = math.Max(0, oldestLog.DepthMm-latestLog.DepthMm)
+		} else {
+			// Single measure: wear since new over the tire's whole life at that reading.
+			distanceTraveled = tire.InitialDistanceKm + TireDistanceAtOdometer(sessions, latestLog.Odometer)
+			measuredWear = math.Max(0, initialDepth-latestLog.DepthMm)
 		}
 	}
 
@@ -120,7 +144,7 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		lifespan = 40000
 	}
 	lifeProgressPct := math.Min(100.0, math.Round((totalDistance/float64(lifespan))*1000)/10)
-	costPerKm := math.Round((tire.PurchasePrice/float64(lifespan))*10000) / 10000
+	costPerKm := math.Round((tire.PurchasePrice.Float()/float64(lifespan))*10000) / 10000
 
 	wornDepth := math.Max(0, initialDepth-currentDepth)
 	remainingDepth := math.Max(0, currentDepth-minLegal)
@@ -129,8 +153,8 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 	wearRatePer10k := 0.0
 	estimatedRemainingKm := 0.0
 
-	if distanceTraveled > 500 && wornDepth > 0.05 {
-		wearRatePer10k = (wornDepth / distanceTraveled) * 10000.0
+	if distanceTraveled > 500 && measuredWear > 0.05 {
+		wearRatePer10k = (measuredWear / distanceTraveled) * 10000.0
 		if wearRatePer10k > 0 {
 			estimatedRemainingKm = (remainingDepth / wearRatePer10k) * 10000.0
 		}
@@ -254,4 +278,3 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		WearExplanation:        wearExplanation,
 	}, nil
 }
-

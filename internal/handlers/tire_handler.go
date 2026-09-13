@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
-	"math"
+	"errors"
 	"net/http"
 	"time"
 
@@ -11,6 +11,7 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
 )
 
@@ -59,7 +60,7 @@ type CreateTireRequest struct {
 	Dimension             string              `json:"dimension"`
 	Season                models.TireSeason   `json:"season"`
 	PurchaseDate          string              `json:"purchase_date"` // YYYY-MM-DD
-	PurchasePrice         float64             `json:"purchase_price"`
+	PurchasePrice         money.Cents         `json:"purchase_price"`
 	CurrentPosition       models.TirePosition `json:"current_position"`
 	InitialDepthMm        float64             `json:"initial_depth_mm"`
 	MinLegalDepthMm       float64             `json:"min_legal_depth_mm"`
@@ -89,9 +90,14 @@ func (h *TireHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchaseDate, err := time.Parse("2006-01-02", req.PurchaseDate)
+	purchaseDate, err := parseDate(req.PurchaseDate)
 	if err != nil {
-		purchaseDate = time.Now()
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateAmount(req.PurchasePrice, true); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	pos := req.CurrentPosition
@@ -136,7 +142,7 @@ func (h *TireHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateTire(r.Context(), t); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create tire: "+err.Error())
+		writeRepoError(w, err, "Failed to create tire")
 		return
 	}
 
@@ -150,8 +156,8 @@ type BatchCreateTiresRequest struct {
 	Dimension             string            `json:"dimension"`
 	Season                models.TireSeason `json:"season"`
 	PurchaseDate          string            `json:"purchase_date"`
-	TotalPrice            float64           `json:"total_price"`
-	UnitPrice             float64           `json:"unit_price"`
+	TotalPrice            money.Cents       `json:"total_price"`
+	UnitPrice             money.Cents       `json:"unit_price"`
 	InitialDepthMm        float64           `json:"initial_depth_mm"`
 	MinLegalDepthMm       float64           `json:"min_legal_depth_mm"`
 	DotCode               *string           `json:"dot_code"`
@@ -180,9 +186,18 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	purchaseDate, err := time.Parse("2006-01-02", req.PurchaseDate)
+	purchaseDate, err := parseDate(req.PurchaseDate)
 	if err != nil {
-		purchaseDate = time.Now()
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateAmount(req.TotalPrice, true); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := validateAmount(req.UnitPrice, true); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	season := req.Season
@@ -221,13 +236,16 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	count := len(positions)
-	unitPrice := req.UnitPrice
-	if req.TotalPrice > 0 && count > 0 {
-		unitPrice = math.Round((req.TotalPrice/float64(count))*100) / 100
+	prices := make([]money.Cents, count)
+	for i := range prices {
+		prices[i] = req.UnitPrice
+	}
+	if req.TotalPrice > 0 {
+		prices = money.Split(req.TotalPrice, count)
 	}
 
 	var tires []*models.Tire
-	for _, pos := range positions {
+	for i, pos := range positions {
 		var mountedOdom *float64
 		if pos != models.TirePosStorage {
 			mountedOdom = req.MountedOdometer
@@ -239,7 +257,7 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 			Dimension:             req.Dimension,
 			Season:                season,
 			PurchaseDate:          purchaseDate,
-			PurchasePrice:         unitPrice,
+			PurchasePrice:         prices[i],
 			CurrentPosition:       pos,
 			InitialDepthMm:        initialDepth,
 			MinLegalDepthMm:       minDepth,
@@ -252,7 +270,7 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateTiresBatch(r.Context(), tires); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to batch create tires: "+err.Error())
+		writeRepoError(w, err, "Failed to batch create tires")
 		return
 	}
 
@@ -285,11 +303,27 @@ func (h *TireHandler) QuickRotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.QuickRotateTires(r.Context(), vehicleID, req.Mode, req.Odometer, req.SwapWithPackTireIDs); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to perform quick rotation: "+err.Error())
+		writeRepoError(w, err, "Failed to perform quick rotation")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+// UpdateTireRequest updates descriptive fields; omitted fields are left unchanged.
+// Positions are changed through mount sessions or rotations only.
+type UpdateTireRequest struct {
+	Brand               *string            `json:"brand"`
+	Model               *string            `json:"model"`
+	Dimension           *string            `json:"dimension"`
+	Season              *models.TireSeason `json:"season"`
+	PurchaseDate        *string            `json:"purchase_date"`
+	PurchasePrice       *money.Cents       `json:"purchase_price"`
+	InitialDepthMm      *float64           `json:"initial_depth_mm"`
+	MinLegalDepthMm     *float64           `json:"min_legal_depth_mm"`
+	DotCode             *string            `json:"dot_code"`
+	InitialDistanceKm   *float64           `json:"initial_distance_km"`
+	EstimatedLifespanKm *int               `json:"estimated_lifespan_km"`
 }
 
 func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -308,54 +342,61 @@ func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req CreateTireRequest
+	var req UpdateTireRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
-	if req.Brand != "" {
-		t.Brand = req.Brand
+	if req.Brand != nil && *req.Brand != "" {
+		t.Brand = *req.Brand
 	}
-	if req.Model != "" {
-		t.Model = req.Model
+	if req.Model != nil && *req.Model != "" {
+		t.Model = *req.Model
 	}
-	if req.Dimension != "" {
-		t.Dimension = req.Dimension
+	if req.Dimension != nil && *req.Dimension != "" {
+		t.Dimension = *req.Dimension
 	}
-	if req.Season != "" {
-		t.Season = req.Season
+	if req.Season != nil && *req.Season != "" {
+		t.Season = *req.Season
 	}
-	if req.PurchaseDate != "" {
-		if pd, err := time.Parse("2006-01-02", req.PurchaseDate); err == nil {
-			t.PurchaseDate = pd
+	if req.PurchaseDate != nil {
+		pd, err := parseDate(*req.PurchaseDate)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
 		}
+		t.PurchaseDate = pd
 	}
-	if req.PurchasePrice > 0 {
-		t.PurchasePrice = req.PurchasePrice
+	if req.PurchasePrice != nil {
+		if err := validateAmount(*req.PurchasePrice, true); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		t.PurchasePrice = *req.PurchasePrice
 	}
-	if req.CurrentPosition != "" {
-		t.CurrentPosition = req.CurrentPosition
+	if req.InitialDepthMm != nil && *req.InitialDepthMm > 0 {
+		t.InitialDepthMm = *req.InitialDepthMm
 	}
-	if req.InitialDepthMm > 0 {
-		t.InitialDepthMm = req.InitialDepthMm
-	}
-	if req.MinLegalDepthMm > 0 {
-		t.MinLegalDepthMm = req.MinLegalDepthMm
+	if req.MinLegalDepthMm != nil && *req.MinLegalDepthMm > 0 {
+		t.MinLegalDepthMm = *req.MinLegalDepthMm
 	}
 	if req.DotCode != nil {
 		t.DotCode = req.DotCode
 	}
-	if req.MountedOdometer != nil {
-		t.MountedOdometer = req.MountedOdometer
+	if req.InitialDistanceKm != nil {
+		if *req.InitialDistanceKm < 0 {
+			writeError(w, http.StatusBadRequest, "le kilométrage initial ne peut pas être négatif")
+			return
+		}
+		t.InitialDistanceKm = *req.InitialDistanceKm
 	}
-	t.AccumulatedDistanceKm = req.AccumulatedDistanceKm
-	if req.EstimatedLifespanKm > 0 {
-		t.EstimatedLifespanKm = req.EstimatedLifespanKm
+	if req.EstimatedLifespanKm != nil && *req.EstimatedLifespanKm > 0 {
+		t.EstimatedLifespanKm = *req.EstimatedLifespanKm
 	}
 
 	if err := h.repo.UpdateTire(r.Context(), t); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update tire: "+err.Error())
+		writeRepoError(w, err, "Failed to update tire")
 		return
 	}
 
@@ -401,6 +442,35 @@ type MountSessionPayload struct {
 	Notes              *string             `json:"notes"`
 }
 
+func parseSessionPayload(req *MountSessionPayload) (time.Time, *time.Time, error) {
+	if !isMountedPosition(req.Position) {
+		return time.Time{}, nil, errors.New("une session de montage requiert une position FL, FR, RL ou RR")
+	}
+	if req.MountedOdometer < 0 || (req.DismountedOdometer != nil && *req.DismountedOdometer < 0) {
+		return time.Time{}, nil, errors.New("odomètre invalide")
+	}
+	mountedDate, err := parseDate(req.MountedDate)
+	if err != nil {
+		return time.Time{}, nil, err
+	}
+	dismountedDate, err := parseOptionalDate(req.DismountedDate)
+	if err != nil {
+		return time.Time{}, nil, err
+	}
+	if dismountedDate != nil && dismountedDate.Before(mountedDate) {
+		return time.Time{}, nil, errors.New("la date de démontage précède la date de montage")
+	}
+	return mountedDate, dismountedDate, nil
+}
+
+func isMountedPosition(pos models.TirePosition) bool {
+	switch pos {
+	case models.TirePosFL, models.TirePosFR, models.TirePosRL, models.TirePosRR:
+		return true
+	}
+	return false
+}
+
 func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
@@ -417,16 +487,10 @@ func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mountedDate, err := time.Parse(time.RFC3339, req.MountedDate)
+	mountedDate, dismountedDate, err := parseSessionPayload(&req)
 	if err != nil {
-		mountedDate = time.Now()
-	}
-
-	var dismountedDate *time.Time
-	if req.DismountedDate != nil && *req.DismountedDate != "" {
-		if dd, err := time.Parse(time.RFC3339, *req.DismountedDate); err == nil {
-			dismountedDate = &dd
-		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	session := &models.TireMountSession{
@@ -442,7 +506,7 @@ func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateTireMountSession(r.Context(), session); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create mount session: "+err.Error())
+		writeRepoError(w, err, "Failed to create mount session")
 		return
 	}
 
@@ -466,16 +530,10 @@ func (h *TireHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mountedDate, err := time.Parse(time.RFC3339, req.MountedDate)
+	mountedDate, dismountedDate, err := parseSessionPayload(&req)
 	if err != nil {
-		mountedDate = time.Now()
-	}
-
-	var dismountedDate *time.Time
-	if req.DismountedDate != nil && *req.DismountedDate != "" {
-		if dd, err := time.Parse(time.RFC3339, *req.DismountedDate); err == nil {
-			dismountedDate = &dd
-		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	session := &models.TireMountSession{
@@ -492,7 +550,7 @@ func (h *TireHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateTireMountSession(r.Context(), session); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update mount session: "+err.Error())
+		writeRepoError(w, err, "Failed to update mount session")
 		return
 	}
 
@@ -510,8 +568,8 @@ func (h *TireHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.repo.DeleteTireMountSession(r.Context(), sessionID, tireID); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to delete mount session")
+	if err := h.repo.DeleteTireMountSession(r.Context(), vehicleID, sessionID, tireID); err != nil {
+		writeRepoError(w, err, "Failed to delete mount session")
 		return
 	}
 
@@ -526,7 +584,18 @@ type AddTireLogRequest struct {
 }
 
 func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
 	tireID := chi.URLParam(r, "tireId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if err := h.repo.EnsureTireOwned(r.Context(), vehicleID, tireID); err != nil {
+		writeRepoError(w, err, "Failed to record tire log")
+		return
+	}
 
 	var req AddTireLogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -534,14 +603,23 @@ func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.DepthMm <= 0 {
-		writeError(w, http.StatusBadRequest, "Depth must be greater than 0 mm")
+	if req.DepthMm <= 0 || req.DepthMm > 20 {
+		writeError(w, http.StatusBadRequest, "La profondeur doit être comprise entre 0 et 20 mm")
+		return
+	}
+	if req.Odometer <= 0 {
+		writeError(w, http.StatusBadRequest, "Le relevé d'usure requiert l'odomètre du véhicule")
 		return
 	}
 
-	logDate, err := time.Parse(time.RFC3339, req.Date)
-	if err != nil {
-		logDate = time.Now()
+	logDate := time.Now()
+	if req.Date != "" {
+		parsed, err := parseDate(req.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		logDate = parsed
 	}
 
 	log := &models.TireLog{
@@ -553,7 +631,7 @@ func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.AddTireLog(r.Context(), log); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to record tire log")
+		writeRepoError(w, err, "Failed to record tire log")
 		return
 	}
 
@@ -582,9 +660,14 @@ func (h *TireHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rotDate, err := time.Parse(time.RFC3339, req.Date)
-	if err != nil {
-		rotDate = time.Now()
+	rotDate := time.Now().UTC()
+	if req.Date != "" {
+		parsed, err := parseDate(req.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		rotDate = parsed
 	}
 
 	rot := &models.TireRotation{
@@ -596,7 +679,7 @@ func (h *TireHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.AddTireRotation(r.Context(), rot); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to apply tire rotation: "+err.Error())
+		writeRepoError(w, err, "Failed to apply tire rotation")
 		return
 	}
 

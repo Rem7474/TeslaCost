@@ -12,7 +12,7 @@ func TestCarpoolUnitRatesDefaults(t *testing.T) {
 		InsurancePerKm:    0.035,
 	}
 
-	distance := 450.0 // Paris - Lyon
+	distance := 450.0                // Paris - Lyon
 	kwh := (distance * 16.5) / 100.0 // 74.25 kWh
 	elecCost := kwh * rates.ElectricityPerKwh
 	tiresCost := distance * rates.TiresPerKm

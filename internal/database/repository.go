@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 )
 
 var (
@@ -100,14 +101,38 @@ func (r *Repository) GetUserCount(ctx context.Context) (int, error) {
 // Vehicles
 // ============================================================================
 
+const vehicleColumns = `
+	id, user_id, name, vin, teslamate_car_id, current_odometer,
+	teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
+	teslamate_basic_user, teslamate_basic_pass_encrypted,
+	annual_insurance_cost, annual_expected_mileage,
+	acquisition_type, purchase_price, purchase_date, purchase_odometer,
+	purchase_incentives, expected_resale_value, expected_holding_months,
+	created_at, updated_at
+`
+
+func scanVehicle(row pgx.Row, v *models.Vehicle) error {
+	return row.Scan(
+		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
+		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
+		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
+		&v.AnnualInsuranceCost, &v.AnnualExpectedMileage,
+		&v.AcquisitionType, &v.PurchasePrice, &v.PurchaseDate, &v.PurchaseOdometer,
+		&v.PurchaseIncentives, &v.ExpectedResaleValue, &v.ExpectedHoldingMonths,
+		&v.CreatedAt, &v.UpdatedAt,
+	)
+}
+
 func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error {
 	query := `
 		INSERT INTO vehicles (
 			user_id, name, vin, teslamate_car_id, current_odometer,
 			teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
 			teslamate_basic_user, teslamate_basic_pass_encrypted,
-			annual_insurance_cost, annual_expected_mileage
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			annual_insurance_cost, annual_expected_mileage,
+			acquisition_type, purchase_price, purchase_date, purchase_odometer,
+			purchase_incentives, expected_resale_value, expected_holding_months
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING id, created_at, updated_at;
 	`
 	err := r.pool.QueryRow(ctx, query,
@@ -115,6 +140,8 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
 		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
+		v.AcquisitionType, v.PurchasePrice, v.PurchaseDate, v.PurchaseOdometer,
+		v.PurchaseIncentives, v.ExpectedResaleValue, v.ExpectedHoldingMonths,
 	).Scan(&v.ID, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create vehicle: %w", err)
@@ -122,17 +149,8 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 	return nil
 }
 
-func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([]models.Vehicle, error) {
-	query := `
-		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
-		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted,
-		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
-		FROM vehicles
-		WHERE user_id = $1
-		ORDER BY created_at ASC;
-	`
-	rows, err := r.pool.Query(ctx, query, userID)
+func (r *Repository) listVehicles(ctx context.Context, where string, args ...any) ([]models.Vehicle, error) {
+	rows, err := r.pool.Query(ctx, `SELECT `+vehicleColumns+` FROM vehicles WHERE `+where+` ORDER BY created_at ASC;`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list vehicles: %w", err)
 	}
@@ -141,67 +159,25 @@ func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([
 	var list []models.Vehicle
 	for rows.Next() {
 		var v models.Vehicle
-		if err := rows.Scan(
-			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
-			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-			&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
-		); err != nil {
+		if err := scanVehicle(rows, &v); err != nil {
 			return nil, err
 		}
 		list = append(list, v)
 	}
-	return list, nil
+	return list, rows.Err()
+}
+
+func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([]models.Vehicle, error) {
+	return r.listVehicles(ctx, `user_id = $1`, userID)
 }
 
 func (r *Repository) ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models.Vehicle, error) {
-	query := `
-		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
-		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted,
-		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
-		FROM vehicles
-		WHERE teslamate_api_url IS NOT NULL AND teslamate_api_url != ''
-		ORDER BY created_at ASC;
-	`
-	rows, err := r.pool.Query(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list vehicles with teslamate: %w", err)
-	}
-	defer rows.Close()
-
-	var list []models.Vehicle
-	for rows.Next() {
-		var v models.Vehicle
-		if err := rows.Scan(
-			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
-			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-			&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		list = append(list, v)
-	}
-	return list, nil
+	return r.listVehicles(ctx, `teslamate_api_url IS NOT NULL AND teslamate_api_url != ''`)
 }
 
 func (r *Repository) GetVehicleByID(ctx context.Context, id, userID string) (*models.Vehicle, error) {
-	query := `
-		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
-		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted,
-		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
-		FROM vehicles
-		WHERE id = $1 AND user_id = $2;
-	`
 	var v models.Vehicle
-	err := r.pool.QueryRow(ctx, query, id, userID).Scan(
-		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
-		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-		&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
-	)
+	err := scanVehicle(r.pool.QueryRow(ctx, `SELECT `+vehicleColumns+` FROM vehicles WHERE id::text = $1 AND user_id = $2;`, id, userID), &v)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -219,14 +195,18 @@ func (r *Repository) UpdateVehicle(ctx context.Context, v *models.Vehicle) error
 		    teslamate_api_key_encrypted = $7, teslamate_basic_user = $8,
 		    teslamate_basic_pass_encrypted = $9,
 		    annual_insurance_cost = $10, annual_expected_mileage = $11,
+		    acquisition_type = $12, purchase_price = $13, purchase_date = $14, purchase_odometer = $15,
+		    purchase_incentives = $16, expected_resale_value = $17, expected_holding_months = $18,
 		    updated_at = NOW()
-		WHERE id = $12 AND user_id = $13;
+		WHERE id = $19 AND user_id = $20;
 	`
 	tag, err := r.pool.Exec(ctx, query,
 		v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
 		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
+		v.AcquisitionType, v.PurchasePrice, v.PurchaseDate, v.PurchaseOdometer,
+		v.PurchaseIncentives, v.ExpectedResaleValue, v.ExpectedHoldingMonths,
 		v.ID, v.UserID,
 	)
 	if err != nil {
@@ -287,6 +267,7 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		    end_address = EXCLUDED.end_address,
 		    energy_consumed_kwh = EXCLUDED.energy_consumed_kwh,
 		    consumption_kwh_100km = EXCLUDED.consumption_kwh_100km,
+		    deleted_upstream_at = NULL,
 		    updated_at = NOW()
 		RETURNING id, (xmax = 0) AS is_inserted;
 	`
@@ -305,7 +286,7 @@ func (r *Repository) GetLatestTeslaMateDriveStartTime(ctx context.Context, vehic
 	query := `
 		SELECT start_time
 		FROM drives
-		WHERE vehicle_id = $1 AND teslamate_drive_id IS NOT NULL
+		WHERE vehicle_id = $1 AND teslamate_drive_id IS NOT NULL AND deleted_upstream_at IS NULL
 		ORDER BY start_time DESC
 		LIMIT 1;
 	`
@@ -320,14 +301,31 @@ func (r *Repository) GetLatestTeslaMateDriveStartTime(ctx context.Context, vehic
 	return &t, nil
 }
 
-func (r *Repository) ListDrives(ctx context.Context, vehicleID string, tag string, limit, offset int) ([]models.Drive, int, error) {
-	countQuery := `
-		SELECT COUNT(*)
-		FROM drives
-		WHERE vehicle_id = $1 AND ($2 = '' OR $2 = ANY(tags));
-	`
+// DriveFilter narrows drive listings.
+type DriveFilter struct {
+	Tag             string
+	UnqualifiedOnly bool
+}
+
+// HighwayDrivePredicate matches long and fast drives, likely to use toll roads.
+const HighwayDrivePredicate = `drives.distance_km >= 40 AND COALESCE(drives.speed_avg, 0) >= 70`
+
+// Highway-like drives (long and fast) with no toll attached and no explicit "no toll" review.
+const UnqualifiedDrivePredicate = HighwayDrivePredicate + `
+	AND drives.toll_reviewed_at IS NULL
+	AND NOT EXISTS (SELECT 1 FROM drive_expenses de WHERE de.drive_id = drives.id)
+	AND NOT EXISTS (
+		SELECT 1 FROM drive_expenses de
+		JOIN trip_group_drives tgd ON tgd.trip_group_id = de.trip_group_id
+		WHERE tgd.drive_id = drives.id
+	)
+`
+
+func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter DriveFilter, limit, offset int) ([]models.Drive, int, error) {
+	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND ($2 = '' OR $2 = ANY(tags)) AND (NOT $3 OR (` + UnqualifiedDrivePredicate + `))`
+
 	var total int
-	if err := r.pool.QueryRow(ctx, countQuery, vehicleID, tag).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE `+where, vehicleID, filter.Tag, filter.UnqualifiedOnly).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -335,13 +333,13 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, tag strin
 		SELECT id, vehicle_id, teslamate_drive_id, start_time, end_time,
 		       start_odometer, end_odometer, distance_km, duration_min,
 		       speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
-		       consumption_kwh_100km, tags, is_manual, created_at, updated_at
+		       consumption_kwh_100km, tags, is_manual, toll_reviewed_at, created_at, updated_at
 		FROM drives
-		WHERE vehicle_id = $1 AND ($2 = '' OR $2 = ANY(tags))
+		WHERE ` + where + `
 		ORDER BY start_time DESC
-		LIMIT $3 OFFSET $4;
+		LIMIT $4 OFFSET $5;
 	`
-	rows, err := r.pool.Query(ctx, query, vehicleID, tag, limit, offset)
+	rows, err := r.pool.Query(ctx, query, vehicleID, filter.Tag, filter.UnqualifiedOnly, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -355,13 +353,36 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, tag strin
 			&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
 			&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
 			&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
-			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
+			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.TollReviewedAt, &d.CreatedAt, &d.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
 		}
 		list = append(list, d)
 	}
-	return list, total, nil
+	return list, total, rows.Err()
+}
+
+// CountUnqualifiedDrives counts highway-like drives still waiting for a toll qualification.
+func (r *Repository) CountUnqualifiedDrives(ctx context.Context, vehicleID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND `+UnqualifiedDrivePredicate, vehicleID).Scan(&count)
+	return count, err
+}
+
+// SetDriveTollReviewed marks (or unmarks) a drive as explicitly reviewed without toll.
+func (r *Repository) SetDriveTollReviewed(ctx context.Context, driveID, vehicleID string, reviewed bool) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE drives
+		SET toll_reviewed_at = CASE WHEN $1 THEN NOW() ELSE NULL END, updated_at = NOW()
+		WHERE id::text = $2 AND vehicle_id = $3;
+	`, reviewed, driveID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *Repository) UpdateDriveTags(ctx context.Context, driveID, vehicleID string, tags []string) error {
@@ -387,6 +408,17 @@ func (r *Repository) CreateTripGroup(ctx context.Context, tg *models.TripGroup, 
 	}
 	defer tx.Rollback(ctx)
 
+	if err := insertTripGroup(ctx, tx, tg, driveIDs); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func insertTripGroup(ctx context.Context, tx pgx.Tx, tg *models.TripGroup, driveIDs []string) error {
+	if err := ensureDrivesOwned(ctx, tx, tg.VehicleID, driveIDs); err != nil {
+		return err
+	}
+
 	query := `
 		INSERT INTO trip_groups (vehicle_id, name, notes)
 		VALUES ($1, $2, $3)
@@ -395,18 +427,21 @@ func (r *Repository) CreateTripGroup(ctx context.Context, tg *models.TripGroup, 
 	if err := tx.QueryRow(ctx, query, tg.VehicleID, tg.Name, tg.Notes).Scan(&tg.ID, &tg.CreatedAt, &tg.UpdatedAt); err != nil {
 		return err
 	}
+	return linkTripGroupDrives(ctx, tx, tg.ID, driveIDs)
+}
 
-	for i, dID := range driveIDs {
-		_, err := tx.Exec(ctx, `
-			INSERT INTO trip_group_drives (trip_group_id, drive_id, order_index)
-			VALUES ($1, $2, $3);
-		`, tg.ID, dID, i)
-		if err != nil {
-			return fmt.Errorf("failed to link drive to trip group: %w", err)
-		}
+// linkTripGroupDrives links drives to a trip group, ordered chronologically.
+func linkTripGroupDrives(ctx context.Context, tx pgx.Tx, tripGroupID string, driveIDs []string) error {
+	_, err := tx.Exec(ctx, `
+		INSERT INTO trip_group_drives (trip_group_id, drive_id, order_index)
+		SELECT $1, d.id, ROW_NUMBER() OVER (ORDER BY d.start_time) - 1
+		FROM drives d
+		WHERE d.id::text = ANY($2::text[]) AND d.deleted_upstream_at IS NULL;
+	`, tripGroupID, uniqueStrings(driveIDs))
+	if err != nil {
+		return fmt.Errorf("failed to link drives to trip group: %w", err)
 	}
-
-	return tx.Commit(ctx)
+	return nil
 }
 
 func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]models.TripGroup, error) {
@@ -437,31 +472,141 @@ func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]mo
 // Drive Expenses (Tolls, Parking)
 // ============================================================================
 
-func (r *Repository) CreateDriveExpense(ctx context.Context, exp *models.DriveExpense) error {
-	query := `
-		INSERT INTO drive_expenses (vehicle_id, trip_group_id, drive_id, type, amount, currency, date, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		RETURNING id, created_at;
-	`
-	return r.pool.QueryRow(ctx, query,
-		exp.VehicleID, exp.TripGroupID, exp.DriveID, exp.Type,
-		exp.Amount, exp.Currency, exp.Date, exp.Notes,
-	).Scan(&exp.ID, &exp.CreatedAt)
+// AmountEURExpr converts an expense amount to EUR; NULL when a foreign amount has no conversion rate.
+const AmountEURExpr = `(CASE WHEN currency = 'EUR' THEN amount ELSE amount * fx_rate END)`
+
+// SaveDriveExpense creates (exp.ID empty) or updates a drive expense in a single transaction.
+// When groupDriveIDs contains several drives, the expense is attached to a trip group: the group
+// previously dedicated to this expense is resynchronized, otherwise a new group named groupName is created.
+func (r *Repository) SaveDriveExpense(ctx context.Context, exp *models.DriveExpense, groupDriveIDs []string, groupName string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var previousGroupID *string
+	if exp.ID != "" {
+		err := tx.QueryRow(ctx, `
+			SELECT trip_group_id FROM drive_expenses WHERE id::text = $1 AND vehicle_id = $2 FOR UPDATE;
+		`, exp.ID, exp.VehicleID).Scan(&previousGroupID)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
+				return ErrNotFound
+			}
+			return err
+		}
+	}
+
+	ids := uniqueStrings(groupDriveIDs)
+	switch {
+	case len(ids) > 1:
+		if err := ensureDrivesOwned(ctx, tx, exp.VehicleID, ids); err != nil {
+			return err
+		}
+		groupID, err := r.reusableExpenseGroup(ctx, tx, exp, previousGroupID)
+		if err != nil {
+			return err
+		}
+		if groupID != "" {
+			if _, err := tx.Exec(ctx, `DELETE FROM trip_group_drives WHERE trip_group_id = $1;`, groupID); err != nil {
+				return err
+			}
+			if err := linkTripGroupDrives(ctx, tx, groupID, ids); err != nil {
+				return err
+			}
+		} else {
+			tg := &models.TripGroup{VehicleID: exp.VehicleID, Name: groupName, Notes: exp.Notes}
+			if err := insertTripGroup(ctx, tx, tg, ids); err != nil {
+				return err
+			}
+			groupID = tg.ID
+		}
+		exp.TripGroupID = &groupID
+		exp.DriveID = nil
+	case len(ids) == 1:
+		exp.DriveID = &ids[0]
+		exp.TripGroupID = nil
+	}
+
+	if exp.DriveID != nil && *exp.DriveID == "" {
+		exp.DriveID = nil
+	}
+	if exp.TripGroupID != nil && *exp.TripGroupID == "" {
+		exp.TripGroupID = nil
+	}
+	if exp.TripGroupID != nil {
+		exp.DriveID = nil
+		if err := ensureTripGroupOwned(ctx, tx, exp.VehicleID, *exp.TripGroupID); err != nil {
+			return err
+		}
+	}
+	if exp.DriveID != nil {
+		if err := ensureDrivesOwned(ctx, tx, exp.VehicleID, []string{*exp.DriveID}); err != nil {
+			return err
+		}
+	}
+
+	if exp.ID == "" {
+		err = tx.QueryRow(ctx, `
+			INSERT INTO drive_expenses (vehicle_id, trip_group_id, drive_id, type, amount, currency, fx_rate, date, notes)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			RETURNING id, created_at;
+		`, exp.VehicleID, exp.TripGroupID, exp.DriveID, exp.Type,
+			exp.Amount, exp.Currency, exp.FxRate, exp.Date, exp.Notes,
+		).Scan(&exp.ID, &exp.CreatedAt)
+	} else {
+		err = tx.QueryRow(ctx, `
+			UPDATE drive_expenses
+			SET trip_group_id = $1, drive_id = $2, type = $3, amount = $4,
+			    currency = $5, fx_rate = $6, date = $7, notes = $8
+			WHERE id::text = $9 AND vehicle_id = $10
+			RETURNING created_at;
+		`, exp.TripGroupID, exp.DriveID, exp.Type, exp.Amount,
+			exp.Currency, exp.FxRate, exp.Date, exp.Notes,
+			exp.ID, exp.VehicleID,
+		).Scan(&exp.CreatedAt)
+	}
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+// reusableExpenseGroup returns the expense's current trip group when no other expense or carpool uses it.
+func (r *Repository) reusableExpenseGroup(ctx context.Context, tx pgx.Tx, exp *models.DriveExpense, previousGroupID *string) (string, error) {
+	if previousGroupID == nil {
+		return "", nil
+	}
+	var shared bool
+	err := tx.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM drive_expenses WHERE trip_group_id = $1 AND id::text <> $2)
+		    OR EXISTS(SELECT 1 FROM carpool_trips WHERE trip_group_id = $1);
+	`, *previousGroupID, exp.ID).Scan(&shared)
+	if err != nil {
+		return "", err
+	}
+	if shared {
+		return "", nil
+	}
+	return *previousGroupID, nil
 }
 
 func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([]models.DriveExpense, error) {
 	query := `
-		SELECT 
+		SELECT
 			e.id, e.vehicle_id, e.trip_group_id, tg.name,
-			e.drive_id, 
-			CASE 
+			ARRAY(SELECT tgd.drive_id::text FROM trip_group_drives tgd WHERE tgd.trip_group_id = e.trip_group_id ORDER BY tgd.order_index),
+			e.drive_id,
+			CASE
 				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
-				ELSE NULL 
+				ELSE NULL
 			END,
-			e.type, e.amount, e.currency, e.date, e.notes, e.created_at
+			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes, e.created_at
 		FROM drive_expenses e
-		LEFT JOIN drives d ON e.drive_id = d.id
-		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id
+		LEFT JOIN drives d ON e.drive_id = d.id AND d.vehicle_id = e.vehicle_id
+		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id AND tg.vehicle_id = e.vehicle_id
 		WHERE e.vehicle_id = $1
 		ORDER BY e.date DESC;
 	`
@@ -475,51 +620,25 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 	for rows.Next() {
 		var e models.DriveExpense
 		if err := rows.Scan(
-			&e.ID, &e.VehicleID, &e.TripGroupID, &e.TripGroupName,
+			&e.ID, &e.VehicleID, &e.TripGroupID, &e.TripGroupName, &e.TripGroupDriveIDs,
 			&e.DriveID, &e.DriveTitle, &e.Type,
-			&e.Amount, &e.Currency, &e.Date, &e.Notes, &e.CreatedAt,
+			&e.Amount, &e.Currency, &e.FxRate, &e.Date, &e.Notes, &e.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
 		list = append(list, e)
 	}
-	return list, nil
-}
-
-func (r *Repository) UpdateDriveExpense(ctx context.Context, exp *models.DriveExpense) error {
-	query := `
-		UPDATE drive_expenses
-		SET trip_group_id = $1,
-		    drive_id = $2,
-		    type = $3,
-		    amount = $4,
-		    currency = $5,
-		    date = $6,
-		    notes = $7
-		WHERE id = $8 AND vehicle_id = $9;
-	`
-	cmdTag, err := r.pool.Exec(ctx, query,
-		exp.TripGroupID, exp.DriveID, exp.Type,
-		exp.Amount, exp.Currency, exp.Date, exp.Notes,
-		exp.ID, exp.VehicleID,
-	)
-	if err != nil {
-		return err
-	}
-	if cmdTag.RowsAffected() == 0 {
-		return errors.New("expense not found")
-	}
-	return nil
+	return list, rows.Err()
 }
 
 func (r *Repository) DeleteDriveExpense(ctx context.Context, vehicleID, expenseID string) error {
-	query := `DELETE FROM drive_expenses WHERE id = $1 AND vehicle_id = $2;`
+	query := `DELETE FROM drive_expenses WHERE id::text = $1 AND vehicle_id = $2;`
 	cmdTag, err := r.pool.Exec(ctx, query, expenseID, vehicleID)
 	if err != nil {
 		return err
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return errors.New("expense not found")
+		return ErrNotFound
 	}
 	return nil
 }
@@ -528,55 +647,47 @@ func (r *Repository) DeleteDriveExpense(ctx context.Context, vehicleID, expenseI
 // Tires, Wear Logs & Rotations
 // ============================================================================
 
+const tireColumns = `
+	id, vehicle_id, brand, model, dimension, season,
+	purchase_date, purchase_price, current_position,
+	initial_depth_mm, min_legal_depth_mm, dot_code, is_archived,
+	mounted_odometer, initial_distance_km, accumulated_distance_km, estimated_lifespan_km,
+	created_at, updated_at
+`
+
+func scanTire(row pgx.Row, t *models.Tire) error {
+	return row.Scan(
+		&t.ID, &t.VehicleID, &t.Brand, &t.Model, &t.Dimension, &t.Season,
+		&t.PurchaseDate, &t.PurchasePrice, &t.CurrentPosition,
+		&t.InitialDepthMm, &t.MinLegalDepthMm, &t.DotCode, &t.IsArchived,
+		&t.MountedOdometer, &t.InitialDistanceKm, &t.AccumulatedDistanceKm, &t.EstimatedLifespanKm,
+		&t.CreatedAt, &t.UpdatedAt,
+	)
+}
+
+func isMountedPosition(pos models.TirePosition) bool {
+	switch pos {
+	case models.TirePosFL, models.TirePosFR, models.TirePosRL, models.TirePosRR:
+		return true
+	}
+	return false
+}
+
+func isValidTirePosition(pos models.TirePosition) bool {
+	return isMountedPosition(pos) || pos == models.TirePosStorage || pos == models.TirePosDisposed
+}
+
 func (r *Repository) CreateTire(ctx context.Context, t *models.Tire) error {
-	lifespan := t.EstimatedLifespanKm
-	if lifespan <= 0 {
-		lifespan = 40000
-	}
-	query := `
-		INSERT INTO tires (
-			vehicle_id, brand, model, dimension, season,
-			purchase_date, purchase_price, current_position,
-			initial_depth_mm, min_legal_depth_mm, dot_code,
-			mounted_odometer, accumulated_distance_km, estimated_lifespan_km
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-		RETURNING id, created_at, updated_at;
-	`
-	err := r.pool.QueryRow(ctx, query,
-		t.VehicleID, t.Brand, t.Model, t.Dimension, t.Season,
-		t.PurchaseDate, t.PurchasePrice, t.CurrentPosition,
-		t.InitialDepthMm, t.MinLegalDepthMm, t.DotCode,
-		t.MountedOdometer, t.AccumulatedDistanceKm, lifespan,
-	).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
-		return err
-	}
-
-	// If mounted immediately, create initial mount session
-	if t.CurrentPosition != models.TirePosStorage && t.CurrentPosition != models.TirePosDisposed && t.MountedOdometer != nil && t.VehicleID != nil {
-		sessionQuery := `
-			INSERT INTO tire_mount_sessions (
-				tire_id, vehicle_id, position, mounted_date, mounted_odometer
-			) VALUES ($1, $2, $3, $4, $5);
-		`
-		_, _ = r.pool.Exec(ctx, sessionQuery, t.ID, *t.VehicleID, t.CurrentPosition, t.PurchaseDate, *t.MountedOdometer)
-	}
-
-	return nil
+	return r.CreateTiresBatch(ctx, []*models.Tire{t})
 }
 
 func (r *Repository) ListTires(ctx context.Context, vehicleID string) ([]models.Tire, error) {
-	query := `
-		SELECT id, vehicle_id, brand, model, dimension, season,
-		       purchase_date, purchase_price, current_position,
-		       initial_depth_mm, min_legal_depth_mm, dot_code, is_archived,
-		       mounted_odometer, accumulated_distance_km, estimated_lifespan_km,
-		       created_at, updated_at
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+tireColumns+`
 		FROM tires
 		WHERE vehicle_id = $1 AND is_archived = FALSE
 		ORDER BY current_position ASC, purchase_date DESC;
-	`
-	rows, err := r.pool.Query(ctx, query, vehicleID)
+	`, vehicleID)
 	if err != nil {
 		return nil, err
 	}
@@ -585,38 +696,21 @@ func (r *Repository) ListTires(ctx context.Context, vehicleID string) ([]models.
 	var list []models.Tire
 	for rows.Next() {
 		var t models.Tire
-		if err := rows.Scan(
-			&t.ID, &t.VehicleID, &t.Brand, &t.Model, &t.Dimension, &t.Season,
-			&t.PurchaseDate, &t.PurchasePrice, &t.CurrentPosition,
-			&t.InitialDepthMm, &t.MinLegalDepthMm, &t.DotCode, &t.IsArchived,
-			&t.MountedOdometer, &t.AccumulatedDistanceKm, &t.EstimatedLifespanKm,
-			&t.CreatedAt, &t.UpdatedAt,
-		); err != nil {
+		if err := scanTire(rows, &t); err != nil {
 			return nil, err
 		}
 		list = append(list, t)
 	}
-	return list, nil
+	return list, rows.Err()
 }
 
 func (r *Repository) GetTireByID(ctx context.Context, id, vehicleID string) (*models.Tire, error) {
-	query := `
-		SELECT id, vehicle_id, brand, model, dimension, season,
-		       purchase_date, purchase_price, current_position,
-		       initial_depth_mm, min_legal_depth_mm, dot_code, is_archived,
-		       mounted_odometer, accumulated_distance_km, estimated_lifespan_km,
-		       created_at, updated_at
-		FROM tires
-		WHERE id = $1 AND vehicle_id = $2;
-	`
 	var t models.Tire
-	err := r.pool.QueryRow(ctx, query, id, vehicleID).Scan(
-		&t.ID, &t.VehicleID, &t.Brand, &t.Model, &t.Dimension, &t.Season,
-		&t.PurchaseDate, &t.PurchasePrice, &t.CurrentPosition,
-		&t.InitialDepthMm, &t.MinLegalDepthMm, &t.DotCode, &t.IsArchived,
-		&t.MountedOdometer, &t.AccumulatedDistanceKm, &t.EstimatedLifespanKm,
-		&t.CreatedAt, &t.UpdatedAt,
-	)
+	err := scanTire(r.pool.QueryRow(ctx, `
+		SELECT `+tireColumns+`
+		FROM tires
+		WHERE id::text = $1 AND vehicle_id = $2;
+	`, id, vehicleID), &t)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -626,30 +720,58 @@ func (r *Repository) GetTireByID(ctx context.Context, id, vehicleID string) (*mo
 	return &t, nil
 }
 
+// UpdateTire updates descriptive tire fields and recomputes its lifetime distance.
+// Position changes go through mount sessions / rotations, never through this method.
 func (r *Repository) UpdateTire(ctx context.Context, t *models.Tire) error {
 	lifespan := t.EstimatedLifespanKm
 	if lifespan <= 0 {
 		lifespan = 40000
 	}
-	query := `
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
 		UPDATE tires
 		SET brand = $1, model = $2, dimension = $3, season = $4,
-		    purchase_date = $5, purchase_price = $6, current_position = $7,
-		    initial_depth_mm = $8, min_legal_depth_mm = $9, dot_code = $10,
-		    mounted_odometer = $11, accumulated_distance_km = $12, estimated_lifespan_km = $13,
+		    purchase_date = $5, purchase_price = $6,
+		    initial_depth_mm = $7, min_legal_depth_mm = $8, dot_code = $9,
+		    initial_distance_km = $10, estimated_lifespan_km = $11,
 		    updated_at = NOW()
-		WHERE id = $14;
-	`
-	_, err := r.pool.Exec(ctx, query,
+		WHERE id::text = $12 AND vehicle_id = $13;
+	`,
 		t.Brand, t.Model, t.Dimension, t.Season,
-		t.PurchaseDate, t.PurchasePrice, t.CurrentPosition,
+		t.PurchaseDate, t.PurchasePrice,
 		t.InitialDepthMm, t.MinLegalDepthMm, t.DotCode,
-		t.MountedOdometer, t.AccumulatedDistanceKm, lifespan,
-		t.ID,
+		t.InitialDistanceKm, lifespan,
+		t.ID, t.VehicleID,
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := recalcTireDistance(ctx, tx, t.ID); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	updated, err := r.GetTireByID(ctx, t.ID, *t.VehicleID)
+	if err != nil {
+		return err
+	}
+	*t = *updated
+	return nil
 }
 
+// CreateTiresBatch inserts tires and their initial mount sessions atomically.
+// AccumulatedDistanceKm provided at creation is recorded as the tire's initial distance.
 func (r *Repository) CreateTiresBatch(ctx context.Context, tires []*models.Tire) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -662,25 +784,38 @@ func (r *Repository) CreateTiresBatch(ctx context.Context, tires []*models.Tire)
 		if lifespan <= 0 {
 			lifespan = 40000
 		}
+		if !isValidTirePosition(t.CurrentPosition) {
+			return validationErrorf("position de pneu invalide : %s", t.CurrentPosition)
+		}
+		if isMountedPosition(t.CurrentPosition) && (t.MountedOdometer == nil || t.VehicleID == nil) {
+			return validationErrorf("un pneu monté requiert l'odomètre de montage")
+		}
+		if !isMountedPosition(t.CurrentPosition) {
+			t.MountedOdometer = nil
+		}
+		t.InitialDistanceKm = math.Max(0, t.AccumulatedDistanceKm)
+
 		query := `
 			INSERT INTO tires (
 				vehicle_id, brand, model, dimension, season,
 				purchase_date, purchase_price, current_position,
 				initial_depth_mm, min_legal_depth_mm, dot_code,
-				mounted_odometer, accumulated_distance_km, estimated_lifespan_km
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+				mounted_odometer, initial_distance_km, accumulated_distance_km, estimated_lifespan_km
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $13, $14)
 			RETURNING id, created_at, updated_at;
 		`
 		if err := tx.QueryRow(ctx, query,
 			t.VehicleID, t.Brand, t.Model, t.Dimension, t.Season,
 			t.PurchaseDate, t.PurchasePrice, t.CurrentPosition,
 			t.InitialDepthMm, t.MinLegalDepthMm, t.DotCode,
-			t.MountedOdometer, t.AccumulatedDistanceKm, lifespan,
+			t.MountedOdometer, t.InitialDistanceKm, lifespan,
 		).Scan(&t.ID, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return fmt.Errorf("failed to batch insert tire: %w", err)
+			return fmt.Errorf("failed to insert tire: %w", err)
 		}
+		t.AccumulatedDistanceKm = t.InitialDistanceKm
+		t.EstimatedLifespanKm = lifespan
 
-		if t.CurrentPosition != models.TirePosStorage && t.CurrentPosition != models.TirePosDisposed && t.MountedOdometer != nil && t.VehicleID != nil {
+		if isMountedPosition(t.CurrentPosition) {
 			sessionQuery := `
 				INSERT INTO tire_mount_sessions (
 					tire_id, vehicle_id, position, mounted_date, mounted_odometer
@@ -700,7 +835,7 @@ func (r *Repository) ListTireMountSessions(ctx context.Context, tireID string) (
 		SELECT id, tire_id, vehicle_id, position, mounted_date, mounted_odometer,
 		       dismounted_date, dismounted_odometer, distance_km, notes, created_at, updated_at
 		FROM tire_mount_sessions
-		WHERE tire_id = $1
+		WHERE tire_id::text = $1
 		ORDER BY mounted_date DESC;
 	`
 	rows, err := r.pool.Query(ctx, query, tireID)
@@ -723,226 +858,342 @@ func (r *Repository) ListTireMountSessions(ctx context.Context, tireID string) (
 	if list == nil {
 		list = []models.TireMountSession{}
 	}
-	return list, nil
+	return list, rows.Err()
+}
+
+func normalizeSessionDistance(s *models.TireMountSession) error {
+	if s.DismountedOdometer != nil {
+		if *s.DismountedOdometer < s.MountedOdometer {
+			return validationErrorf("l'odomètre de démontage est inférieur à celui du montage")
+		}
+		// Odometers win over a manual distance; a manual distance is kept when odometers are unknown.
+		if *s.DismountedOdometer > s.MountedOdometer {
+			s.DistanceKm = *s.DismountedOdometer - s.MountedOdometer
+		}
+	} else if s.DismountedDate == nil {
+		s.DistanceKm = 0
+	}
+	if s.DistanceKm < 0 {
+		return validationErrorf("la distance d'une session ne peut pas être négative")
+	}
+	return nil
 }
 
 func (r *Repository) CreateTireMountSession(ctx context.Context, s *models.TireMountSession) error {
-	if s.DistanceKm == 0 && s.DismountedOdometer != nil && *s.DismountedOdometer > s.MountedOdometer {
-		s.DistanceKm = *s.DismountedOdometer - s.MountedOdometer
-	}
-	query := `
-		INSERT INTO tire_mount_sessions (
-			tire_id, vehicle_id, position, mounted_date, mounted_odometer,
-			dismounted_date, dismounted_odometer, distance_km, notes
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, created_at, updated_at;
-	`
-	err := r.pool.QueryRow(ctx, query,
-		s.TireID, s.VehicleID, s.Position, s.MountedDate, s.MountedOdometer,
-		s.DismountedDate, s.DismountedOdometer, s.DistanceKm, s.Notes,
-	).Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
-	if err != nil {
+	if err := normalizeSessionDistance(s); err != nil {
 		return err
 	}
-	return r.RecalculateTireLifetimeDistance(ctx, s.TireID)
-}
-
-func (r *Repository) UpdateTireMountSession(ctx context.Context, s *models.TireMountSession) error {
-	if s.DistanceKm == 0 && s.DismountedOdometer != nil && *s.DismountedOdometer > s.MountedOdometer {
-		s.DistanceKm = *s.DismountedOdometer - s.MountedOdometer
-	}
-	query := `
-		UPDATE tire_mount_sessions
-		SET position = $1, mounted_date = $2, mounted_odometer = $3,
-		    dismounted_date = $4, dismounted_odometer = $5, distance_km = $6, notes = $7,
-		    updated_at = NOW()
-		WHERE id = $8 AND tire_id = $9;
-	`
-	_, err := r.pool.Exec(ctx, query,
-		s.Position, s.MountedDate, s.MountedOdometer,
-		s.DismountedDate, s.DismountedOdometer, s.DistanceKm, s.Notes,
-		s.ID, s.TireID,
-	)
-	if err != nil {
-		return err
-	}
-	return r.RecalculateTireLifetimeDistance(ctx, s.TireID)
-}
-
-func (r *Repository) DeleteTireMountSession(ctx context.Context, sessionID, tireID string) error {
-	query := `DELETE FROM tire_mount_sessions WHERE id = $1 AND tire_id = $2;`
-	cmd, err := r.pool.Exec(ctx, query, sessionID, tireID)
-	if err != nil {
-		return err
-	}
-	if cmd.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return r.RecalculateTireLifetimeDistance(ctx, tireID)
-}
-
-func (r *Repository) RecalculateTireLifetimeDistance(ctx context.Context, tireID string) error {
-	var totalFinishedKm float64
-	_ = r.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(distance_km), 0)
-		FROM tire_mount_sessions
-		WHERE tire_id = $1 AND dismounted_date IS NOT NULL;
-	`, tireID).Scan(&totalFinishedKm)
-
-	var activeMountedOdometer *float64
-	_ = r.pool.QueryRow(ctx, `
-		SELECT mounted_odometer
-		FROM tire_mount_sessions
-		WHERE tire_id = $1 AND dismounted_date IS NULL
-		ORDER BY mounted_date DESC LIMIT 1;
-	`, tireID).Scan(&activeMountedOdometer)
-
-	_, err := r.pool.Exec(ctx, `
-		UPDATE tires
-		SET accumulated_distance_km = $1,
-		    mounted_odometer = $2,
-		    updated_at = NOW()
-		WHERE id = $3;
-	`, totalFinishedKm, activeMountedOdometer, tireID)
-	return err
-}
-
-func (r *Repository) QuickRotateTires(ctx context.Context, vehicleID string, mode string, odometer float64, swapWithPackTireIDs []string) error {
-	currentTires, err := r.ListTires(ctx, vehicleID)
-	if err != nil {
-		return err
-	}
-
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
+	if err := ensureTiresOwned(ctx, tx, s.VehicleID, []string{s.TireID}); err != nil {
+		return ErrNotFound
+	}
+	err = tx.QueryRow(ctx, `
+		INSERT INTO tire_mount_sessions (
+			tire_id, vehicle_id, position, mounted_date, mounted_odometer,
+			dismounted_date, dismounted_odometer, distance_km, notes
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id, created_at, updated_at;
+	`,
+		s.TireID, s.VehicleID, s.Position, s.MountedDate, s.MountedOdometer,
+		s.DismountedDate, s.DismountedOdometer, s.DistanceKm, s.Notes,
+	).Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		return err
+	}
+	if err := recalcTireDistance(ctx, tx, s.TireID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) UpdateTireMountSession(ctx context.Context, s *models.TireMountSession) error {
+	if err := normalizeSessionDistance(s); err != nil {
+		return err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE tire_mount_sessions s
+		SET position = $1, mounted_date = $2, mounted_odometer = $3,
+		    dismounted_date = $4, dismounted_odometer = $5, distance_km = $6, notes = $7,
+		    updated_at = NOW()
+		FROM tires t
+		WHERE s.id::text = $8 AND s.tire_id = t.id AND t.id::text = $9 AND t.vehicle_id = $10;
+	`,
+		s.Position, s.MountedDate, s.MountedOdometer,
+		s.DismountedDate, s.DismountedOdometer, s.DistanceKm, s.Notes,
+		s.ID, s.TireID, s.VehicleID,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := recalcTireDistance(ctx, tx, s.TireID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) DeleteTireMountSession(ctx context.Context, vehicleID, sessionID, tireID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		DELETE FROM tire_mount_sessions s
+		USING tires t
+		WHERE s.id::text = $1 AND s.tire_id = t.id AND t.id::text = $2 AND t.vehicle_id = $3;
+	`, sessionID, tireID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if err := recalcTireDistance(ctx, tx, tireID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// recalcTireDistance derives accumulated distance (initial + closed sessions) and the active mount odometer.
+func recalcTireDistance(ctx context.Context, tx pgx.Tx, tireID string) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE tires t
+		SET accumulated_distance_km = t.initial_distance_km + COALESCE((
+		        SELECT SUM(s.distance_km) FROM tire_mount_sessions s
+		        WHERE s.tire_id = t.id AND s.dismounted_date IS NOT NULL
+		    ), 0),
+		    mounted_odometer = (
+		        SELECT s.mounted_odometer FROM tire_mount_sessions s
+		        WHERE s.tire_id = t.id AND s.dismounted_date IS NULL
+		        ORDER BY s.mounted_date DESC LIMIT 1
+		    ),
+		    updated_at = NOW()
+		WHERE t.id::text = $1;
+	`, tireID)
+	if err != nil {
+		return fmt.Errorf("failed to recalculate tire distance: %w", err)
+	}
+	return nil
+}
+
+// QuickRotateTires applies a predefined rotation or a seasonal pack swap.
+func (r *Repository) QuickRotateTires(ctx context.Context, vehicleID string, mode string, odometer float64, swapWithPackTireIDs []string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	current, err := lockVehicleTires(ctx, tx, vehicleID)
+	if err != nil {
+		return err
+	}
+
 	mountedMap := make(map[models.TirePosition]*models.Tire)
-	for i := range currentTires {
-		t := &currentTires[i]
-		if t.CurrentPosition != models.TirePosStorage && t.CurrentPosition != models.TirePosDisposed {
+	for _, t := range current {
+		if isMountedPosition(t.CurrentPosition) {
 			mountedMap[t.CurrentPosition] = t
 		}
 	}
 
 	newPositions := make(map[string]models.TirePosition)
-	now := time.Now().UTC()
+	swap := func(a, b models.TirePosition) {
+		if t, ok := mountedMap[a]; ok {
+			newPositions[t.ID] = b
+		}
+		if t, ok := mountedMap[b]; ok {
+			newPositions[t.ID] = a
+		}
+	}
 
 	switch mode {
 	case "FRONT_BACK":
-		if fl, ok := mountedMap[models.TirePosFL]; ok {
-			newPositions[fl.ID] = models.TirePosRL
-		}
-		if rl, ok := mountedMap[models.TirePosRL]; ok {
-			newPositions[rl.ID] = models.TirePosFL
-		}
-		if fr, ok := mountedMap[models.TirePosFR]; ok {
-			newPositions[fr.ID] = models.TirePosRR
-		}
-		if rr, ok := mountedMap[models.TirePosRR]; ok {
-			newPositions[rr.ID] = models.TirePosFR
-		}
+		swap(models.TirePosFL, models.TirePosRL)
+		swap(models.TirePosFR, models.TirePosRR)
 	case "CROSS":
-		if fl, ok := mountedMap[models.TirePosFL]; ok {
-			newPositions[fl.ID] = models.TirePosRR
-		}
-		if rr, ok := mountedMap[models.TirePosRR]; ok {
-			newPositions[rr.ID] = models.TirePosFL
-		}
-		if fr, ok := mountedMap[models.TirePosFR]; ok {
-			newPositions[fr.ID] = models.TirePosRL
-		}
-		if rl, ok := mountedMap[models.TirePosRL]; ok {
-			newPositions[rl.ID] = models.TirePosFR
-		}
+		swap(models.TirePosFL, models.TirePosRR)
+		swap(models.TirePosFR, models.TirePosRL)
 	case "SWAP_PACK":
+		ids := uniqueStrings(swapWithPackTireIDs)
+		if len(ids) == 0 || len(ids) > 4 {
+			return validationErrorf("un échange de train requiert entre 1 et 4 pneus")
+		}
 		for _, t := range mountedMap {
 			newPositions[t.ID] = models.TirePosStorage
 		}
 		positions := []models.TirePosition{models.TirePosFL, models.TirePosFR, models.TirePosRL, models.TirePosRR}
-		for i, tireID := range swapWithPackTireIDs {
-			if i < len(positions) {
-				newPositions[tireID] = positions[i]
+		for i, tireID := range ids {
+			t, ok := current[tireID]
+			if !ok {
+				return ErrForeignReference
 			}
+			if isMountedPosition(t.CurrentPosition) || t.CurrentPosition == models.TirePosDisposed {
+				return validationErrorf("le pneu %s n'est pas en stockage", tireID)
+			}
+			newPositions[tireID] = positions[i]
 		}
 	default:
-		return fmt.Errorf("unknown rotation mode: %s", mode)
+		return validationErrorf("mode de permutation inconnu : %s", mode)
 	}
 
-	mappingJSON := make(map[string]any)
-	for tireID, newPos := range newPositions {
-		mappingJSON[string(newPos)] = tireID
-
-		var currentTire *models.Tire
-		for i := range currentTires {
-			if currentTires[i].ID == tireID {
-				currentTire = &currentTires[i]
-				break
-			}
-		}
-
-		if currentTire != nil {
-			if currentTire.CurrentPosition != models.TirePosStorage && newPos == models.TirePosStorage {
-				var runKm float64
-				if currentTire.MountedOdometer != nil && odometer > *currentTire.MountedOdometer {
-					runKm = odometer - *currentTire.MountedOdometer
-				}
-				_, _ = tx.Exec(ctx, `
-					UPDATE tire_mount_sessions
-					SET dismounted_date = $1, dismounted_odometer = $2, distance_km = $3, updated_at = NOW()
-					WHERE tire_id = $4 AND dismounted_date IS NULL;
-				`, now, odometer, runKm, tireID)
-
-				newAcc := currentTire.AccumulatedDistanceKm + runKm
-				_, _ = tx.Exec(ctx, `
-					UPDATE tires
-					SET current_position = $1, mounted_odometer = NULL, accumulated_distance_km = $2, updated_at = NOW()
-					WHERE id = $3;
-				`, newPos, newAcc, tireID)
-			} else if newPos != models.TirePosStorage {
-				if currentTire.CurrentPosition != models.TirePosStorage {
-					var runKm float64
-					if currentTire.MountedOdometer != nil && odometer > *currentTire.MountedOdometer {
-						runKm = odometer - *currentTire.MountedOdometer
-					}
-					_, _ = tx.Exec(ctx, `
-						UPDATE tire_mount_sessions
-						SET dismounted_date = $1, dismounted_odometer = $2, distance_km = $3, updated_at = NOW()
-						WHERE tire_id = $4 AND dismounted_date IS NULL;
-					`, now, odometer, runKm, tireID)
-					currentTire.AccumulatedDistanceKm += runKm
-				}
-
-				_, _ = tx.Exec(ctx, `
-					INSERT INTO tire_mount_sessions (
-						tire_id, vehicle_id, position, mounted_date, mounted_odometer
-					) VALUES ($1, $2, $3, $4, $5);
-				`, tireID, vehicleID, newPos, now, odometer)
-
-				_, _ = tx.Exec(ctx, `
-					UPDATE tires
-					SET current_position = $1, mounted_odometer = $2, accumulated_distance_km = $3, updated_at = NOW()
-					WHERE id = $4;
-				`, newPos, odometer, currentTire.AccumulatedDistanceKm, tireID)
-			}
-		}
-	}
-
-	mapBytes, _ := json.Marshal(mappingJSON)
-	_, _ = tx.Exec(ctx, `
-		INSERT INTO tire_rotations (vehicle_id, date, odometer, mapping_json, notes)
-		VALUES ($1, $2, $3, $4, $5);
-	`, vehicleID, now, odometer, mapBytes, fmt.Sprintf("Permutation rapide: %s", mode))
-
-	return tx.Commit(ctx)
+	notes := fmt.Sprintf("Permutation rapide: %s", mode)
+	return r.applyTirePositions(ctx, tx, vehicleID, current, newPositions, time.Now().UTC(), odometer, &notes)
 }
 
-func (r *Repository) UpdateTirePosition(ctx context.Context, tireID string, pos models.TirePosition) error {
-	query := `UPDATE tires SET current_position = $1, updated_at = NOW() WHERE id = $2;`
-	_, err := r.pool.Exec(ctx, query, pos, tireID)
-	return err
+// AddTireRotation applies an explicit position mapping ({"FL": "<tire id>", ...}).
+func (r *Repository) AddTireRotation(ctx context.Context, rot *models.TireRotation) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	current, err := lockVehicleTires(ctx, tx, rot.VehicleID)
+	if err != nil {
+		return err
+	}
+
+	newPositions := make(map[string]models.TirePosition)
+	for posStr, tireIDVal := range rot.MappingJSON {
+		pos := models.TirePosition(posStr)
+		tireID, ok := tireIDVal.(string)
+		if !ok || tireID == "" {
+			continue
+		}
+		if !isValidTirePosition(pos) {
+			return validationErrorf("position de pneu invalide : %s", posStr)
+		}
+		if _, owned := current[tireID]; !owned {
+			return ErrForeignReference
+		}
+		newPositions[tireID] = pos
+	}
+
+	return r.applyTirePositions(ctx, tx, rot.VehicleID, current, newPositions, rot.Date, rot.Odometer, rot.Notes)
+}
+
+func lockVehicleTires(ctx context.Context, tx pgx.Tx, vehicleID string) (map[string]*models.Tire, error) {
+	rows, err := tx.Query(ctx, `
+		SELECT `+tireColumns+`
+		FROM tires
+		WHERE vehicle_id = $1 AND is_archived = FALSE
+		FOR UPDATE;
+	`, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tires := make(map[string]*models.Tire)
+	for rows.Next() {
+		var t models.Tire
+		if err := scanTire(rows, &t); err != nil {
+			return nil, err
+		}
+		tires[t.ID] = &t
+	}
+	return tires, rows.Err()
+}
+
+// applyTirePositions closes/opens mount sessions for every moved tire, updates positions,
+// recomputes distances and records the rotation, all inside the caller's transaction.
+func (r *Repository) applyTirePositions(ctx context.Context, tx pgx.Tx, vehicleID string, current map[string]*models.Tire, newPositions map[string]models.TirePosition, at time.Time, odometer float64, notes *string) error {
+	if len(newPositions) == 0 {
+		return validationErrorf("aucun pneu à déplacer")
+	}
+	if odometer <= 0 {
+		return validationErrorf("un relevé d'odomètre valide est requis")
+	}
+	for tireID := range newPositions {
+		if t := current[tireID]; t.MountedOdometer != nil && odometer < *t.MountedOdometer {
+			return validationErrorf("l'odomètre (%.0f km) est inférieur à l'odomètre de montage du pneu %s (%.0f km)", odometer, tireID, *t.MountedOdometer)
+		}
+	}
+
+	// Two tires must never end up on the same wheel.
+	finalPositions := make(map[models.TirePosition]string)
+	for id, t := range current {
+		pos := t.CurrentPosition
+		if p, moved := newPositions[id]; moved {
+			pos = p
+		}
+		if isMountedPosition(pos) {
+			if other, taken := finalPositions[pos]; taken {
+				return validationErrorf("la position %s serait occupée par deux pneus (%s et %s)", pos, other, id)
+			}
+			finalPositions[pos] = id
+		}
+	}
+
+	mapping := make(map[string]any)
+	var stored []string
+	for tireID, newPos := range newPositions {
+		t := current[tireID]
+		if newPos == t.CurrentPosition {
+			continue
+		}
+		if isMountedPosition(newPos) {
+			mapping[string(newPos)] = tireID
+		} else {
+			stored = append(stored, tireID)
+		}
+
+		if isMountedPosition(t.CurrentPosition) {
+			if _, err := tx.Exec(ctx, `
+				UPDATE tire_mount_sessions
+				SET dismounted_date = $1, dismounted_odometer = $2,
+				    distance_km = GREATEST($2 - mounted_odometer, 0), updated_at = NOW()
+				WHERE tire_id = $3 AND dismounted_date IS NULL;
+			`, at, odometer, tireID); err != nil {
+				return fmt.Errorf("failed to close mount session of tire %s: %w", tireID, err)
+			}
+		}
+		if isMountedPosition(newPos) {
+			if _, err := tx.Exec(ctx, `
+				INSERT INTO tire_mount_sessions (tire_id, vehicle_id, position, mounted_date, mounted_odometer)
+				VALUES ($1, $2, $3, $4, $5);
+			`, tireID, vehicleID, newPos, at, odometer); err != nil {
+				return fmt.Errorf("failed to open mount session of tire %s: %w", tireID, err)
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE tires SET current_position = $1, updated_at = NOW() WHERE id = $2;`, newPos, tireID); err != nil {
+			return fmt.Errorf("failed to update position of tire %s: %w", tireID, err)
+		}
+		if err := recalcTireDistance(ctx, tx, tireID); err != nil {
+			return err
+		}
+	}
+	if len(stored) > 0 {
+		mapping[string(models.TirePosStorage)] = stored
+	}
+
+	mapBytes, err := json.Marshal(mapping)
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO tire_rotations (vehicle_id, date, odometer, mapping_json, notes)
+		VALUES ($1, $2, $3, $4, $5);
+	`, vehicleID, at, odometer, mapBytes, notes); err != nil {
+		return fmt.Errorf("failed to record tire rotation: %w", err)
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (r *Repository) AddTireLog(ctx context.Context, l *models.TireLog) error {
@@ -958,7 +1209,7 @@ func (r *Repository) ListTireLogs(ctx context.Context, tireID string) ([]models.
 	query := `
 		SELECT id, tire_id, date, odometer, depth_mm, notes, created_at
 		FROM tire_logs
-		WHERE tire_id = $1
+		WHERE tire_id::text = $1
 		ORDER BY date DESC;
 	`
 	rows, err := r.pool.Query(ctx, query, tireID)
@@ -975,41 +1226,7 @@ func (r *Repository) ListTireLogs(ctx context.Context, tireID string) ([]models.
 		}
 		list = append(list, l)
 	}
-	return list, nil
-}
-
-func (r *Repository) AddTireRotation(ctx context.Context, rot *models.TireRotation) error {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	mappingBytes, err := json.Marshal(rot.MappingJSON)
-	if err != nil {
-		return fmt.Errorf("invalid mapping JSON: %w", err)
-	}
-
-	query := `
-		INSERT INTO tire_rotations (vehicle_id, date, odometer, mapping_json, notes)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, created_at;
-	`
-	if err := tx.QueryRow(ctx, query, rot.VehicleID, rot.Date, rot.Odometer, mappingBytes, rot.Notes).Scan(&rot.ID, &rot.CreatedAt); err != nil {
-		return err
-	}
-
-	// Update positions for each tire mapped
-	for posStr, tireIDVal := range rot.MappingJSON {
-		if tireID, ok := tireIDVal.(string); ok && tireID != "" {
-			_, err := tx.Exec(ctx, `UPDATE tires SET current_position = $1, updated_at = NOW() WHERE id = $2;`, posStr, tireID)
-			if err != nil {
-				return fmt.Errorf("failed to update tire position during rotation: %w", err)
-			}
-		}
-	}
-
-	return tx.Commit(ctx)
+	return list, rows.Err()
 }
 
 // ============================================================================
@@ -1019,21 +1236,21 @@ func (r *Repository) AddTireRotation(ctx context.Context, rot *models.TireRotati
 func (r *Repository) CreateMaintenanceExpense(ctx context.Context, m *models.MaintenanceExpense) error {
 	query := `
 		INSERT INTO maintenance_expenses (
-			vehicle_id, category, amount, currency, date,
-			odometer, is_recurring, recurrence_interval_months, description
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			vehicle_id, category, amount, currency, fx_rate, date,
+			odometer, is_recurring, recurrence_interval_months, recurrence_end_date, description
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING id, created_at, updated_at;
 	`
 	return r.pool.QueryRow(ctx, query,
-		m.VehicleID, m.Category, m.Amount, m.Currency, m.Date,
-		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.Description,
+		m.VehicleID, m.Category, m.Amount, m.Currency, m.FxRate, m.Date,
+		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.RecurrenceEndDate, m.Description,
 	).Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt)
 }
 
 func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID string) ([]models.MaintenanceExpense, error) {
 	query := `
-		SELECT id, vehicle_id, category, amount, currency, date,
-		       odometer, is_recurring, recurrence_interval_months, description,
+		SELECT id, vehicle_id, category, amount, currency, fx_rate, date,
+		       odometer, is_recurring, recurrence_interval_months, recurrence_end_date, description,
 		       created_at, updated_at
 		FROM maintenance_expenses
 		WHERE vehicle_id = $1
@@ -1049,15 +1266,15 @@ func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID stri
 	for rows.Next() {
 		var m models.MaintenanceExpense
 		if err := rows.Scan(
-			&m.ID, &m.VehicleID, &m.Category, &m.Amount, &m.Currency, &m.Date,
-			&m.Odometer, &m.IsRecurring, &m.RecurrenceIntervalMonths, &m.Description,
+			&m.ID, &m.VehicleID, &m.Category, &m.Amount, &m.Currency, &m.FxRate, &m.Date,
+			&m.Odometer, &m.IsRecurring, &m.RecurrenceIntervalMonths, &m.RecurrenceEndDate, &m.Description,
 			&m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
 		list = append(list, m)
 	}
-	return list, nil
+	return list, rows.Err()
 }
 
 func (r *Repository) UpdateMaintenanceExpense(ctx context.Context, m *models.MaintenanceExpense) error {
@@ -1066,36 +1283,36 @@ func (r *Repository) UpdateMaintenanceExpense(ctx context.Context, m *models.Mai
 		SET category = $1,
 		    amount = $2,
 		    currency = $3,
-		    date = $4,
-		    odometer = $5,
-		    is_recurring = $6,
-		    recurrence_interval_months = $7,
-		    description = $8,
+		    fx_rate = $4,
+		    date = $5,
+		    odometer = $6,
+		    is_recurring = $7,
+		    recurrence_interval_months = $8,
+		    recurrence_end_date = $9,
+		    description = $10,
 		    updated_at = NOW()
-		WHERE id = $9 AND vehicle_id = $10;
+		WHERE id::text = $11 AND vehicle_id = $12
+		RETURNING created_at, updated_at;
 	`
-	cmdTag, err := r.pool.Exec(ctx, query,
-		m.Category, m.Amount, m.Currency, m.Date,
-		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.Description,
+	err := r.pool.QueryRow(ctx, query,
+		m.Category, m.Amount, m.Currency, m.FxRate, m.Date,
+		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.RecurrenceEndDate, m.Description,
 		m.ID, m.VehicleID,
-	)
-	if err != nil {
-		return err
+	).Scan(&m.CreatedAt, &m.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
 	}
-	if cmdTag.RowsAffected() == 0 {
-		return errors.New("maintenance expense not found")
-	}
-	return nil
+	return err
 }
 
 func (r *Repository) DeleteMaintenanceExpense(ctx context.Context, vehicleID, maintenanceID string) error {
-	query := `DELETE FROM maintenance_expenses WHERE id = $1 AND vehicle_id = $2;`
+	query := `DELETE FROM maintenance_expenses WHERE id::text = $1 AND vehicle_id = $2;`
 	cmdTag, err := r.pool.Exec(ctx, query, maintenanceID, vehicleID)
 	if err != nil {
 		return err
 	}
 	if cmdTag.RowsAffected() == 0 {
-		return errors.New("maintenance expense not found")
+		return ErrNotFound
 	}
 	return nil
 }
@@ -1104,21 +1321,23 @@ func (r *Repository) DeleteMaintenanceExpense(ctx context.Context, vehicleID, ma
 // Charges
 // ============================================================================
 
+// UpsertTeslaMateCharge inserts or refreshes a TeslaMate charge. A cost entered manually is never overwritten.
 func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.ChargeLog) (bool, error) {
 	query := `
 		INSERT INTO charge_logs (
 			vehicle_id, teslamate_charge_id, date, end_date,
-			address, kwh_added, kwh_used, cost, currency, odometer, is_manual
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, FALSE)
+			address, kwh_added, kwh_used, cost, cost_source, currency, odometer, is_manual
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'TESLAMATE', $9, $10, FALSE)
 		ON CONFLICT (vehicle_id, teslamate_charge_id) DO UPDATE
 		SET date = EXCLUDED.date,
 		    end_date = EXCLUDED.end_date,
 		    address = EXCLUDED.address,
 		    kwh_added = EXCLUDED.kwh_added,
 		    kwh_used = EXCLUDED.kwh_used,
-		    cost = EXCLUDED.cost,
-		    currency = EXCLUDED.currency,
-		    odometer = EXCLUDED.odometer
+		    cost = CASE WHEN charge_logs.cost_source = 'MANUAL' THEN charge_logs.cost ELSE EXCLUDED.cost END,
+		    currency = CASE WHEN charge_logs.cost_source = 'MANUAL' THEN charge_logs.currency ELSE EXCLUDED.currency END,
+		    odometer = EXCLUDED.odometer,
+		    deleted_upstream_at = NULL
 		RETURNING id, (xmax = 0) AS is_inserted;
 	`
 	var isInserted bool
@@ -1133,7 +1352,7 @@ func (r *Repository) GetLatestTeslaMateChargeDate(ctx context.Context, vehicleID
 	query := `
 		SELECT date
 		FROM charge_logs
-		WHERE vehicle_id = $1 AND teslamate_charge_id IS NOT NULL
+		WHERE vehicle_id = $1 AND teslamate_charge_id IS NOT NULL AND deleted_upstream_at IS NULL
 		ORDER BY date DESC
 		LIMIT 1;
 	`
@@ -1148,21 +1367,34 @@ func (r *Repository) GetLatestTeslaMateChargeDate(ctx context.Context, vehicleID
 	return &t, nil
 }
 
-func (r *Repository) ListCharges(ctx context.Context, vehicleID string, limit, offset int) ([]models.ChargeLog, int, error) {
+const chargeColumns = `
+	id, vehicle_id, teslamate_charge_id, date, end_date,
+	address, kwh_added, kwh_used, cost, cost_source, currency, fx_rate, odometer, is_manual, notes, created_at
+`
+
+func scanCharge(row pgx.Row, c *models.ChargeLog) error {
+	return row.Scan(
+		&c.ID, &c.VehicleID, &c.TeslaMateChargeID, &c.Date, &c.EndDate,
+		&c.Address, &c.KwhAdded, &c.KwhUsed, &c.Cost, &c.CostSource, &c.Currency, &c.FxRate, &c.Odometer,
+		&c.IsManual, &c.Notes, &c.CreatedAt,
+	)
+}
+
+// ListCharges lists charges; missingCostOnly restricts to charges whose cost is still unknown.
+func (r *Repository) ListCharges(ctx context.Context, vehicleID string, missingCostOnly bool, limit, offset int) ([]models.ChargeLog, int, error) {
+	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND (NOT $2 OR cost IS NULL)`
 	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE vehicle_id = $1;`, vehicleID).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE `+where, vehicleID, missingCostOnly).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	query := `
-		SELECT id, vehicle_id, teslamate_charge_id, date, end_date,
-		       address, kwh_added, kwh_used, cost, currency, odometer, is_manual, created_at
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+chargeColumns+`
 		FROM charge_logs
-		WHERE vehicle_id = $1
+		WHERE `+where+`
 		ORDER BY date DESC
-		LIMIT $2 OFFSET $3;
-	`
-	rows, err := r.pool.Query(ctx, query, vehicleID, limit, offset)
+		LIMIT $3 OFFSET $4;
+	`, vehicleID, missingCostOnly, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -1171,16 +1403,107 @@ func (r *Repository) ListCharges(ctx context.Context, vehicleID string, limit, o
 	var list []models.ChargeLog
 	for rows.Next() {
 		var c models.ChargeLog
-		if err := rows.Scan(
-			&c.ID, &c.VehicleID, &c.TeslaMateChargeID, &c.Date, &c.EndDate,
-			&c.Address, &c.KwhAdded, &c.KwhUsed, &c.Cost, &c.Currency, &c.Odometer,
-			&c.IsManual, &c.CreatedAt,
-		); err != nil {
+		if err := scanCharge(rows, &c); err != nil {
 			return nil, 0, err
 		}
 		list = append(list, c)
 	}
-	return list, total, nil
+	return list, total, rows.Err()
+}
+
+// CountChargesWithoutCost counts charges with an unknown cost.
+func (r *Repository) CountChargesWithoutCost(ctx context.Context, vehicleID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE vehicle_id = $1 AND cost IS NULL AND deleted_upstream_at IS NULL;`, vehicleID).Scan(&count)
+	return count, err
+}
+
+// CreateManualCharge records a charge that TeslaMate did not capture.
+func (r *Repository) CreateManualCharge(ctx context.Context, c *models.ChargeLog) error {
+	c.IsManual = true
+	c.CostSource = "MANUAL"
+	return r.pool.QueryRow(ctx, `
+		INSERT INTO charge_logs (
+			vehicle_id, date, end_date, address, kwh_added, cost, cost_source,
+			currency, fx_rate, odometer, is_manual, notes
+		) VALUES ($1, $2, $3, $4, $5, $6, 'MANUAL', $7, $8, $9, TRUE, $10)
+		RETURNING id, created_at;
+	`,
+		c.VehicleID, c.Date, c.EndDate, c.Address, c.KwhAdded, c.Cost,
+		c.Currency, c.FxRate, c.Odometer, c.Notes,
+	).Scan(&c.ID, &c.CreatedAt)
+}
+
+// UpdateCharge updates a charge. TeslaMate charges only accept cost corrections (protected from resyncs);
+// manual charges are fully editable.
+func (r *Repository) UpdateCharge(ctx context.Context, c *models.ChargeLog) error {
+	var existing models.ChargeLog
+	err := scanCharge(r.pool.QueryRow(ctx, `
+		SELECT `+chargeColumns+` FROM charge_logs WHERE id::text = $1 AND vehicle_id = $2;
+	`, c.ID, c.VehicleID), &existing)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return err
+	}
+
+	if !existing.IsManual {
+		c.Date, c.EndDate, c.Address = existing.Date, existing.EndDate, existing.Address
+		c.KwhAdded, c.Odometer = existing.KwhAdded, existing.Odometer
+	}
+
+	return scanCharge(r.pool.QueryRow(ctx, `
+		UPDATE charge_logs
+		SET date = $1, end_date = $2, address = $3, kwh_added = $4, odometer = $5,
+		    cost = $6, cost_source = 'MANUAL', currency = $7, fx_rate = $8, notes = $9
+		WHERE id::text = $10 AND vehicle_id = $11
+		RETURNING `+chargeColumns+`;
+	`,
+		c.Date, c.EndDate, c.Address, c.KwhAdded, c.Odometer,
+		c.Cost, c.Currency, c.FxRate, c.Notes,
+		c.ID, c.VehicleID,
+	), c)
+}
+
+// DeleteManualCharge deletes a manually entered charge (TeslaMate charges would come back on next sync).
+func (r *Repository) DeleteManualCharge(ctx context.Context, vehicleID, chargeID string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM charge_logs WHERE id::text = $1 AND vehicle_id = $2 AND is_manual = TRUE;`, chargeID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ============================================================================
+// Sync State
+// ============================================================================
+
+// IsFullImportCompleted reports whether the complete TeslaMate history of a resource was imported once.
+func (r *Repository) IsFullImportCompleted(ctx context.Context, vehicleID, resource string) (bool, error) {
+	var completed bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM sync_state
+			WHERE vehicle_id = $1 AND resource = $2 AND full_import_completed_at IS NOT NULL
+		);
+	`, vehicleID, resource).Scan(&completed)
+	return completed, err
+}
+
+// MarkSyncSuccess records a successful sync pass; fullImport marks the complete history as imported.
+func (r *Repository) MarkSyncSuccess(ctx context.Context, vehicleID, resource string, fullImport bool) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO sync_state (vehicle_id, resource, full_import_completed_at, last_success_at)
+		VALUES ($1, $2, CASE WHEN $3 THEN NOW() END, NOW())
+		ON CONFLICT (vehicle_id, resource) DO UPDATE
+		SET last_success_at = NOW(),
+		    full_import_completed_at = COALESCE(sync_state.full_import_completed_at, EXCLUDED.full_import_completed_at);
+	`, vehicleID, resource, fullImport)
+	return err
 }
 
 // ============================================================================
@@ -1194,8 +1517,12 @@ func (r *Repository) CreateCarpoolTrip(ctx context.Context, trip *models.Carpool
 	}
 	defer tx.Rollback(ctx)
 
+	if err := ensureCarpoolLinksOwned(ctx, tx, trip); err != nil {
+		return err
+	}
+
 	// Calculate totals
-	var revenue float64
+	var revenue money.Cents
 	for _, p := range passengers {
 		revenue += p.AmountPaid
 	}
@@ -1241,6 +1568,26 @@ func (r *Repository) CreateCarpoolTrip(ctx context.Context, trip *models.Carpool
 	}
 
 	return tx.Commit(ctx)
+}
+
+func ensureCarpoolLinksOwned(ctx context.Context, tx pgx.Tx, trip *models.CarpoolTrip) error {
+	if trip.DriveID != nil && *trip.DriveID == "" {
+		trip.DriveID = nil
+	}
+	if trip.TripGroupID != nil && *trip.TripGroupID == "" {
+		trip.TripGroupID = nil
+	}
+	if trip.DriveID != nil {
+		if err := ensureDrivesOwned(ctx, tx, trip.VehicleID, []string{*trip.DriveID}); err != nil {
+			return err
+		}
+	}
+	if trip.TripGroupID != nil {
+		if err := ensureTripGroupOwned(ctx, tx, trip.VehicleID, *trip.TripGroupID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Repository) ListCarpoolTrips(ctx context.Context, vehicleID string) ([]models.CarpoolTripWithPassengers, error) {
@@ -1351,7 +1698,11 @@ func (r *Repository) UpdateCarpoolTrip(ctx context.Context, trip *models.Carpool
 	}
 	defer tx.Rollback(ctx)
 
-	var revenue float64
+	if err := ensureCarpoolLinksOwned(ctx, tx, trip); err != nil {
+		return err
+	}
+
+	var revenue money.Cents
 	for _, p := range passengers {
 		revenue += p.AmountPaid
 	}
@@ -1442,11 +1793,11 @@ func (r *Repository) GetCarpoolSummary(ctx context.Context, vehicleID string) (*
 	`, vehicleID).Scan(&s.TotalPassengers)
 
 	if s.TotalRealCost > 0 {
-		s.CoverageRatePct = math.Round((s.TotalRevenue/s.TotalRealCost)*1000) / 10
+		s.CoverageRatePct = math.Round((s.TotalRevenue.Float()/s.TotalRealCost.Float())*1000) / 10
 		s.TotalSaved = s.TotalRevenue
 	}
 	if s.TotalDistanceKm > 0 {
-		s.NetCostPerKm = math.Round((s.TotalNetCost/s.TotalDistanceKm)*1000) / 1000
+		s.NetCostPerKm = math.Round((s.TotalNetCost.Float()/s.TotalDistanceKm)*1000) / 1000
 	}
 
 	return &s, nil
@@ -1457,9 +1808,9 @@ func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string
 		SELECT id, vehicle_id, teslamate_drive_id, start_time, end_time,
 		       start_odometer, end_odometer, distance_km, duration_min,
 		       speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
-		       consumption_kwh_100km, tags, is_manual, created_at, updated_at
+		       consumption_kwh_100km, tags, is_manual, toll_reviewed_at, created_at, updated_at
 		FROM drives
-		WHERE id = $1 AND vehicle_id = $2;
+		WHERE id::text = $1 AND vehicle_id = $2 AND deleted_upstream_at IS NULL;
 	`
 	var d models.Drive
 	err := r.pool.QueryRow(ctx, query, driveID, vehicleID).Scan(
@@ -1467,7 +1818,7 @@ func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string
 		&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
 		&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
 		&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
-		&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
+		&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.TollReviewedAt, &d.CreatedAt, &d.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1478,18 +1829,19 @@ func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string
 	return &d, nil
 }
 
-func (r *Repository) GetTripGroupDrives(ctx context.Context, tripGroupID string) ([]models.Drive, error) {
+func (r *Repository) GetTripGroupDrives(ctx context.Context, vehicleID, tripGroupID string) ([]models.Drive, error) {
 	query := `
 		SELECT d.id, d.vehicle_id, d.teslamate_drive_id, d.start_time, d.end_time,
 		       d.start_odometer, d.end_odometer, d.distance_km, d.duration_min,
 		       d.speed_avg, d.speed_max, d.power_max, d.power_min, d.start_address, d.end_address, d.energy_consumed_kwh,
-		       d.consumption_kwh_100km, d.tags, d.is_manual, d.created_at, d.updated_at
+		       d.consumption_kwh_100km, d.tags, d.is_manual, d.toll_reviewed_at, d.created_at, d.updated_at
 		FROM drives d
 		JOIN trip_group_drives tgd ON d.id = tgd.drive_id
-		WHERE tgd.trip_group_id = $1
+		JOIN trip_groups tg ON tg.id = tgd.trip_group_id
+		WHERE tgd.trip_group_id::text = $1 AND tg.vehicle_id = $2 AND d.vehicle_id = $2 AND d.deleted_upstream_at IS NULL
 		ORDER BY tgd.order_index ASC;
 	`
-	rows, err := r.pool.Query(ctx, query, tripGroupID)
+	rows, err := r.pool.Query(ctx, query, tripGroupID, vehicleID)
 	if err != nil {
 		return nil, err
 	}
@@ -1503,76 +1855,56 @@ func (r *Repository) GetTripGroupDrives(ctx context.Context, tripGroupID string)
 			&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
 			&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
 			&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
-			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.CreatedAt, &d.UpdatedAt,
+			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.TollReviewedAt, &d.CreatedAt, &d.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
 		list = append(list, d)
 	}
-	return list, nil
+	return list, rows.Err()
 }
 
-func (r *Repository) GetTollExpensesForDriveOrGroup(ctx context.Context, vehicleID string, driveID, tripGroupID *string) (float64, error) {
-	var total float64
-	if driveID != nil && *driveID != "" {
-		_ = r.pool.QueryRow(ctx, `
-			SELECT COALESCE(SUM(amount), 0)
-			FROM (
-				SELECT DISTINCT de.id, de.amount
-				FROM drive_expenses de
-				LEFT JOIN trip_group_drives tgd ON de.trip_group_id = tgd.trip_group_id
-				WHERE de.vehicle_id = $1 
-				  AND (de.drive_id = $2 OR tgd.drive_id = $2)
-			) s;
-		`, vehicleID, *driveID).Scan(&total)
-	} else if tripGroupID != nil && *tripGroupID != "" {
-		_ = r.pool.QueryRow(ctx, `
-			SELECT COALESCE(SUM(amount), 0)
-			FROM (
-				SELECT DISTINCT de.id, de.amount
-				FROM drive_expenses de
-				LEFT JOIN trip_group_drives tgd ON de.trip_group_id = tgd.trip_group_id
-				WHERE de.vehicle_id = $1 
-				  AND (
-				      de.trip_group_id = $2 
-				      OR de.drive_id IN (SELECT drive_id FROM trip_group_drives WHERE trip_group_id = $2)
-				  )
-			) s;
-		`, vehicleID, *tripGroupID).Scan(&total)
-	}
-	return total, nil
-}
+// DriveTollAllocationCTE allocates drive expenses (in EUR) to drives of vehicle $1: an expense attached to
+// a drive counts fully for it; an expense attached to a trip group is split across the group's drives
+// proportionally to their distance (equally when the group has no distance).
+const DriveTollAllocationCTE = `
+	WITH group_stats AS (
+		SELECT tgd.trip_group_id, SUM(d.distance_km) AS km, COUNT(*) AS n
+		FROM trip_group_drives tgd
+		JOIN trip_groups tg ON tg.id = tgd.trip_group_id AND tg.vehicle_id = $1
+		JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
+		GROUP BY tgd.trip_group_id
+	),
+	allocations AS (
+		SELECT e.id AS expense_id, e.drive_id, ` + AmountEURExpr + ` AS allocated
+		FROM drive_expenses e
+		JOIN drives d ON d.id = e.drive_id AND d.deleted_upstream_at IS NULL
+		WHERE e.vehicle_id = $1
+		UNION ALL
+		SELECT e.id, tgd.drive_id,
+		       ` + AmountEURExpr + ` * CASE WHEN gs.km > 0 THEN d.distance_km / gs.km ELSE 1.0 / gs.n END
+		FROM drive_expenses e
+		JOIN group_stats gs ON gs.trip_group_id = e.trip_group_id
+		JOIN trip_group_drives tgd ON tgd.trip_group_id = e.trip_group_id
+		JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
+		WHERE e.vehicle_id = $1
+	)
+`
 
-func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (float64, error) {
-	if len(driveIDs) == 0 {
-		return 0, nil
-	}
-	var total float64
-	err := r.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount), 0)
-		FROM (
-			SELECT DISTINCT de.id, de.amount
-			FROM drive_expenses de
-			LEFT JOIN trip_group_drives tgd ON de.trip_group_id = tgd.trip_group_id
-			WHERE de.vehicle_id = $1 
-			  AND (de.drive_id = ANY($2) OR tgd.drive_id = ANY($2))
-		) s;
-	`, vehicleID, driveIDs).Scan(&total)
-	return total, err
-}
-
-func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]float64, error) {
-	result := make(map[string]float64)
-	if len(driveIDs) == 0 {
+// GetTollExpensesForDrives returns the drive expenses allocated to each drive (EUR).
+func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]money.Cents, error) {
+	result := make(map[string]money.Cents)
+	ids := uniqueStrings(driveIDs)
+	if len(ids) == 0 {
 		return result, nil
 	}
 
-	rows, err := r.pool.Query(ctx, `
-		SELECT drive_id, COALESCE(SUM(amount), 0)
-		FROM drive_expenses
-		WHERE vehicle_id = $1 AND drive_id = ANY($2)
+	rows, err := r.pool.Query(ctx, DriveTollAllocationCTE+`
+		SELECT drive_id::text, COALESCE(SUM(allocated), 0)
+		FROM allocations
+		WHERE drive_id::text = ANY($2::text[])
 		GROUP BY drive_id;
-	`, vehicleID, driveIDs)
+	`, vehicleID, ids)
 	if err != nil {
 		return result, err
 	}
@@ -1580,29 +1912,56 @@ func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID str
 
 	for rows.Next() {
 		var dID string
-		var amt float64
-		if err := rows.Scan(&dID, &amt); err == nil {
-			result[dID] = amt
+		var amt money.Cents
+		if err := rows.Scan(&dID, &amt); err != nil {
+			return result, err
 		}
+		result[dID] = amt
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
+// GetTotalTollExpensesForDrives sums the expenses allocated to a set of drives (EUR).
+func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (money.Cents, error) {
+	perDrive, err := r.GetTollExpensesForDrives(ctx, vehicleID, driveIDs)
+	var total money.Cents
+	for _, amt := range perDrive {
+		total += amt
+	}
+	return total, err
+}
+
+// GetTollExpensesForTripGroup sums the expenses allocated to the drives of a trip group (EUR).
+func (r *Repository) GetTollExpensesForTripGroup(ctx context.Context, vehicleID, tripGroupID string) (money.Cents, error) {
+	drives, err := r.GetTripGroupDrives(ctx, vehicleID, tripGroupID)
+	if err != nil {
+		return 0, err
+	}
+	ids := make([]string, len(drives))
+	for i, d := range drives {
+		ids[i] = d.ID
+	}
+	return r.GetTotalTollExpensesForDrives(ctx, vehicleID, ids)
+}
+
+// GetDriveExpensesByDriveID lists expenses attached to a drive directly or through its trip groups,
+// with the share allocated to this drive.
 func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, driveID string) ([]models.DriveExpense, error) {
-	rows, err := r.pool.Query(ctx, `
-		SELECT 
+	rows, err := r.pool.Query(ctx, DriveTollAllocationCTE+`
+		SELECT
 			e.id, e.vehicle_id, e.trip_group_id, tg.name,
-			e.drive_id, 
-			CASE 
+			e.drive_id,
+			CASE
 				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
-				ELSE NULL 
+				ELSE NULL
 			END,
-			e.type, e.amount, e.currency, e.date, e.notes, e.created_at
-		FROM drive_expenses e
+			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes, e.created_at,
+			a.allocated
+		FROM allocations a
+		JOIN drive_expenses e ON e.id = a.expense_id
 		LEFT JOIN drives d ON e.drive_id = d.id
 		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id
-		LEFT JOIN trip_group_drives tgd ON e.trip_group_id = tgd.trip_group_id
-		WHERE e.vehicle_id = $1 AND (e.drive_id = $2 OR tgd.drive_id = $2)
+		WHERE a.drive_id::text = $2
 		ORDER BY e.date ASC;
 	`, vehicleID, driveID)
 	if err != nil {
@@ -1616,12 +1975,14 @@ func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, d
 		if err := rows.Scan(
 			&de.ID, &de.VehicleID, &de.TripGroupID, &de.TripGroupName,
 			&de.DriveID, &de.DriveTitle, &de.Type,
-			&de.Amount, &de.Currency, &de.Date, &de.Notes, &de.CreatedAt,
-		); err == nil {
-			list = append(list, de)
+			&de.Amount, &de.Currency, &de.FxRate, &de.Date, &de.Notes, &de.CreatedAt,
+			&de.AllocatedAmount,
+		); err != nil {
+			return nil, err
 		}
+		list = append(list, de)
 	}
-	return list, nil
+	return list, rows.Err()
 }
 
 func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID string, minOdometer *float64) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error) {
@@ -1632,7 +1993,7 @@ func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID str
 			COALESCE(AVG(NULLIF(consumption_kwh_100km, 0)), 0),
 			COUNT(*)
 		FROM drives
-		WHERE vehicle_id = $1
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
 	`
 	args := []any{vehicleID}
 	if minOdometer != nil && *minOdometer > 0 {
@@ -1652,4 +2013,186 @@ func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID str
 	return avgPowerMax, avgPowerMin, avgConsumption, count, nil
 }
 
+// ============================================================================
+// TeslaMate Reconciliation
+// ============================================================================
 
+// ReconcileResult reports records no longer present in TeslaMate.
+type ReconcileResult struct {
+	Missing int  // TeslaMate records of the covered window absent from the API response
+	Marked  int  // Records flagged as deleted upstream
+	Skipped bool // Guard triggered: too many records would disappear at once
+}
+
+// Share of the covered window above which missing records are considered an API anomaly rather than deletions.
+const maxUpstreamDeletionShare = 0.2
+
+// ReconcileTeslaMateRecords flags drives or charges ("drives" | "charges") imported from TeslaMate that were not
+// returned by the API over the covered window (start date strictly after coveredAfter, or the whole history when nil).
+func (r *Repository) ReconcileTeslaMateRecords(ctx context.Context, resource, vehicleID string, coveredAfter *time.Time, seenIDs []int) (*ReconcileResult, error) {
+	var table, idColumn, dateColumn string
+	switch resource {
+	case "drives":
+		table, idColumn, dateColumn = "drives", "teslamate_drive_id", "start_time"
+	case "charges":
+		table, idColumn, dateColumn = "charge_logs", "teslamate_charge_id", "date"
+	default:
+		return nil, fmt.Errorf("unknown resource %q", resource)
+	}
+	if seenIDs == nil {
+		seenIDs = []int{}
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	window := `vehicle_id = $1 AND ` + idColumn + ` IS NOT NULL AND deleted_upstream_at IS NULL
+		AND ($2::timestamptz IS NULL OR ` + dateColumn + ` > $2)`
+
+	var total, missing int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(*), COUNT(*) FILTER (WHERE NOT (`+idColumn+` = ANY($3::int[])))
+		FROM `+table+` WHERE `+window+`;
+	`, vehicleID, coveredAfter, seenIDs).Scan(&total, &missing); err != nil {
+		return nil, fmt.Errorf("failed to count missing %s: %w", resource, err)
+	}
+
+	res := &ReconcileResult{Missing: missing}
+	if missing == 0 {
+		return res, nil
+	}
+	if missing > 10 && float64(missing) > maxUpstreamDeletionShare*float64(total) {
+		res.Skipped = true
+		return res, nil
+	}
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE `+table+` SET deleted_upstream_at = NOW()
+		WHERE `+window+` AND NOT (`+idColumn+` = ANY($3::int[]));
+	`, vehicleID, coveredAfter, seenIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to flag deleted %s: %w", resource, err)
+	}
+	res.Marked = int(tag.RowsAffected())
+	return res, tx.Commit(ctx)
+}
+
+// ============================================================================
+// Data Quality
+// ============================================================================
+
+// Data quality issue types.
+const (
+	IssueOdometerGap        = "ODOMETER_GAP"        // Kilometers between two consecutive drives not covered by any drive
+	IssueOdometerRegression = "ODOMETER_REGRESSION" // A drive starts below the end odometer of the previous one
+	IssueDistanceMismatch   = "DISTANCE_MISMATCH"   // Drive distance differs from its odometer delta
+)
+
+// ListDataQualityIssues checks odometer continuity of the drives of a vehicle (most recent first).
+func (r *Repository) ListDataQualityIssues(ctx context.Context, vehicleID string, limit int) ([]models.DataQualityIssue, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH ordered AS (
+			SELECT id, start_time, start_odometer, end_odometer, distance_km,
+			       LAG(id) OVER w AS prev_id,
+			       LAG(end_odometer) OVER w AS prev_end_odometer
+			FROM drives
+			WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
+			  AND start_odometer > 0 AND end_odometer > 0
+			WINDOW w AS (ORDER BY start_time)
+		),
+		issues AS (
+			SELECT '`+IssueOdometerGap+`' AS type, id, prev_id, start_time, start_odometer - prev_end_odometer AS km
+			FROM ordered WHERE start_odometer - prev_end_odometer > 1
+			UNION ALL
+			SELECT '`+IssueOdometerRegression+`', id, prev_id, start_time, prev_end_odometer - start_odometer
+			FROM ordered WHERE prev_end_odometer - start_odometer > 1
+			UNION ALL
+			SELECT '`+IssueDistanceMismatch+`', id, NULL, start_time, distance_km - (end_odometer - start_odometer)
+			FROM ordered
+			WHERE ABS(distance_km - (end_odometer - start_odometer)) > GREATEST(1, 0.05 * distance_km)
+		)
+		SELECT type, id::text, prev_id::text, start_time, ROUND(km::numeric, 1)::float8
+		FROM issues
+		ORDER BY start_time DESC
+		LIMIT $2;
+	`, vehicleID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	list := []models.DataQualityIssue{}
+	for rows.Next() {
+		var issue models.DataQualityIssue
+		if err := rows.Scan(&issue.Type, &issue.DriveID, &issue.PreviousDriveID, &issue.Date, &issue.Km); err != nil {
+			return nil, err
+		}
+		list = append(list, issue)
+	}
+	return list, rows.Err()
+}
+
+// OdometerContinuitySummarySQL returns, for vehicle $1, the number of odometer gaps between consecutive drives,
+// the kilometers they represent and the number of odometer anomalies (regressions, distance mismatches).
+const OdometerContinuitySummarySQL = `
+	WITH ordered AS (
+		SELECT start_odometer, end_odometer, distance_km,
+		       LAG(end_odometer) OVER (ORDER BY start_time) AS prev_end_odometer
+		FROM drives
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND start_odometer > 0 AND end_odometer > 0
+	)
+	SELECT COUNT(*) FILTER (WHERE start_odometer - prev_end_odometer > 1),
+	       COALESCE(SUM(start_odometer - prev_end_odometer) FILTER (WHERE start_odometer - prev_end_odometer > 1), 0)::float8,
+	       COUNT(*) FILTER (WHERE prev_end_odometer - start_odometer > 1
+	                           OR ABS(distance_km - (end_odometer - start_odometer)) > GREATEST(1, 0.05 * distance_km))
+	FROM ordered;
+`
+
+// DataQualitySummary counts odometer continuity issues and the kilometers they represent.
+func (r *Repository) DataQualitySummary(ctx context.Context, vehicleID string) (gaps int, gapKm float64, anomalies int, err error) {
+	err = r.pool.QueryRow(ctx, OdometerContinuitySummarySQL, vehicleID).Scan(&gaps, &gapKm, &anomalies)
+	return gaps, gapKm, anomalies, err
+}
+
+// ============================================================================
+// Idempotency Keys
+// ============================================================================
+
+// StoredResponse is the replayable response of an idempotent request.
+type StoredResponse struct {
+	Method     string
+	Path       string
+	StatusCode int
+	Body       []byte
+}
+
+// GetIdempotentResponse returns the stored response of a key, or nil.
+func (r *Repository) GetIdempotentResponse(ctx context.Context, userID, key string) (*StoredResponse, error) {
+	var res StoredResponse
+	err := r.pool.QueryRow(ctx, `
+		SELECT method, path, status_code, response_body FROM idempotency_keys WHERE user_id = $1 AND key = $2;
+	`, userID, key).Scan(&res.Method, &res.Path, &res.StatusCode, &res.Body)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// SaveIdempotentResponse stores the response of a key (first writer wins) and purges keys older than 30 days.
+func (r *Repository) SaveIdempotentResponse(ctx context.Context, userID, key string, res StoredResponse) error {
+	if _, err := r.pool.Exec(ctx, `
+		INSERT INTO idempotency_keys (user_id, key, method, path, status_code, response_body)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (user_id, key) DO NOTHING;
+	`, userID, key, res.Method, res.Path, res.StatusCode, res.Body); err != nil {
+		return err
+	}
+	_, err := r.pool.Exec(ctx, `DELETE FROM idempotency_keys WHERE created_at < NOW() - INTERVAL '30 days';`)
+	return err
+}

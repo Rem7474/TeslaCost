@@ -163,7 +163,7 @@ func TestGetDrivesAndCharges(t *testing.T) {
 	if len(charges) != 1 {
 		t.Fatalf("Expected 1 charge, got %d", len(charges))
 	}
-	if charges[0].ChargeID != 201 || charges[0].Cost != 14.85 || charges[0].ChargeEnergyAdded != 42.5 {
+	if charges[0].ChargeID != 201 || charges[0].Cost == nil || *charges[0].Cost != 14.85 || charges[0].ChargeEnergyAdded != 42.5 {
 		t.Fatalf("Unexpected charge payload: %+v", charges[0])
 	}
 }

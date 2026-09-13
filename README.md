@@ -9,19 +9,37 @@
 1. **Multi-véhicules & Authentification JWT :** Gestion multi-utilisateurs et multi-véhicules avec contrôle d'accès sécurisé.
 2. **Synchronisation TeslaMate API :**
    - Récupération de l'odomètre en temps réel.
-   - Synchronisation incrémentale des trajets (`/drives`) et des charges (`/charges` avec coûts kWh et devises).
+   - Synchronisation lancée en arrière-plan : l'API répond immédiatement et l'interface suit l'avancement ; une seule synchronisation à la fois par véhicule (manuelle ou planifiée).
+   - Contrôle de continuité de l'odomètre : trous entre trajets consécutifs, odomètre en recul, distance différente du relevé (`GET /api/vehicles/{id}/data-quality`).
+   - Import complet de l'historique des trajets (`/drives`) et des charges (`/charges`), repris automatiquement à la synchronisation suivante en cas d'interruption.
+   - Synchronisation incrémentale relisant les 30 derniers jours pour récupérer les coûts complétés après coup dans TeslaMate.
+   - Une recharge sans tarif TeslaMate est enregistrée « sans coût » (jamais 0 €) et signalée ; son coût peut être saisi manuellement sans être écrasé par les synchronisations.
+   - Saisie des recharges hors TeslaMate (prise d'un tiers, borne non suivie).
+   - Trajets et recharges supprimés dans TeslaMate exclus des calculs (tags et liens conservés, restaurés s'ils réapparaissent). Si plus de 20 % de la période relue disparaît d'un coup, rien n'est retiré et un avertissement est affiché.
    - Support d'authentification Bearer Token et HTTP Basic Auth.
    - Chiffrement symétrique au repos AES-256-GCM des identifiants et tokens API dans la base de données.
 3. **Péages, Parkings et Fusion de Trajets :**
    - Création de groupes de trajets (`TripGroup`) pour fusionner des étapes segmentées par des pauses.
-   - Affectation granulaire des dépenses de voyage (péages d'autoroutes, parkings, ferries).
+   - Affectation granulaire des dépenses de voyage (péages d'autoroutes, parkings, ferries) ; une dépense de groupe est répartie entre les étapes au prorata des kilomètres.
+   - File « À qualifier » : trajets de type autoroutier (≥ 40 km, ≥ 70 km/h de moyenne) sans péage renseigné, à compléter ou marquer « sans péage ».
+   - Dépenses en devise étrangère avec taux de conversion vers l'euro saisi à la dépense.
 4. **Gestion du Cycle de Vie des Pneus :**
    - Fiche produit (marque, modèle, dimensions, saison, prix, dot code).
    - Position dynamique sur véhicule (`FL`, `FR`, `RL`, `RR`, `STORAGE`, `DISPOSED`).
-   - Relevés millimétriques de la profondeur de sculpture et projection de l'usure kilométrique restante.
-   - Historique et journal complet des permutations de roues avec odomètre.
-5. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes.
-6. **Calculateur de TCO (€ total et €/km décomposé) :** Répartition claire énergie / péages / pneus / entretien.
+   - Relevés millimétriques de la profondeur de sculpture et projection de l'usure kilométrique restante, calculée sur les kilomètres roulés par le pneu (périodes en stockage exclues).
+   - Historique et journal complet des permutations de roues avec odomètre (sessions de montage ouvertes et fermées de façon transactionnelle).
+   - Kilométrage initial conservé pour les pneus achetés d'occasion.
+5. **Saisie hors connexion (PWA) :** les péages, dépenses, recharges et qualifications de trajets saisis sans réseau sont conservés dans le navigateur (IndexedDB) puis envoyés au retour de la connexion. Chaque envoi porte un en-tête `Idempotency-Key` : une requête rejouée après une réponse perdue n'est appliquée qu'une fois.
+6. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
+7. **Calculateur de TCO :**
+   - Registre des coûts unique (vue SQL `cost_ledger`) : recharges, péages, dépenses récurrentes générées échéance par échéance, pneus, assurance, achat du véhicule. Totaux, historique mensuel et taux au km en sont tous dérivés.
+   - Montants stockés et calculés en centimes exacts (`NUMERIC` en base, entiers en Go).
+   - Dépenses courantes décaissées (pneus au jour d'achat, achat du véhicule exclu) et coût complet (usure des pneus amortie au kilomètre, décote du véhicule).
+   - Acquisition : achat (prix, aides, valeur de revente estimée et durée de détention pour une décote linéaire) ou location (loyers en dépense « Financement »). Pour un crédit, seuls les intérêts et l'assurance emprunteur sont à saisir en « Financement ».
+   - Coût d'usage au km (énergie + péages), coût complet au km et coût net des recettes de covoiturage, calculés sur la plus grande distance entre les trajets suivis, l'odomètre couvert par les trajets et le kilométrage depuis l'acquisition.
+   - Ventilation énergie / péages & parkings / pneus / entretien / assurance / financement / décote / abonnements, taxes & autres.
+   - Assurance : dépenses « Assurance » enregistrées, sinon prime annuelle de la fiche véhicule répartie au prorata du temps.
+   - Score de complétude pondéré (« TCO consolidé à X % ») : recharges avec coût, kilomètres couverts par des trajets, trajets autoroutiers qualifiés, assurance, acquisition, continuité de l'odomètre, conversion des devises ; chaque manque est détaillé avec un lien pour le corriger.
 
 ---
 
@@ -94,7 +112,16 @@ docker run -d \
   ghcr.io/rem7474/teslacost:latest
 ```
 
-### 5. Lancer les tests unitaires
+### 5. Lancer les tests
 ```bash
 go test -v ./...
 ```
+
+Les tests d'intégration (requêtes SQL, migrations, TCO) nécessitent une base PostgreSQL jetable ; son schéma `public` est supprimé et recréé :
+```bash
+docker run -d --name teslacost-test-pg -e POSTGRES_USER=teslacost -e POSTGRES_PASSWORD=test -e POSTGRES_DB=teslacost_test -p 55432:5432 postgres:14-alpine
+TEST_DATABASE_URL="postgres://teslacost:test@localhost:55432/teslacost_test?sslmode=disable" go test ./internal/services/
+```
+
+### 6. Migrations de base de données
+Les migrations embarquées (`migrations/*.up.sql`) sont appliquées au démarrage, chacune dans une transaction, et enregistrées dans la table `schema_migrations`. Le serveur refuse de démarrer si une migration échoue.
