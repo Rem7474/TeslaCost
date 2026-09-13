@@ -307,11 +307,12 @@ type DriveFilter struct {
 	UnqualifiedOnly bool
 }
 
+// HighwayDrivePredicate matches long and fast drives, likely to use toll roads.
+const HighwayDrivePredicate = `drives.distance_km >= 40 AND COALESCE(drives.speed_avg, 0) >= 70`
+
 // Highway-like drives (long and fast) with no toll attached and no explicit "no toll" review.
-const UnqualifiedDrivePredicate = `
-	drives.toll_reviewed_at IS NULL
-	AND drives.distance_km >= 40
-	AND COALESCE(drives.speed_avg, 0) >= 70
+const UnqualifiedDrivePredicate = HighwayDrivePredicate + `
+	AND drives.toll_reviewed_at IS NULL
 	AND NOT EXISTS (SELECT 1 FROM drive_expenses de WHERE de.drive_id = drives.id)
 	AND NOT EXISTS (
 		SELECT 1 FROM drive_expenses de
@@ -2154,4 +2155,44 @@ const OdometerContinuitySummarySQL = `
 func (r *Repository) DataQualitySummary(ctx context.Context, vehicleID string) (gaps int, gapKm float64, anomalies int, err error) {
 	err = r.pool.QueryRow(ctx, OdometerContinuitySummarySQL, vehicleID).Scan(&gaps, &gapKm, &anomalies)
 	return gaps, gapKm, anomalies, err
+}
+
+// ============================================================================
+// Idempotency Keys
+// ============================================================================
+
+// StoredResponse is the replayable response of an idempotent request.
+type StoredResponse struct {
+	Method     string
+	Path       string
+	StatusCode int
+	Body       []byte
+}
+
+// GetIdempotentResponse returns the stored response of a key, or nil.
+func (r *Repository) GetIdempotentResponse(ctx context.Context, userID, key string) (*StoredResponse, error) {
+	var res StoredResponse
+	err := r.pool.QueryRow(ctx, `
+		SELECT method, path, status_code, response_body FROM idempotency_keys WHERE user_id = $1 AND key = $2;
+	`, userID, key).Scan(&res.Method, &res.Path, &res.StatusCode, &res.Body)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
+}
+
+// SaveIdempotentResponse stores the response of a key (first writer wins) and purges keys older than 30 days.
+func (r *Repository) SaveIdempotentResponse(ctx context.Context, userID, key string, res StoredResponse) error {
+	if _, err := r.pool.Exec(ctx, `
+		INSERT INTO idempotency_keys (user_id, key, method, path, status_code, response_body)
+		VALUES ($1, $2, $3, $4, $5, $6)
+		ON CONFLICT (user_id, key) DO NOTHING;
+	`, userID, key, res.Method, res.Path, res.StatusCode, res.Body); err != nil {
+		return err
+	}
+	_, err := r.pool.Exec(ctx, `DELETE FROM idempotency_keys WHERE created_at < NOW() - INTERVAL '30 days';`)
+	return err
 }

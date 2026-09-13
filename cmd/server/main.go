@@ -95,7 +95,7 @@ func main() {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token", "Idempotency-Key"},
 		ExposedHeaders:   []string{"Link"},
 		AllowCredentials: true,
 		MaxAge:           300,
@@ -146,6 +146,7 @@ func main() {
 		// Protected Routes
 		r.Group(func(r chi.Router) {
 			r.Use(appMiddleware.AuthenticateJWT(cfg.JWTSecret))
+			r.Use(handlers.Idempotency(repo))
 
 			r.Get("/api/auth/me", authHandler.Me)
 

@@ -3,6 +3,7 @@ import { onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
+import { useOfflineStore } from '@/stores/offline'
 import Navigation from '@/components/Navigation.vue'
 import TopBar from '@/components/TopBar.vue'
 
@@ -19,7 +20,10 @@ const showDashboardLayout = computed(() => {
   )
 })
 
+const offlineStore = useOfflineStore()
+
 onMounted(async () => {
+  offlineStore.start()
   await authStore.init()
   if (authStore.isAuthenticated) {
     await vehicleStore.fetchVehicles()

@@ -73,6 +73,73 @@ type TCOCompleteness struct {
 	InsuranceMissing    bool     `json:"insurance_missing"`
 	AcquisitionMissing  bool     `json:"acquisition_missing"`
 	Warnings            []string `json:"warnings"`
+	// ScorePct is a weighted completeness score (0-100) over the dimensions below.
+	ScorePct   int                     `json:"score_pct"`
+	Dimensions []CompletenessDimension `json:"dimensions"`
+}
+
+// CompletenessDimension is one weighted component of the completeness score.
+type CompletenessDimension struct {
+	Key      string  `json:"key"`
+	Label    string  `json:"label"`
+	ScorePct int     `json:"score_pct"`
+	Weight   float64 `json:"weight"`
+}
+
+// completenessInputs gathers the ratios used by the completeness score.
+type completenessInputs struct {
+	kwhAdded, kwhPriced float64
+	highwayDrives       int
+	unqualifiedDrives   int
+	trackedKm, basisKm  float64
+	insurancePresent    bool
+	acquisitionComplete bool
+	pricedEntries       int
+	unconvertedEntries  int
+	drivesWithOdometer  int
+	odometerAnomalies   int
+}
+
+func ratio(part, total float64) float64 {
+	if total <= 0 {
+		return 1
+	}
+	return math.Max(0, math.Min(1, part/total))
+}
+
+func boolScore(ok bool) float64 {
+	if ok {
+		return 1
+	}
+	return 0
+}
+
+// completenessScore weights how much of the TCO rests on complete data.
+func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
+	distance := 0.0
+	if in.basisKm > 0 {
+		distance = ratio(in.trackedKm, in.basisKm)
+	}
+	dims := []struct {
+		key, label string
+		weight     float64
+		score      float64
+	}{
+		{"energy", "Recharges avec coût (kWh)", 0.30, ratio(in.kwhPriced, in.kwhAdded)},
+		{"distance", "Kilomètres couverts par des trajets", 0.20, distance},
+		{"tolls", "Trajets autoroutiers qualifiés", 0.15, 1 - ratio(float64(in.unqualifiedDrives), float64(in.highwayDrives))},
+		{"insurance", "Assurance renseignée", 0.10, boolScore(in.insurancePresent)},
+		{"acquisition", "Acquisition et décote renseignées", 0.10, boolScore(in.acquisitionComplete)},
+		{"odometer", "Continuité de l'odomètre", 0.10, 1 - ratio(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))},
+		{"currency", "Dépenses converties en euros", 0.05, 1 - ratio(float64(in.unconvertedEntries), float64(in.pricedEntries+in.unconvertedEntries))},
+	}
+	var total float64
+	out := make([]CompletenessDimension, 0, len(dims))
+	for _, d := range dims {
+		total += d.weight * d.score
+		out = append(out, CompletenessDimension{Key: d.key, Label: d.label, ScorePct: int(math.Round(d.score * 100)), Weight: d.weight})
+	}
+	return int(math.Round(total * 100)), out
 }
 
 // TCOSummary represents the global TCO calculation, built from the cost_ledger view.
@@ -336,10 +403,15 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	}
 
 	// 8. Toll qualification backlog
+	var highwayDrives, drivesWithOdometer, ledgerEntries int
 	if err := s.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM drives
-		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND `+database.UnqualifiedDrivePredicate+`;
-	`, vehicleID).Scan(&comp.UnqualifiedDrives); err != nil {
+		SELECT COUNT(*) FILTER (WHERE `+database.UnqualifiedDrivePredicate+`),
+		       COUNT(*) FILTER (WHERE `+database.HighwayDrivePredicate+`),
+		       COUNT(*) FILTER (WHERE start_odometer > 0 AND end_odometer > 0),
+		       (SELECT COUNT(*) FROM cost_ledger WHERE vehicle_id = $1)
+		FROM drives
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
+	`, vehicleID).Scan(&comp.UnqualifiedDrives, &highwayDrives, &drivesWithOdometer, &ledgerEntries); err != nil {
 		return nil, fmt.Errorf("unqualified drives: %w", err)
 	}
 	if comp.UnqualifiedDrives > 0 {
@@ -363,10 +435,25 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
 			"%d incohérence(s) d'odomètre (odomètre en recul ou distance différente du relevé) à vérifier dans TeslaMate", comp.OdometerAnomalies))
 	}
+
 	comp.IsComplete = len(comp.Warnings) == 0
 	if comp.Warnings == nil {
 		comp.Warnings = []string{}
 	}
+	comp.ScorePct, comp.Dimensions = completenessScore(completenessInputs{
+		kwhAdded:            kwhAdded,
+		kwhPriced:           kwhPriced,
+		highwayDrives:       highwayDrives,
+		unqualifiedDrives:   comp.UnqualifiedDrives,
+		trackedKm:           trackedKm,
+		basisKm:             basisKm,
+		insurancePresent:    !comp.InsuranceMissing,
+		acquisitionComplete: !comp.AcquisitionMissing,
+		pricedEntries:       ledgerEntries,
+		unconvertedEntries:  comp.UnconvertedExpenses,
+		drivesWithOdometer:  drivesWithOdometer,
+		odometerAnomalies:   comp.OdometerAnomalies + comp.OdometerGaps,
+	})
 
 	// 10. Aggregates
 	energy := byCategory[LedgerEnergy]

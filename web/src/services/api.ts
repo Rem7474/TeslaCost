@@ -1,4 +1,5 @@
 // TeslaCost API Service
+import { newIdempotencyKey } from '@/services/offlineQueue'
 
 const BASE_URL = '/api'
 
@@ -13,14 +14,46 @@ function getHeaders(): HeadersInit {
   return headers
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      ...getHeaders(),
-      ...(options.headers || {}),
-    },
-  })
+export interface QueuedResult {
+  queued: true
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}, offlineLabel?: string): Promise<T> {
+  const idempotencyKey = offlineLabel ? newIdempotencyKey() : undefined
+  const queueForLater = async () => {
+    const { useOfflineStore } = await import('@/stores/offline')
+    await useOfflineStore().queue({
+      id: idempotencyKey!,
+      method: options.method || 'POST',
+      endpoint,
+      body: typeof options.body === 'string' ? options.body : undefined,
+      label: offlineLabel!,
+      createdAt: Date.now(),
+    })
+    return { queued: true } as T
+  }
+
+  if (offlineLabel && !navigator.onLine) {
+    return queueForLater()
+  }
+
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers: {
+        ...getHeaders(),
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+        ...(options.headers || {}),
+      },
+    })
+  } catch (err) {
+    // Network failure: mutations flagged for offline use are kept and replayed later
+    if (offlineLabel && err instanceof TypeError) {
+      return queueForLater()
+    }
+    throw err
+  }
 
   if (res.status === 401) {
     localStorage.removeItem('teslacost_token')
@@ -78,7 +111,11 @@ export const api = {
   updateDriveTags: (vehicleId: string, driveId: string, tags: string[]) =>
     request<any>(`/vehicles/${vehicleId}/drives/${driveId}/tags`, { method: 'PATCH', body: JSON.stringify({ tags }) }),
   setDriveTollReview: (vehicleId: string, driveId: string, reviewed: boolean) =>
-    request<any>(`/vehicles/${vehicleId}/drives/${driveId}/toll-review`, { method: 'PATCH', body: JSON.stringify({ reviewed }) }),
+    request<any>(
+      `/vehicles/${vehicleId}/drives/${driveId}/toll-review`,
+      { method: 'PATCH', body: JSON.stringify({ reviewed }) },
+      'Trajet marqué sans péage'
+    ),
   createTripGroup: (vehicleId: string, payload: { name: string; notes?: string; drive_ids: string[] }) =>
     request<any>(`/vehicles/${vehicleId}/trip-groups`, { method: 'POST', body: JSON.stringify(payload) }),
   getTripGroups: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-groups`),
@@ -108,14 +145,14 @@ export const api = {
   // Expenses & Charges
   getDriveExpenses: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/expenses`),
   createDriveExpense: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/expenses`, { method: 'POST', body: JSON.stringify(data) }),
+    request<any>(`/vehicles/${vehicleId}/expenses`, { method: 'POST', body: JSON.stringify(data) }, `Péage / parking de ${data.amount} ${data.currency || 'EUR'}`),
   updateDriveExpense: (vehicleId: string, expenseId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'PUT', body: JSON.stringify(data) }),
+    request<any>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'PUT', body: JSON.stringify(data) }, 'Modification de péage / parking'),
   deleteDriveExpense: (vehicleId: string, expenseId: string) =>
     request<void>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'DELETE' }),
   getMaintenance: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/maintenance`),
   createMaintenance: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/maintenance`, { method: 'POST', body: JSON.stringify(data) }),
+    request<any>(`/vehicles/${vehicleId}/maintenance`, { method: 'POST', body: JSON.stringify(data) }, `Dépense « ${data.description} »`),
   updateMaintenance: (vehicleId: string, maintenanceId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/maintenance/${maintenanceId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteMaintenance: (vehicleId: string, maintenanceId: string) =>
@@ -126,9 +163,9 @@ export const api = {
     return request<any>(`/vehicles/${vehicleId}/charges?${q.toString()}`)
   },
   createCharge: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/charges`, { method: 'POST', body: JSON.stringify(data) }),
+    request<any>(`/vehicles/${vehicleId}/charges`, { method: 'POST', body: JSON.stringify(data) }, `Recharge de ${data.kwh_added} kWh`),
   updateCharge: (vehicleId: string, chargeId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'PUT', body: JSON.stringify(data) }),
+    request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'PUT', body: JSON.stringify(data) }, 'Coût de recharge'),
   deleteCharge: (vehicleId: string, chargeId: string) =>
     request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'DELETE' }),
 

@@ -1,0 +1,94 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { enqueueMutation, listQueuedMutations, removeQueuedMutation, type QueuedMutation } from '@/services/offlineQueue'
+import { useVehicleStore } from '@/stores/vehicle'
+
+const RETRY_INTERVAL_MS = 30_000
+
+export const useOfflineStore = defineStore('offline', () => {
+  const isOnline = ref(typeof navigator === 'undefined' ? true : navigator.onLine)
+  const pendingCount = ref(0)
+  const isFlushing = ref(false)
+  const lastQueuedLabel = ref<string | null>(null)
+  const failures = ref<{ label: string; error: string }[]>([])
+  let started = false
+
+  async function refreshCount() {
+    try {
+      pendingCount.value = (await listQueuedMutations()).length
+    } catch {
+      pendingCount.value = 0
+    }
+  }
+
+  async function queue(mutation: QueuedMutation) {
+    await enqueueMutation(mutation)
+    lastQueuedLabel.value = mutation.label
+    setTimeout(() => {
+      if (lastQueuedLabel.value === mutation.label) lastQueuedLabel.value = null
+    }, 4000)
+    await refreshCount()
+  }
+
+  // Replays queued mutations in order; stops at the first network or server error to keep ordering
+  async function flush() {
+    if (isFlushing.value || !navigator.onLine) return
+    isFlushing.value = true
+    let sent = 0
+    try {
+      for (const m of await listQueuedMutations()) {
+        const token = localStorage.getItem('teslacost_token')
+        let res: Response
+        try {
+          res = await fetch(`/api${m.endpoint}`, {
+            method: m.method,
+            headers: {
+              'Content-Type': 'application/json',
+              'Idempotency-Key': m.id,
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: m.body,
+          })
+        } catch {
+          break
+        }
+        if (res.status === 401 || res.status >= 500) break
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          failures.value.push({ label: m.label, error: data.error || `Erreur ${res.status}` })
+        } else {
+          sent++
+        }
+        await removeQueuedMutation(m.id)
+      }
+    } finally {
+      isFlushing.value = false
+      await refreshCount()
+      if (sent > 0) {
+        useVehicleStore().lastSyncTimestamp = Date.now()
+      }
+    }
+  }
+
+  function start() {
+    if (started) return
+    started = true
+    window.addEventListener('online', () => {
+      isOnline.value = true
+      flush()
+    })
+    window.addEventListener('offline', () => {
+      isOnline.value = false
+    })
+    setInterval(() => {
+      if (pendingCount.value > 0) flush()
+    }, RETRY_INTERVAL_MS)
+    refreshCount().then(flush)
+  }
+
+  function dismissFailures() {
+    failures.value = []
+  }
+
+  return { isOnline, pendingCount, isFlushing, lastQueuedLabel, failures, queue, flush, start, dismissFailures }
+})

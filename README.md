@@ -29,8 +29,9 @@
    - Relevés millimétriques de la profondeur de sculpture et projection de l'usure kilométrique restante, calculée sur les kilomètres roulés par le pneu (périodes en stockage exclues).
    - Historique et journal complet des permutations de roues avec odomètre (sessions de montage ouvertes et fermées de façon transactionnelle).
    - Kilométrage initial conservé pour les pneus achetés d'occasion.
-5. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
-6. **Calculateur de TCO :**
+5. **Saisie hors connexion (PWA) :** les péages, dépenses, recharges et qualifications de trajets saisis sans réseau sont conservés dans le navigateur (IndexedDB) puis envoyés au retour de la connexion. Chaque envoi porte un en-tête `Idempotency-Key` : une requête rejouée après une réponse perdue n'est appliquée qu'une fois.
+6. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
+7. **Calculateur de TCO :**
    - Registre des coûts unique (vue SQL `cost_ledger`) : recharges, péages, dépenses récurrentes générées échéance par échéance, pneus, assurance, achat du véhicule. Totaux, historique mensuel et taux au km en sont tous dérivés.
    - Montants stockés et calculés en centimes exacts (`NUMERIC` en base, entiers en Go).
    - Dépenses courantes décaissées (pneus au jour d'achat, achat du véhicule exclu) et coût complet (usure des pneus amortie au kilomètre, décote du véhicule).
@@ -38,7 +39,7 @@
    - Coût d'usage au km (énergie + péages), coût complet au km et coût net des recettes de covoiturage, calculés sur la plus grande distance entre les trajets suivis, l'odomètre couvert par les trajets et le kilométrage depuis l'acquisition.
    - Ventilation énergie / péages & parkings / pneus / entretien / assurance / financement / décote / abonnements, taxes & autres.
    - Assurance : dépenses « Assurance » enregistrées, sinon prime annuelle de la fiche véhicule répartie au prorata du temps.
-   - Indicateur de complétude : recharges sans coût, dépenses non converties, trajets à qualifier, kilomètres non suivis, assurance absente.
+   - Score de complétude pondéré (« TCO consolidé à X % ») : recharges avec coût, kilomètres couverts par des trajets, trajets autoroutiers qualifiés, assurance, acquisition, continuité de l'odomètre, conversion des devises ; chaque manque est détaillé avec un lien pour le corriger.
 
 ---
 

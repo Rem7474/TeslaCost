@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
-import { RefreshCw, Car, Gauge, Plus, AlertCircle, AlertTriangle, X, CheckCircle2 } from 'lucide-vue-next'
+import { useOfflineStore } from '@/stores/offline'
+import { RefreshCw, Car, Gauge, Plus, AlertCircle, AlertTriangle, X, CheckCircle2, WifiOff, CloudUpload } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { APP_VERSION } from '@/version'
 
 const vehicleStore = useVehicleStore()
+const offlineStore = useOfflineStore()
 const router = useRouter()
 
 const syncSummary = computed(() => {
@@ -78,6 +80,19 @@ function onVehicleChange(event: Event) {
 
       <!-- Actions (Sync) -->
       <div class="flex items-center gap-2">
+        <!-- Offline queue -->
+        <div
+          v-if="!offlineStore.isOnline || offlineStore.pendingCount > 0"
+          class="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border"
+          :class="offlineStore.isOnline ? 'text-sky-300 bg-sky-500/10 border-sky-500/20' : 'text-amber-300 bg-amber-500/10 border-amber-500/20'"
+          :title="offlineStore.isOnline ? 'Envoi des saisies enregistrées hors ligne' : 'Les saisies sont conservées et seront envoyées au retour du réseau'"
+        >
+          <WifiOff v-if="!offlineStore.isOnline" class="w-3.5 h-3.5 shrink-0" />
+          <CloudUpload v-else class="w-3.5 h-3.5 shrink-0" :class="{ 'animate-pulse': offlineStore.isFlushing }" />
+          <span v-if="!offlineStore.isOnline">Hors ligne</span>
+          <span v-if="offlineStore.pendingCount > 0">{{ offlineStore.pendingCount }} en attente</span>
+        </div>
+
         <button
           v-if="vehicleStore.activeVehicle?.teslamate_api_url"
           @click="vehicleStore.syncActiveVehicle"
@@ -112,6 +127,32 @@ function onVehicleChange(event: Event) {
       </div>
     </header>
 
+    <!-- Offline confirmation -->
+    <div
+      v-if="offlineStore.lastQueuedLabel"
+      class="bg-sky-500/15 border-b border-sky-500/30 px-4 py-2 text-xs text-sky-200 flex items-center gap-2"
+    >
+      <CloudUpload class="w-4 h-4 shrink-0 text-sky-400" />
+      <span><strong>{{ offlineStore.lastQueuedLabel }}</strong> enregistré hors ligne : envoi automatique au retour du réseau.</span>
+    </div>
+
+    <!-- Offline replay failures -->
+    <div
+      v-if="offlineStore.failures.length"
+      class="bg-rose-500/15 border-b border-rose-500/30 px-4 py-2.5 text-xs text-rose-300 flex items-center justify-between gap-3"
+    >
+      <div class="flex items-start gap-2">
+        <AlertCircle class="w-4 h-4 shrink-0 text-rose-400" />
+        <span>
+          <strong>Saisies hors ligne refusées :</strong>
+          {{ offlineStore.failures.map((f) => `${f.label} (${f.error})`).join(' ; ') }}
+        </span>
+      </div>
+      <button @click="offlineStore.dismissFailures" class="text-rose-400 hover:text-white p-1 rounded transition-colors">
+        <X class="w-4 h-4" />
+      </button>
+    </div>
+
     <!-- Error Banner for Sync Failure -->
     <div
       v-if="vehicleStore.syncError"
@@ -137,7 +178,7 @@ function onVehicleChange(event: Event) {
       <div class="flex items-center gap-2">
         <AlertTriangle class="w-4 h-4 shrink-0 text-amber-400" />
         <span>
-          <strong>Synchronisation partielle :</strong> {{ syncSummary }}.
+          <strong>Synchronisation terminée avec remarques :</strong> {{ syncSummary }}.
           <span class="text-amber-200/80">({{ vehicleStore.syncResult.warnings.join(' ; ') }})</span>
         </span>
       </div>
