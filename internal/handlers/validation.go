@@ -11,10 +11,8 @@ import (
 	"time"
 
 	"github.com/teslacost/teslacost/internal/database"
+	"github.com/teslacost/teslacost/internal/money"
 )
-
-// maxAmount is the largest value storable in NUMERIC(10, 2).
-const maxAmount = 99_999_999.99
 
 var currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
 
@@ -74,12 +72,20 @@ func parseOptionalDate(value *string) (*time.Time, error) {
 	return &t, nil
 }
 
-func validateAmount(amount float64, allowZero bool) error {
-	if math.IsNaN(amount) || math.IsInf(amount, 0) || amount > maxAmount {
+func validateAmount(amount money.Cents, allowZero bool) error {
+	if amount > money.Max {
 		return errors.New("montant invalide")
 	}
 	if amount < 0 || (!allowZero && amount == 0) {
 		return errors.New("le montant doit être positif")
+	}
+	return nil
+}
+
+// validateQuantity validates a non-monetary positive quantity (kWh, km).
+func validateQuantity(v float64, max float64) error {
+	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > max {
+		return errors.New("valeur invalide")
 	}
 	return nil
 }

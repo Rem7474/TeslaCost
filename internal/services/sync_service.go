@@ -10,6 +10,7 @@ import (
 	"github.com/teslacost/teslacost/internal/crypto"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/teslamate"
 )
 
@@ -465,6 +466,15 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 	return st
 }
 
+// costCents converts a TeslaMate cost; nil (no tariff configured) stays nil.
+func costCents(cost *float64) *money.Cents {
+	if cost == nil {
+		return nil
+	}
+	c := money.FromFloat(*cost)
+	return &c
+}
+
 func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, startDate time.Time) *models.ChargeLog {
 	endDate, _ := tc.ParsedEndTime()
 
@@ -501,7 +511,7 @@ func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, 
 		Address:           addrPtr,
 		KwhAdded:          tc.ChargeEnergyAdded,
 		KwhUsed:           kwhUsedPtr,
-		Cost:              tc.Cost,
+		Cost:              costCents(tc.Cost),
 		CostSource:        "TESLAMATE",
 		Currency:          "EUR",
 		Odometer:          odoPtr,

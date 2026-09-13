@@ -6,6 +6,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 )
 
 type CarpoolService struct {
@@ -49,7 +50,7 @@ type UnitRates struct {
 	MaintenanceSource     string
 	InsurancePerKm        float64
 	InsuranceSource       string // "VEHICLE_SETTINGS", "RECORDED_EXPENSES", "DEFAULT"
-	AnnualInsuranceCost   *float64
+	AnnualInsuranceCost   *money.Cents
 	AnnualExpectedMileage *float64
 }
 
@@ -96,7 +97,8 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 	}
 
 	// Electricity rate (€/kWh), only over charges whose cost is known
-	var pricedCost, pricedKwh float64
+	var pricedCost money.Cents
+	var pricedKwh float64
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0),
 		       COALESCE(SUM(kwh_added), 0)
@@ -106,12 +108,13 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		return nil, err
 	}
 	if pricedKwh > 0 && pricedCost > 0 {
-		rates.ElectricityPerKwh = pricedCost / pricedKwh
+		rates.ElectricityPerKwh = pricedCost.Float() / pricedKwh
 		rates.ElectricitySource = RateSourceHistory
 	}
 
 	// Tires rate (€/km): mounted tires purchase price over their remaining expected life
-	var mountedTireRate, totalTiresCost float64
+	var mountedTireRate float64
+	var totalTiresCost money.Cents
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(purchase_price / GREATEST(estimated_lifespan_km - initial_distance_km, 1))
 		                FILTER (WHERE current_position IN ('FL', 'FR', 'RL', 'RR')), 0),
@@ -125,12 +128,12 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		rates.TiresPerKm = mountedTireRate
 		rates.TiresSource = RateSourceMountedTires
 	} else if totalDistance > 500 && totalTiresCost > 0 {
-		rates.TiresPerKm = totalTiresCost / totalDistance
+		rates.TiresPerKm = totalTiresCost.Float() / totalDistance
 		rates.TiresSource = RateSourceHistory
 	}
 
 	// Maintenance and insurance from expanded occurrences
-	var totalMaintCost, annualInsuranceExpenses float64
+	var totalMaintCost, annualInsuranceExpenses money.Cents
 	var insuranceEntries int
 	if err := s.pool.QueryRow(ctx, `
 		WITH `+maintenanceOccurrencesCTE+`
@@ -142,11 +145,12 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		return nil, err
 	}
 	if totalDistance > 500 && totalMaintCost > 0 {
-		rates.MaintenancePerKm = totalMaintCost / totalDistance
+		rates.MaintenancePerKm = totalMaintCost.Float() / totalDistance
 		rates.MaintenanceSource = RateSourceHistory
 	}
 
-	var vAnnualIns, vAnnualKm *float64
+	var vAnnualIns *money.Cents
+	var vAnnualKm *float64
 	if err := s.pool.QueryRow(ctx, `
 		SELECT annual_insurance_cost, annual_expected_mileage
 		FROM vehicles
@@ -164,12 +168,12 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 
 	switch {
 	case insuranceEntries > 0 && annualInsuranceExpenses > 0:
-		rates.InsurancePerKm = annualInsuranceExpenses / expectedKm
+		rates.InsurancePerKm = annualInsuranceExpenses.Float() / expectedKm
 		rates.InsuranceSource = InsuranceSourceRecordedExpenses
 		rates.AnnualInsuranceCost = &annualInsuranceExpenses
 		rates.AnnualExpectedMileage = &expectedKm
 	case vAnnualIns != nil && *vAnnualIns > 0:
-		rates.InsurancePerKm = *vAnnualIns / expectedKm
+		rates.InsurancePerKm = vAnnualIns.Float() / expectedKm
 		rates.InsuranceSource = InsuranceSourceVehicleSettings
 		rates.AnnualInsuranceCost = vAnnualIns
 		rates.AnnualExpectedMileage = &expectedKm
@@ -214,7 +218,8 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		}
 	}
 
-	var distance, kwhConsumed, tolls float64
+	var distance, kwhConsumed float64
+	var tolls money.Cents
 	energySource := EnergySourceMeasured
 	if len(drives) > 0 {
 		ids := make([]string, len(drives))
@@ -235,21 +240,21 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		kwhConsumed, energySource = DriveEnergyKwh(distance, nil, nil)
 	}
 
-	elecCost := round2(kwhConsumed * rates.ElectricityPerKwh)
-	tiresCost := round2(distance * rates.TiresPerKm)
-	maintCost := round2(distance * rates.MaintenancePerKm)
-	insCost := round2(distance * rates.InsurancePerKm)
+	elecCost := money.FromFloat(kwhConsumed * rates.ElectricityPerKwh)
+	tiresCost := money.FromFloat(distance * rates.TiresPerKm)
+	maintCost := money.FromFloat(distance * rates.MaintenancePerKm)
+	insCost := money.FromFloat(distance * rates.InsurancePerKm)
 	totalCost := elecCost + tolls + tiresCost + maintCost + insCost
 
 	return &models.CarpoolCostEstimate{
 		DistanceKm:            round1(distance),
 		ElectricityCost:       elecCost,
-		TollsCost:             round2(tolls),
+		TollsCost:             tolls,
 		TiresCost:             tiresCost,
 		MaintenanceCost:       maintCost,
 		InsuranceCost:         insCost,
-		OtherCost:             0.0,
-		TotalCost:             round2(totalCost),
+		OtherCost:             0,
+		TotalCost:             totalCost,
 		ElectricityRatePerKwh: rates.ElectricityPerKwh,
 		TiresRatePerKm:        rates.TiresPerKm,
 		MaintenanceRatePerKm:  rates.MaintenancePerKm,

@@ -11,27 +11,28 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
 )
 
 type DriveCostBreakdown struct {
-	ElectricityCost       float64 `json:"electricity_cost"`
-	ElectricityKwh        float64 `json:"electricity_kwh"`
-	ElectricityRate       float64 `json:"electricity_rate"`
-	EnergySource          string  `json:"energy_source"`           // MEASURED | CONSUMPTION | DEFAULT
-	ElectricityRateSource string  `json:"electricity_rate_source"` // HISTORY | DEFAULT
-	TiresCost             float64 `json:"tires_cost"`
-	TiresRate             float64 `json:"tires_rate"`
-	TiresRateSource       string  `json:"tires_rate_source"`
-	MaintenanceCost       float64 `json:"maintenance_cost"`
-	MaintenanceRate       float64 `json:"maintenance_rate"`
-	MaintenanceRateSource string  `json:"maintenance_rate_source"`
-	InsuranceCost         float64 `json:"insurance_cost"`
-	InsuranceRate         float64 `json:"insurance_rate"`
-	InsuranceSource       string  `json:"insurance_source"`
-	TollsCost             float64 `json:"tolls_cost"` // Direct expenses + share of trip group expenses
-	TotalCost             float64 `json:"total_cost"`
-	CostPerKm             float64 `json:"cost_per_km"`
+	ElectricityCost       money.Cents `json:"electricity_cost"`
+	ElectricityKwh        float64     `json:"electricity_kwh"`
+	ElectricityRate       float64     `json:"electricity_rate"`
+	EnergySource          string      `json:"energy_source"`           // MEASURED | CONSUMPTION | DEFAULT
+	ElectricityRateSource string      `json:"electricity_rate_source"` // HISTORY | DEFAULT
+	TiresCost             money.Cents `json:"tires_cost"`
+	TiresRate             float64     `json:"tires_rate"`
+	TiresRateSource       string      `json:"tires_rate_source"`
+	MaintenanceCost       money.Cents `json:"maintenance_cost"`
+	MaintenanceRate       float64     `json:"maintenance_rate"`
+	MaintenanceRateSource string      `json:"maintenance_rate_source"`
+	InsuranceCost         money.Cents `json:"insurance_cost"`
+	InsuranceRate         float64     `json:"insurance_rate"`
+	InsuranceSource       string      `json:"insurance_source"`
+	TollsCost             money.Cents `json:"tolls_cost"` // Direct expenses + share of trip group expenses
+	TotalCost             money.Cents `json:"total_cost"`
+	CostPerKm             float64     `json:"cost_per_km"`
 	// HasEstimates is true when at least one component relies on a default assumption.
 	HasEstimates bool `json:"has_estimates"`
 }
@@ -118,16 +119,16 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 			rates.MaintenanceSource == services.RateSourceDefault ||
 			rates.InsuranceSource == services.InsuranceSourceDefault
 
-		elecCost := math.Round(kwh*rates.ElectricityPerKwh*100) / 100
-		tiresCost := math.Round(d.DistanceKm*rates.TiresPerKm*100) / 100
-		maintCost := math.Round(d.DistanceKm*rates.MaintenancePerKm*100) / 100
-		insCost := math.Round(d.DistanceKm*rates.InsurancePerKm*100) / 100
-		tollsCost := math.Round(tollsMap[d.ID]*100) / 100
-		totalCost := math.Round((elecCost+tiresCost+maintCost+insCost+tollsCost)*100) / 100
+		elecCost := money.FromFloat(kwh * rates.ElectricityPerKwh)
+		tiresCost := money.FromFloat(d.DistanceKm * rates.TiresPerKm)
+		maintCost := money.FromFloat(d.DistanceKm * rates.MaintenancePerKm)
+		insCost := money.FromFloat(d.DistanceKm * rates.InsurancePerKm)
+		tollsCost := tollsMap[d.ID]
+		totalCost := elecCost + tiresCost + maintCost + insCost + tollsCost
 
 		costPerKm := 0.0
 		if d.DistanceKm > 0 {
-			costPerKm = math.Round((totalCost/d.DistanceKm)*1000) / 1000
+			costPerKm = math.Round((totalCost.Float()/d.DistanceKm)*1000) / 1000
 		}
 
 		enriched[i] = EnrichedDrive{

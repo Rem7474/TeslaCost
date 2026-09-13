@@ -13,6 +13,7 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 )
 
 type ExpenseHandler struct {
@@ -24,15 +25,15 @@ func NewExpenseHandler(repo *database.Repository) *ExpenseHandler {
 }
 
 type CreateDriveExpenseRequest struct {
-	TripGroupID *string  `json:"trip_group_id"`
-	DriveID     *string  `json:"drive_id"`
-	DriveIDs    []string `json:"drive_ids"`
-	Type        string   `json:"type"` // TOLL, PARKING, etc.
-	Amount      float64  `json:"amount"`
-	Currency    string   `json:"currency"`
-	FxRate      *float64 `json:"fx_rate"`
-	Date        string   `json:"date"`
-	Notes       *string  `json:"notes"`
+	TripGroupID *string     `json:"trip_group_id"`
+	DriveID     *string     `json:"drive_id"`
+	DriveIDs    []string    `json:"drive_ids"`
+	Type        string      `json:"type"` // TOLL, PARKING, etc.
+	Amount      money.Cents `json:"amount"`
+	Currency    string      `json:"currency"`
+	FxRate      *float64    `json:"fx_rate"`
+	Date        string      `json:"date"`
+	Notes       *string     `json:"notes"`
 }
 
 // buildDriveExpense validates a drive expense payload.
@@ -176,16 +177,16 @@ func (h *ExpenseHandler) DeleteDriveExpense(w http.ResponseWriter, r *http.Reque
 }
 
 type CreateMaintenanceRequest struct {
-	Category                 string   `json:"category"`
-	Amount                   float64  `json:"amount"`
-	Currency                 string   `json:"currency"`
-	FxRate                   *float64 `json:"fx_rate"`
-	Date                     string   `json:"date"`
-	Odometer                 *float64 `json:"odometer"`
-	IsRecurring              bool     `json:"is_recurring"`
-	RecurrenceIntervalMonths *int     `json:"recurrence_interval_months"`
-	RecurrenceEndDate        *string  `json:"recurrence_end_date"`
-	Description              string   `json:"description"`
+	Category                 string      `json:"category"`
+	Amount                   money.Cents `json:"amount"`
+	Currency                 string      `json:"currency"`
+	FxRate                   *float64    `json:"fx_rate"`
+	Date                     string      `json:"date"`
+	Odometer                 *float64    `json:"odometer"`
+	IsRecurring              bool        `json:"is_recurring"`
+	RecurrenceIntervalMonths *int        `json:"recurrence_interval_months"`
+	RecurrenceEndDate        *string     `json:"recurrence_end_date"`
+	Description              string      `json:"description"`
 }
 
 // buildMaintenanceExpense validates a maintenance / fixed expense payload.
@@ -388,15 +389,15 @@ func (h *ExpenseHandler) ListCharges(w http.ResponseWriter, r *http.Request) {
 }
 
 type SaveChargeRequest struct {
-	Date     string   `json:"date"`
-	EndDate  *string  `json:"end_date"`
-	Address  *string  `json:"address"`
-	KwhAdded float64  `json:"kwh_added"`
-	Cost     *float64 `json:"cost"`
-	Currency string   `json:"currency"`
-	FxRate   *float64 `json:"fx_rate"`
-	Odometer *float64 `json:"odometer"`
-	Notes    *string  `json:"notes"`
+	Date     string       `json:"date"`
+	EndDate  *string      `json:"end_date"`
+	Address  *string      `json:"address"`
+	KwhAdded float64      `json:"kwh_added"`
+	Cost     *money.Cents `json:"cost"`
+	Currency string       `json:"currency"`
+	FxRate   *float64     `json:"fx_rate"`
+	Odometer *float64     `json:"odometer"`
+	Notes    *string      `json:"notes"`
 }
 
 func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, error) {
@@ -411,7 +412,7 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 	if endDate != nil && endDate.Before(date) {
 		return nil, errors.New("la fin de recharge précède son début")
 	}
-	if err := validateAmount(req.KwhAdded, true); err != nil || req.KwhAdded > 1000 {
+	if err := validateQuantity(req.KwhAdded, 1000); err != nil {
 		return nil, errors.New("énergie ajoutée invalide")
 	}
 	if req.Cost != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 )
 
 var (
@@ -1541,7 +1542,7 @@ func (r *Repository) CreateCarpoolTrip(ctx context.Context, trip *models.Carpool
 	}
 
 	// Calculate totals
-	var revenue float64
+	var revenue money.Cents
 	for _, p := range passengers {
 		revenue += p.AmountPaid
 	}
@@ -1721,7 +1722,7 @@ func (r *Repository) UpdateCarpoolTrip(ctx context.Context, trip *models.Carpool
 		return err
 	}
 
-	var revenue float64
+	var revenue money.Cents
 	for _, p := range passengers {
 		revenue += p.AmountPaid
 	}
@@ -1812,11 +1813,11 @@ func (r *Repository) GetCarpoolSummary(ctx context.Context, vehicleID string) (*
 	`, vehicleID).Scan(&s.TotalPassengers)
 
 	if s.TotalRealCost > 0 {
-		s.CoverageRatePct = math.Round((s.TotalRevenue/s.TotalRealCost)*1000) / 10
+		s.CoverageRatePct = math.Round((s.TotalRevenue.Float()/s.TotalRealCost.Float())*1000) / 10
 		s.TotalSaved = s.TotalRevenue
 	}
 	if s.TotalDistanceKm > 0 {
-		s.NetCostPerKm = math.Round((s.TotalNetCost/s.TotalDistanceKm)*1000) / 1000
+		s.NetCostPerKm = math.Round((s.TotalNetCost.Float()/s.TotalDistanceKm)*1000) / 1000
 	}
 
 	return &s, nil
@@ -1911,8 +1912,8 @@ const DriveTollAllocationCTE = `
 `
 
 // GetTollExpensesForDrives returns the drive expenses allocated to each drive (EUR).
-func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]float64, error) {
-	result := make(map[string]float64)
+func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]money.Cents, error) {
+	result := make(map[string]money.Cents)
 	ids := uniqueStrings(driveIDs)
 	if len(ids) == 0 {
 		return result, nil
@@ -1931,7 +1932,7 @@ func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID str
 
 	for rows.Next() {
 		var dID string
-		var amt float64
+		var amt money.Cents
 		if err := rows.Scan(&dID, &amt); err != nil {
 			return result, err
 		}
@@ -1941,9 +1942,9 @@ func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID str
 }
 
 // GetTotalTollExpensesForDrives sums the expenses allocated to a set of drives (EUR).
-func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (float64, error) {
+func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (money.Cents, error) {
 	perDrive, err := r.GetTollExpensesForDrives(ctx, vehicleID, driveIDs)
-	var total float64
+	var total money.Cents
 	for _, amt := range perDrive {
 		total += amt
 	}
@@ -1951,7 +1952,7 @@ func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleI
 }
 
 // GetTollExpensesForTripGroup sums the expenses allocated to the drives of a trip group (EUR).
-func (r *Repository) GetTollExpensesForTripGroup(ctx context.Context, vehicleID, tripGroupID string) (float64, error) {
+func (r *Repository) GetTollExpensesForTripGroup(ctx context.Context, vehicleID, tripGroupID string) (money.Cents, error) {
 	drives, err := r.GetTripGroupDrives(ctx, vehicleID, tripGroupID)
 	if err != nil {
 		return 0, err

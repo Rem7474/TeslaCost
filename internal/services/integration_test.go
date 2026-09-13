@@ -13,6 +13,7 @@ import (
 
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/migrations"
 )
 
@@ -112,7 +113,7 @@ func TestIntegrationDriveExpenseOwnershipAndGroupAllocation(t *testing.T) {
 	bobDrive := mustDrive(t, repo, bob.ID, 1, base, 5000, 50)
 
 	// Cross-tenant references are rejected.
-	foreign := &models.DriveExpense{VehicleID: alice.ID, DriveID: &bobDrive.ID, Type: "TOLL", Amount: 5, Currency: "EUR", Date: base}
+	foreign := &models.DriveExpense{VehicleID: alice.ID, DriveID: &bobDrive.ID, Type: "TOLL", Amount: 500, Currency: "EUR", Date: base}
 	if err := repo.SaveDriveExpense(ctx, foreign, nil, ""); !errors.Is(err, database.ErrForeignReference) {
 		t.Fatalf("expected ErrForeignReference for a foreign drive, got %v", err)
 	}
@@ -121,7 +122,7 @@ func TestIntegrationDriveExpenseOwnershipAndGroupAllocation(t *testing.T) {
 	}
 
 	// A 40 € toll over two drives (100 km + 300 km) is allocated 10 / 30.
-	exp := &models.DriveExpense{VehicleID: alice.ID, Type: "TOLL", Amount: 40, Currency: "EUR", Date: base}
+	exp := &models.DriveExpense{VehicleID: alice.ID, Type: "TOLL", Amount: 4000, Currency: "EUR", Date: base}
 	if err := repo.SaveDriveExpense(ctx, exp, []string{d2.ID, d1.ID}, "Paris → Lyon"); err != nil {
 		t.Fatal(err)
 	}
@@ -132,17 +133,17 @@ func TestIntegrationDriveExpenseOwnershipAndGroupAllocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if math.Abs(alloc[d1.ID]-10) > 0.001 || math.Abs(alloc[d2.ID]-30) > 0.001 {
+	if alloc[d1.ID] != 1000 || alloc[d2.ID] != 3000 {
 		t.Fatalf("unexpected allocation: %v", alloc)
 	}
 	perDrive, err := repo.GetDriveExpensesByDriveID(ctx, alice.ID, d1.ID)
-	if err != nil || len(perDrive) != 1 || perDrive[0].AllocatedAmount == nil || math.Abs(*perDrive[0].AllocatedAmount-10) > 0.001 {
+	if err != nil || len(perDrive) != 1 || perDrive[0].AllocatedAmount == nil || *perDrive[0].AllocatedAmount != 1000 {
 		t.Fatalf("expected one expense allocated 10 € to d1, got %+v (err %v)", perDrive, err)
 	}
 
 	// Editing the expense (same drives) keeps the same group instead of creating a new one.
 	groupID := *exp.TripGroupID
-	exp.Amount = 42
+	exp.Amount = 4200
 	if err := repo.SaveDriveExpense(ctx, exp, []string{d1.ID, d2.ID}, "Paris → Lyon"); err != nil {
 		t.Fatal(err)
 	}
@@ -186,7 +187,7 @@ func TestIntegrationTCOCompletenessRecurringAndInsurance(t *testing.T) {
 	mustDrive(t, repo, v.ID, 2, now.AddDate(0, -1, 0), 10900, 100) // 500 km odometer gap before this drive
 
 	// Charges: one priced, one without tariff.
-	cost := 12.0
+	cost := money.Cents(1200)
 	c1, c2 := 1, 2
 	if _, err := repo.UpsertTeslaMateCharge(ctx, &models.ChargeLog{VehicleID: v.ID, TeslaMateChargeID: &c1, Date: now.AddDate(0, -1, 0), KwhAdded: 40, Cost: &cost, Currency: "EUR"}); err != nil {
 		t.Fatal(err)
@@ -196,7 +197,7 @@ func TestIntegrationTCOCompletenessRecurringAndInsurance(t *testing.T) {
 	}
 
 	// Vehicle-level insurance only: pro rata, flagged.
-	annual := 730.5
+	annual := money.Cents(73050)
 	v.AnnualInsuranceCost = &annual
 	if err := repo.UpdateVehicle(ctx, v); err != nil {
 		t.Fatal(err)
@@ -221,12 +222,12 @@ func TestIntegrationTCOCompletenessRecurringAndInsurance(t *testing.T) {
 	// A monthly recurring insurance started 3 months ago counts 4 occurrences and replaces vehicle settings.
 	interval := 1
 	start := now.AddDate(0, -3, 0).Add(-time.Hour)
-	if err := repo.CreateMaintenanceExpense(ctx, &models.MaintenanceExpense{VehicleID: v.ID, Category: "INSURANCE", Amount: 50, Currency: "EUR",
+	if err := repo.CreateMaintenanceExpense(ctx, &models.MaintenanceExpense{VehicleID: v.ID, Category: "INSURANCE", Amount: 5000, Currency: "EUR",
 		Date: start, IsRecurring: true, RecurrenceIntervalMonths: &interval, Description: "Assurance"}); err != nil {
 		t.Fatal(err)
 	}
 	// A CHF parking without rate is excluded and reported.
-	if err := repo.SaveDriveExpense(ctx, &models.DriveExpense{VehicleID: v.ID, Type: "PARKING", Amount: 20, Currency: "CHF", Date: now}, nil, ""); err != nil {
+	if err := repo.SaveDriveExpense(ctx, &models.DriveExpense{VehicleID: v.ID, Type: "PARKING", Amount: 2000, Currency: "CHF", Date: now}, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	sum, err = tco.ComputeVehicleTCO(ctx, v.ID)
@@ -260,7 +261,7 @@ func TestIntegrationTiresAndManualCharges(t *testing.T) {
 	// Used tire bought with 12,000 km, mounted at 10,000 km.
 	odo := 10000.0
 	tire := &models.Tire{VehicleID: &v.ID, Brand: "Michelin", Model: "PS4", Dimension: "235/40 R19", Season: models.TireSeasonSummer,
-		PurchaseDate: time.Now(), PurchasePrice: 150, CurrentPosition: models.TirePosFL, InitialDepthMm: 8, MinLegalDepthMm: 1.6,
+		PurchaseDate: time.Now(), PurchasePrice: 15000, CurrentPosition: models.TirePosFL, InitialDepthMm: 8, MinLegalDepthMm: 1.6,
 		MountedOdometer: &odo, AccumulatedDistanceKm: 12000, EstimatedLifespanKm: 40000}
 	if err := repo.CreateTire(ctx, tire); err != nil {
 		t.Fatal(err)
@@ -296,7 +297,7 @@ func TestIntegrationTiresAndManualCharges(t *testing.T) {
 	if len(charges) != 1 {
 		t.Fatalf("expected one charge without cost, got %d", len(charges))
 	}
-	manualCost := 18.5
+	manualCost := money.Cents(1850)
 	fix := &models.ChargeLog{ID: charges[0].ID, VehicleID: v.ID, Cost: &manualCost, Currency: "EUR"}
 	if err := repo.UpdateCharge(ctx, fix); err != nil {
 		t.Fatal(err)
@@ -305,7 +306,7 @@ func TestIntegrationTiresAndManualCharges(t *testing.T) {
 		t.Fatal(err)
 	}
 	charges, _, _ = repo.ListCharges(ctx, v.ID, false, 10, 0)
-	if charges[0].Cost == nil || *charges[0].Cost != 18.5 || charges[0].CostSource != "MANUAL" || charges[0].KwhAdded != 50 {
+	if charges[0].Cost == nil || *charges[0].Cost != 1850 || charges[0].CostSource != "MANUAL" || charges[0].KwhAdded != 50 {
 		t.Fatalf("expected manual cost to survive resync, got %+v", charges[0])
 	}
 	if err := repo.DeleteManualCharge(ctx, v.ID, charges[0].ID); !errors.Is(err, database.ErrNotFound) {
@@ -324,7 +325,7 @@ func TestIntegrationUpstreamDeletions(t *testing.T) {
 	for i := 1; i <= 12; i++ {
 		drives = append(drives, mustDrive(t, repo, v.ID, i, base.Add(time.Duration(i)*time.Hour), 10000+float64(i)*100, 100))
 	}
-	toll := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 30, Currency: "EUR", Date: base}
+	toll := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 3000, Currency: "EUR", Date: base}
 	if err := repo.SaveDriveExpense(ctx, toll, []string{drives[10].ID, drives[11].ID}, "Voyage"); err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +347,7 @@ func TestIntegrationUpstreamDeletions(t *testing.T) {
 		t.Fatalf("expected 1,100 km and the toll still paid (30 €), got %.0f km / %.2f €", sum.TotalDistanceKm, sum.TollsCost)
 	}
 	alloc, _ := repo.GetTollExpensesForDrives(ctx, v.ID, []string{drives[10].ID})
-	if math.Abs(alloc[drives[10].ID]-30) > 0.001 {
+	if alloc[drives[10].ID] != 3000 {
 		t.Fatalf("expected the group toll fully allocated to the remaining drive, got %v", alloc)
 	}
 
@@ -362,7 +363,7 @@ func TestIntegrationUpstreamDeletions(t *testing.T) {
 		t.Fatalf("expected restored drive, got %d drives", total)
 	}
 	alloc, _ = repo.GetTollExpensesForDrives(ctx, v.ID, []string{drives[10].ID, drives[11].ID})
-	if math.Abs(alloc[drives[10].ID]-15) > 0.001 || math.Abs(alloc[drives[11].ID]-15) > 0.001 {
+	if alloc[drives[10].ID] != 1500 || alloc[drives[11].ID] != 1500 {
 		t.Fatalf("expected the group toll split again after restoration, got %v", alloc)
 	}
 }

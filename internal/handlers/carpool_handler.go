@@ -12,6 +12,7 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
 )
 
@@ -28,12 +29,12 @@ func NewCarpoolHandler(repo *database.Repository, carpoolService *services.Carpo
 }
 
 type PassengerPayload struct {
-	PassengerName string  `json:"passenger_name"`
-	Origin        *string `json:"origin"`
-	Destination   *string `json:"destination"`
-	Seats         int     `json:"seats"`
-	AmountPaid    float64 `json:"amount_paid"`
-	Notes         *string `json:"notes"`
+	PassengerName string      `json:"passenger_name"`
+	Origin        *string     `json:"origin"`
+	Destination   *string     `json:"destination"`
+	Seats         int         `json:"seats"`
+	AmountPaid    money.Cents `json:"amount_paid"`
+	Notes         *string     `json:"notes"`
 }
 
 type UpsertCarpoolRequest struct {
@@ -42,14 +43,29 @@ type UpsertCarpoolRequest struct {
 	DistanceKm      float64            `json:"distance_km"`
 	DriveID         *string            `json:"drive_id"`
 	TripGroupID     *string            `json:"trip_group_id"`
-	ElectricityCost float64            `json:"electricity_cost"`
-	TollsCost       float64            `json:"tolls_cost"`
-	TiresCost       float64            `json:"tires_cost"`
-	MaintenanceCost float64            `json:"maintenance_cost"`
-	InsuranceCost   float64            `json:"insurance_cost"`
-	OtherCost       float64            `json:"other_cost"`
+	ElectricityCost money.Cents        `json:"electricity_cost"`
+	TollsCost       money.Cents        `json:"tolls_cost"`
+	TiresCost       money.Cents        `json:"tires_cost"`
+	MaintenanceCost money.Cents        `json:"maintenance_cost"`
+	InsuranceCost   money.Cents        `json:"insurance_cost"`
+	OtherCost       money.Cents        `json:"other_cost"`
 	Notes           *string            `json:"notes"`
 	Passengers      []PassengerPayload `json:"passengers"`
+}
+
+// validateCarpoolAmounts rejects negative or out-of-range cost components and passenger payments.
+func validateCarpoolAmounts(req *UpsertCarpoolRequest) error {
+	for _, c := range []money.Cents{req.ElectricityCost, req.TollsCost, req.TiresCost, req.MaintenanceCost, req.InsuranceCost, req.OtherCost} {
+		if err := validateAmount(c, true); err != nil {
+			return err
+		}
+	}
+	for _, p := range req.Passengers {
+		if err := validateAmount(p.AmountPaid, true); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -109,6 +125,10 @@ func (h *CarpoolHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req UpsertCarpoolRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if err := validateCarpoolAmounts(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -184,6 +204,10 @@ func (h *CarpoolHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req UpsertCarpoolRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if err := validateCarpoolAmounts(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

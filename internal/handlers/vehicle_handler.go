@@ -10,6 +10,7 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
 )
 
@@ -37,7 +38,7 @@ type SaveVehicleRequest struct {
 	TeslaMateAPIKey       *string         `json:"teslamate_api_key"` // Plain text from frontend
 	TeslaMateBasicUser    *string         `json:"teslamate_basic_user"`
 	TeslaMateBasicPass    *string         `json:"teslamate_basic_pass"` // Plain text from frontend
-	AnnualInsuranceCost   *float64        `json:"annual_insurance_cost"`
+	AnnualInsuranceCost   *money.Cents    `json:"annual_insurance_cost"`
 	AnnualExpectedMileage *float64        `json:"annual_expected_mileage"`
 }
 

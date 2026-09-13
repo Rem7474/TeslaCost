@@ -144,7 +144,7 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		lifespan = 40000
 	}
 	lifeProgressPct := math.Min(100.0, math.Round((totalDistance/float64(lifespan))*1000)/10)
-	costPerKm := math.Round((tire.PurchasePrice/float64(lifespan))*10000) / 10000
+	costPerKm := math.Round((tire.PurchasePrice.Float()/float64(lifespan))*10000) / 10000
 
 	wornDepth := math.Max(0, initialDepth-currentDepth)
 	remainingDepth := math.Max(0, currentDepth-minLegal)

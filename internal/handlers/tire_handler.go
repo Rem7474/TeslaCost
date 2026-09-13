@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"math"
 	"net/http"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
 )
 
@@ -60,7 +60,7 @@ type CreateTireRequest struct {
 	Dimension             string              `json:"dimension"`
 	Season                models.TireSeason   `json:"season"`
 	PurchaseDate          string              `json:"purchase_date"` // YYYY-MM-DD
-	PurchasePrice         float64             `json:"purchase_price"`
+	PurchasePrice         money.Cents         `json:"purchase_price"`
 	CurrentPosition       models.TirePosition `json:"current_position"`
 	InitialDepthMm        float64             `json:"initial_depth_mm"`
 	MinLegalDepthMm       float64             `json:"min_legal_depth_mm"`
@@ -156,8 +156,8 @@ type BatchCreateTiresRequest struct {
 	Dimension             string            `json:"dimension"`
 	Season                models.TireSeason `json:"season"`
 	PurchaseDate          string            `json:"purchase_date"`
-	TotalPrice            float64           `json:"total_price"`
-	UnitPrice             float64           `json:"unit_price"`
+	TotalPrice            money.Cents       `json:"total_price"`
+	UnitPrice             money.Cents       `json:"unit_price"`
 	InitialDepthMm        float64           `json:"initial_depth_mm"`
 	MinLegalDepthMm       float64           `json:"min_legal_depth_mm"`
 	DotCode               *string           `json:"dot_code"`
@@ -236,12 +236,12 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	count := len(positions)
-	prices := make([]float64, count)
+	prices := make([]money.Cents, count)
 	for i := range prices {
 		prices[i] = req.UnitPrice
 	}
 	if req.TotalPrice > 0 {
-		prices = splitAmount(req.TotalPrice, count)
+		prices = money.Split(req.TotalPrice, count)
 	}
 
 	var tires []*models.Tire
@@ -281,26 +281,6 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// splitAmount splits a total into n parts to the cent; the rounding remainder goes to the last part
-// so that the parts always add up exactly to the total.
-func splitAmount(total float64, n int) []float64 {
-	parts := make([]float64, n)
-	if n <= 0 {
-		return parts
-	}
-	totalCents := int64(math.Round(total * 100))
-	base := totalCents / int64(n)
-	remainder := totalCents - base*int64(n)
-	for i := range parts {
-		cents := base
-		if i == n-1 {
-			cents += remainder
-		}
-		parts[i] = float64(cents) / 100
-	}
-	return parts
-}
-
 type QuickRotateRequest struct {
 	Mode                string   `json:"mode"` // "FRONT_BACK", "CROSS", "SWAP_PACK"
 	Odometer            float64  `json:"odometer"`
@@ -338,7 +318,7 @@ type UpdateTireRequest struct {
 	Dimension           *string            `json:"dimension"`
 	Season              *models.TireSeason `json:"season"`
 	PurchaseDate        *string            `json:"purchase_date"`
-	PurchasePrice       *float64           `json:"purchase_price"`
+	PurchasePrice       *money.Cents       `json:"purchase_price"`
 	InitialDepthMm      *float64           `json:"initial_depth_mm"`
 	MinLegalDepthMm     *float64           `json:"min_legal_depth_mm"`
 	DotCode             *string            `json:"dot_code"`
