@@ -367,30 +367,10 @@ async function handleCreateGroupAndExpense() {
 
 async function handleCarpoolSelectedDrives() {
   if (!vehicleStore.activeVehicle || !selectedDriveIds.value.length) return
-
-  if (selectedDriveIds.value.length === 1) {
-    router.push({ path: '/carpools', query: { new_drive_id: selectedDriveIds.value[0] } })
-    return
-  }
-
-  // Multi-drives: sort chronologically to identify first origin and last destination
-  const ordered = selectedList.value
-  const first = ordered[0]
-  const last = ordered[ordered.length - 1]
-  const fromCity = (first.start_address || 'Départ').split(',')[0]
-  const toCity = (last.end_address || 'Arrivée').split(',')[0]
-  const groupTitle = `${fromCity} → ${toCity} (${ordered.length} étapes)`
-
-  try {
-    const tg = await api.createTripGroup(vehicleStore.activeVehicle.id, {
-      name: groupTitle,
-      drive_ids: ordered.map((d: any) => d.id),
-    })
-    clearSelection()
-    router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })
-  } catch (err: any) {
-    alert(`Erreur lors de la préparation du voyage : ${err.message}`)
-  }
+  // Each selected drive becomes a leg of the carpool, in chronological order
+  const ids = selectedList.value.map((d: any) => d.id)
+  clearSelection()
+  router.push({ path: '/carpools', query: { new_drive_ids: ids.join(',') } })
 }
 
 async function openCostModal(drive: any) {

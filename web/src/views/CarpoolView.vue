@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
@@ -18,21 +18,49 @@ import {
   Shield,
   CreditCard,
   CheckCircle2,
-  AlertCircle,
   X,
-  ArrowRight,
   Receipt,
   Sparkles,
-  HelpCircle,
-  Layers,
   CheckSquare,
   Square,
+  Navigation,
+  Calculator,
 } from 'lucide-vue-next'
+
+interface LegForm {
+  drive_id: string | null
+  start_label: string
+  end_label: string
+  distance_km: number
+  electricity_cost: number
+  tolls_cost: number
+  tires_cost: number
+  maintenance_cost: number
+  insurance_cost: number
+  other_cost: number
+}
+
+interface PassengerForm {
+  passenger_name: string
+  seats: number
+  amount_paid: number
+  board_stop_index: number
+  alight_stop_index: number
+  notes: string
+}
+
+const COST_FIELDS: Array<{ key: keyof LegForm; label: string }> = [
+  { key: 'electricity_cost', label: 'Électricité' },
+  { key: 'tolls_cost', label: 'Péages' },
+  { key: 'tires_cost', label: 'Pneus' },
+  { key: 'maintenance_cost', label: 'Entretien' },
+  { key: 'insurance_cost', label: 'Assurance' },
+  { key: 'other_cost', label: 'Divers' },
+]
 
 const vehicleStore = useVehicleStore()
 const { showConfirm, showAlert } = useConfirm()
 const route = useRoute()
-const router = useRouter()
 
 const loading = ref(true)
 const trips = ref<any[]>([])
@@ -43,9 +71,10 @@ const summary = ref<any>({
   total_real_cost: 0,
   total_revenue: 0,
   total_net_cost: 0,
-  total_saved: 0,
   coverage_rate_pct: 0,
   net_cost_per_km: 0,
+  total_passengers_share: 0,
+  total_driver_share: 0,
 })
 
 // Modal state
@@ -53,38 +82,93 @@ const showModal = ref(false)
 const editingTripId = ref<string | null>(null)
 const modalSubmitting = ref(false)
 const estimating = ref(false)
-
-// Recent drives for pre-selection
+const sourceMode = ref<'DRIVES' | 'MANUAL'>('DRIVES')
 const recentDrives = ref<any[]>([])
-const selectedDriveId = ref<string>('')
+const selectedDriveIds = ref<string[]>([])
+const titleTouched = ref(false)
+const currentRates = ref<any>(null)
 
-// Form state
 const form = ref({
   title: '',
   date: new Date().toISOString().substring(0, 10),
-  distance_km: 0,
-  drive_id: null as string | null,
   trip_group_id: null as string | null,
-  electricity_cost: 0,
-  tolls_cost: 0,
-  tires_cost: 0,
-  maintenance_cost: 0,
-  insurance_cost: 0,
-  other_cost: 0,
   notes: '',
-  passengers: [] as Array<{
-    passenger_name: string
-    origin: string
-    destination: string
-    seats: number
-    amount_paid: number
-    notes: string
-  }>,
+  legs: [] as LegForm[],
+  passengers: [] as PassengerForm[],
 })
 
-// Unit rates retrieved during estimation
-const currentRates = ref<any>(null)
+// ---------- Helpers ----------
+const cents = (v: number | string) => Math.round((Number(v) || 0) * 100)
+const euros = (c: number) => c / 100
+const fmt = (v: number) => Number(v || 0).toFixed(2)
 
+function emptyLeg(): LegForm {
+  return {
+    drive_id: null,
+    start_label: '',
+    end_label: '',
+    distance_km: 0,
+    electricity_cost: 0,
+    tolls_cost: 0,
+    tires_cost: 0,
+    maintenance_cost: 0,
+    insurance_cost: 0,
+    other_cost: 0,
+  }
+}
+
+function newPassenger(index: number): PassengerForm {
+  return {
+    passenger_name: `Passager ${index + 1}`,
+    seats: 1,
+    amount_paid: 0,
+    board_stop_index: 0,
+    alight_stop_index: Math.max(1, form.value.legs.length),
+    notes: '',
+  }
+}
+
+function legTotalCents(leg: any) {
+  return COST_FIELDS.reduce((sum, f) => sum + cents(leg[f.key]), 0)
+}
+
+// Stop names: stop i starts leg i, the last stop ends the last leg
+function stopNames(legs: any[]) {
+  if (!legs.length) return ['Départ', 'Arrivée']
+  const names = legs.map((l, i) => l.start_label || (i > 0 && legs[i - 1].end_label) || (i === 0 ? 'Départ' : `Arrêt ${i}`))
+  names.push(legs[legs.length - 1].end_label || 'Arrivée')
+  return names
+}
+
+// Same fair split as the backend: each leg cost is divided between the people on board (driver included)
+function allocate(legs: any[], passengers: any[]) {
+  const shares = passengers.map(() => 0)
+  const legDetails = legs.map((leg, i) => {
+    const total = legTotalCents(leg)
+    let seats = 0
+    passengers.forEach((p) => {
+      if (p.board_stop_index <= i && i < p.alight_stop_index) seats += Number(p.seats) || 1
+    })
+    const perPerson = Math.floor(total / (1 + seats))
+    passengers.forEach((p, j) => {
+      if (p.board_stop_index <= i && i < p.alight_stop_index) shares[j] += perPerson * (Number(p.seats) || 1)
+    })
+    return { total, seats, perPerson }
+  })
+  const total = legDetails.reduce((s, l) => s + l.total, 0)
+  const passengersShare = shares.reduce((s, v) => s + v, 0)
+  return { legDetails, shares, total, passengersShare, driverShare: total - passengersShare }
+}
+
+// ---------- Live form computations ----------
+const stops = computed(() => stopNames(form.value.legs))
+const live = computed(() => allocate(form.value.legs, form.value.passengers))
+const liveDistance = computed(() => form.value.legs.reduce((s, l) => s + (Number(l.distance_km) || 0), 0))
+const liveRevenue = computed(() => form.value.passengers.reduce((s, p) => s + cents(p.amount_paid), 0))
+const liveNet = computed(() => live.value.total - liveRevenue.value)
+const liveCoverage = computed(() => (live.value.total > 0 ? Math.min(100, Math.round((liveRevenue.value / live.value.total) * 1000) / 10) : 0))
+
+// ---------- Data loading ----------
 async function loadData() {
   if (!vehicleStore.activeVehicle) return
   loading.value = true
@@ -102,319 +186,292 @@ async function loadData() {
 async function loadRecentDrives() {
   if (!vehicleStore.activeVehicle) return
   try {
-    const res = await api.getDrives(vehicleStore.activeVehicle.id, { limit: 30 })
+    const res = await api.getDrives(vehicleStore.activeVehicle.id, { limit: 200 })
     recentDrives.value = res.drives || []
   } catch (err) {
     console.error('Failed to load recent drives', err)
   }
 }
 
-// Live calculations inside form
-const liveTotalCost = computed(() => {
-  return (
-    Number(form.value.electricity_cost || 0) +
-    Number(form.value.tolls_cost || 0) +
-    Number(form.value.tires_cost || 0) +
-    Number(form.value.maintenance_cost || 0) +
-    Number(form.value.insurance_cost || 0) +
-    Number(form.value.other_cost || 0)
-  )
-})
+// ---------- Estimation ----------
+// Identifies a stop by the drive it starts (or ends, for the last stop), so that passengers keep their
+// boarding and alighting places when drives are added or removed around them.
+function stopKeys(legs: LegForm[]) {
+  const keys = legs.map((l, i) => (l.drive_id ? `start:${l.drive_id}` : `index:${i}`))
+  keys.push(legs.length && legs[legs.length - 1].drive_id ? `end:${legs[legs.length - 1].drive_id}` : `index:${legs.length}`)
+  return keys
+}
 
-const liveTotalRevenue = computed(() => {
-  return form.value.passengers.reduce((sum, p) => sum + Number(p.amount_paid || 0), 0)
-})
+function applyEstimate(est: any) {
+  currentRates.value = est
+  const previousLegs = form.value.legs
+  const previousLegCount = previousLegs.length
+  const previousKeys = stopKeys(previousLegs)
+  // Alternative key of a stop: the end of the previous drive is the same place as the start of the next one
+  const previousAltKeys = previousKeys.map((_, i) => (i > 0 && previousLegs[i - 1]?.drive_id ? `end:${previousLegs[i - 1].drive_id}` : ''))
+  form.value.legs = (est.legs || []).map((l: any) => ({
+    drive_id: l.drive_id || null,
+    start_label: l.start_label || '',
+    end_label: l.end_label || '',
+    distance_km: l.distance_km,
+    electricity_cost: l.electricity_cost,
+    tolls_cost: l.tolls_cost,
+    tires_cost: l.tires_cost,
+    maintenance_cost: l.maintenance_cost,
+    insurance_cost: l.insurance_cost,
+    other_cost: l.other_cost || 0,
+  }))
 
-const liveNetCost = computed(() => {
-  return liveTotalCost.value - liveTotalRevenue.value
-})
+  if (previousLegCount > 0) {
+    const keys = stopKeys(form.value.legs)
+    const altIndex = new Map<string, number>()
+    form.value.legs.forEach((l, i) => l.drive_id && altIndex.set(`end:${l.drive_id}`, i + 1))
+    const locate = (stop: number) => {
+      const direct = keys.indexOf(previousKeys[stop])
+      if (direct >= 0) return direct
+      if (altIndex.has(previousKeys[stop])) return altIndex.get(previousKeys[stop])!
+      const alt = previousAltKeys[stop] && altIndex.get(previousAltKeys[stop])
+      return alt === undefined || alt === '' ? -1 : alt
+    }
+    form.value.passengers.forEach((p) => {
+      const ridesToEnd = p.alight_stop_index >= previousLegCount
+      const board = locate(p.board_stop_index)
+      const alight = locate(p.alight_stop_index)
+      p.board_stop_index = board >= 0 ? board : 0
+      p.alight_stop_index = ridesToEnd || alight < 0 ? form.value.legs.length : alight
+    })
+  }
+  clampPassengerStops(previousLegCount === 0 ? 0 : -1)
+  if (!titleTouched.value && form.value.legs.length) {
+    const names = stops.value
+    form.value.title = `${names[0]} → ${names[names.length - 1]}${form.value.legs.length > 1 ? ` (${form.value.legs.length} étapes)` : ''}`
+  }
+}
 
-const liveCoveragePct = computed(() => {
-  if (liveTotalCost.value <= 0) return 0
-  return Math.min(100, Math.round((liveTotalRevenue.value / liveTotalCost.value) * 1000) / 10)
-})
+// Keeps passengers' stops inside the current stops. A passenger who rode to the last stop (or any passenger
+// entered before the legs were known) still rides to the new last stop.
+function clampPassengerStops(previousLegCount: number) {
+  const n = form.value.legs.length
+  if (!n) return
+  form.value.passengers.forEach((p) => {
+    if (previousLegCount === 0 || (previousLegCount > 0 && p.alight_stop_index >= previousLegCount)) p.alight_stop_index = n
+    p.alight_stop_index = Math.min(Math.max(p.alight_stop_index, 1), n)
+    p.board_stop_index = Math.min(Math.max(p.board_stop_index, 0), p.alight_stop_index - 1)
+  })
+}
 
-const liveNetCostPerKm = computed(() => {
-  if (form.value.distance_km <= 0) return 0
-  return Math.round((liveNetCost.value / form.value.distance_km) * 1000) / 1000
-})
+async function estimateFromDrives() {
+  if (!vehicleStore.activeVehicle) return
+  if (!selectedDriveIds.value.length) {
+    form.value.legs = []
+    return
+  }
+  estimating.value = true
+  try {
+    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, { drive_ids: selectedDriveIds.value })
+    applyEstimate(est)
+    const first = recentDrives.value
+      .filter((d) => selectedDriveIds.value.includes(d.id))
+      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0]
+    if (first) form.value.date = new Date(first.start_time).toISOString().substring(0, 10)
+  } catch (err: any) {
+    alert(`Erreur d'estimation : ${err.message}`)
+  } finally {
+    estimating.value = false
+  }
+}
 
-const sourceMode = ref<'SINGLE' | 'MULTI' | 'MANUAL'>('SINGLE')
-const selectedMultiDriveIds = ref<string[]>([])
-const multiSteps = computed(() => {
-  return recentDrives.value
-    .filter((d) => selectedMultiDriveIds.value.includes(d.id))
-    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-})
+async function toggleDrive(driveId: string) {
+  const idx = selectedDriveIds.value.indexOf(driveId)
+  if (idx > -1) selectedDriveIds.value.splice(idx, 1)
+  else selectedDriveIds.value.push(driveId)
+  await estimateFromDrives()
+}
 
-function openCreateModal(preselectedDriveId?: string) {
+async function estimateManualLeg(index: number) {
+  const leg = form.value.legs[index]
+  if (!vehicleStore.activeVehicle || !(Number(leg.distance_km) > 0)) {
+    alert("Indiquez d'abord la distance de l'étape")
+    return
+  }
+  estimating.value = true
+  try {
+    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, { distance_km: Number(leg.distance_km) })
+    currentRates.value = est
+    const estimated = est.legs?.[0] || est
+    leg.electricity_cost = estimated.electricity_cost
+    leg.tires_cost = estimated.tires_cost
+    leg.maintenance_cost = estimated.maintenance_cost
+    leg.insurance_cost = estimated.insurance_cost
+  } catch (err: any) {
+    alert(`Erreur d'estimation : ${err.message}`)
+  } finally {
+    estimating.value = false
+  }
+}
+
+function addManualLeg() {
+  const previous = form.value.legs.length
+  const leg = emptyLeg()
+  if (previous) leg.start_label = form.value.legs[previous - 1].end_label
+  form.value.legs.push(leg)
+  clampPassengerStops(previous)
+}
+
+function removeLeg(index: number) {
+  if (form.value.legs.length <= 1) return
+  const previous = form.value.legs.length
+  form.value.legs.splice(index, 1)
+  clampPassengerStops(previous)
+}
+
+function switchSource(mode: 'DRIVES' | 'MANUAL') {
+  if (sourceMode.value === mode) return
+  sourceMode.value = mode
+  if (mode === 'MANUAL') {
+    selectedDriveIds.value = []
+    form.value.legs = form.value.legs.map((l) => ({ ...l, drive_id: null }))
+    if (!form.value.legs.length) addManualLeg()
+  }
+}
+
+// ---------- Modal ----------
+function resetForm() {
   editingTripId.value = null
-  selectedDriveId.value = preselectedDriveId || ''
-  selectedMultiDriveIds.value = []
-  sourceMode.value = 'SINGLE'
+  titleTouched.value = false
+  currentRates.value = null
+  selectedDriveIds.value = []
+  sourceMode.value = 'DRIVES'
   form.value = {
     title: '',
     date: new Date().toISOString().substring(0, 10),
-    distance_km: 0,
-    drive_id: preselectedDriveId || null,
     trip_group_id: null,
-    electricity_cost: 0,
-    tolls_cost: 0,
-    tires_cost: 0,
-    maintenance_cost: 0,
-    insurance_cost: 0,
-    other_cost: 0,
     notes: '',
-    passengers: [
-      {
-        passenger_name: 'Passager 1 (BlaBlaCar)',
-        origin: '',
-        destination: '',
-        seats: 1,
-        amount_paid: 0,
-        notes: '',
-      },
-    ],
+    legs: [],
+    passengers: [],
   }
-  showModal.value = true
-  loadRecentDrives()
-
-  if (preselectedDriveId) {
-    onSelectDrive(preselectedDriveId)
-  }
+  form.value.passengers.push({ ...newPassenger(0), passenger_name: 'Passager 1 (BlaBlaCar)' })
 }
 
-async function openCreateModalForTripGroup(tripGroupId: string) {
-  editingTripId.value = null
-  selectedDriveId.value = ''
-  selectedMultiDriveIds.value = []
-  sourceMode.value = 'MULTI'
-  form.value = {
-    title: 'Voyage multi-étapes',
-    date: new Date().toISOString().substring(0, 10),
-    distance_km: 0,
-    drive_id: null,
-    trip_group_id: tripGroupId,
-    electricity_cost: 0,
-    tolls_cost: 0,
-    tires_cost: 0,
-    maintenance_cost: 0,
-    insurance_cost: 0,
-    other_cost: 0,
-    notes: 'Voyage regroupant plusieurs trajets TeslaMate',
-    passengers: [
-      {
-        passenger_name: 'Passager 1 (BlaBlaCar)',
-        origin: '',
-        destination: '',
-        seats: 1,
-        amount_paid: 0,
-        notes: '',
-      },
-    ],
-  }
+async function openCreateModal(options: { driveIds?: string[]; tripGroupId?: string } = {}) {
+  resetForm()
   showModal.value = true
   await loadRecentDrives()
-
   if (!vehicleStore.activeVehicle) return
-  estimating.value = true
-  try {
-    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, { trip_group_id: tripGroupId })
-    currentRates.value = est
-    form.value.distance_km = est.distance_km
-    form.value.electricity_cost = est.electricity_cost
-    form.value.tolls_cost = est.tolls_cost
-    form.value.tires_cost = est.tires_cost
-    form.value.maintenance_cost = est.maintenance_cost
-    form.value.insurance_cost = est.insurance_cost
 
-    const groups = await api.getTripGroups(vehicleStore.activeVehicle.id)
-    const g = (groups || []).find((grp: any) => grp.id === tripGroupId)
-    if (g && g.name) {
-      form.value.title = g.name
+  if (options.tripGroupId) {
+    form.value.trip_group_id = options.tripGroupId
+    estimating.value = true
+    try {
+      const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, { trip_group_id: options.tripGroupId })
+      selectedDriveIds.value = (est.legs || []).map((l: any) => l.drive_id).filter(Boolean)
+      applyEstimate(est)
+      const groups = await api.getTripGroups(vehicleStore.activeVehicle.id)
+      const group = (groups || []).find((g: any) => g.id === options.tripGroupId)
+      if (group?.name) {
+        form.value.title = group.name
+        titleTouched.value = true
+      }
+      if (group?.start_time) form.value.date = new Date(group.start_time).toISOString().substring(0, 10)
+    } catch (err: any) {
+      alert(`Erreur d'estimation : ${err.message}`)
+    } finally {
+      estimating.value = false
     }
-  } catch (err) {
-    console.error('Failed to estimate costs for trip group', err)
-  } finally {
-    estimating.value = false
-  }
-}
-
-async function toggleMultiDrive(driveId: string) {
-  const idx = selectedMultiDriveIds.value.indexOf(driveId)
-  if (idx > -1) {
-    selectedMultiDriveIds.value.splice(idx, 1)
-  } else {
-    selectedMultiDriveIds.value.push(driveId)
-  }
-
-  if (!selectedMultiDriveIds.value.length) {
-    form.value.distance_km = 0
-    form.value.electricity_cost = 0
-    form.value.tolls_cost = 0
-    form.value.tires_cost = 0
-    form.value.maintenance_cost = 0
-    form.value.insurance_cost = 0
-    return
-  }
-
-  const steps = recentDrives.value
-    .filter((d) => selectedMultiDriveIds.value.includes(d.id))
-    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-
-  if (steps.length > 0) {
-    const firstCity = (steps[0].start_address || 'Départ').split(',')[0]
-    const lastCity = (steps[steps.length - 1].end_address || 'Arrivée').split(',')[0]
-    form.value.title = `${firstCity} → ${lastCity} (${steps.length} étapes)`
-    form.value.date = new Date(steps[0].start_time).toISOString().substring(0, 10)
-  }
-
-  if (!vehicleStore.activeVehicle) return
-  estimating.value = true
-  try {
-    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, {
-      drive_ids: selectedMultiDriveIds.value,
-    })
-    currentRates.value = est
-    form.value.distance_km = est.distance_km
-    form.value.electricity_cost = est.electricity_cost
-    form.value.tolls_cost = est.tolls_cost
-    form.value.tires_cost = est.tires_cost
-    form.value.maintenance_cost = est.maintenance_cost
-    form.value.insurance_cost = est.insurance_cost
-  } catch (err) {
-    console.error('Failed to estimate costs for multi drives', err)
-  } finally {
-    estimating.value = false
+  } else if (options.driveIds?.length) {
+    selectedDriveIds.value = [...options.driveIds]
+    await estimateFromDrives()
   }
 }
 
 function openEditModal(trip: any) {
+  resetForm()
   editingTripId.value = trip.id
-  selectedDriveId.value = trip.drive_id || ''
-  selectedMultiDriveIds.value = []
-  sourceMode.value = trip.trip_group_id ? 'MULTI' : trip.drive_id ? 'SINGLE' : 'MANUAL'
+  titleTouched.value = true
+  const legs: LegForm[] = (trip.legs || []).map((l: any) => ({
+    drive_id: l.drive_id || null,
+    start_label: l.start_label || '',
+    end_label: l.end_label || '',
+    distance_km: l.distance_km,
+    electricity_cost: l.electricity_cost,
+    tolls_cost: l.tolls_cost,
+    tires_cost: l.tires_cost,
+    maintenance_cost: l.maintenance_cost,
+    insurance_cost: l.insurance_cost,
+    other_cost: l.other_cost,
+  }))
+  sourceMode.value = legs.some((l) => l.drive_id) ? 'DRIVES' : 'MANUAL'
+  selectedDriveIds.value = legs.map((l) => l.drive_id).filter((id): id is string => !!id)
   form.value = {
     title: trip.title,
     date: new Date(trip.date).toISOString().substring(0, 10),
-    distance_km: trip.distance_km,
-    drive_id: trip.drive_id || null,
     trip_group_id: trip.trip_group_id || null,
-    electricity_cost: trip.electricity_cost,
-    tolls_cost: trip.tolls_cost,
-    tires_cost: trip.tires_cost,
-    maintenance_cost: trip.maintenance_cost,
-    insurance_cost: trip.insurance_cost,
-    other_cost: trip.other_cost,
     notes: trip.notes || '',
+    legs,
     passengers: (trip.passengers || []).map((p: any) => ({
       passenger_name: p.passenger_name,
-      origin: p.origin || '',
-      destination: p.destination || '',
       seats: p.seats || 1,
       amount_paid: p.amount_paid || 0,
+      board_stop_index: p.board_stop_index ?? 0,
+      alight_stop_index: p.alight_stop_index ?? legs.length,
       notes: p.notes || '',
     })),
   }
-  if (form.value.passengers.length === 0) {
-    addPassenger()
-  }
+  if (!form.value.passengers.length) addPassenger()
   showModal.value = true
-}
-
-async function onSelectDrive(driveId: string) {
-  if (!driveId || !vehicleStore.activeVehicle) return
-  estimating.value = true
-  try {
-    const drive = recentDrives.value.find((d) => d.id === driveId)
-    if (drive) {
-      const from = drive.start_address ? drive.start_address.split(',')[0] : 'Départ'
-      const to = drive.end_address ? drive.end_address.split(',')[0] : 'Arrivée'
-      form.value.title = `${from} → ${to}`
-      form.value.date = new Date(drive.start_time).toISOString().substring(0, 10)
-      form.value.distance_km = drive.distance_km
-      form.value.drive_id = drive.id
-    }
-
-    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, { drive_id: driveId })
-    currentRates.value = est
-    form.value.distance_km = est.distance_km
-    form.value.electricity_cost = est.electricity_cost
-    form.value.tolls_cost = est.tolls_cost
-    form.value.tires_cost = est.tires_cost
-    form.value.maintenance_cost = est.maintenance_cost
-    form.value.insurance_cost = est.insurance_cost
-  } catch (err) {
-    console.error('Failed to estimate costs for drive', err)
-  } finally {
-    estimating.value = false
-  }
-}
-
-async function reestimateFromDistance() {
-  if (!vehicleStore.activeVehicle || form.value.distance_km <= 0) return
-  estimating.value = true
-  try {
-    const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, {
-      distance_km: Number(form.value.distance_km),
-    })
-    currentRates.value = est
-    form.value.electricity_cost = est.electricity_cost
-    form.value.tires_cost = est.tires_cost
-    form.value.maintenance_cost = est.maintenance_cost
-    form.value.insurance_cost = est.insurance_cost
-  } catch (err) {
-    console.error('Failed to estimate costs from distance', err)
-  } finally {
-    estimating.value = false
-  }
+  loadRecentDrives()
 }
 
 function addPassenger() {
-  form.value.passengers.push({
-    passenger_name: `Passager ${form.value.passengers.length + 1}`,
-    origin: '',
-    destination: '',
-    seats: 1,
-    amount_paid: 0,
-    notes: '',
-  })
+  form.value.passengers.push(newPassenger(form.value.passengers.length))
 }
 
 function removePassenger(index: number) {
   form.value.passengers.splice(index, 1)
 }
 
+function onBoardChange(p: PassengerForm) {
+  if (p.alight_stop_index <= p.board_stop_index) p.alight_stop_index = p.board_stop_index + 1
+}
+
+function applyFairPrice(index: number) {
+  form.value.passengers[index].amount_paid = euros(live.value.shares[index])
+}
+
 async function handleSave() {
   if (!vehicleStore.activeVehicle) return
   if (!form.value.title.trim()) {
-    showAlert('Veuillez indiquer un titre ou trajet (ex: Paris → Lyon)', 'Champ requis', 'warning')
+    showAlert('Veuillez indiquer un titre (ex: Paris → Lyon)', 'Champ requis', 'warning')
     return
   }
-
+  if (!form.value.legs.length) {
+    showAlert('Sélectionnez au moins un trajet ou ajoutez une étape', 'Champ requis', 'warning')
+    return
+  }
   modalSubmitting.value = true
   try {
-    // If multi-drives selected directly without existing trip_group_id, create trip group first
-    if (sourceMode.value === 'MULTI' && !form.value.trip_group_id && selectedMultiDriveIds.value.length > 1) {
-      const tg = await api.createTripGroup(vehicleStore.activeVehicle.id, {
-        name: form.value.title,
-        drive_ids: selectedMultiDriveIds.value,
-      })
-      form.value.trip_group_id = tg.id
-      form.value.drive_id = null
-    }
-
     const payload = {
-      ...form.value,
+      title: form.value.title,
       date: new Date(form.value.date).toISOString(),
+      trip_group_id: form.value.trip_group_id,
+      notes: form.value.notes || null,
+      legs: form.value.legs.map((l) => ({
+        ...l,
+        distance_km: Number(l.distance_km) || 0,
+        ...Object.fromEntries(COST_FIELDS.map((f) => [f.key, Number(l[f.key]) || 0])),
+      })),
+      passengers: form.value.passengers.map((p) => ({
+        ...p,
+        seats: Number(p.seats) || 1,
+        amount_paid: Number(p.amount_paid) || 0,
+        notes: p.notes || null,
+      })),
     }
-
     if (editingTripId.value) {
       await api.updateCarpool(vehicleStore.activeVehicle.id, editingTripId.value, payload)
     } else {
       await api.createCarpool(vehicleStore.activeVehicle.id, payload)
     }
-
     showModal.value = false
     await loadData()
   } catch (err: any) {
@@ -443,29 +500,26 @@ async function handleDelete(trip: any) {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('fr-FR', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  })
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function formatDriveTime(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 watch(
   () => [vehicleStore.activeVehicle?.id, vehicleStore.lastSyncTimestamp],
-  () => {
-    loadData()
-  }
+  () => loadData()
 )
 
 onMounted(() => {
   loadData()
-  const newDriveId = route.query.new_drive_id as string
-  const newTripGroupId = route.query.new_trip_group_id as string
-  if (newDriveId) {
-    openCreateModal(newDriveId)
-  } else if (newTripGroupId) {
-    openCreateModalForTripGroup(newTripGroupId)
-  }
+  const driveIds = [route.query.new_drive_id, ...String(route.query.new_drive_ids || '').split(',')]
+    .map((v) => String(v || '').trim())
+    .filter(Boolean)
+  const tripGroupId = route.query.new_trip_group_id as string
+  if (tripGroupId) openCreateModal({ tripGroupId })
+  else if (driveIds.length) openCreateModal({ driveIds })
 })
 </script>
 
@@ -479,10 +533,9 @@ onMounted(() => {
           Covoiturage & BlaBlaCar
         </h2>
         <p class="text-sm text-slate-400">
-          Suivi financier précis par trajet • Recettes reçues, usure réelle, électricité, péages et amortissement des frais
+          Trajets en plusieurs étapes, passagers qui montent et descendent en route : chacun paie sa part des étapes parcourues
         </p>
       </div>
-
       <button
         @click="openCreateModal()"
         class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20 transition-all self-start sm:self-auto"
@@ -494,123 +547,82 @@ onMounted(() => {
 
     <!-- KPI Summary Grid -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      <!-- Trajets partagés -->
       <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-slate-400">Trajets covoiturés</span>
-          <div class="p-2 bg-slate-800 rounded-xl text-slate-300">
-            <Users class="w-4 h-4" />
-          </div>
+          <div class="p-2 bg-slate-800 rounded-xl text-slate-300"><Users class="w-4 h-4" /></div>
         </div>
         <div class="mt-2 flex items-baseline gap-2">
           <span class="text-2xl font-bold text-white">{{ summary.total_trips }}</span>
           <span class="text-xs text-slate-400">voyages</span>
         </div>
-        <div class="mt-1 text-[11px] text-slate-400">
-          {{ Math.round(summary.total_distance_km || 0).toLocaleString('fr-FR') }} km partagés
-        </div>
+        <div class="mt-1 text-[11px] text-slate-400">{{ Math.round(summary.total_distance_km || 0).toLocaleString('fr-FR') }} km partagés</div>
       </div>
 
-      <!-- Passagers transportés -->
       <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-slate-400">Passagers transportés</span>
-          <div class="p-2 bg-blue-500/10 rounded-xl text-blue-400">
-            <Users class="w-4 h-4" />
-          </div>
+          <div class="p-2 bg-blue-500/10 rounded-xl text-blue-400"><Users class="w-4 h-4" /></div>
         </div>
         <div class="mt-2 flex items-baseline gap-2">
           <span class="text-2xl font-bold text-blue-400">{{ summary.total_passengers }}</span>
           <span class="text-xs text-slate-400">personnes</span>
         </div>
-        <div class="mt-1 text-[11px] text-slate-400">
-          BlaBlaCar & directs
-        </div>
+        <div class="mt-1 text-[11px] text-slate-400">Part équitable due : {{ fmt(summary.total_passengers_share) }} €</div>
       </div>
 
-      <!-- Recettes perçues -->
       <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-slate-400">Total perçu passagers</span>
-          <div class="p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
-            <CreditCard class="w-4 h-4" />
-          </div>
+          <div class="p-2 bg-emerald-500/10 rounded-xl text-emerald-400"><CreditCard class="w-4 h-4" /></div>
         </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span class="text-2xl font-bold text-emerald-400">{{ Number(summary.total_revenue || 0).toFixed(2) }} €</span>
-        </div>
-        <div class="mt-1 text-[11px] text-emerald-500/80">
-          Argent directement encaissé
+        <div class="mt-2"><span class="text-2xl font-bold text-emerald-400">{{ fmt(summary.total_revenue) }} €</span></div>
+        <div class="mt-1 text-[11px]" :class="summary.total_revenue >= summary.total_passengers_share ? 'text-emerald-500/80' : 'text-amber-400'">
+          {{ summary.total_revenue >= summary.total_passengers_share ? 'Parts des passagers couvertes' : `${fmt(summary.total_passengers_share - summary.total_revenue)} € sous leur part` }}
         </div>
       </div>
 
-      <!-- Taux d'amortissement / Économies -->
       <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-slate-400">Taux d'amortissement</span>
-          <div class="p-2 bg-rose-500/10 rounded-xl text-rose-400">
-            <TrendingUp class="w-4 h-4" />
-          </div>
+          <div class="p-2 bg-rose-500/10 rounded-xl text-rose-400"><TrendingUp class="w-4 h-4" /></div>
         </div>
-        <div class="mt-2 flex items-baseline gap-2">
-          <span class="text-2xl font-bold text-rose-400">{{ summary.coverage_rate_pct || 0 }} %</span>
-        </div>
-        <div class="mt-1 text-[11px] text-slate-400">
-          {{ Number(summary.total_saved || 0).toFixed(2) }} € économisés sur les coûts réels
-        </div>
+        <div class="mt-2"><span class="text-2xl font-bold text-rose-400">{{ summary.coverage_rate_pct || 0 }} %</span></div>
+        <div class="mt-1 text-[11px] text-slate-400">du coût réel total ({{ fmt(summary.total_real_cost) }} €)</div>
       </div>
 
-      <!-- Coût net conducteur au km -->
       <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-slate-400">Coût net conducteur</span>
-          <div class="p-2 bg-amber-500/10 rounded-xl text-amber-400">
-            <Receipt class="w-4 h-4" />
-          </div>
+          <div class="p-2 bg-amber-500/10 rounded-xl text-amber-400"><Receipt class="w-4 h-4" /></div>
         </div>
         <div class="mt-2 flex items-baseline gap-2">
           <span class="text-2xl font-bold text-amber-400">{{ Number(summary.net_cost_per_km || 0).toFixed(3) }} €</span>
           <span class="text-xs text-slate-400">/ km</span>
         </div>
-        <div class="mt-1 text-[11px] text-slate-400">
-          Reste à charge réel
-        </div>
+        <div class="mt-1 text-[11px] text-slate-400">Part équitable conducteur : {{ fmt(summary.total_driver_share) }} €</div>
       </div>
     </div>
 
-    <!-- SKELETON LOADING STATE -->
-    <div v-if="loading" class="space-y-6 animate-pulse">
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <div v-for="i in 5" :key="i" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl h-24 flex flex-col justify-between">
-          <div class="h-3 w-20 bg-slate-800 rounded"></div>
-          <div class="h-6 w-24 bg-slate-800 rounded"></div>
-        </div>
-      </div>
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 h-64 flex flex-col justify-between">
-        <div class="h-4 w-40 bg-slate-800 rounded"></div>
-        <div class="space-y-3">
-          <div v-for="j in 3" :key="j" class="h-12 bg-slate-800/50 rounded-xl"></div>
-        </div>
-      </div>
+    <!-- Loading -->
+    <div v-if="loading" class="space-y-4 animate-pulse">
+      <div v-for="i in 2" :key="i" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 h-48"></div>
     </div>
 
     <!-- Empty State -->
-    <div
-      v-else-if="trips.length === 0"
-      class="bg-slate-900/60 border border-slate-800 rounded-3xl p-12 text-center max-w-2xl mx-auto space-y-4"
-    >
+    <div v-else-if="trips.length === 0" class="bg-slate-900/60 border border-slate-800 rounded-3xl p-12 text-center max-w-2xl mx-auto space-y-4">
       <div class="w-16 h-16 bg-rose-500/10 border border-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center mx-auto">
         <Users class="w-8 h-8" />
       </div>
       <div>
         <h3 class="text-lg font-bold text-white">Aucun trajet covoituré pour le moment</h3>
         <p class="text-sm text-slate-400 mt-1 max-w-md mx-auto">
-          Enregistrez vos trajets BlaBlaCar pour découvrir le coût de revient exact de vos voyages (électricité, usure pneus, péages, assurance) et combien vos passagers vous ont fait économiser !
+          Sélectionnez les étapes de votre trajet, indiquez où chaque passager monte et descend : TeslaCost calcule la part réelle de chacun.
         </p>
       </div>
       <button
         @click="openCreateModal()"
-        class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl inline-flex items-center gap-2 shadow-lg shadow-rose-600/20 transition-all"
+        class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl inline-flex items-center gap-2 shadow-lg shadow-rose-600/20"
       >
         <Plus class="w-4 h-4" />
         Créer mon premier covoiturage
@@ -619,28 +631,18 @@ onMounted(() => {
 
     <!-- Trips List -->
     <div v-else class="space-y-4">
-      <div
-        v-for="trip in trips"
-        :key="trip.id"
-        class="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-all shadow-sm space-y-4"
-      >
+      <div v-for="trip in trips" :key="trip.id" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-all shadow-sm space-y-4">
         <!-- Trip Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div class="space-y-1">
             <div class="flex items-center gap-2.5 flex-wrap">
               <h3 class="text-base font-bold text-white">{{ trip.title }}</h3>
-              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium">
-                {{ trip.distance_km }} km
-              </span>
+              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium">{{ trip.distance_km }} km</span>
               <span
                 class="text-xs px-2.5 py-0.5 rounded-full font-semibold border"
-                :class="
-                  trip.net_cost <= 0
-                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                    : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                "
+                :class="trip.net_cost <= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'"
               >
-                {{ trip.net_cost <= 0 ? 'Trajet 100% rentabilisé !' : `Amorti à ${Math.min(100, Math.round((trip.total_revenue / trip.total_cost) * 100))}%` }}
+                {{ trip.net_cost <= 0 ? 'Trajet 100% rentabilisé !' : `Amorti à ${trip.total_cost > 0 ? Math.min(100, Math.round((trip.total_revenue / trip.total_cost) * 100)) : 0}%` }}
               </span>
             </div>
             <div class="flex items-center gap-2 text-xs text-slate-400">
@@ -649,556 +651,397 @@ onMounted(() => {
               <span v-if="trip.notes" class="text-slate-500">• {{ trip.notes }}</span>
             </div>
           </div>
-
-          <!-- Actions -->
           <div class="flex items-center gap-2 self-end sm:self-auto">
-            <button
-              @click="openEditModal(trip)"
-              class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-              title="Modifier"
-            >
+            <button @click="openEditModal(trip)" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg" title="Modifier">
               <Edit2 class="w-4 h-4" />
             </button>
-            <button
-              @click="handleDelete(trip)"
-              class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-              title="Supprimer"
-            >
+            <button @click="handleDelete(trip)" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg" title="Supprimer">
               <Trash2 class="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        <!-- Passengers & Bouts de trajet -->
+        <!-- Legs -->
+        <div class="space-y-2">
+          <div class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+            <Navigation class="w-3.5 h-3.5 text-indigo-400" />
+            Étapes ({{ trip.legs.length }})
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <div
+              v-for="(leg, i) in trip.legs"
+              :key="leg.id"
+              class="bg-slate-950/60 border border-slate-800/80 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-300"
+            >
+              <div class="font-semibold text-slate-200">{{ stopNames(trip.legs)[i] }} → {{ stopNames(trip.legs)[i + 1] }}</div>
+              <div class="text-slate-400">
+                {{ leg.distance_km }} km • {{ fmt(leg.total_cost) }} € •
+                {{ 1 + leg.passenger_seats }} à bord • {{ fmt(leg.cost_per_person) }} €/pers.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Passengers -->
         <div class="space-y-2">
           <div class="text-xs font-semibold text-slate-300 flex items-center justify-between">
             <span class="flex items-center gap-1.5">
               <Users class="w-3.5 h-3.5 text-blue-400" />
-              Passagers & Tronçons ({{ trip.passengers?.length || 0 }})
+              Passagers ({{ trip.passengers?.length || 0 }})
             </span>
-            <span class="text-emerald-400 font-bold">Total perçu : +{{ Number(trip.total_revenue).toFixed(2) }} €</span>
+            <span class="text-emerald-400 font-bold">Total perçu : +{{ fmt(trip.total_revenue) }} €</span>
           </div>
-
           <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-            <div
-              v-for="p in trip.passengers"
-              :key="p.id"
-              class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-2.5 flex items-center justify-between text-xs"
-            >
-              <div class="space-y-0.5 truncate pr-2">
-                <div class="font-semibold text-slate-200 truncate">{{ p.passenger_name }}</div>
-                <div class="text-[11px] text-slate-400 flex items-center gap-1 truncate">
-                  <MapPin class="w-3 h-3 shrink-0 text-slate-500" />
-                  <span class="truncate">
-                    {{ p.origin || 'Départ' }} → {{ p.destination || 'Arrivée' }}
-                  </span>
-                </div>
+            <div v-for="p in trip.passengers" :key="p.id" class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-2.5 text-xs space-y-1">
+              <div class="flex items-center justify-between gap-2">
+                <span class="font-semibold text-slate-200 truncate">{{ p.passenger_name }}</span>
+                <span class="font-bold text-emerald-400 shrink-0">+{{ fmt(p.amount_paid) }} €</span>
               </div>
-              <div class="text-right shrink-0">
-                <div class="font-bold text-emerald-400">+{{ Number(p.amount_paid).toFixed(2) }} €</div>
-                <div class="text-[10px] text-slate-500">{{ p.seats }} place{{ p.seats > 1 ? 's' : '' }}</div>
+              <div class="text-[11px] text-slate-400 flex items-center gap-1 truncate">
+                <MapPin class="w-3 h-3 shrink-0 text-slate-500" />
+                <span class="truncate">
+                  {{ stopNames(trip.legs)[p.board_stop_index] }} → {{ stopNames(trip.legs)[p.alight_stop_index] }}
+                  • {{ p.seats }} place{{ p.seats > 1 ? 's' : '' }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between text-[11px]">
+                <span class="text-slate-400">Part : {{ fmt(p.cost_share) }} €</span>
+                <span :class="p.balance >= 0 ? 'text-emerald-400' : 'text-amber-400'">
+                  {{ p.balance >= 0 ? `+${fmt(p.balance)} € au-dessus` : `${fmt(-p.balance)} € sous sa part` }}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Cost Breakdown Badges -->
+        <!-- Cost Breakdown -->
         <div class="pt-3 border-t border-slate-800/60 space-y-2">
-          <div class="text-xs font-semibold text-slate-400">Coûts réels de revient du trajet :</div>
+          <div class="text-xs font-semibold text-slate-400">Coûts réels du trajet :</div>
           <div class="flex flex-wrap items-center gap-2 text-xs">
-            <!-- Electricity -->
             <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-              <Zap class="w-3.5 h-3.5 text-amber-400" />
-              <span>Électricité : <strong>{{ Number(trip.electricity_cost).toFixed(2) }} €</strong></span>
+              <Zap class="w-3.5 h-3.5 text-amber-400" /> Électricité : <strong>{{ fmt(trip.electricity_cost) }} €</strong>
             </div>
-
-            <!-- Tolls -->
-            <div
-              v-if="trip.tolls_cost > 0"
-              class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300"
-            >
-              <CreditCard class="w-3.5 h-3.5 text-blue-400" />
-              <span>Péages : <strong>{{ Number(trip.tolls_cost).toFixed(2) }} €</strong></span>
+            <div v-if="trip.tolls_cost > 0" class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
+              <CreditCard class="w-3.5 h-3.5 text-blue-400" /> Péages : <strong>{{ fmt(trip.tolls_cost) }} €</strong>
             </div>
-
-            <!-- Tires -->
             <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-              <Disc class="w-3.5 h-3.5 text-rose-400" />
-              <span>Usure pneus : <strong>{{ Number(trip.tires_cost).toFixed(2) }} €</strong></span>
+              <Disc class="w-3.5 h-3.5 text-rose-400" /> Usure pneus : <strong>{{ fmt(trip.tires_cost) }} €</strong>
             </div>
-
-            <!-- Maintenance -->
             <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-              <Wrench class="w-3.5 h-3.5 text-indigo-400" />
-              <span>Entretien : <strong>{{ Number(trip.maintenance_cost).toFixed(2) }} €</strong></span>
+              <Wrench class="w-3.5 h-3.5 text-indigo-400" /> Entretien : <strong>{{ fmt(trip.maintenance_cost) }} €</strong>
             </div>
-
-            <!-- Insurance -->
             <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-              <Shield class="w-3.5 h-3.5 text-emerald-400" />
-              <span>Assurance : <strong>{{ Number(trip.insurance_cost).toFixed(2) }} €</strong></span>
+              <Shield class="w-3.5 h-3.5 text-emerald-400" /> Assurance : <strong>{{ fmt(trip.insurance_cost) }} €</strong>
             </div>
-
-            <!-- Other -->
-            <div
-              v-if="trip.other_cost > 0"
-              class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300"
-            >
-              <Receipt class="w-3.5 h-3.5 text-slate-400" />
-              <span>Divers : <strong>{{ Number(trip.other_cost).toFixed(2) }} €</strong></span>
+            <div v-if="trip.other_cost > 0" class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
+              <Receipt class="w-3.5 h-3.5 text-slate-400" /> Divers : <strong>{{ fmt(trip.other_cost) }} €</strong>
             </div>
           </div>
         </div>
 
-        <!-- Financial Bottom Line Banner -->
+        <!-- Bottom Line -->
         <div
-          class="rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-          :class="
-            trip.net_cost <= 0
-              ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300'
-              : 'bg-slate-950/80 border border-slate-800 text-slate-300'
-          "
+          class="rounded-xl p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs"
+          :class="trip.net_cost <= 0 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-slate-950/80 border border-slate-800 text-slate-300'"
         >
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <CheckCircle2 v-if="trip.net_cost <= 0" class="w-4 h-4 text-emerald-400 shrink-0" />
             <Sparkles v-else class="w-4 h-4 text-amber-400 shrink-0" />
-            <div>
-              <span>Coût réel total : <strong>{{ Number(trip.total_cost).toFixed(2) }} €</strong></span>
-              <span class="mx-2">•</span>
-              <span>Total perçu : <strong class="text-emerald-400">+{{ Number(trip.total_revenue).toFixed(2) }} €</strong></span>
-            </div>
+            <span>Coût réel : <strong>{{ fmt(trip.total_cost) }} €</strong></span>
+            <span>•</span>
+            <span>Part des passagers : <strong>{{ fmt(trip.passengers_cost_share) }} €</strong></span>
+            <span>•</span>
+            <span>Part du conducteur : <strong>{{ fmt(trip.driver_cost_share) }} €</strong></span>
           </div>
-
-          <div class="flex items-center gap-3">
-            <div v-if="trip.net_cost > 0">
-              Reste à charge conducteur : <strong class="text-white text-sm">{{ Number(trip.net_cost).toFixed(2) }} €</strong>
-              <span class="text-slate-400 text-[11px] ml-1">({{ (trip.net_cost / trip.distance_km).toFixed(3) }} €/km)</span>
-            </div>
-            <div v-else class="font-bold text-emerald-400 text-sm">
-              Excédent net : +{{ Math.abs(trip.net_cost).toFixed(2) }} €
-            </div>
+          <div>
+            <template v-if="trip.net_cost > 0">
+              Reste à charge conducteur : <strong class="text-white text-sm">{{ fmt(trip.net_cost) }} €</strong>
+              <span v-if="trip.distance_km > 0" class="text-slate-400 text-[11px] ml-1">({{ (trip.net_cost / trip.distance_km).toFixed(3) }} €/km)</span>
+            </template>
+            <span v-else class="font-bold text-emerald-400 text-sm">Excédent net : +{{ fmt(Math.abs(trip.net_cost)) }} €</span>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Create / Edit Carpool Modal -->
-    <div
-      v-if="showModal"
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
-    >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl">
-        <!-- Modal Header -->
-        <div class="flex items-center justify-between pb-4 border-b border-slate-800">
-          <div>
-            <h3 class="text-lg font-bold text-white flex items-center gap-2">
-              <Users class="w-5 h-5 text-rose-500" />
-              {{ editingTripId ? 'Modifier le covoiturage' : 'Nouveau trajet covoituré' }}
-            </h3>
-            <p class="text-xs text-slate-400">Renseignez le trajet, ses passagers et ses frais réels</p>
-          </div>
-          <button @click="showModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg">
-            <X class="w-5 h-5" />
-          </button>
+    <!-- Create / Edit Modal -->
+    <div v-if="showModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-4xl w-full p-6 space-y-5 max-h-[92vh] overflow-y-auto shadow-2xl">
+        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+            <Users class="w-5 h-5 text-rose-400" />
+            {{ editingTripId ? 'Modifier le covoiturage' : 'Nouveau covoiturage' }}
+          </h3>
+          <button @click="showModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg"><X class="w-5 h-5" /></button>
         </div>
 
-        <!-- Trip Origin Selection (Single Drive, Multi-Drive Journey, or Manual) -->
-        <div v-if="!editingTripId" class="bg-slate-950/60 border border-slate-800 p-3.5 rounded-2xl space-y-3">
-          <div class="flex items-center justify-between flex-wrap gap-2">
-            <label class="text-xs font-semibold text-slate-300">Origine des données du trajet :</label>
-            <!-- Tabs -->
-            <div class="flex items-center gap-1 bg-slate-900 border border-slate-800 p-0.5 rounded-lg text-xs">
-              <button
-                type="button"
-                @click="sourceMode = 'SINGLE'"
-                class="px-2.5 py-1 rounded-md transition-all font-semibold"
-                :class="sourceMode === 'SINGLE' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
-              >
-                Trajet unique
-              </button>
-              <button
-                type="button"
-                @click="sourceMode = 'MULTI'"
-                class="px-2.5 py-1 rounded-md transition-all font-semibold flex items-center gap-1"
-                :class="sourceMode === 'MULTI' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
-              >
-                <Layers class="w-3 h-3" />
-                Multi-étapes (arrêts)
-              </button>
-              <button
-                type="button"
-                @click="sourceMode = 'MANUAL'"
-                class="px-2.5 py-1 rounded-md transition-all font-semibold"
-                :class="sourceMode === 'MANUAL' ? 'bg-rose-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'"
-              >
-                Saisie libre
-              </button>
-            </div>
-          </div>
-
-          <!-- Mode 1: Single Drive -->
-          <div v-if="sourceMode === 'SINGLE'" class="space-y-2">
-            <label for="carpool-selected-drive-id" class="sr-only">Trajet TeslaMate associé</label>
-            <select id="carpool-selected-drive-id"
-              v-model="selectedDriveId"
-              @change="onSelectDrive(selectedDriveId)"
-              class="w-full bg-slate-900 text-slate-200 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
+        <!-- Source -->
+        <div class="space-y-3">
+          <div class="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl w-fit text-xs font-semibold">
+            <button
+              @click="switchSource('DRIVES')"
+              class="px-3 py-1.5 rounded-lg"
+              :class="sourceMode === 'DRIVES' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'"
             >
-              <option value="">-- Choisir un trajet récent dans la liste --</option>
-              <option v-for="d in recentDrives" :key="d.id" :value="d.id">
-                {{ formatDate(d.start_time) }} : {{ d.start_address?.split(',')[0] || 'Départ' }} → {{ d.end_address?.split(',')[0] || 'Arrivée' }} ({{ d.distance_km }} km, {{ d.energy_consumed_kwh ? d.energy_consumed_kwh + ' kWh' : '' }})
-              </option>
-            </select>
+              Trajets TeslaMate
+            </button>
+            <button
+              @click="switchSource('MANUAL')"
+              class="px-3 py-1.5 rounded-lg"
+              :class="sourceMode === 'MANUAL' ? 'bg-rose-600 text-white' : 'text-slate-400 hover:text-white'"
+            >
+              Saisie manuelle
+            </button>
           </div>
 
-          <!-- Mode 2: Multi-stage Drive (Arrêts recharge / pauses) -->
-          <div v-else-if="sourceMode === 'MULTI'" class="space-y-2.5">
-            <p class="text-[11px] text-slate-400">
-              Cochez les trajets consécutifs composant votre voyage (ex: Paris → Beaune puis Beaune → Lyon) :
-            </p>
-            <div class="max-h-44 overflow-y-auto space-y-1.5 pr-1">
-              <div
+          <div v-if="sourceMode === 'DRIVES'" class="space-y-1.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">Cochez les trajets qui composent le covoiturage : chaque trajet devient une étape.</span>
+              <span class="text-rose-400 font-semibold">{{ selectedDriveIds.length }} étape(s){{ estimating ? ' • estimation…' : '' }}</span>
+            </div>
+            <div class="max-h-44 overflow-y-auto space-y-1 pr-1">
+              <button
                 v-for="d in recentDrives"
                 :key="d.id"
-                @click="toggleMultiDrive(d.id)"
-                class="flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer border transition-all"
-                :class="selectedMultiDriveIds.includes(d.id) ? 'bg-rose-500/15 border-rose-500/40 text-white' : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:bg-slate-800/60'"
+                type="button"
+                @click="toggleDrive(d.id)"
+                class="w-full flex items-center justify-between gap-3 p-2 rounded-lg text-xs border text-left transition-colors"
+                :class="selectedDriveIds.includes(d.id) ? 'bg-rose-500/10 border-rose-500/40 text-rose-100' : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'"
               >
-                <div class="flex items-center gap-2 truncate pr-2">
-                  <component :is="selectedMultiDriveIds.includes(d.id) ? CheckSquare : Square" class="w-4 h-4 text-rose-400 shrink-0" />
-                  <span class="text-slate-400 font-mono text-[11px]">{{ formatDate(d.start_time) }}</span>
-                  <span class="truncate">{{ d.start_address?.split(',')[0] || 'Départ' }} → {{ d.end_address?.split(',')[0] || 'Arrivée' }}</span>
-                </div>
-                <div class="shrink-0 text-right">
-                  <span class="font-bold text-rose-400">{{ d.distance_km }} km</span>
-                  <span v-if="d.energy_consumed_kwh" class="text-sky-400 ml-1.5 font-mono text-[10px]">({{ d.energy_consumed_kwh }} kWh)</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Steps summary -->
-            <div v-if="multiSteps.length" class="bg-slate-900 border border-slate-800 p-2.5 rounded-xl space-y-1.5">
-              <div class="text-[11px] font-bold text-rose-400 flex items-center gap-1.5">
-                <Layers class="w-3.5 h-3.5" />
-                <span>{{ multiSteps.length }} étape(s) combinée(s) : {{ form.distance_km }} km au total</span>
-              </div>
-              <div class="flex flex-wrap items-center gap-1.5">
-                <span
-                  v-for="(step, idx) in multiSteps"
-                  :key="step.id"
-                  class="px-2 py-0.5 bg-slate-800 border border-slate-700 rounded-lg text-[10px] text-slate-300 flex items-center gap-1"
-                >
-                  <span class="text-rose-400 font-bold">Étape {{ idx + 1 }}:</span>
-                  <span>{{ step.start_address?.split(',')[0] || 'Dép' }} → {{ step.end_address?.split(',')[0] || 'Arr' }}</span>
-                  <span class="text-slate-500">({{ step.distance_km }} km)</span>
+                <span class="flex items-center gap-2 truncate">
+                  <component :is="selectedDriveIds.includes(d.id) ? CheckSquare : Square" class="w-4 h-4 shrink-0 text-rose-400" />
+                  <span class="truncate">{{ formatDriveTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}</span>
                 </span>
-              </div>
+                <span class="font-mono text-[11px] text-slate-400 shrink-0">{{ Number(d.distance_km).toFixed(0) }} km</span>
+              </button>
             </div>
-          </div>
-
-          <!-- Mode 3: Manual Free Input -->
-          <div v-else class="text-[11px] text-slate-400">
-            Saisissez manuellement le titre, la distance et vos estimations de frais ci-dessous.
-          </div>
-
-          <div v-if="estimating" class="text-[11px] text-rose-400 flex items-center gap-1.5">
-            <Sparkles class="w-3.5 h-3.5 animate-spin" />
-            <span>Calcul automatique des coûts réels selon les taux de votre Tesla...</span>
           </div>
         </div>
 
-        <!-- Trip Details -->
+        <!-- Title & date -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="sm:col-span-2">
-            <label for="carpool-title" class="block text-xs font-semibold text-slate-400 mb-1">Titre / Trajet</label>
-            <input id="carpool-title"
+            <label for="carpool-title" class="block text-xs font-semibold text-slate-400 mb-1">Titre</label>
+            <input
+              id="carpool-title"
               v-model="form.title"
-              type="text"
-              placeholder="Ex: Paris → Lyon (via Auxerre)"
-              class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
+              @input="titleTouched = true"
+              placeholder="ex: Annecy → Valence"
+              class="w-full bg-slate-800 text-slate-100 text-sm rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
             />
           </div>
           <div>
             <label for="carpool-date" class="block text-xs font-semibold text-slate-400 mb-1">Date</label>
-            <input id="carpool-date"
-              v-model="form.date"
-              type="date"
-              class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
-            />
+            <input id="carpool-date" v-model="form.date" type="date" class="w-full bg-slate-800 text-slate-100 text-sm rounded-xl px-3 py-2 border border-slate-700" />
           </div>
         </div>
 
-        <!-- Distance & Re-estimate Button -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
-          <div>
-            <label for="carpool-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">Distance parcourue (km)</label>
-            <input id="carpool-distance-km"
-              v-model.number="form.distance_km"
-              type="number"
-              step="0.1"
-              min="0"
-              class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
-            />
-          </div>
-          <div>
+        <!-- Legs -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+              <Navigation class="w-4 h-4 text-indigo-400" />
+              Étapes et coûts réels ({{ liveDistance.toFixed(1) }} km • {{ fmt(euros(live.total)) }} €)
+            </h4>
             <button
+              v-if="sourceMode === 'MANUAL'"
               type="button"
-              @click="reestimateFromDistance"
-              :disabled="estimating || form.distance_km <= 0"
-              class="w-full bg-slate-800 hover:bg-slate-700 text-rose-400 border border-slate-700 text-xs font-medium px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+              @click="addManualLeg"
+              class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
             >
-              <Sparkles class="w-3.5 h-3.5" />
-              Réestimer coûts réels au km
+              <Plus class="w-3.5 h-3.5" /> Ajouter une étape
             </button>
           </div>
-        </div>
+          <p v-if="!form.legs.length" class="text-xs text-slate-500">Sélectionnez au moins un trajet.</p>
 
-        <!-- Detailed Real Cost Breakdown (Editable) -->
-        <div class="bg-slate-950/60 border border-slate-800 p-4 rounded-2xl space-y-3">
-          <div class="flex items-center justify-between">
-            <span class="text-xs font-bold text-white flex items-center gap-1.5">
-              <Receipt class="w-4 h-4 text-rose-500" />
-              Décomposition des coûts réels du véhicule
-            </span>
-            <span class="text-xs text-slate-300 font-bold">Total coût : {{ liveTotalCost.toFixed(2) }} €</span>
-          </div>
-
-          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            <div>
-              <label for="carpool-electricity-cost" class="block text-[11px] text-slate-400 mb-1">⚡ Électricité (€)</label>
-              <input id="carpool-electricity-cost"
-                v-model.number="form.electricity_cost"
-                type="number"
-                step="0.01"
-                min="0"
-                class="w-full bg-slate-900 text-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
+          <div v-for="(leg, i) in form.legs" :key="i" class="bg-slate-950/50 border border-slate-800 rounded-xl p-3 space-y-2">
+            <div class="flex flex-wrap items-center gap-2 text-xs">
+              <span class="font-bold text-indigo-300">Étape {{ i + 1 }}</span>
+              <label :for="`leg-start-${i}`" class="sr-only">Départ de l'étape {{ i + 1 }}</label>
+              <input
+                :id="`leg-start-${i}`"
+                v-model="leg.start_label"
+                placeholder="Départ"
+                class="w-36 bg-slate-800 text-slate-100 rounded-lg px-2 py-1 border border-slate-700"
               />
-            </div>
-            <div>
-              <label for="carpool-tolls-cost" class="block text-[11px] text-slate-400 mb-1">🛣️ Péages (€)</label>
-              <input id="carpool-tolls-cost"
-                v-model.number="form.tolls_cost"
-                type="number"
-                step="0.01"
-                min="0"
-                class="w-full bg-slate-900 text-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
+              <span class="text-slate-500">→</span>
+              <label :for="`leg-end-${i}`" class="sr-only">Arrivée de l'étape {{ i + 1 }}</label>
+              <input
+                :id="`leg-end-${i}`"
+                v-model="leg.end_label"
+                placeholder="Arrivée"
+                class="w-36 bg-slate-800 text-slate-100 rounded-lg px-2 py-1 border border-slate-700"
               />
-            </div>
-            <div>
-              <label for="carpool-tires-cost" class="block text-[11px] text-slate-400 mb-1">🛞 Usure pneus (€)</label>
-              <input id="carpool-tires-cost"
-                v-model.number="form.tires_cost"
+              <label :for="`leg-distance-${i}`" class="text-slate-400">km</label>
+              <input
+                :id="`leg-distance-${i}`"
+                v-model.number="leg.distance_km"
                 type="number"
-                step="0.01"
+                step="0.1"
                 min="0"
-                class="w-full bg-slate-900 text-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
+                :readonly="!!leg.drive_id"
+                class="w-20 bg-slate-800 text-slate-100 rounded-lg px-2 py-1 border border-slate-700"
               />
+              <button
+                v-if="!leg.drive_id"
+                type="button"
+                @click="estimateManualLeg(i)"
+                class="flex items-center gap-1 text-[11px] text-indigo-400 hover:text-indigo-300"
+                title="Estimer électricité, pneus, entretien et assurance à partir de la distance"
+              >
+                <Calculator class="w-3.5 h-3.5" /> Estimer
+              </button>
+              <span class="ml-auto text-slate-300">
+                {{ fmt(euros(live.legDetails[i]?.total || 0)) }} € •
+                {{ 1 + (live.legDetails[i]?.seats || 0) }} à bord •
+                <strong>{{ fmt(euros(live.legDetails[i]?.perPerson || 0)) }} €/pers.</strong>
+              </span>
+              <button v-if="sourceMode === 'MANUAL' && form.legs.length > 1" type="button" @click="removeLeg(i)" class="text-slate-500 hover:text-rose-400" title="Supprimer l'étape">
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
             </div>
-            <div>
-              <label for="carpool-maintenance-cost" class="block text-[11px] text-slate-400 mb-1">🔧 Entretien (€)</label>
-              <input id="carpool-maintenance-cost"
-                v-model.number="form.maintenance_cost"
-                type="number"
-                step="0.01"
-                min="0"
-                class="w-full bg-slate-900 text-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
-              />
-            </div>
-            <div>
-              <div class="flex items-center justify-between mb-1">
-                <label for="carpool-insurance-cost" class="text-[11px] text-slate-400">🛡️ Assurance (€)</label>
-                <span
-                  v-if="currentRates?.insurance_source === 'RECORDED_EXPENSES'"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
-                  title="Primes payées sur les 12 derniers mois divisées par les kilomètres parcourus sur la même période"
-                  >
-                  Primes réelles
-                </span>
-                  <span
-                  v-else-if="currentRates?.insurance_source === 'INCLUDED_IN_LEASE'"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
-                  >
-                  Incluse dans la location
-                </span>
-                  <span
-                  v-else-if="currentRates?.insurance_source === 'INSUFFICIENT_DISTANCE'"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
-                  title="Moins de 500 km parcourus depuis la première prime : quote-part non calculée"
-                  >
-                  Pas assez de km
-                </span>
-                  <span
-                  v-else
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
-                  title="Aucune prime d'assurance enregistrée dans les dépenses"
-                  >
-                  Non renseignée
-                </span>
+            <div class="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              <div v-for="f in COST_FIELDS" :key="f.key">
+                <label :for="`leg-${f.key}-${i}`" class="block text-[10px] text-slate-500 mb-0.5">{{ f.label }} (€)</label>
+                <input
+                  :id="`leg-${f.key}-${i}`"
+                  v-model.number="(leg as any)[f.key]"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="w-full bg-slate-900 text-slate-100 text-xs rounded-lg px-2 py-1 border border-slate-700 focus:outline-none focus:border-rose-500"
+                />
               </div>
-              <input id="carpool-insurance-cost"
-                v-model.number="form.insurance_cost"
-                type="number"
-                step="0.01"
-                min="0"
-                class="w-full bg-slate-900 text-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
-              />
-            </div>
-            <div>
-              <label for="carpool-other-cost" class="block text-[11px] text-slate-400 mb-1">📦 Divers (€)</label>
-              <input id="carpool-other-cost"
-                v-model.number="form.other_cost"
-                type="number"
-                step="0.01"
-                min="0"
-                class="w-full bg-slate-900 text-slate-100 text-xs rounded-lg px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
-              />
             </div>
           </div>
         </div>
 
-        <!-- Passengers / Bouts de trajet section -->
-        <div class="space-y-3">
+        <!-- Passengers -->
+        <div class="space-y-2">
           <div class="flex items-center justify-between">
-            <label class="text-xs font-bold text-white flex items-center gap-1.5">
+            <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
               <Users class="w-4 h-4 text-blue-400" />
-              Passagers & Tronçons ("Bouts de trajet")
-            </label>
-            <button
-              type="button"
-              @click="addPassenger"
-              class="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 transition-colors"
-            >
-              <Plus class="w-3.5 h-3.5" />
-              Ajouter un passager
+              Passagers, montée et descente
+            </h4>
+            <button type="button" @click="addPassenger" class="text-xs text-blue-400 hover:text-blue-300 font-semibold flex items-center gap-1">
+              <Plus class="w-3.5 h-3.5" /> Ajouter un passager
             </button>
           </div>
 
-          <div class="space-y-2.5">
-            <div
-              v-for="(p, index) in form.passengers"
-              :key="index"
-              class="bg-slate-950/80 border border-slate-800 p-3 rounded-2xl space-y-2.5"
-            >
-              <div class="flex items-center justify-between">
-                <span class="text-xs font-semibold text-slate-300">Passager #{{ index + 1 }}</span>
-                <button
-                  v-if="form.passengers.length > 1"
-                  type="button"
-                  @click="removePassenger(index)"
-                  class="text-slate-500 hover:text-rose-400 transition-colors p-1"
+          <div v-for="(p, index) in form.passengers" :key="index" class="bg-slate-950/50 border border-slate-800 rounded-xl p-3 space-y-2">
+            <div class="grid grid-cols-2 sm:grid-cols-12 gap-2 items-end text-xs">
+              <div class="col-span-2 sm:col-span-3">
+                <label :for="`passenger-name-${index}`" class="block text-[10px] text-slate-500 mb-0.5">Nom</label>
+                <input
+                  :id="`passenger-name-${index}`"
+                  v-model="p.passenger_name"
+                  class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
+                />
+              </div>
+              <div class="sm:col-span-3">
+                <label :for="`passenger-board-${index}`" class="block text-[10px] text-slate-500 mb-0.5">Monte à</label>
+                <select
+                  :id="`passenger-board-${index}`"
+                  v-model.number="p.board_stop_index"
+                  @change="onBoardChange(p)"
+                  class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
                 >
+                  <option v-for="(name, s) in stops.slice(0, -1)" :key="s" :value="s">{{ name }}</option>
+                </select>
+              </div>
+              <div class="sm:col-span-3">
+                <label :for="`passenger-alight-${index}`" class="block text-[10px] text-slate-500 mb-0.5">Descend à</label>
+                <select
+                  :id="`passenger-alight-${index}`"
+                  v-model.number="p.alight_stop_index"
+                  class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
+                >
+                  <option v-for="(name, s) in stops" v-show="s > p.board_stop_index" :key="s" :value="s" :disabled="s <= p.board_stop_index">{{ name }}</option>
+                </select>
+              </div>
+              <div>
+                <label :for="`passenger-seats-${index}`" class="block text-[10px] text-slate-500 mb-0.5">Places</label>
+                <input
+                  :id="`passenger-seats-${index}`"
+                  v-model.number="p.seats"
+                  type="number"
+                  min="1"
+                  max="7"
+                  class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
+                />
+              </div>
+              <div class="sm:col-span-2">
+                <label :for="`passenger-paid-${index}`" class="block text-[10px] text-slate-500 mb-0.5">Payé (€)</label>
+                <input
+                  :id="`passenger-paid-${index}`"
+                  v-model.number="p.amount_paid"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  class="w-full bg-slate-900 text-emerald-400 font-bold rounded-lg px-2 py-1.5 border border-slate-700"
+                />
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-400">
+                Part équitable : <strong class="text-slate-200">{{ fmt(euros(live.shares[index] || 0)) }} €</strong>
+                <span :class="cents(p.amount_paid) >= (live.shares[index] || 0) ? 'text-emerald-400' : 'text-amber-400'" class="ml-2">
+                  {{ cents(p.amount_paid) >= (live.shares[index] || 0)
+                    ? `+${fmt(euros(cents(p.amount_paid) - (live.shares[index] || 0)))} € au-dessus`
+                    : `${fmt(euros((live.shares[index] || 0) - cents(p.amount_paid)))} € sous sa part` }}
+                </span>
+              </span>
+              <span class="flex items-center gap-3">
+                <button type="button" @click="applyFairPrice(index)" class="text-indigo-400 hover:text-indigo-300 font-semibold">Appliquer la part équitable</button>
+                <button v-if="form.passengers.length > 1" type="button" @click="removePassenger(index)" class="text-slate-500 hover:text-rose-400" title="Retirer ce passager">
                   <Trash2 class="w-3.5 h-3.5" />
                 </button>
-              </div>
-
-              <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                <div class="sm:col-span-2">
-                  <label :for="`carpool-p-passenger-name-${index}`" class="sr-only">Nom du passager (ex: Sophie - BlaBlaCar)</label>
-                  <input :id="`carpool-p-passenger-name-${index}`"
-                    v-model="p.passenger_name"
-                    type="text"
-                    placeholder="Nom du passager (ex: Sophie - BlaBlaCar)"
-                    class="w-full bg-slate-900 text-slate-100 text-xs rounded-xl px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-                <div>
-                  <label :for="`carpool-p-amount-paid-${index}`" class="sr-only">Montant (€)</label>
-                  <input :id="`carpool-p-amount-paid-${index}`"
-                    v-model.number="p.amount_paid"
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    placeholder="Montant (€)"
-                    class="w-full bg-slate-900 text-emerald-400 font-bold text-xs rounded-xl px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-                <div>
-                  <label :for="`carpool-p-seats-${index}`" class="sr-only">Places (1)</label>
-                  <input :id="`carpool-p-seats-${index}`"
-                    v-model.number="p.seats"
-                    type="number"
-                    min="1"
-                    placeholder="Places (1)"
-                    class="w-full bg-slate-900 text-slate-100 text-xs rounded-xl px-2.5 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500"
-                  />
-                </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-2">
-                <label :for="`carpool-p-origin-${index}`" class="sr-only">Départ tronçon (ex: Paris)</label>
-                <input :id="`carpool-p-origin-${index}`"
-                  v-model="p.origin"
-                  type="text"
-                  placeholder="Départ tronçon (ex: Paris)"
-                  class="w-full bg-slate-900 text-slate-200 text-[11px] rounded-lg px-2 py-1 border border-slate-800 focus:outline-none focus:border-slate-600"
-                />
-                <label :for="`carpool-p-destination-${index}`" class="sr-only">Arrivée tronçon (ex: Auxerre)</label>
-                <input :id="`carpool-p-destination-${index}`"
-                  v-model="p.destination"
-                  type="text"
-                  placeholder="Arrivée tronçon (ex: Auxerre)"
-                  class="w-full bg-slate-900 text-slate-200 text-[11px] rounded-lg px-2 py-1 border border-slate-800 focus:outline-none focus:border-slate-600"
-                />
-              </div>
+              </span>
             </div>
           </div>
         </div>
 
-        <!-- Real-time Financial Simulation Box -->
-        <div class="bg-gradient-to-r from-slate-950 to-slate-900 border border-slate-700/80 p-4 rounded-2xl space-y-2">
-          <div class="text-xs font-bold text-slate-300 flex items-center justify-between">
-            <span>Bilan financier en direct :</span>
-            <span class="text-emerald-400 font-extrabold text-sm">+{{ liveTotalRevenue.toFixed(2) }} € perçus</span>
+        <!-- Simulation -->
+        <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
+          <div>
+            <div class="text-slate-500">Coût réel</div>
+            <div class="text-sm font-bold text-white">{{ fmt(euros(live.total)) }} €</div>
           </div>
-
-          <div class="flex items-center justify-between text-xs pt-1">
-            <span class="text-slate-400">Coût total réel : {{ liveTotalCost.toFixed(2) }} €</span>
-            <span class="font-semibold" :class="liveNetCost <= 0 ? 'text-emerald-400' : 'text-rose-400'">
-              {{ liveNetCost <= 0 ? `Bénéfice : +${Math.abs(liveNetCost).toFixed(2)} €` : `Reste à charge : ${liveNetCost.toFixed(2)} €` }}
-            </span>
+          <div>
+            <div class="text-slate-500">Parts des passagers</div>
+            <div class="text-sm font-bold text-blue-400">{{ fmt(euros(live.passengersShare)) }} €</div>
           </div>
-
-          <!-- Progress bar -->
-          <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-            <div
-              class="bg-gradient-to-r from-emerald-500 to-rose-500 h-full rounded-full transition-all duration-300"
-              :style="{ width: `${Math.min(100, liveCoveragePct)}%` }"
-            ></div>
+          <div>
+            <div class="text-slate-500">Part du conducteur</div>
+            <div class="text-sm font-bold text-amber-400">{{ fmt(euros(live.driverShare)) }} €</div>
           </div>
-
-          <div class="flex items-center justify-between text-[11px] text-slate-400">
-            <span>Taux de couverture des frais : <strong>{{ liveCoveragePct }}%</strong></span>
-            <span v-if="form.distance_km > 0">Coût net : <strong>{{ liveNetCostPerKm.toFixed(3) }} €/km</strong></span>
+          <div>
+            <div class="text-slate-500">Perçu</div>
+            <div class="text-sm font-bold text-emerald-400">{{ fmt(euros(liveRevenue)) }} € ({{ liveCoverage }} %)</div>
+          </div>
+          <div>
+            <div class="text-slate-500">{{ liveNet > 0 ? 'Reste à charge' : 'Excédent' }}</div>
+            <div class="text-sm font-bold" :class="liveNet > 0 ? 'text-white' : 'text-emerald-400'">{{ fmt(euros(Math.abs(liveNet))) }} €</div>
           </div>
         </div>
+        <p v-if="currentRates && currentRates.insurance_source !== 'RECORDED_EXPENSES'" class="text-[11px] text-amber-400/90">
+          Quote-part d'assurance non calculée ({{ currentRates.insurance_source === 'INCLUDED_IN_LEASE' ? 'incluse dans la location' : 'aucune prime enregistrée ou kilométrage insuffisant' }}).
+        </p>
 
-        <!-- Notes -->
         <div>
-          <label for="carpool-notes" class="block text-xs font-semibold text-slate-400 mb-1">Notes ou commentaires (optionnel)</label>
-          <input id="carpool-notes"
-            v-model="form.notes"
-            type="text"
-            placeholder="Ex: Aller-retour week-end, super covoitureurs"
-            class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
-          />
+          <label for="carpool-notes" class="block text-xs font-semibold text-slate-400 mb-1">Notes (optionnel)</label>
+          <input id="carpool-notes" v-model="form.notes" class="w-full bg-slate-800 text-slate-100 text-sm rounded-xl px-3 py-2 border border-slate-700" />
         </div>
 
-        <!-- Modal Footer -->
-        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-800">
-          <button
-            type="button"
-            @click="showModal = false"
-            class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-          >
-            Annuler
-          </button>
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+          <button type="button" @click="showModal = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Annuler</button>
           <button
             type="button"
             @click="handleSave"
-            :disabled="modalSubmitting"
-            class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl transition-all shadow-lg shadow-rose-600/20 disabled:opacity-50"
+            :disabled="modalSubmitting || estimating"
+            class="bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold px-5 py-2 rounded-xl"
           >
-            {{ modalSubmitting ? 'Enregistrement...' : editingTripId ? 'Mettre à jour' : 'Créer le covoiturage' }}
+            {{ modalSubmitting ? 'Enregistrement…' : 'Enregistrer' }}
           </button>
         </div>
       </div>

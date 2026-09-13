@@ -693,3 +693,84 @@ func TestIntegrationEditCapabilities(t *testing.T) {
 		t.Fatalf("the unlinked toll must still count in the TCO, got %v (err %v)", sumTCO.TollsCost, err)
 	}
 }
+
+func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "carpool@example.com")
+	other := mustVehicle(t, repo, "other-carpool@example.com")
+	svc := NewCarpoolService(db.Pool, repo)
+	base := time.Now().UTC().AddDate(0, 0, -2)
+
+	// Annecy → Chambéry (50 km) → Grenoble (60 km) → Valence (90 km); a 40 € toll over the whole trip group
+	addr := func(s string) *string { return &s }
+	var drives []*models.Drive
+	for i, leg := range []struct {
+		from, to string
+		km       float64
+	}{{"Annecy, France", "Chambéry, France", 50}, {"Chambéry, France", "Grenoble, France", 60}, {"Grenoble, France", "Valence, France", 90}} {
+		d := mustDrive(t, repo, v.ID, i+1, base.Add(time.Duration(i)*2*time.Hour), 10000+float64(i)*100, leg.km)
+		if _, err := db.Pool.Exec(ctx, `UPDATE drives SET start_address = $1, end_address = $2 WHERE id = $3`, leg.from, leg.to, d.ID); err != nil {
+			t.Fatal(err)
+		}
+		d.StartAddress, d.EndAddress = addr(leg.from), addr(leg.to)
+		drives = append(drives, d)
+	}
+	toll := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 4000, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, toll, []string{drives[0].ID, drives[1].ID, drives[2].ID}, "Alpes"); err != nil {
+		t.Fatal(err)
+	}
+
+	est, err := svc.EstimateCosts(ctx, v.ID, nil, nil, []string{drives[2].ID, drives[0].ID, drives[1].ID}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(est.Legs) != 3 || *est.Legs[0].StartLabel != "Annecy" || *est.Legs[2].EndLabel != "Valence" {
+		t.Fatalf("expected 3 chronological legs with place labels, got %+v", est.Legs)
+	}
+	if est.Legs[0].TollsCost != 1000 || est.Legs[1].TollsCost != 1200 || est.Legs[2].TollsCost != 1800 || est.TollsCost != 4000 {
+		t.Fatalf("expected the group toll split 10/12/18 € across legs, got %d %d %d", est.Legs[0].TollsCost, est.Legs[1].TollsCost, est.Legs[2].TollsCost)
+	}
+
+	// Anna rides Annecy → Valence, Bruno boards at Grenoble (stop 2)
+	trip := &models.CarpoolTrip{VehicleID: v.ID, Title: "Annecy → Valence", Date: base}
+	passengers := []models.CarpoolPassenger{
+		{PassengerName: "Anna", Seats: 1, AmountPaid: 2500, BoardStopIndex: 0, AlightStopIndex: 3},
+		{PassengerName: "Bruno", Seats: 1, AmountPaid: 1000, BoardStopIndex: 2, AlightStopIndex: 3},
+	}
+	if err := repo.CreateCarpoolTrip(ctx, trip, est.Legs, passengers); err != nil {
+		t.Fatal(err)
+	}
+	if trip.TotalCost != est.TotalCost || trip.DistanceKm != 200 || trip.TotalRevenue != 3500 {
+		t.Fatalf("trip totals must be the sum of its legs: %+v", trip)
+	}
+
+	trips, err := repo.ListCarpoolTrips(ctx, v.ID)
+	if err != nil || len(trips) != 1 || len(trips[0].Legs) != 3 || len(trips[0].Passengers) != 2 {
+		t.Fatalf("expected the trip with 3 legs and 2 passengers, got %+v (err %v)", trips, err)
+	}
+	loaded := trips[0]
+	driver, shared := AllocateCarpoolCosts(loaded.Legs, loaded.Passengers)
+	if driver+shared != loaded.TotalCost {
+		t.Fatalf("shares must add up to the trip cost")
+	}
+	// Bruno only pays a third of the last leg; Anna half of the first two legs and a third of the last one
+	last := loaded.Legs[2].Total()
+	if loaded.Passengers[1].CostShare != money.Split(last, 3)[0] {
+		t.Fatalf("Bruno's share must be a third of the last leg (%s), got %s", last, loaded.Passengers[1].CostShare)
+	}
+	if loaded.Legs[0].PassengerSeats != 1 || loaded.Legs[2].PassengerSeats != 2 {
+		t.Fatalf("unexpected occupancy: %d / %d", loaded.Legs[0].PassengerSeats, loaded.Legs[2].PassengerSeats)
+	}
+
+	// Invalid stops and foreign drives are rejected
+	var vErr *database.ValidationError
+	bad := []models.CarpoolPassenger{{PassengerName: "Zoé", Seats: 1, BoardStopIndex: 2, AlightStopIndex: 4}}
+	if err := repo.UpdateCarpoolTrip(ctx, trip, est.Legs, bad); !errors.As(err, &vErr) {
+		t.Fatalf("expected invalid stops to be rejected, got %v", err)
+	}
+	foreign := &models.CarpoolTrip{VehicleID: other.ID, Title: "x", Date: base}
+	if err := repo.CreateCarpoolTrip(ctx, foreign, est.Legs, nil); !errors.Is(err, database.ErrForeignReference) {
+		t.Fatalf("expected foreign drives to be rejected, got %v", err)
+	}
+}
