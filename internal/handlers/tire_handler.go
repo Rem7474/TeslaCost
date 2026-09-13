@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -684,4 +685,208 @@ func (h *TireHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, rot)
+}
+
+// BatchUpdateTiresRequest applies the same values to several tires; omitted fields are left unchanged.
+type BatchUpdateTiresRequest struct {
+	TireIDs             []string           `json:"tire_ids"`
+	Brand               *string            `json:"brand"`
+	Model               *string            `json:"model"`
+	Dimension           *string            `json:"dimension"`
+	Season              *models.TireSeason `json:"season"`
+	PurchaseDate        *string            `json:"purchase_date"`
+	PurchasePrice       *money.Cents       `json:"purchase_price"` // Unit price
+	TotalPrice          *money.Cents       `json:"total_price"`    // Split across the selected tires
+	InitialDepthMm      *float64           `json:"initial_depth_mm"`
+	MinLegalDepthMm     *float64           `json:"min_legal_depth_mm"`
+	DotCode             *string            `json:"dot_code"`
+	InitialDistanceKm   *float64           `json:"initial_distance_km"`
+	EstimatedLifespanKm *int               `json:"estimated_lifespan_km"`
+	MountedDate         *string            `json:"mounted_date"`
+	MountedOdometer     *float64           `json:"mounted_odometer"`
+}
+
+func nonEmpty(s *string) *string {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return nil
+	}
+	return s
+}
+
+func buildTirePatch(req *BatchUpdateTiresRequest) (database.TirePatch, error) {
+	p := database.TirePatch{
+		Brand: nonEmpty(req.Brand), Model: nonEmpty(req.Model), Dimension: nonEmpty(req.Dimension),
+		DotCode: req.DotCode, EstimatedLifespanKm: req.EstimatedLifespanKm,
+	}
+	if req.Season != nil && *req.Season != "" {
+		switch *req.Season {
+		case models.TireSeasonSummer, models.TireSeasonWinter, models.TireSeasonAllSeason:
+			p.Season = req.Season
+		default:
+			return p, errors.New("saison invalide")
+		}
+	}
+	var err error
+	if p.PurchaseDate, err = parseOptionalDate(req.PurchaseDate); err != nil {
+		return p, err
+	}
+	if p.MountedDate, err = parseOptionalDate(req.MountedDate); err != nil {
+		return p, err
+	}
+	for _, amount := range []*money.Cents{req.PurchasePrice, req.TotalPrice} {
+		if amount != nil {
+			if err := validateAmount(*amount, true); err != nil {
+				return p, err
+			}
+		}
+	}
+	p.PurchasePrice, p.TotalPrice = req.PurchasePrice, req.TotalPrice
+	for _, q := range []struct {
+		v   *float64
+		max float64
+		msg string
+	}{
+		{req.InitialDepthMm, 20, "profondeur initiale invalide"},
+		{req.MinLegalDepthMm, 20, "profondeur minimale invalide"},
+		{req.InitialDistanceKm, 500_000, "kilométrage initial invalide"},
+		{req.MountedOdometer, 2_000_000, "odomètre de montage invalide"},
+	} {
+		if q.v != nil {
+			if err := validateQuantity(*q.v, q.max); err != nil {
+				return p, errors.New(q.msg)
+			}
+		}
+	}
+	if req.EstimatedLifespanKm != nil && (*req.EstimatedLifespanKm <= 0 || *req.EstimatedLifespanKm > 500_000) {
+		return p, errors.New("durée de vie estimée invalide")
+	}
+	p.InitialDepthMm, p.MinLegalDepthMm, p.InitialDistanceKm, p.MountedOdometer =
+		req.InitialDepthMm, req.MinLegalDepthMm, req.InitialDistanceKm, req.MountedOdometer
+	return p, nil
+}
+
+// BatchUpdate edits several tires at once (e.g. a set of four bought and mounted together).
+func (h *TireHandler) BatchUpdate(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	var req BatchUpdateTiresRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	patch, err := buildTirePatch(&req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.repo.BatchUpdateTires(r.Context(), vehicleID, req.TireIDs, patch); err != nil {
+		writeRepoError(w, err, "Failed to update tires")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "count": len(req.TireIDs)})
+}
+
+// Delete permanently removes a tire entered by mistake, with its history.
+func (h *TireHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if err := h.repo.DeleteTire(r.Context(), vehicleID, chi.URLParam(r, "tireId")); err != nil {
+		writeRepoError(w, err, "Failed to delete tire")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+type DisposeTireRequest struct {
+	Date     string   `json:"date"`
+	Odometer *float64 `json:"odometer"`
+}
+
+// Dispose retires a worn out or damaged tire while keeping its history and cost.
+func (h *TireHandler) Dispose(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	var req DisposeTireRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	at := time.Now().UTC()
+	if req.Date != "" {
+		parsed, err := parseDate(req.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		at = parsed
+	}
+	if req.Odometer != nil {
+		if err := validateQuantity(*req.Odometer, 2_000_000); err != nil {
+			writeError(w, http.StatusBadRequest, "odomètre invalide")
+			return
+		}
+	}
+	if err := h.repo.DisposeTire(r.Context(), vehicleID, chi.URLParam(r, "tireId"), at, req.Odometer); err != nil {
+		writeRepoError(w, err, "Failed to dispose tire")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+// UpdateLog corrects a tread depth measurement.
+func (h *TireHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	var req AddTireLogRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if req.DepthMm <= 0 || req.DepthMm > 20 || req.Odometer <= 0 {
+		writeError(w, http.StatusBadRequest, "Profondeur (0 à 20 mm) et odomètre requis")
+		return
+	}
+	date, err := parseDate(req.Date)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	l := &models.TireLog{ID: chi.URLParam(r, "logId"), TireID: chi.URLParam(r, "tireId"), Date: date, Odometer: req.Odometer, DepthMm: req.DepthMm, Notes: req.Notes}
+	if err := h.repo.UpdateTireLog(r.Context(), vehicleID, l); err != nil {
+		writeRepoError(w, err, "Failed to update tire log")
+		return
+	}
+	writeJSON(w, http.StatusOK, l)
+}
+
+// DeleteLog deletes a tread depth measurement.
+func (h *TireHandler) DeleteLog(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if err := h.repo.DeleteTireLog(r.Context(), vehicleID, chi.URLParam(r, "tireId"), chi.URLParam(r, "logId")); err != nil {
+		writeRepoError(w, err, "Failed to delete tire log")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }

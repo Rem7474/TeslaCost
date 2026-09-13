@@ -581,3 +581,115 @@ func TestIntegrationOwnershipLoanLeaseAndInsuranceShare(t *testing.T) {
 		t.Fatalf("expected 5 premiums until the sale and realized depreciation 15,000 €, got %s / %s", sum.InsuranceCost, sum.DepreciationCost)
 	}
 }
+
+func TestIntegrationEditCapabilities(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "edit@example.com")
+	other := mustVehicle(t, repo, "intruder@example.com")
+	base := time.Now().UTC().AddDate(0, -1, 0)
+
+	// Set of 4 tires created mounted with rough values, then fixed in one batch.
+	odo := 5000.0
+	var ids []string
+	for _, pos := range []models.TirePosition{models.TirePosFL, models.TirePosFR, models.TirePosRL, models.TirePosRR} {
+		tire := &models.Tire{VehicleID: &v.ID, Brand: "X", Model: "Y", Dimension: "235", Season: models.TireSeasonSummer,
+			PurchaseDate: time.Now(), PurchasePrice: 1, CurrentPosition: pos, InitialDepthMm: 8, MinLegalDepthMm: 1.6,
+			MountedOdometer: &odo, EstimatedLifespanKm: 40000}
+		if err := repo.CreateTire(ctx, tire); err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, tire.ID)
+	}
+	brand, total, mounted, mountedOdo := "Michelin", money.Cents(99999), base, 1200.0
+	if err := repo.BatchUpdateTires(ctx, v.ID, ids, database.TirePatch{Brand: &brand, TotalPrice: &total, MountedDate: &mounted, MountedOdometer: &mountedOdo}); err != nil {
+		t.Fatal(err)
+	}
+	var sum money.Cents
+	for _, id := range ids {
+		tire, _ := repo.GetTireByID(ctx, id, v.ID)
+		sum += tire.PurchasePrice
+		if tire.Brand != "Michelin" || tire.MountedOdometer == nil || *tire.MountedOdometer != 1200 {
+			t.Fatalf("batch update not applied: %+v", tire)
+		}
+	}
+	if sum != 99999 {
+		t.Fatalf("total price must be split exactly, got %s", sum)
+	}
+	if err := repo.BatchUpdateTires(ctx, other.ID, ids, database.TirePatch{Brand: &brand}); !errors.Is(err, database.ErrForeignReference) {
+		t.Fatalf("batch update of foreign tires must be rejected, got %v", err)
+	}
+
+	// Dispose a mounted tire: session closed, DISPOSED, amortized cost fully counted.
+	at, disposeOdo := time.Now().UTC(), 1100.0
+	var vErr *database.ValidationError
+	if err := repo.DisposeTire(ctx, v.ID, ids[0], at, &disposeOdo); !errors.As(err, &vErr) {
+		t.Fatalf("odometer below the mount odometer must be rejected, got %v", err)
+	}
+	disposeOdo = 21200
+	if err := repo.DisposeTire(ctx, v.ID, ids[0], at, &disposeOdo); err != nil {
+		t.Fatal(err)
+	}
+	disposed, _ := repo.GetTireByID(ctx, ids[0], v.ID)
+	if disposed.CurrentPosition != models.TirePosDisposed || disposed.AccumulatedDistanceKm != 20000 || disposed.MountedOdometer != nil {
+		t.Fatalf("unexpected disposed tire: %+v", disposed)
+	}
+
+	// Wear logs can be corrected and deleted, not across vehicles.
+	log := &models.TireLog{TireID: ids[1], Date: base, Odometer: 3000, DepthMm: 7.5}
+	if err := repo.AddTireLog(ctx, log); err != nil {
+		t.Fatal(err)
+	}
+	log.DepthMm = 6.9
+	if err := repo.UpdateTireLog(ctx, other.ID, log); !errors.Is(err, database.ErrNotFound) {
+		t.Fatalf("foreign log update must be rejected, got %v", err)
+	}
+	if err := repo.UpdateTireLog(ctx, v.ID, log); err != nil {
+		t.Fatal(err)
+	}
+	if logs, _ := repo.ListTireLogs(ctx, ids[1]); len(logs) != 1 || logs[0].DepthMm != 6.9 {
+		t.Fatalf("log not updated: %+v", logs)
+	}
+	if err := repo.DeleteTireLog(ctx, v.ID, ids[1], log.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete a tire entered by mistake.
+	if err := repo.DeleteTire(ctx, other.ID, ids[3]); !errors.Is(err, database.ErrNotFound) {
+		t.Fatalf("foreign tire delete must be rejected, got %v", err)
+	}
+	if err := repo.DeleteTire(ctx, v.ID, ids[3]); err != nil {
+		t.Fatal(err)
+	}
+
+	// Trip group: rename, change drives, delete while keeping or deleting its expenses.
+	d1 := mustDrive(t, repo, v.ID, 1, base, 10000, 100)
+	d2 := mustDrive(t, repo, v.ID, 2, base.Add(2*time.Hour), 10100, 100)
+	d3 := mustDrive(t, repo, v.ID, 3, base.Add(4*time.Hour), 10200, 200)
+	exp := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 3000, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, exp, []string{d1.ID, d2.ID}, "Aller"); err != nil {
+		t.Fatal(err)
+	}
+	tg := &models.TripGroup{ID: *exp.TripGroupID, VehicleID: v.ID, Name: "Vacances - aller"}
+	if err := repo.UpdateTripGroup(ctx, tg, []string{d1.ID, d2.ID, d3.ID}); err != nil {
+		t.Fatal(err)
+	}
+	groups, _ := repo.ListTripGroups(ctx, v.ID)
+	if len(groups) != 1 || groups[0].Name != "Vacances - aller" || len(groups[0].DriveIDs) != 3 || groups[0].DistanceKm != 400 || groups[0].ExpensesTotal != 3000 {
+		t.Fatalf("unexpected trip group summary: %+v", groups)
+	}
+	if err := repo.UpdateTripGroup(ctx, tg, []string{}); !errors.As(err, &vErr) {
+		t.Fatalf("an empty trip group must be rejected, got %v", err)
+	}
+	if err := repo.DeleteTripGroup(ctx, v.ID, tg.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	expenses, _ := repo.ListDriveExpenses(ctx, v.ID)
+	if len(expenses) != 1 || expenses[0].TripGroupID != nil {
+		t.Fatalf("the expense must be kept unlinked, got %+v", expenses)
+	}
+	sumTCO, err := NewTCOService(db.Pool, "UTC").ComputeVehicleTCO(ctx, v.ID)
+	if err != nil || sumTCO.TollsCost != 3000 {
+		t.Fatalf("the unlinked toll must still count in the TCO, got %v (err %v)", sumTCO.TollsCost, err)
+	}
+}

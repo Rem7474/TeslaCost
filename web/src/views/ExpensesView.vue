@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
@@ -31,6 +31,9 @@ const driveExpenses = ref<any[]>([])
 const maintenanceExpenses = ref<any[]>([])
 const charges = ref<any[]>([])
 const chargesWithoutCost = ref(0)
+const chargesTotal = ref(0)
+const chargesPage = ref(1)
+const loadingMoreCharges = ref(false)
 const missingCostOnly = ref(false)
 const loading = ref(false)
 
@@ -131,8 +134,10 @@ async function loadData() {
     } else if (activeTab.value === 'MAINTENANCE') {
       maintenanceExpenses.value = await api.getMaintenance(vehicleStore.activeVehicle.id)
     } else if (activeTab.value === 'CHARGES') {
+      chargesPage.value = 1
       const res = await api.getCharges(vehicleStore.activeVehicle.id, { missingCost: missingCostOnly.value })
       charges.value = res.charges
+      chargesTotal.value = res.total || 0
       chargesWithoutCost.value = res.charges_without_cost || 0
     }
   } catch (err) {
@@ -145,7 +150,7 @@ async function loadData() {
 async function loadRecentDrives() {
   if (!vehicleStore.activeVehicle) return
   try {
-    const res = await api.getDrives(vehicleStore.activeVehicle.id, { limit: 40 })
+    const res = await api.getDrives(vehicleStore.activeVehicle.id, { limit: 200 })
     recentDrives.value = res.drives || []
   } catch (err) {
     console.error('Failed to load recent drives', err)
@@ -354,6 +359,27 @@ async function handleCreateMaint() {
     alert(`Erreur : ${err.message}`)
   }
 }
+
+// Next page of charges, so that older charges can also be completed or corrected
+async function loadMoreCharges() {
+  if (!vehicleStore.activeVehicle) return
+  loadingMoreCharges.value = true
+  try {
+    const res = await api.getCharges(vehicleStore.activeVehicle.id, { page: chargesPage.value + 1, missingCost: missingCostOnly.value })
+    chargesPage.value += 1
+    charges.value = [...charges.value, ...res.charges]
+    chargesTotal.value = res.total || 0
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  } finally {
+    loadingMoreCharges.value = false
+  }
+}
+
+// Drives selected for a toll that are older than the loaded recent drives
+const selectedDrivesNotListed = computed(
+  () => selectedDriveIds.value.filter((id) => !recentDrives.value.some((d) => d.id === id)).length
+)
 
 function toggleMissingCostFilter() {
   missingCostOnly.value = !missingCostOnly.value
@@ -685,6 +711,17 @@ function formatDriveTime(dateStr: string) {
             </div>
           </div>
         </div>
+        <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+          <span>{{ charges.length }} recharge(s) affichée(s) sur {{ chargesTotal }}</span>
+          <button
+            v-if="charges.length < chargesTotal"
+            @click="loadMoreCharges"
+            :disabled="loadingMoreCharges"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl border border-slate-700 disabled:opacity-50"
+          >
+            {{ loadingMoreCharges ? 'Chargement...' : 'Charger plus' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -786,7 +823,9 @@ function formatDriveTime(dateStr: string) {
             <div v-if="associationMode === 'MULTI'" class="pt-2 space-y-1.5">
               <div class="flex items-center justify-between">
                 <label class="text-xs text-slate-400">Cocher les étapes composant le voyage :</label>
-                <span class="text-[11px] text-amber-400 font-semibold">{{ selectedDriveIds.length }} étape(s)</span>
+                <span class="text-[11px] text-amber-400 font-semibold">
+                  {{ selectedDriveIds.length }} étape(s)<template v-if="selectedDrivesNotListed"> dont {{ selectedDrivesNotListed }} plus ancienne(s) que les 200 derniers trajets</template>
+                </span>
               </div>
               <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
                 <div

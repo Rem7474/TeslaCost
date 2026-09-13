@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -287,6 +288,7 @@ func (r *Repository) GetLatestTeslaMateDriveStartTime(ctx context.Context, vehic
 type DriveFilter struct {
 	Tag             string
 	UnqualifiedOnly bool
+	TripGroupID     string
 }
 
 // HighwayDrivePredicate matches long and fast drives, likely to use toll roads.
@@ -304,10 +306,12 @@ const UnqualifiedDrivePredicate = HighwayDrivePredicate + `
 `
 
 func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter DriveFilter, limit, offset int) ([]models.Drive, int, error) {
-	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND ($2 = '' OR $2 = ANY(tags)) AND (NOT $3 OR (` + UnqualifiedDrivePredicate + `))`
+	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND ($2 = '' OR $2 = ANY(tags)) AND (NOT $3 OR (` + UnqualifiedDrivePredicate + `))
+		AND ($6::text = '' OR id IN (SELECT drive_id FROM trip_group_drives WHERE trip_group_id::text = $6::text))`
 
 	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE `+where, vehicleID, filter.Tag, filter.UnqualifiedOnly).Scan(&total); err != nil {
+	countWhere := strings.ReplaceAll(where, "$6", "$4")
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE `+countWhere, vehicleID, filter.Tag, filter.UnqualifiedOnly, filter.TripGroupID).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -321,7 +325,7 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter Dr
 		ORDER BY start_time DESC
 		LIMIT $4 OFFSET $5;
 	`
-	rows, err := r.pool.Query(ctx, query, vehicleID, filter.Tag, filter.UnqualifiedOnly, limit, offset)
+	rows, err := r.pool.Query(ctx, query, vehicleID, filter.Tag, filter.UnqualifiedOnly, limit, offset, filter.TripGroupID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -427,13 +431,25 @@ func linkTripGroupDrives(ctx context.Context, tx pgx.Tx, tripGroupID string, dri
 }
 
 func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]models.TripGroup, error) {
-	query := `
-		SELECT id, vehicle_id, name, notes, created_at, updated_at
-		FROM trip_groups
-		WHERE vehicle_id = $1
-		ORDER BY created_at DESC;
-	`
-	rows, err := r.pool.Query(ctx, query, vehicleID)
+	rows, err := r.pool.Query(ctx, `
+		SELECT tg.id, tg.vehicle_id, tg.name, tg.notes, tg.created_at, tg.updated_at,
+		       ARRAY(SELECT tgd.drive_id::text FROM trip_group_drives tgd
+		             JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
+		             WHERE tgd.trip_group_id = tg.id ORDER BY d.start_time),
+		       COALESCE(stats.km, 0), stats.first_start, stats.last_end,
+		       COALESCE((SELECT SUM(`+AmountEURExpr+`) FROM drive_expenses e WHERE e.trip_group_id = tg.id), 0),
+		       (SELECT COUNT(*) FROM drive_expenses e WHERE e.trip_group_id = tg.id),
+		       (SELECT COUNT(*) FROM carpool_trips c WHERE c.trip_group_id = tg.id)
+		FROM trip_groups tg
+		LEFT JOIN LATERAL (
+			SELECT SUM(d.distance_km) AS km, MIN(d.start_time) AS first_start, MAX(d.end_time) AS last_end
+			FROM trip_group_drives tgd
+			JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
+			WHERE tgd.trip_group_id = tg.id
+		) stats ON TRUE
+		WHERE tg.vehicle_id = $1
+		ORDER BY COALESCE(stats.first_start, tg.created_at) DESC;
+	`, vehicleID)
 	if err != nil {
 		return nil, err
 	}
@@ -442,12 +458,70 @@ func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]mo
 	var list []models.TripGroup
 	for rows.Next() {
 		var tg models.TripGroup
-		if err := rows.Scan(&tg.ID, &tg.VehicleID, &tg.Name, &tg.Notes, &tg.CreatedAt, &tg.UpdatedAt); err != nil {
+		if err := rows.Scan(&tg.ID, &tg.VehicleID, &tg.Name, &tg.Notes, &tg.CreatedAt, &tg.UpdatedAt,
+			&tg.DriveIDs, &tg.DistanceKm, &tg.StartTime, &tg.EndTime, &tg.ExpensesTotal, &tg.ExpenseCount, &tg.CarpoolCount); err != nil {
 			return nil, err
 		}
 		list = append(list, tg)
 	}
-	return list, nil
+	return list, rows.Err()
+}
+
+// UpdateTripGroup renames a trip group and, when driveIDs is not nil, replaces its drives.
+func (r *Repository) UpdateTripGroup(ctx context.Context, tg *models.TripGroup, driveIDs []string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE trip_groups SET name = $1, notes = $2, updated_at = NOW()
+		WHERE id::text = $3 AND vehicle_id = $4;
+	`, tg.Name, tg.Notes, tg.ID, tg.VehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	if driveIDs != nil {
+		if len(uniqueStrings(driveIDs)) == 0 {
+			return validationErrorf("un voyage doit contenir au moins un trajet")
+		}
+		if err := ensureDrivesOwned(ctx, tx, tg.VehicleID, driveIDs); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM trip_group_drives WHERE trip_group_id::text = $1;`, tg.ID); err != nil {
+			return err
+		}
+		if err := linkTripGroupDrives(ctx, tx, tg.ID, driveIDs); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+// DeleteTripGroup deletes a trip group. Its expenses are kept (no longer linked to drives) unless deleteExpenses is set.
+func (r *Repository) DeleteTripGroup(ctx context.Context, vehicleID, tripGroupID string, deleteExpenses bool) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := ensureTripGroupOwned(ctx, tx, vehicleID, tripGroupID); err != nil {
+		return ErrNotFound
+	}
+	if deleteExpenses {
+		if _, err := tx.Exec(ctx, `DELETE FROM drive_expenses WHERE trip_group_id::text = $1 AND vehicle_id = $2;`, tripGroupID, vehicleID); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM trip_groups WHERE id::text = $1 AND vehicle_id = $2;`, tripGroupID, vehicleID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // ============================================================================
@@ -705,17 +779,32 @@ func (r *Repository) GetTireByID(ctx context.Context, id, vehicleID string) (*mo
 // UpdateTire updates descriptive tire fields and recomputes its lifetime distance.
 // Position changes go through mount sessions / rotations, never through this method.
 func (r *Repository) UpdateTire(ctx context.Context, t *models.Tire) error {
-	lifespan := t.EstimatedLifespanKm
-	if lifespan <= 0 {
-		lifespan = 40000
-	}
-
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
+	if err := updateTireTx(ctx, tx, t); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+
+	updated, err := r.GetTireByID(ctx, t.ID, *t.VehicleID)
+	if err != nil {
+		return err
+	}
+	*t = *updated
+	return nil
+}
+
+func updateTireTx(ctx context.Context, tx pgx.Tx, t *models.Tire) error {
+	lifespan := t.EstimatedLifespanKm
+	if lifespan <= 0 {
+		lifespan = 40000
+	}
 	tag, err := tx.Exec(ctx, `
 		UPDATE tires
 		SET brand = $1, model = $2, dimension = $3, season = $4,
@@ -737,18 +826,224 @@ func (r *Repository) UpdateTire(ctx context.Context, t *models.Tire) error {
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	if err := recalcTireDistance(ctx, tx, t.ID); err != nil {
-		return err
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return err
-	}
+	return recalcTireDistance(ctx, tx, t.ID)
+}
 
-	updated, err := r.GetTireByID(ctx, t.ID, *t.VehicleID)
+// TirePatch holds the fields applied to several tires at once; nil fields are left unchanged.
+type TirePatch struct {
+	Brand               *string
+	Model               *string
+	Dimension           *string
+	Season              *models.TireSeason
+	PurchaseDate        *time.Time
+	PurchasePrice       *money.Cents // Unit price
+	TotalPrice          *money.Cents // Split to the cent across the selected tires (overrides PurchasePrice)
+	InitialDepthMm      *float64
+	MinLegalDepthMm     *float64
+	DotCode             *string
+	InitialDistanceKm   *float64
+	EstimatedLifespanKm *int
+	// Active mount session of mounted tires
+	MountedDate     *time.Time
+	MountedOdometer *float64
+}
+
+// BatchUpdateTires applies a patch to several tires of a vehicle in one transaction.
+func (r *Repository) BatchUpdateTires(ctx context.Context, vehicleID string, tireIDs []string, p TirePatch) error {
+	ids := uniqueStrings(tireIDs)
+	if len(ids) == 0 {
+		return validationErrorf("aucun pneu sélectionné")
+	}
+	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
-	*t = *updated
+	defer tx.Rollback(ctx)
+
+	current, err := lockVehicleTires(ctx, tx, vehicleID)
+	if err != nil {
+		return err
+	}
+	var prices []money.Cents
+	if p.TotalPrice != nil {
+		prices = money.Split(*p.TotalPrice, len(ids))
+	}
+
+	for i, id := range ids {
+		t, ok := current[id]
+		if !ok {
+			return ErrForeignReference
+		}
+		if p.Brand != nil {
+			t.Brand = *p.Brand
+		}
+		if p.Model != nil {
+			t.Model = *p.Model
+		}
+		if p.Dimension != nil {
+			t.Dimension = *p.Dimension
+		}
+		if p.Season != nil {
+			t.Season = *p.Season
+		}
+		if p.PurchaseDate != nil {
+			t.PurchaseDate = *p.PurchaseDate
+		}
+		if prices != nil {
+			t.PurchasePrice = prices[i]
+		} else if p.PurchasePrice != nil {
+			t.PurchasePrice = *p.PurchasePrice
+		}
+		if p.InitialDepthMm != nil {
+			t.InitialDepthMm = *p.InitialDepthMm
+		}
+		if p.MinLegalDepthMm != nil {
+			t.MinLegalDepthMm = *p.MinLegalDepthMm
+		}
+		if p.DotCode != nil {
+			t.DotCode = p.DotCode
+		}
+		if p.InitialDistanceKm != nil {
+			t.InitialDistanceKm = *p.InitialDistanceKm
+		}
+		if p.EstimatedLifespanKm != nil {
+			t.EstimatedLifespanKm = *p.EstimatedLifespanKm
+		}
+		t.VehicleID = &vehicleID
+		if err := updateTireTx(ctx, tx, t); err != nil {
+			return err
+		}
+
+		if (p.MountedDate != nil || p.MountedOdometer != nil) && isMountedPosition(t.CurrentPosition) {
+			if err := setActiveMount(ctx, tx, t, vehicleID, p.MountedDate, p.MountedOdometer); err != nil {
+				return err
+			}
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+// setActiveMount updates the open mount session of a mounted tire, creating it when missing.
+func setActiveMount(ctx context.Context, tx pgx.Tx, t *models.Tire, vehicleID string, date *time.Time, odometer *float64) error {
+	var sessionID string
+	var curDate time.Time
+	var curOdo float64
+	err := tx.QueryRow(ctx, `
+		SELECT id, mounted_date, mounted_odometer FROM tire_mount_sessions
+		WHERE tire_id::text = $1 AND dismounted_date IS NULL
+		ORDER BY mounted_date DESC LIMIT 1;
+	`, t.ID).Scan(&sessionID, &curDate, &curOdo)
+	switch {
+	case errors.Is(err, pgx.ErrNoRows):
+		if date == nil || odometer == nil {
+			return validationErrorf("le pneu %s %s n'a pas de montage en cours : date et odomètre de montage requis", t.Brand, t.CurrentPosition)
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO tire_mount_sessions (tire_id, vehicle_id, position, mounted_date, mounted_odometer)
+			VALUES ($1, $2, $3, $4, $5);
+		`, t.ID, vehicleID, t.CurrentPosition, *date, *odometer); err != nil {
+			return err
+		}
+	case err != nil:
+		return err
+	default:
+		if date != nil {
+			curDate = *date
+		}
+		if odometer != nil {
+			curOdo = *odometer
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE tire_mount_sessions SET mounted_date = $1, mounted_odometer = $2, updated_at = NOW() WHERE id = $3;
+		`, curDate, curOdo, sessionID); err != nil {
+			return err
+		}
+	}
+	return recalcTireDistance(ctx, tx, t.ID)
+}
+
+// DeleteTire permanently deletes a tire with its sessions and wear logs (erroneous entry).
+func (r *Repository) DeleteTire(ctx context.Context, vehicleID, tireID string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM tires WHERE id::text = $1 AND vehicle_id = $2;`, tireID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DisposeTire retires a tire (worn out, damaged, sold): closes its mount session and moves it to DISPOSED.
+// Its purchase price is then fully counted as consumed in the amortized cost.
+func (r *Repository) DisposeTire(ctx context.Context, vehicleID, tireID string, at time.Time, odometer *float64) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	current, err := lockVehicleTires(ctx, tx, vehicleID)
+	if err != nil {
+		return err
+	}
+	t, ok := current[tireID]
+	if !ok {
+		return ErrNotFound
+	}
+	if isMountedPosition(t.CurrentPosition) {
+		if odometer == nil {
+			return validationErrorf("l'odomètre de démontage est requis pour un pneu monté")
+		}
+		if t.MountedOdometer != nil && *odometer < *t.MountedOdometer {
+			return validationErrorf("l'odomètre (%.0f km) est inférieur à l'odomètre de montage (%.0f km)", *odometer, *t.MountedOdometer)
+		}
+		if _, err := tx.Exec(ctx, `
+			UPDATE tire_mount_sessions
+			SET dismounted_date = $1, dismounted_odometer = $2,
+			    distance_km = GREATEST($2 - mounted_odometer, 0), updated_at = NOW()
+			WHERE tire_id = $3 AND dismounted_date IS NULL;
+		`, at, *odometer, tireID); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.Exec(ctx, `UPDATE tires SET current_position = 'DISPOSED', updated_at = NOW() WHERE id = $1;`, tireID); err != nil {
+		return err
+	}
+	if err := recalcTireDistance(ctx, tx, tireID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+// UpdateTireLog corrects a tread depth measurement.
+func (r *Repository) UpdateTireLog(ctx context.Context, vehicleID string, l *models.TireLog) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE tire_logs l SET date = $1, odometer = $2, depth_mm = $3, notes = $4
+		FROM tires t
+		WHERE l.id::text = $5 AND l.tire_id = t.id AND t.id::text = $6 AND t.vehicle_id = $7;
+	`, l.Date, l.Odometer, l.DepthMm, l.Notes, l.ID, l.TireID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// DeleteTireLog deletes a tread depth measurement.
+func (r *Repository) DeleteTireLog(ctx context.Context, vehicleID, tireID, logID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM tire_logs l USING tires t
+		WHERE l.id::text = $1 AND l.tire_id = t.id AND t.id::text = $2 AND t.vehicle_id = $3;
+	`, logID, tireID, vehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
 	return nil
 }
 

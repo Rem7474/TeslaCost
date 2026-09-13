@@ -96,6 +96,15 @@ type TripGroup struct {
 	Notes     *string   `json:"notes,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+
+	// Summary (listing only)
+	DriveIDs      []string    `json:"drive_ids"`
+	DistanceKm    float64     `json:"distance_km"`
+	StartTime     *time.Time  `json:"start_time,omitempty"`
+	EndTime       *time.Time  `json:"end_time,omitempty"`
+	ExpensesTotal money.Cents `json:"expenses_total"` // EUR
+	ExpenseCount  int         `json:"expense_count"`
+	CarpoolCount  int         `json:"carpool_count"`
 }
 
 // DriveExpense holds costs directly attached to a drive or a trip group (tolls, parking).

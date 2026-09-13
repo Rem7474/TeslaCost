@@ -21,6 +21,8 @@
 3. **Péages, Parkings et Fusion de Trajets :**
    - Création de groupes de trajets (`TripGroup`) pour fusionner des étapes segmentées par des pauses.
    - Affectation granulaire des dépenses de voyage (péages d'autoroutes, parkings, ferries) ; une dépense de groupe est répartie entre les étapes au prorata des kilomètres.
+   - Sélection de trajets conservée d'une page à l'autre ; frais d'un trajet ou d'un voyage modifiables et supprimables depuis la fenêtre de coût du trajet.
+   - Onglet « Voyages » : renommer, retirer ou ajouter des trajets, supprimer un voyage en conservant ou non ses frais.
    - File « À qualifier » : trajets de type autoroutier (≥ 40 km, ≥ 70 km/h de moyenne) sans péage renseigné, à compléter ou marquer « sans péage ».
    - Dépenses en devise étrangère avec taux de conversion vers l'euro saisi à la dépense.
 4. **Gestion du Cycle de Vie des Pneus :**
@@ -29,6 +31,8 @@
    - Relevés millimétriques de la profondeur de sculpture et projection de l'usure kilométrique restante, calculée sur les kilomètres roulés par le pneu (périodes en stockage exclues).
    - Historique et journal complet des permutations de roues avec odomètre (sessions de montage ouvertes et fermées de façon transactionnelle).
    - Kilométrage initial conservé pour les pneus achetés d'occasion.
+   - Modification d'un pneu ou par lot (marque, dimensions, prix unitaire ou total réparti au centime, date et odomètre du montage en cours), relevés d'usure modifiables et supprimables.
+   - Mise au rebut (montage clôturé, historique et coût conservés) ou suppression d'une saisie erronée.
 5. **Saisie hors connexion (PWA) :** les péages, dépenses, recharges et qualifications de trajets saisis sans réseau sont conservés dans le navigateur (IndexedDB) puis envoyés au retour de la connexion. Chaque envoi porte un en-tête `Idempotency-Key` : une requête rejouée après une réponse perdue n'est appliquée qu'une fois.
 6. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
 7. **Calculateur de TCO :**

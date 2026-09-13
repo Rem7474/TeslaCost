@@ -104,9 +104,10 @@ export const api = {
   getDataQuality: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/data-quality`),
 
   // Drives
-  getDrives: (vehicleId: string, params?: { tag?: string; page?: number; limit?: number; unqualified?: boolean }) => {
+  getDrives: (vehicleId: string, params?: { tag?: string; page?: number; limit?: number; unqualified?: boolean; tripGroupId?: string }) => {
     const q = new URLSearchParams()
     if (params?.tag) q.set('tag', params.tag)
+    if (params?.tripGroupId) q.set('trip_group_id', params.tripGroupId)
     if (params?.unqualified) q.set('unqualified', 'true')
     if (params?.page) q.set('page', params.page.toString())
     if (params?.limit) q.set('limit', params.limit.toString())
@@ -123,6 +124,10 @@ export const api = {
   createTripGroup: (vehicleId: string, payload: { name: string; notes?: string; drive_ids: string[] }) =>
     request<any>(`/vehicles/${vehicleId}/trip-groups`, { method: 'POST', body: JSON.stringify(payload) }),
   getTripGroups: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-groups`),
+  updateTripGroup: (vehicleId: string, groupId: string, payload: { name: string; notes?: string | null; drive_ids?: string[] }) =>
+    request<any>(`/vehicles/${vehicleId}/trip-groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deleteTripGroup: (vehicleId: string, groupId: string, deleteExpenses = false) =>
+    request<any>(`/vehicles/${vehicleId}/trip-groups/${groupId}?delete_expenses=${deleteExpenses}`, { method: 'DELETE' }),
 
   // Tires
   getTires: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/tires`),
@@ -141,6 +146,16 @@ export const api = {
     request<any>(`/vehicles/${vehicleId}/tires/${tireId}/sessions/${sessionId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTireSession: (vehicleId: string, tireId: string, sessionId: string) =>
     request<any>(`/vehicles/${vehicleId}/tires/${tireId}/sessions/${sessionId}`, { method: 'DELETE' }),
+  batchUpdateTires: (vehicleId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/tires/batch`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteTire: (vehicleId: string, tireId: string) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}`, { method: 'DELETE' }),
+  disposeTire: (vehicleId: string, tireId: string, data: { date: string; odometer?: number | null }) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/dispose`, { method: 'POST', body: JSON.stringify(data) }),
+  updateTireLog: (vehicleId: string, tireId: string, logId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/logs/${logId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteTireLog: (vehicleId: string, tireId: string, logId: string) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/logs/${logId}`, { method: 'DELETE' }),
   addTireLog: (vehicleId: string, tireId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/tires/${tireId}/logs`, { method: 'POST', body: JSON.stringify(data) }),
   rotateTires: (vehicleId: string, data: any) =>
