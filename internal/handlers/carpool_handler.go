@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -29,14 +31,31 @@ func NewCarpoolHandler(repo *database.Repository, carpoolService *services.Carpo
 }
 
 type PassengerPayload struct {
-	PassengerName string      `json:"passenger_name"`
-	Origin        *string     `json:"origin"`
-	Destination   *string     `json:"destination"`
-	Seats         int         `json:"seats"`
-	AmountPaid    money.Cents `json:"amount_paid"`
-	Notes         *string     `json:"notes"`
+	PassengerName   string      `json:"passenger_name"`
+	Origin          *string     `json:"origin"`
+	Destination     *string     `json:"destination"`
+	Seats           int         `json:"seats"`
+	AmountPaid      money.Cents `json:"amount_paid"`
+	Notes           *string     `json:"notes"`
+	BoardStopIndex  *int        `json:"board_stop_index"`  // Default: first stop
+	AlightStopIndex *int        `json:"alight_stop_index"` // Default: last stop
 }
 
+type LegPayload struct {
+	DriveID         *string     `json:"drive_id"`
+	StartLabel      *string     `json:"start_label"`
+	EndLabel        *string     `json:"end_label"`
+	DistanceKm      float64     `json:"distance_km"`
+	ElectricityCost money.Cents `json:"electricity_cost"`
+	TollsCost       money.Cents `json:"tolls_cost"`
+	TiresCost       money.Cents `json:"tires_cost"`
+	MaintenanceCost money.Cents `json:"maintenance_cost"`
+	InsuranceCost   money.Cents `json:"insurance_cost"`
+	OtherCost       money.Cents `json:"other_cost"`
+}
+
+// UpsertCarpoolRequest describes a carpool trip. Legs are the ordered stages of the trip; when omitted,
+// the trip-level distance and costs form a single leg.
 type UpsertCarpoolRequest struct {
 	Title           string             `json:"title"`
 	Date            string             `json:"date"`
@@ -50,22 +69,133 @@ type UpsertCarpoolRequest struct {
 	InsuranceCost   money.Cents        `json:"insurance_cost"`
 	OtherCost       money.Cents        `json:"other_cost"`
 	Notes           *string            `json:"notes"`
+	Legs            []LegPayload       `json:"legs"`
 	Passengers      []PassengerPayload `json:"passengers"`
 }
 
-// validateCarpoolAmounts rejects negative or out-of-range cost components and passenger payments.
-func validateCarpoolAmounts(req *UpsertCarpoolRequest) error {
-	for _, c := range []money.Cents{req.ElectricityCost, req.TollsCost, req.TiresCost, req.MaintenanceCost, req.InsuranceCost, req.OtherCost} {
-		if err := validateAmount(c, true); err != nil {
-			return err
+// Maximum seats occupied by passengers on a single leg (7-seat vehicles).
+const maxCarpoolSeatsPerLeg = 7
+
+func nonEmptyLabel(s *string) *string {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return nil
+	}
+	v := strings.TrimSpace(*s)
+	if r := []rune(v); len(r) > 150 {
+		v = string(r[:150])
+	}
+	return &v
+}
+
+// buildCarpool validates the payload and returns the trip, its legs and its passengers.
+func buildCarpool(vehicleID string, req *UpsertCarpoolRequest) (*models.CarpoolTrip, []models.CarpoolLeg, []models.CarpoolPassenger, error) {
+	if strings.TrimSpace(req.Title) == "" {
+		return nil, nil, nil, errors.New("le titre du covoiturage est requis")
+	}
+	date := time.Now().UTC()
+	if req.Date != "" {
+		parsed, err := parseDate(req.Date)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		date = parsed
+	}
+
+	payloads := req.Legs
+	if len(payloads) == 0 {
+		payloads = []LegPayload{{
+			DriveID: req.DriveID, DistanceKm: req.DistanceKm,
+			ElectricityCost: req.ElectricityCost, TollsCost: req.TollsCost, TiresCost: req.TiresCost,
+			MaintenanceCost: req.MaintenanceCost, InsuranceCost: req.InsuranceCost, OtherCost: req.OtherCost,
+		}}
+	}
+	if len(payloads) > 30 {
+		return nil, nil, nil, errors.New("un covoiturage est limité à 30 étapes")
+	}
+
+	legs := make([]models.CarpoolLeg, len(payloads))
+	for i, lp := range payloads {
+		if err := validateQuantity(lp.DistanceKm, 5000); err != nil {
+			return nil, nil, nil, fmt.Errorf("distance invalide pour l'étape %d", i+1)
+		}
+		for _, c := range []money.Cents{lp.ElectricityCost, lp.TollsCost, lp.TiresCost, lp.MaintenanceCost, lp.InsuranceCost, lp.OtherCost} {
+			if err := validateAmount(c, true); err != nil {
+				return nil, nil, nil, fmt.Errorf("étape %d : %w", i+1, err)
+			}
+		}
+		driveID := lp.DriveID
+		if driveID != nil && *driveID == "" {
+			driveID = nil
+		}
+		legs[i] = models.CarpoolLeg{
+			OrderIndex: i, DriveID: driveID, StartLabel: nonEmptyLabel(lp.StartLabel), EndLabel: nonEmptyLabel(lp.EndLabel),
+			DistanceKm: lp.DistanceKm, ElectricityCost: lp.ElectricityCost, TollsCost: lp.TollsCost, TiresCost: lp.TiresCost,
+			MaintenanceCost: lp.MaintenanceCost, InsuranceCost: lp.InsuranceCost, OtherCost: lp.OtherCost,
 		}
 	}
+	stopLabel := func(stop int) *string {
+		if stop < len(legs) {
+			return legs[stop].StartLabel
+		}
+		return legs[len(legs)-1].EndLabel
+	}
+
+	passengers := make([]models.CarpoolPassenger, 0, len(req.Passengers))
+	seatsPerLeg := make([]int, len(legs))
 	for _, p := range req.Passengers {
 		if err := validateAmount(p.AmountPaid, true); err != nil {
-			return err
+			return nil, nil, nil, err
 		}
+		seats := p.Seats
+		if seats <= 0 {
+			seats = 1
+		}
+		name := strings.TrimSpace(p.PassengerName)
+		if name == "" {
+			name = "Passager"
+		}
+		board, alight := 0, len(legs)
+		if p.BoardStopIndex != nil {
+			board = *p.BoardStopIndex
+		}
+		if p.AlightStopIndex != nil {
+			alight = *p.AlightStopIndex
+		}
+		if board < 0 || alight <= board || alight > len(legs) {
+			return nil, nil, nil, fmt.Errorf("%s : l'arrêt de descente doit suivre l'arrêt de montée", name)
+		}
+		for i := board; i < alight; i++ {
+			seatsPerLeg[i] += seats
+			if seatsPerLeg[i] > maxCarpoolSeatsPerLeg {
+				return nil, nil, nil, fmt.Errorf("plus de %d places occupées sur l'étape %d", maxCarpoolSeatsPerLeg, i+1)
+			}
+		}
+		origin, destination := nonEmptyLabel(p.Origin), nonEmptyLabel(p.Destination)
+		if origin == nil {
+			origin = stopLabel(board)
+		}
+		if destination == nil {
+			destination = stopLabel(alight)
+		}
+		passengers = append(passengers, models.CarpoolPassenger{
+			PassengerName: name, Origin: origin, Destination: destination, Seats: seats,
+			AmountPaid: p.AmountPaid, Notes: p.Notes, BoardStopIndex: board, AlightStopIndex: alight,
+		})
 	}
-	return nil
+
+	trip := &models.CarpoolTrip{
+		VehicleID: vehicleID, DriveID: req.DriveID, TripGroupID: req.TripGroupID,
+		Title: strings.TrimSpace(req.Title), Date: date, Notes: req.Notes,
+	}
+	if len(legs) == 1 && legs[0].DriveID != nil {
+		trip.DriveID = legs[0].DriveID
+	}
+	return trip, legs, passengers, nil
+}
+
+// allocate computes the fair split of the costs of a trip between its driver and passengers.
+func allocate(t *models.CarpoolTripWithPassengers) {
+	t.DriverCostShare, t.PassengersCostShare = services.AllocateCarpoolCosts(t.Legs, t.Passengers)
 }
 
 func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -85,7 +215,13 @@ func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	summary, err := h.repo.GetCarpoolSummary(r.Context(), vehicleID)
 	if err != nil {
-		summary = &models.CarpoolSummary{}
+		writeRepoError(w, err, "Failed to summarize carpool trips")
+		return
+	}
+	for i := range trips {
+		allocate(&trips[i])
+		summary.TotalDriverShare += trips[i].DriverCostShare
+		summary.TotalPassengersShare += trips[i].PassengersCostShare
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -97,23 +233,22 @@ func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *CarpoolHandler) Get(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	id := chi.URLParam(r, "id")
 
 	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
 		writeError(w, http.StatusNotFound, "Vehicle not found")
 		return
 	}
 
-	trip, err := h.repo.GetCarpoolTrip(r.Context(), id, vehicleID)
+	trip, err := h.repo.GetCarpoolTrip(r.Context(), chi.URLParam(r, "id"), vehicleID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Carpool trip not found")
+		writeRepoError(w, err, "Failed to load carpool trip")
 		return
 	}
-
+	allocate(trip)
 	writeJSON(w, http.StatusOK, trip)
 }
 
-func (h *CarpoolHandler) Create(w http.ResponseWriter, r *http.Request) {
+func (h *CarpoolHandler) save(w http.ResponseWriter, r *http.Request, tripID string) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
@@ -127,143 +262,36 @@ func (h *CarpoolHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
-	if err := validateCarpoolAmounts(&req); err != nil {
+	trip, legs, passengers, err := buildCarpool(vehicleID, &req)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	if req.Title == "" {
-		writeError(w, http.StatusBadRequest, "Title is required")
-		return
+	status := http.StatusCreated
+	if tripID == "" {
+		err = h.repo.CreateCarpoolTrip(r.Context(), trip, legs, passengers)
+	} else {
+		trip.ID = tripID
+		status = http.StatusOK
+		err = h.repo.UpdateCarpoolTrip(r.Context(), trip, legs, passengers)
 	}
-
-	parsedDate, err := time.Parse(time.RFC3339, req.Date)
 	if err != nil {
-		parsedDate = time.Now().UTC()
-	}
-
-	trip := &models.CarpoolTrip{
-		VehicleID:       vehicleID,
-		DriveID:         req.DriveID,
-		TripGroupID:     req.TripGroupID,
-		Title:           req.Title,
-		Date:            parsedDate,
-		DistanceKm:      req.DistanceKm,
-		ElectricityCost: req.ElectricityCost,
-		TollsCost:       req.TollsCost,
-		TiresCost:       req.TiresCost,
-		MaintenanceCost: req.MaintenanceCost,
-		InsuranceCost:   req.InsuranceCost,
-		OtherCost:       req.OtherCost,
-		Notes:           req.Notes,
-	}
-
-	var passengers []models.CarpoolPassenger
-	for _, p := range req.Passengers {
-		seats := p.Seats
-		if seats <= 0 {
-			seats = 1
-		}
-		name := p.PassengerName
-		if name == "" {
-			name = "Passager"
-		}
-		passengers = append(passengers, models.CarpoolPassenger{
-			PassengerName: name,
-			Origin:        p.Origin,
-			Destination:   p.Destination,
-			Seats:         seats,
-			AmountPaid:    p.AmountPaid,
-			Notes:         p.Notes,
-		})
-	}
-
-	if err := h.repo.CreateCarpoolTrip(r.Context(), trip, passengers); err != nil {
-		writeRepoError(w, err, "Failed to create carpool trip")
+		writeRepoError(w, err, "Failed to save carpool trip")
 		return
 	}
 
-	tripWithPassengers := &models.CarpoolTripWithPassengers{
-		CarpoolTrip: *trip,
-		Passengers:  passengers,
-	}
+	result := &models.CarpoolTripWithPassengers{CarpoolTrip: *trip, Legs: legs, Passengers: passengers}
+	allocate(result)
+	writeJSON(w, status, result)
+}
 
-	writeJSON(w, http.StatusCreated, tripWithPassengers)
+func (h *CarpoolHandler) Create(w http.ResponseWriter, r *http.Request) {
+	h.save(w, r, "")
 }
 
 func (h *CarpoolHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	vehicleID := chi.URLParam(r, "vehicleId")
-	id := chi.URLParam(r, "id")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
-		return
-	}
-
-	var req UpsertCarpoolRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
-	if err := validateCarpoolAmounts(&req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	parsedDate, err := time.Parse(time.RFC3339, req.Date)
-	if err != nil {
-		parsedDate = time.Now().UTC()
-	}
-
-	trip := &models.CarpoolTrip{
-		ID:              id,
-		VehicleID:       vehicleID,
-		DriveID:         req.DriveID,
-		TripGroupID:     req.TripGroupID,
-		Title:           req.Title,
-		Date:            parsedDate,
-		DistanceKm:      req.DistanceKm,
-		ElectricityCost: req.ElectricityCost,
-		TollsCost:       req.TollsCost,
-		TiresCost:       req.TiresCost,
-		MaintenanceCost: req.MaintenanceCost,
-		InsuranceCost:   req.InsuranceCost,
-		OtherCost:       req.OtherCost,
-		Notes:           req.Notes,
-	}
-
-	var passengers []models.CarpoolPassenger
-	for _, p := range req.Passengers {
-		seats := p.Seats
-		if seats <= 0 {
-			seats = 1
-		}
-		name := p.PassengerName
-		if name == "" {
-			name = "Passager"
-		}
-		passengers = append(passengers, models.CarpoolPassenger{
-			PassengerName: name,
-			Origin:        p.Origin,
-			Destination:   p.Destination,
-			Seats:         seats,
-			AmountPaid:    p.AmountPaid,
-			Notes:         p.Notes,
-		})
-	}
-
-	if err := h.repo.UpdateCarpoolTrip(r.Context(), trip, passengers); err != nil {
-		writeRepoError(w, err, "Failed to update carpool trip")
-		return
-	}
-
-	tripWithPassengers := &models.CarpoolTripWithPassengers{
-		CarpoolTrip: *trip,
-		Passengers:  passengers,
-	}
-
-	writeJSON(w, http.StatusOK, tripWithPassengers)
+	h.save(w, r, chi.URLParam(r, "id"))
 }
 
 func (h *CarpoolHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -277,7 +305,7 @@ func (h *CarpoolHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.DeleteCarpoolTrip(r.Context(), id, vehicleID); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to delete carpool trip")
+		writeRepoError(w, err, "Failed to delete carpool trip")
 		return
 	}
 

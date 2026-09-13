@@ -33,9 +33,13 @@
    - Kilométrage initial conservé pour les pneus achetés d'occasion.
    - Modification d'un pneu ou par lot (marque, dimensions, prix unitaire ou total réparti au centime, date et odomètre du montage en cours), relevés d'usure modifiables et supprimables.
    - Mise au rebut (montage clôturé, historique et coût conservés) ou suppression d'une saisie erronée.
-5. **Saisie hors connexion (PWA) :** les péages, dépenses, recharges et qualifications de trajets saisis sans réseau sont conservés dans le navigateur (IndexedDB) puis envoyés au retour de la connexion. Chaque envoi porte un en-tête `Idempotency-Key` : une requête rejouée après une réponse perdue n'est appliquée qu'une fois.
-6. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
-7. **Calculateur de TCO :**
+5. **Covoiturage (BlaBlaCar & directs) :**
+   - Un covoiturage est une suite d'étapes : un trajet TeslaMate par étape (énergie mesurée, péages du trajet, usure, entretien et assurance au km) ou des étapes saisies à la main.
+   - Chaque passager a un arrêt de montée, un arrêt de descente et un nombre de places.
+   - Le coût de chaque étape est partagé à parts égales entre les personnes à bord, conducteur compris : la part d'un passager est la somme des étapes parcourues, l'arrondi reste au conducteur. Pour chaque passager, le montant payé est comparé à sa part.
+6. **Saisie hors connexion (PWA) :** les péages, dépenses, recharges et qualifications de trajets saisis sans réseau sont conservés dans le navigateur (IndexedDB) puis envoyés au retour de la connexion. Chaque envoi porte un en-tête `Idempotency-Key` : une requête rejouée après une réponse perdue n'est appliquée qu'une fois.
+7. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
+8. **Calculateur de TCO :**
    - Registre des coûts unique (vue SQL `cost_ledger`) : recharges, péages, dépenses récurrentes générées échéance par échéance, pneus, assurance, achat du véhicule. Totaux, historique mensuel et taux au km en sont tous dérivés.
    - Montants stockés et calculés en centimes exacts (`NUMERIC` en base, entiers en Go).
    - Dépenses courantes décaissées (pneus au jour d'achat, achat du véhicule exclu) et coût complet (usure des pneus amortie au kilomètre, décote du véhicule).

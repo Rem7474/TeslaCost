@@ -259,12 +259,52 @@ type CarpoolPassenger struct {
 	AmountPaid    money.Cents `json:"amount_paid"`
 	Notes         *string     `json:"notes,omitempty"`
 	CreatedAt     time.Time   `json:"created_at"`
+
+	// Stops where the passenger boards and alights (leg i goes from stop i to stop i + 1)
+	BoardStopIndex  int `json:"board_stop_index"`
+	AlightStopIndex int `json:"alight_stop_index"`
+
+	// Computed: fair share of the costs of the legs ridden, and amount paid minus that share
+	CostShare money.Cents `json:"cost_share"`
+	Balance   money.Cents `json:"balance"`
+}
+
+// CarpoolLeg is one leg of a carpool trip, usually one TeslaMate drive, with its own costs.
+type CarpoolLeg struct {
+	ID              string      `json:"id"`
+	CarpoolTripID   string      `json:"carpool_trip_id"`
+	OrderIndex      int         `json:"order_index"`
+	DriveID         *string     `json:"drive_id,omitempty"`
+	StartLabel      *string     `json:"start_label,omitempty"`
+	EndLabel        *string     `json:"end_label,omitempty"`
+	DistanceKm      float64     `json:"distance_km"`
+	ElectricityCost money.Cents `json:"electricity_cost"`
+	TollsCost       money.Cents `json:"tolls_cost"`
+	TiresCost       money.Cents `json:"tires_cost"`
+	MaintenanceCost money.Cents `json:"maintenance_cost"`
+	InsuranceCost   money.Cents `json:"insurance_cost"`
+	OtherCost       money.Cents `json:"other_cost"`
+
+	// Computed
+	TotalCost      money.Cents `json:"total_cost"`
+	PassengerSeats int         `json:"passenger_seats"` // Seats occupied by passengers on this leg
+	CostPerPerson  money.Cents `json:"cost_per_person"` // Driver included
+}
+
+// Total returns the sum of the leg cost components.
+func (l *CarpoolLeg) Total() money.Cents {
+	return l.ElectricityCost + l.TollsCost + l.TiresCost + l.MaintenanceCost + l.InsuranceCost + l.OtherCost
 }
 
 // CarpoolTripWithPassengers bundles a trip with its passengers.
 type CarpoolTripWithPassengers struct {
 	CarpoolTrip
+	Legs       []CarpoolLeg       `json:"legs"`
 	Passengers []CarpoolPassenger `json:"passengers"`
+
+	// Computed: fair split of the trip costs between the driver and the passengers
+	DriverCostShare     money.Cents `json:"driver_cost_share"`
+	PassengersCostShare money.Cents `json:"passengers_cost_share"`
 }
 
 // CarpoolCostEstimate provides suggested real cost breakdown based on vehicle TCO metrics.
@@ -289,6 +329,8 @@ type CarpoolCostEstimate struct {
 	ElectricityRateSource string       `json:"electricity_rate_source"` // HISTORY | DEFAULT
 	TiresRateSource       string       `json:"tires_rate_source"`       // MOUNTED_TIRES | HISTORY | DEFAULT
 	MaintenanceRateSource string       `json:"maintenance_rate_source"` // HISTORY | DEFAULT
+	// One estimated leg per drive (chronological), or a single leg for a manual distance
+	Legs []CarpoolLeg `json:"legs"`
 }
 
 // CarpoolSummary aggregates global carpooling KPIs for the vehicle.
@@ -302,6 +344,9 @@ type CarpoolSummary struct {
 	TotalSaved      money.Cents `json:"total_saved"`
 	CoverageRatePct float64     `json:"coverage_rate_pct"`
 	NetCostPerKm    float64     `json:"net_cost_per_km"`
+	// Fair shares over all trips: what passengers should cover given the legs they rode, and the driver's own share
+	TotalPassengersShare money.Cents `json:"total_passengers_share"`
+	TotalDriverShare     money.Cents `json:"total_driver_share"`
 }
 
 // DataQualityIssue reports an odometer continuity problem on synchronized drives.
