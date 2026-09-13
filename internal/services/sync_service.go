@@ -22,6 +22,8 @@ type SyncResult struct {
 	ChargesSynced   int      `json:"charges_synced"`
 	ChargesAdded    int      `json:"charges_added"`
 	ChargesUpdated  int      `json:"charges_updated"`
+	DrivesDeleted   int      `json:"drives_deleted_upstream"`
+	ChargesDeleted  int      `json:"charges_deleted_upstream"`
 	SyncedAt        string   `json:"synced_at"`
 	Warnings        []string `json:"warnings,omitempty"`
 }
@@ -61,6 +63,7 @@ type syncStore interface {
 	UpsertTeslaMateCharge(ctx context.Context, c *models.ChargeLog) (bool, error)
 	IsFullImportCompleted(ctx context.Context, vehicleID, resource string) (bool, error)
 	MarkSyncSuccess(ctx context.Context, vehicleID, resource string, fullImport bool) error
+	ReconcileTeslaMateRecords(ctx context.Context, resource, vehicleID string, coveredAfter *time.Time, seenIDs []int) (*database.ReconcileResult, error)
 	ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models.Vehicle, error)
 }
 
@@ -202,14 +205,48 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		ChargesSynced:   charges.count,
 		ChargesAdded:    charges.added,
 		ChargesUpdated:  charges.updated,
+		DrivesDeleted:   drives.deletedUpstream,
+		ChargesDeleted:  charges.deletedUpstream,
 		SyncedAt:        time.Now().UTC().Format(time.RFC3339),
 		Warnings:        syncWarnings,
 	}, nil
 }
 
 type resourceSyncStats struct {
-	count, added, updated, failed int
-	warnings                      []string
+	count, added, updated, failed, deletedUpstream int
+	warnings                                       []string
+	seenIDs                                        []int
+	oldestSeen                                     *time.Time
+}
+
+func (st *resourceSyncStats) see(id int, start time.Time) {
+	st.seenIDs = append(st.seenIDs, id)
+	if st.oldestSeen == nil || start.Before(*st.oldestSeen) {
+		t := start
+		st.oldestSeen = &t
+	}
+}
+
+// reconcile flags records deleted in TeslaMate over the window covered by a completed pass:
+// the whole history for a full import, otherwise everything strictly newer than the oldest record read.
+func (s *SyncService) reconcile(ctx context.Context, st *resourceSyncStats, vehicleID, resource, label string, fullPass bool) {
+	coveredAfter := st.oldestSeen
+	if fullPass {
+		coveredAfter = nil
+	} else if coveredAfter == nil {
+		return
+	}
+	res, err := s.repo.ReconcileTeslaMateRecords(ctx, resource, vehicleID, coveredAfter, st.seenIDs)
+	switch {
+	case err != nil:
+		st.warnings = append(st.warnings, fmt.Sprintf("%s : rapprochement avec TeslaMate impossible (%v)", label, err))
+	case res.Skipped:
+		st.warnings = append(st.warnings, fmt.Sprintf(
+			"%s : %d éléments absents de TeslaMate, suppression ignorée par sécurité (vérifiez l'identifiant du véhicule TeslaMate)", label, res.Missing))
+	case res.Marked > 0:
+		st.deletedUpstream = res.Marked
+		st.warnings = append(st.warnings, fmt.Sprintf("%s : %d élément(s) supprimé(s) dans TeslaMate, exclu(s) des calculs", label, res.Marked))
+	}
 }
 
 func (st *resourceSyncStats) recordUpsert(isInserted bool, err error, label string) {
@@ -288,6 +325,7 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 			if stopBefore != nil && startTime.Before(*stopBefore) {
 				reachedKnownHistory = true
 			}
+			st.see(td.DriveID, startTime)
 
 			isInserted, err := s.repo.UpsertTeslaMateDrive(ctx, buildDrive(v.ID, td, driveUnits, startTime, endTime))
 			st.recordUpsert(isInserted, err, fmt.Sprintf("Trajet TeslaMate #%d", td.DriveID))
@@ -304,6 +342,7 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 
 	st.finalize("Trajets")
 	if completed && st.failed == 0 {
+		s.reconcile(ctx, &st, v.ID, "drives", "Trajets", stopBefore == nil)
 		if err := s.repo.MarkSyncSuccess(ctx, v.ID, "drives", true); err != nil {
 			st.warnings = append(st.warnings, fmt.Sprintf("Trajets : état de synchronisation non enregistré (%v)", err))
 		}
@@ -401,6 +440,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 			if stopBefore != nil && startDate.Before(*stopBefore) {
 				reachedKnownHistory = true
 			}
+			st.see(tc.ChargeID, startDate)
 
 			isInserted, err := s.repo.UpsertTeslaMateCharge(ctx, buildCharge(v.ID, tc, chargeUnits, startDate))
 			st.recordUpsert(isInserted, err, fmt.Sprintf("Recharge TeslaMate #%d", tc.ChargeID))
@@ -417,6 +457,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 
 	st.finalize("Recharges")
 	if completed && st.failed == 0 {
+		s.reconcile(ctx, &st, v.ID, "charges", "Recharges", stopBefore == nil)
 		if err := s.repo.MarkSyncSuccess(ctx, v.ID, "charges", true); err != nil {
 			st.warnings = append(st.warnings, fmt.Sprintf("Recharges : état de synchronisation non enregistré (%v)", err))
 		}

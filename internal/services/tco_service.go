@@ -170,7 +170,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		       COALESCE(MAX(end_odometer) FILTER (WHERE end_odometer > 0) - MIN(start_odometer) FILTER (WHERE start_odometer > 0), 0),
 		       MIN(start_time)
 		FROM drives
-		WHERE vehicle_id = $1;
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
 	`, vehicleID).Scan(&trackedKm, &odometerSpan, &firstDrive); err != nil {
 		return nil, fmt.Errorf("distance: %w", err)
 	}
@@ -191,7 +191,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		       COALESCE(SUM(kwh_added) FILTER (WHERE cost IS NULL), 0),
 		       COUNT(*) FILTER (WHERE cost IS NOT NULL AND currency <> 'EUR' AND fx_rate IS NULL)
 		FROM charge_logs
-		WHERE vehicle_id = $1;
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
 	`, vehicleID).Scan(&energyCost, &kwhAdded, &kwhPriced, &comp.ChargesWithoutCost, &comp.KwhWithoutCost, &comp.UnconvertedExpenses); err != nil {
 		return nil, fmt.Errorf("energy: %w", err)
 	}
@@ -287,7 +287,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	// 7. Toll qualification backlog
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COUNT(*) FROM drives
-		WHERE vehicle_id = $1 AND `+database.UnqualifiedDrivePredicate+`;
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND `+database.UnqualifiedDrivePredicate+`;
 	`, vehicleID).Scan(&comp.UnqualifiedDrives); err != nil {
 		return nil, fmt.Errorf("unqualified drives: %w", err)
 	}
@@ -387,7 +387,7 @@ func (s *TCOService) tagBreakdown(ctx context.Context, vehicleID string, totalDi
 			       unnest(CASE WHEN d.tags = '{}' OR d.tags IS NULL THEN ARRAY['Non tagué'] ELSE d.tags END) AS tag,
 			       d.distance_km, d.energy_consumed_kwh
 			FROM drives d
-			WHERE d.vehicle_id = $1
+			WHERE d.vehicle_id = $1 AND d.deleted_upstream_at IS NULL
 		) sub
 		LEFT JOIN per_drive pd ON pd.drive_id = sub.id
 		GROUP BY sub.tag
@@ -432,7 +432,7 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, insuran
 	all := []series{
 		{`SELECT TO_CHAR(date AT TIME ZONE $2, 'YYYY-MM') AS m,
 		         COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0)
-		  FROM charge_logs WHERE vehicle_id = $1 GROUP BY m`,
+		  FROM charge_logs WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL GROUP BY m`,
 			func(mc *MonthlyCost, v float64) { mc.Energy += v }},
 		{`SELECT TO_CHAR(date AT TIME ZONE $2, 'YYYY-MM') AS m, COALESCE(SUM(` + database.AmountEURExpr + `), 0)
 		  FROM drive_expenses WHERE vehicle_id = $1 GROUP BY m`,
@@ -441,7 +441,7 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, insuran
 		  FROM tires WHERE vehicle_id = $1 AND $2::text IS NOT NULL GROUP BY m`,
 			func(mc *MonthlyCost, v float64) { mc.Tires += v }},
 		{`SELECT TO_CHAR(start_time AT TIME ZONE $2, 'YYYY-MM') AS m, COALESCE(SUM(distance_km), 0)
-		  FROM drives WHERE vehicle_id = $1 GROUP BY m`,
+		  FROM drives WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL GROUP BY m`,
 			func(mc *MonthlyCost, v float64) { mc.DistanceKm += v }},
 	}
 	for _, sr := range all {

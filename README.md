@@ -13,6 +13,7 @@
    - Synchronisation incrémentale relisant les 30 derniers jours pour récupérer les coûts complétés après coup dans TeslaMate.
    - Une recharge sans tarif TeslaMate est enregistrée « sans coût » (jamais 0 €) et signalée ; son coût peut être saisi manuellement sans être écrasé par les synchronisations.
    - Saisie des recharges hors TeslaMate (prise d'un tiers, borne non suivie).
+   - Trajets et recharges supprimés dans TeslaMate exclus des calculs (tags et liens conservés, restaurés s'ils réapparaissent). Si plus de 20 % de la période relue disparaît d'un coup, rien n'est retiré et un avertissement est affiché.
    - Support d'authentification Bearer Token et HTTP Basic Auth.
    - Chiffrement symétrique au repos AES-256-GCM des identifiants et tokens API dans la base de données.
 3. **Péages, Parkings et Fusion de Trajets :**

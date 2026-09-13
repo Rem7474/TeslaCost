@@ -287,6 +287,7 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		    end_address = EXCLUDED.end_address,
 		    energy_consumed_kwh = EXCLUDED.energy_consumed_kwh,
 		    consumption_kwh_100km = EXCLUDED.consumption_kwh_100km,
+		    deleted_upstream_at = NULL,
 		    updated_at = NOW()
 		RETURNING id, (xmax = 0) AS is_inserted;
 	`
@@ -305,7 +306,7 @@ func (r *Repository) GetLatestTeslaMateDriveStartTime(ctx context.Context, vehic
 	query := `
 		SELECT start_time
 		FROM drives
-		WHERE vehicle_id = $1 AND teslamate_drive_id IS NOT NULL
+		WHERE vehicle_id = $1 AND teslamate_drive_id IS NOT NULL AND deleted_upstream_at IS NULL
 		ORDER BY start_time DESC
 		LIMIT 1;
 	`
@@ -340,7 +341,7 @@ const UnqualifiedDrivePredicate = `
 `
 
 func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter DriveFilter, limit, offset int) ([]models.Drive, int, error) {
-	where := `vehicle_id = $1 AND ($2 = '' OR $2 = ANY(tags)) AND (NOT $3 OR (` + UnqualifiedDrivePredicate + `))`
+	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND ($2 = '' OR $2 = ANY(tags)) AND (NOT $3 OR (` + UnqualifiedDrivePredicate + `))`
 
 	var total int
 	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE `+where, vehicleID, filter.Tag, filter.UnqualifiedOnly).Scan(&total); err != nil {
@@ -383,7 +384,7 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter Dr
 // CountUnqualifiedDrives counts highway-like drives still waiting for a toll qualification.
 func (r *Repository) CountUnqualifiedDrives(ctx context.Context, vehicleID string) (int, error) {
 	var count int
-	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE vehicle_id = $1 AND `+UnqualifiedDrivePredicate, vehicleID).Scan(&count)
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND `+UnqualifiedDrivePredicate, vehicleID).Scan(&count)
 	return count, err
 }
 
@@ -454,7 +455,7 @@ func linkTripGroupDrives(ctx context.Context, tx pgx.Tx, tripGroupID string, dri
 		INSERT INTO trip_group_drives (trip_group_id, drive_id, order_index)
 		SELECT $1, d.id, ROW_NUMBER() OVER (ORDER BY d.start_time) - 1
 		FROM drives d
-		WHERE d.id::text = ANY($2::text[]);
+		WHERE d.id::text = ANY($2::text[]) AND d.deleted_upstream_at IS NULL;
 	`, tripGroupID, uniqueStrings(driveIDs))
 	if err != nil {
 		return fmt.Errorf("failed to link drives to trip group: %w", err)
@@ -1354,7 +1355,8 @@ func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.Charge
 		    kwh_used = EXCLUDED.kwh_used,
 		    cost = CASE WHEN charge_logs.cost_source = 'MANUAL' THEN charge_logs.cost ELSE EXCLUDED.cost END,
 		    currency = CASE WHEN charge_logs.cost_source = 'MANUAL' THEN charge_logs.currency ELSE EXCLUDED.currency END,
-		    odometer = EXCLUDED.odometer
+		    odometer = EXCLUDED.odometer,
+		    deleted_upstream_at = NULL
 		RETURNING id, (xmax = 0) AS is_inserted;
 	`
 	var isInserted bool
@@ -1369,7 +1371,7 @@ func (r *Repository) GetLatestTeslaMateChargeDate(ctx context.Context, vehicleID
 	query := `
 		SELECT date
 		FROM charge_logs
-		WHERE vehicle_id = $1 AND teslamate_charge_id IS NOT NULL
+		WHERE vehicle_id = $1 AND teslamate_charge_id IS NOT NULL AND deleted_upstream_at IS NULL
 		ORDER BY date DESC
 		LIMIT 1;
 	`
@@ -1399,7 +1401,7 @@ func scanCharge(row pgx.Row, c *models.ChargeLog) error {
 
 // ListCharges lists charges; missingCostOnly restricts to charges whose cost is still unknown.
 func (r *Repository) ListCharges(ctx context.Context, vehicleID string, missingCostOnly bool, limit, offset int) ([]models.ChargeLog, int, error) {
-	where := `vehicle_id = $1 AND (NOT $2 OR cost IS NULL)`
+	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND (NOT $2 OR cost IS NULL)`
 	var total int
 	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE `+where, vehicleID, missingCostOnly).Scan(&total); err != nil {
 		return nil, 0, err
@@ -1431,7 +1433,7 @@ func (r *Repository) ListCharges(ctx context.Context, vehicleID string, missingC
 // CountChargesWithoutCost counts charges with an unknown cost.
 func (r *Repository) CountChargesWithoutCost(ctx context.Context, vehicleID string) (int, error) {
 	var count int
-	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE vehicle_id = $1 AND cost IS NULL;`, vehicleID).Scan(&count)
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE vehicle_id = $1 AND cost IS NULL AND deleted_upstream_at IS NULL;`, vehicleID).Scan(&count)
 	return count, err
 }
 
@@ -1827,7 +1829,7 @@ func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string
 		       speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
 		       consumption_kwh_100km, tags, is_manual, toll_reviewed_at, created_at, updated_at
 		FROM drives
-		WHERE id::text = $1 AND vehicle_id = $2;
+		WHERE id::text = $1 AND vehicle_id = $2 AND deleted_upstream_at IS NULL;
 	`
 	var d models.Drive
 	err := r.pool.QueryRow(ctx, query, driveID, vehicleID).Scan(
@@ -1855,7 +1857,7 @@ func (r *Repository) GetTripGroupDrives(ctx context.Context, vehicleID, tripGrou
 		FROM drives d
 		JOIN trip_group_drives tgd ON d.id = tgd.drive_id
 		JOIN trip_groups tg ON tg.id = tgd.trip_group_id
-		WHERE tgd.trip_group_id::text = $1 AND tg.vehicle_id = $2 AND d.vehicle_id = $2
+		WHERE tgd.trip_group_id::text = $1 AND tg.vehicle_id = $2 AND d.vehicle_id = $2 AND d.deleted_upstream_at IS NULL
 		ORDER BY tgd.order_index ASC;
 	`
 	rows, err := r.pool.Query(ctx, query, tripGroupID, vehicleID)
@@ -1889,20 +1891,21 @@ const DriveTollAllocationCTE = `
 		SELECT tgd.trip_group_id, SUM(d.distance_km) AS km, COUNT(*) AS n
 		FROM trip_group_drives tgd
 		JOIN trip_groups tg ON tg.id = tgd.trip_group_id AND tg.vehicle_id = $1
-		JOIN drives d ON d.id = tgd.drive_id
+		JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
 		GROUP BY tgd.trip_group_id
 	),
 	allocations AS (
 		SELECT e.id AS expense_id, e.drive_id, ` + AmountEURExpr + ` AS allocated
 		FROM drive_expenses e
-		WHERE e.vehicle_id = $1 AND e.drive_id IS NOT NULL
+		JOIN drives d ON d.id = e.drive_id AND d.deleted_upstream_at IS NULL
+		WHERE e.vehicle_id = $1
 		UNION ALL
 		SELECT e.id, tgd.drive_id,
 		       ` + AmountEURExpr + ` * CASE WHEN gs.km > 0 THEN d.distance_km / gs.km ELSE 1.0 / gs.n END
 		FROM drive_expenses e
 		JOIN group_stats gs ON gs.trip_group_id = e.trip_group_id
 		JOIN trip_group_drives tgd ON tgd.trip_group_id = e.trip_group_id
-		JOIN drives d ON d.id = tgd.drive_id
+		JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
 		WHERE e.vehicle_id = $1
 	)
 `
@@ -2009,7 +2012,7 @@ func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID str
 			COALESCE(AVG(NULLIF(consumption_kwh_100km, 0)), 0),
 			COUNT(*)
 		FROM drives
-		WHERE vehicle_id = $1
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
 	`
 	args := []any{vehicleID}
 	if minOdometer != nil && *minOdometer > 0 {
@@ -2027,4 +2030,71 @@ func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID str
 	}
 
 	return avgPowerMax, avgPowerMin, avgConsumption, count, nil
+}
+
+// ============================================================================
+// TeslaMate Reconciliation
+// ============================================================================
+
+// ReconcileResult reports records no longer present in TeslaMate.
+type ReconcileResult struct {
+	Missing int  // TeslaMate records of the covered window absent from the API response
+	Marked  int  // Records flagged as deleted upstream
+	Skipped bool // Guard triggered: too many records would disappear at once
+}
+
+// Share of the covered window above which missing records are considered an API anomaly rather than deletions.
+const maxUpstreamDeletionShare = 0.2
+
+// ReconcileTeslaMateRecords flags drives or charges ("drives" | "charges") imported from TeslaMate that were not
+// returned by the API over the covered window (start date strictly after coveredAfter, or the whole history when nil).
+func (r *Repository) ReconcileTeslaMateRecords(ctx context.Context, resource, vehicleID string, coveredAfter *time.Time, seenIDs []int) (*ReconcileResult, error) {
+	var table, idColumn, dateColumn string
+	switch resource {
+	case "drives":
+		table, idColumn, dateColumn = "drives", "teslamate_drive_id", "start_time"
+	case "charges":
+		table, idColumn, dateColumn = "charge_logs", "teslamate_charge_id", "date"
+	default:
+		return nil, fmt.Errorf("unknown resource %q", resource)
+	}
+	if seenIDs == nil {
+		seenIDs = []int{}
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	window := `vehicle_id = $1 AND ` + idColumn + ` IS NOT NULL AND deleted_upstream_at IS NULL
+		AND ($2::timestamptz IS NULL OR ` + dateColumn + ` > $2)`
+
+	var total, missing int
+	if err := tx.QueryRow(ctx, `
+		SELECT COUNT(*), COUNT(*) FILTER (WHERE NOT (`+idColumn+` = ANY($3::int[])))
+		FROM `+table+` WHERE `+window+`;
+	`, vehicleID, coveredAfter, seenIDs).Scan(&total, &missing); err != nil {
+		return nil, fmt.Errorf("failed to count missing %s: %w", resource, err)
+	}
+
+	res := &ReconcileResult{Missing: missing}
+	if missing == 0 {
+		return res, nil
+	}
+	if missing > 10 && float64(missing) > maxUpstreamDeletionShare*float64(total) {
+		res.Skipped = true
+		return res, nil
+	}
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE `+table+` SET deleted_upstream_at = NOW()
+		WHERE `+window+` AND NOT (`+idColumn+` = ANY($3::int[]));
+	`, vehicleID, coveredAfter, seenIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to flag deleted %s: %w", resource, err)
+	}
+	res.Marked = int(tag.RowsAffected())
+	return res, tx.Commit(ctx)
 }

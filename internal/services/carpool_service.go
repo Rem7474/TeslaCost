@@ -90,7 +90,7 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		SELECT COALESCE(SUM(distance_km), 0),
 		       COALESCE(SUM(distance_km) FILTER (WHERE start_time >= NOW() - INTERVAL '365 days'), 0)
 		FROM drives
-		WHERE vehicle_id = $1;
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
 	`, vehicleID).Scan(&totalDistance, &lastYearDistance); err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		SELECT COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0),
 		       COALESCE(SUM(kwh_added), 0)
 		FROM charge_logs
-		WHERE vehicle_id = $1 AND cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL);
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL);
 	`, vehicleID).Scan(&pricedCost, &pricedKwh); err != nil {
 		return nil, err
 	}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -83,8 +84,15 @@ func TestIntegrationMigrationsOnLegacyDatabase(t *testing.T) {
 	if err := db.Pool.QueryRow(context.Background(), `SELECT COUNT(*) FROM schema_migrations`).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
-	if count != 5 {
-		t.Fatalf("expected 5 recorded migrations, got %d", count)
+	entries, _ := migrations.FS.ReadDir(".")
+	expected := 0
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".up.sql") {
+			expected++
+		}
+	}
+	if count != expected {
+		t.Fatalf("expected %d recorded migrations, got %d", expected, count)
 	}
 	// Idempotent second run.
 	if err := db.Migrate(context.Background()); err != nil {
@@ -302,5 +310,59 @@ func TestIntegrationTiresAndManualCharges(t *testing.T) {
 	}
 	if err := repo.DeleteManualCharge(ctx, v.ID, charges[0].ID); !errors.Is(err, database.ErrNotFound) {
 		t.Fatalf("TeslaMate charges must not be deletable, got %v", err)
+	}
+}
+
+func TestIntegrationUpstreamDeletions(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "frank@example.com")
+	tco := NewTCOService(db.Pool, "UTC")
+
+	base := time.Now().UTC().AddDate(0, -1, 0)
+	var drives []*models.Drive
+	for i := 1; i <= 12; i++ {
+		drives = append(drives, mustDrive(t, repo, v.ID, i, base.Add(time.Duration(i)*time.Hour), 10000+float64(i)*100, 100))
+	}
+	toll := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 30, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, toll, []string{drives[10].ID, drives[11].ID}, "Voyage"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Drive 12 deleted in TeslaMate, incremental window covering drives 11 and 12.
+	res, err := repo.ReconcileTeslaMateRecords(ctx, "drives", v.ID, &drives[9].StartTime, []int{11})
+	if err != nil || res.Marked != 1 {
+		t.Fatalf("expected 1 drive flagged, got %+v (err %v)", res, err)
+	}
+	list, total, _ := repo.ListDrives(ctx, v.ID, database.DriveFilter{}, 50, 0)
+	if total != 11 || len(list) != 11 {
+		t.Fatalf("expected deleted drive excluded from listing, got %d", total)
+	}
+	sum, err := tco.ComputeVehicleTCO(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.TotalDistanceKm != 1100 || sum.TollsCost != 30 {
+		t.Fatalf("expected 1,100 km and the toll still paid (30 €), got %.0f km / %.2f €", sum.TotalDistanceKm, sum.TollsCost)
+	}
+	alloc, _ := repo.GetTollExpensesForDrives(ctx, v.ID, []string{drives[10].ID})
+	if math.Abs(alloc[drives[10].ID]-30) > 0.001 {
+		t.Fatalf("expected the group toll fully allocated to the remaining drive, got %v", alloc)
+	}
+
+	// Guard: an empty API answer over the whole history does not wipe it.
+	res, err = repo.ReconcileTeslaMateRecords(ctx, "drives", v.ID, nil, nil)
+	if err != nil || !res.Skipped || res.Marked != 0 {
+		t.Fatalf("expected mass deletion to be skipped, got %+v (err %v)", res, err)
+	}
+
+	// The drive comes back in TeslaMate: restored with its links.
+	mustDrive(t, repo, v.ID, 12, drives[11].StartTime, 11200, 100)
+	if _, total, _ = repo.ListDrives(ctx, v.ID, database.DriveFilter{}, 50, 0); total != 12 {
+		t.Fatalf("expected restored drive, got %d drives", total)
+	}
+	alloc, _ = repo.GetTollExpensesForDrives(ctx, v.ID, []string{drives[10].ID, drives[11].ID})
+	if math.Abs(alloc[drives[10].ID]-15) > 0.001 || math.Abs(alloc[drives[11].ID]-15) > 0.001 {
+		t.Fatalf("expected the group toll split again after restoration, got %v", alloc)
 	}
 }

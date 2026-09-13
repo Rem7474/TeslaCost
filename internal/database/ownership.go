@@ -47,7 +47,7 @@ func ensureDrivesOwned(ctx context.Context, q queryRower, vehicleID string, driv
 	}
 	var count int
 	if err := q.QueryRow(ctx, `
-		SELECT COUNT(*) FROM drives WHERE vehicle_id = $1 AND id::text = ANY($2::text[]);
+		SELECT COUNT(*) FROM drives WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND id::text = ANY($2::text[]);
 	`, vehicleID, ids).Scan(&count); err != nil {
 		return fmt.Errorf("failed to verify drives ownership: %w", err)
 	}

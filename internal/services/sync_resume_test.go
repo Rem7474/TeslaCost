@@ -9,13 +9,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
 type fakeSyncStore struct {
-	drives       map[int]*models.Drive
-	charges      map[int]*models.ChargeLog
-	fullImported map[string]bool
+	drives        map[int]*models.Drive
+	charges       map[int]*models.ChargeLog
+	fullImported  map[string]bool
+	deletedDrives []int
 }
 
 func newFakeSyncStore() *fakeSyncStore {
@@ -69,12 +71,37 @@ func (f *fakeSyncStore) MarkSyncSuccess(_ context.Context, _ string, resource st
 	return nil
 }
 
+func (f *fakeSyncStore) ReconcileTeslaMateRecords(_ context.Context, resource, _ string, coveredAfter *time.Time, seenIDs []int) (*database.ReconcileResult, error) {
+	seen := map[int]bool{}
+	for _, id := range seenIDs {
+		seen[id] = true
+	}
+	res := &database.ReconcileResult{}
+	if resource == "drives" {
+		for id, d := range f.drives {
+			if !seen[id] && (coveredAfter == nil || d.StartTime.After(*coveredAfter)) {
+				res.Missing++
+				f.deletedDrives = append(f.deletedDrives, id)
+			}
+		}
+	} else {
+		for id, c := range f.charges {
+			if !seen[id] && (coveredAfter == nil || c.Date.After(*coveredAfter)) {
+				res.Missing++
+			}
+		}
+	}
+	res.Marked = res.Missing
+	return res, nil
+}
+
 func (f *fakeSyncStore) ListAllVehiclesWithTeslaMate(context.Context) ([]models.Vehicle, error) {
 	return nil, nil
 }
 
 // fakeTeslaMate serves `total` drives and charges (newest first, one per day) and can fail a given page.
 type fakeTeslaMate struct {
+	skipID    int // simulates a record deleted in TeslaMate
 	total     int
 	failPage  int
 	chargeFee func(id int) *float64
@@ -98,6 +125,9 @@ func (m *fakeTeslaMate) handler(w http.ResponseWriter, r *http.Request) {
 	var items []map[string]any
 	for i := (page - 1) * show; i < page*show && i < m.total; i++ {
 		id := m.total - i // newest first
+		if id == m.skipID {
+			continue
+		}
 		date := base.AddDate(0, 0, id).Format(time.RFC3339)
 		if r.URL.Path == "/api/v1/cars/1/drives" {
 			items = append(items, map[string]any{"drive_id": id, "start_date": date, "end_date": date,
@@ -177,5 +207,35 @@ func TestSyncRefreshesRecentCostsAndKeepsUnknownCostNil(t *testing.T) {
 	}
 	if c := store.charges[20]; c.Cost != nil {
 		t.Errorf("charge 20: incremental sync should stop before old history, got cost %v", *c.Cost)
+	}
+}
+
+func TestSyncFlagsRecordsDeletedInTeslaMate(t *testing.T) {
+	tm := &fakeTeslaMate{total: 120}
+	svc, store, v := newTestSync(t, tm)
+	if _, err := svc.SyncVehicle(context.Background(), v); err != nil {
+		t.Fatal(err)
+	}
+
+	// Drive 115 (recent, inside the incremental window) and drive 10 (old history) are deleted in TeslaMate.
+	tm.skipID = 115
+	res, err := svc.SyncVehicle(context.Background(), v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.DrivesDeleted != 1 || len(store.deletedDrives) != 1 || store.deletedDrives[0] != 115 {
+		t.Fatalf("expected drive 115 flagged as deleted, got %d %v", res.DrivesDeleted, store.deletedDrives)
+	}
+
+	// An old record outside the incremental window is not judged on a partial read.
+	store.deletedDrives = nil
+	tm.skipID = 10
+	if _, err := svc.SyncVehicle(context.Background(), v); err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range store.deletedDrives {
+		if id == 10 {
+			t.Fatal("drive 10 is outside the covered window and must not be flagged")
+		}
 	}
 }
