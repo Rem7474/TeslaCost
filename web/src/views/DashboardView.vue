@@ -52,9 +52,9 @@ const issueLabels: Record<string, string> = {
 const insuranceSourceLabel = computed(() => {
   switch (tco.value?.insurance_source) {
     case 'RECORDED_EXPENSES':
-      return 'dépenses enregistrées'
-    case 'VEHICLE_SETTINGS':
-      return 'prime annuelle au prorata'
+      return 'primes enregistrées'
+    case 'INCLUDED_IN_LEASE':
+      return 'incluse dans la location'
     default:
       return 'non renseignée'
   }
@@ -266,16 +266,16 @@ function renderCharts() {
     donutChartInstance = new Chart(donutChartRef.value, {
       type: 'doughnut',
       data: {
-        labels: ['Énergie', 'Péages & Parkings', 'Pneus (usure amortie)', 'Entretien', 'Assurance', 'Financement', 'Décote', 'Abonnements, taxes & autres'],
+        labels: ['Énergie', 'Péages & Parkings', 'Pneus (usure amortie)', 'Entretien & réparations', 'Assurance', 'Financement & location', 'Décote', 'Abonnements, taxes & autres'],
         datasets: [
           {
             data: [
               tco.value.energy_cost || 0,
               tco.value.tolls_cost || 0,
               tco.value.tires_amortized_cost || 0,
-              tco.value.maintenance_cost || 0,
+              (tco.value.maintenance_cost || 0) + (tco.value.repair_cost || 0),
               tco.value.insurance_cost || 0,
-              tco.value.financing_cost || 0,
+              Math.max(0, tco.value.financing_full_cost || 0),
               tco.value.depreciation_cost || 0,
               (tco.value.subscription_cost || 0) + (tco.value.tax_cost || 0) + (tco.value.other_cost || 0),
             ],
@@ -417,7 +417,7 @@ function renderCharts() {
           </router-link>
           <router-link
             v-if="tco.completeness.insurance_missing"
-            to="/vehicles"
+            to="/expenses"
             class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
           >
             Renseigner l'assurance
@@ -446,6 +446,31 @@ function renderCharts() {
             <span>{{ new Date(issue.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }} — {{ issueLabels[issue.type] || issue.type }}</span>
             <span class="font-mono">{{ issue.km > 0 ? '+' : '' }}{{ issue.km }} km</span>
           </div>
+        </div>
+      </div>
+
+      <!-- Lease contract follow-up -->
+      <div
+        v-if="tco && ['LOA', 'LLD'].includes(tco.acquisition_type) && (tco.lease_km_allowance_to_date > 0 || tco.contract_end_date)"
+        class="bg-slate-900 border border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+      >
+        <div class="space-y-1">
+          <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Contrat {{ tco.acquisition_type }}</span>
+          <p v-if="tco.lease_km_allowance_to_date > 0" class="text-sm text-slate-200">
+            {{ Math.round(tco.lease_km_driven).toLocaleString('fr-FR') }} km parcourus pour
+            {{ Math.round(tco.lease_km_allowance_to_date).toLocaleString('fr-FR') }} km autorisés à date
+            <span :class="tco.lease_km_driven > tco.lease_km_allowance_to_date ? 'text-rose-400' : 'text-emerald-400'">
+              ({{ Math.round((tco.lease_km_driven / tco.lease_km_allowance_to_date) * 100) }} %)
+            </span>
+          </p>
+          <p v-if="tco.contract_end_date" class="text-xs text-slate-400">
+            Fin de contrat le {{ new Date(tco.contract_end_date).toLocaleDateString('fr-FR') }}
+          </p>
+        </div>
+        <div class="text-right text-xs">
+          <p v-if="tco.lease_excess_km_cost > 0" class="text-rose-300">Dépassement à date : {{ tco.lease_excess_km_cost.toFixed(2) }} €</p>
+          <p v-if="tco.lease_excess_km_projected > 0" class="text-amber-300">Pénalité projetée en fin de contrat : {{ tco.lease_excess_km_projected.toFixed(2) }} €</p>
+          <p v-if="!tco.lease_excess_km_projected && tco.lease_km_allowance_to_date > 0" class="text-emerald-400">Forfait kilométrique respecté au rythme actuel</p>
         </div>
       </div>
 

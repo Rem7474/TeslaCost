@@ -18,6 +18,7 @@ var currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
 
 var maintenanceCategories = map[string]bool{
 	"MAINTENANCE":  true,
+	"REPAIR":       true,
 	"INSURANCE":    true,
 	"SUBSCRIPTION": true,
 	"TAX":          true,

@@ -97,6 +97,10 @@ export const api = {
     request<any>('/vehicles/test-connection', { method: 'POST', body: JSON.stringify(payload) }),
   syncVehicle: (id: string) => request<any>(`/vehicles/${id}/sync`, { method: 'POST' }),
   getSyncStatus: (id: string) => request<any>(`/vehicles/${id}/sync`),
+  getOwnership: (id: string) => request<any>(`/vehicles/${id}/ownership`),
+  saveOwnership: (id: string, data: any) =>
+    request<any>(`/vehicles/${id}/ownership`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteOwnership: (id: string) => request<any>(`/vehicles/${id}/ownership`, { method: 'DELETE' }),
   getDataQuality: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/data-quality`),
 
   // Drives

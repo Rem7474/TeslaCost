@@ -161,6 +161,9 @@ func main() {
 				r.Post("/{id}/teslamate/test", vehicleHandler.TestTeslaMate)
 				r.Post("/{id}/sync", vehicleHandler.Sync)
 				r.Get("/{id}/sync", vehicleHandler.GetSyncStatus)
+				r.Get("/{id}/ownership", vehicleHandler.GetOwnership)
+				r.Put("/{id}/ownership", vehicleHandler.SaveOwnership)
+				r.Delete("/{id}/ownership", vehicleHandler.DeleteOwnership)
 				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
 
 				// Drives

@@ -642,6 +642,7 @@ function formatDate(dateStr: string) {
                 <div class="text-xs font-semibold text-white flex items-center gap-1.5">
                   Usure des Pneumatiques
                   <span v-if="selectedCostDrive.costs?.tires_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">estimation</span>
+                  <span v-else-if="selectedCostDrive.costs?.tires_rate_source === 'INCLUDED_IN_LEASE'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">inclus dans la location</span>
                 </div>
                 <div class="text-[11px] text-slate-400 font-mono">
                   {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.tires_rate || 0.02).toFixed(3) }} €/km
@@ -663,6 +664,7 @@ function formatDate(dateStr: string) {
                 <div class="text-xs font-semibold text-white flex items-center gap-1.5">
                   Provision Entretien
                   <span v-if="selectedCostDrive.costs?.maintenance_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">estimation</span>
+                  <span v-else-if="selectedCostDrive.costs?.maintenance_rate_source === 'INCLUDED_IN_LEASE'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">inclus dans la location</span>
                 </div>
                 <div class="text-[11px] text-slate-400 font-mono">
                   {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.maintenance_rate || 0.015).toFixed(3) }} €/km
@@ -682,30 +684,37 @@ function formatDate(dateStr: string) {
               </div>
               <div>
                 <div class="flex items-center gap-1.5">
-                  <span class="text-xs font-semibold text-white">Quote-part Assurance</span>
+                  <span class="text-xs font-semibold text-white">Quote-part assurance (coût fixe)</span>
                   <span
-                    v-if="selectedCostDrive.costs?.insurance_source === 'VEHICLE_SETTINGS'"
-                    class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
-                    title="Basé sur la prime annuelle renseignée dans votre fiche véhicule"
-                  >
-                    Contrat réel
-                  </span>
-                  <span
-                    v-else-if="selectedCostDrive.costs?.insurance_source === 'RECORDED_EXPENSES'"
+                    v-if="selectedCostDrive.costs?.insurance_source === 'RECORDED_EXPENSES'"
                     class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
-                    title="Basé sur vos dépenses réelles d'assurance"
+                    title="Primes payées sur les 12 derniers mois divisées par les kilomètres parcourus sur la même période"
                   >
-                    Dépenses réelles
+                    Primes réelles
                   </span>
                   <span
-                    v-else-if="selectedCostDrive.costs?.insurance_source === 'DEFAULT'"
-                    class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
+                    v-else-if="selectedCostDrive.costs?.insurance_source === 'INCLUDED_IN_LEASE'"
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
                   >
-                    estimation
+                    Incluse dans la location
+                  </span>
+                  <span
+                    v-else-if="selectedCostDrive.costs?.insurance_source === 'INSUFFICIENT_DISTANCE'"
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
+                    title="Moins de 500 km parcourus depuis la première prime : quote-part non calculée"
+                  >
+                    Pas assez de km
+                  </span>
+                  <span
+                    v-else
+                    class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
+                    title="Aucune prime d'assurance enregistrée dans les dépenses"
+                  >
+                    Non renseignée
                   </span>
                 </div>
                 <div class="text-[11px] text-slate-400 font-mono">
-                  {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.insurance_rate || 0.035).toFixed(3) }} €/km
+                  {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.insurance_rate || 0).toFixed(3) }} €/km
                 </div>
               </div>
             </div>

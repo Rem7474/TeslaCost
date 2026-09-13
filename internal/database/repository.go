@@ -105,9 +105,6 @@ const vehicleColumns = `
 	id, user_id, name, vin, teslamate_car_id, current_odometer,
 	teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
 	teslamate_basic_user, teslamate_basic_pass_encrypted,
-	annual_insurance_cost, annual_expected_mileage,
-	acquisition_type, purchase_price, purchase_date, purchase_odometer,
-	purchase_incentives, expected_resale_value, expected_holding_months,
 	created_at, updated_at
 `
 
@@ -116,9 +113,6 @@ func scanVehicle(row pgx.Row, v *models.Vehicle) error {
 		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
 		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
 		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-		&v.AnnualInsuranceCost, &v.AnnualExpectedMileage,
-		&v.AcquisitionType, &v.PurchasePrice, &v.PurchaseDate, &v.PurchaseOdometer,
-		&v.PurchaseIncentives, &v.ExpectedResaleValue, &v.ExpectedHoldingMonths,
 		&v.CreatedAt, &v.UpdatedAt,
 	)
 }
@@ -128,20 +122,14 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 		INSERT INTO vehicles (
 			user_id, name, vin, teslamate_car_id, current_odometer,
 			teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-			teslamate_basic_user, teslamate_basic_pass_encrypted,
-			annual_insurance_cost, annual_expected_mileage,
-			acquisition_type, purchase_price, purchase_date, purchase_odometer,
-			purchase_incentives, expected_resale_value, expected_holding_months
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+			teslamate_basic_user, teslamate_basic_pass_encrypted
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at, updated_at;
 	`
 	err := r.pool.QueryRow(ctx, query,
 		v.UserID, v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
-		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
-		v.AcquisitionType, v.PurchasePrice, v.PurchaseDate, v.PurchaseOdometer,
-		v.PurchaseIncentives, v.ExpectedResaleValue, v.ExpectedHoldingMonths,
 	).Scan(&v.ID, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create vehicle: %w", err)
@@ -194,19 +182,13 @@ func (r *Repository) UpdateVehicle(ctx context.Context, v *models.Vehicle) error
 		    teslamate_api_url = $5, teslamate_auth_type = $6,
 		    teslamate_api_key_encrypted = $7, teslamate_basic_user = $8,
 		    teslamate_basic_pass_encrypted = $9,
-		    annual_insurance_cost = $10, annual_expected_mileage = $11,
-		    acquisition_type = $12, purchase_price = $13, purchase_date = $14, purchase_odometer = $15,
-		    purchase_incentives = $16, expected_resale_value = $17, expected_holding_months = $18,
 		    updated_at = NOW()
-		WHERE id = $19 AND user_id = $20;
+		WHERE id = $10 AND user_id = $11;
 	`
 	tag, err := r.pool.Exec(ctx, query,
 		v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
-		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
-		v.AcquisitionType, v.PurchasePrice, v.PurchaseDate, v.PurchaseOdometer,
-		v.PurchaseIncentives, v.ExpectedResaleValue, v.ExpectedHoldingMonths,
 		v.ID, v.UserID,
 	)
 	if err != nil {
@@ -2195,4 +2177,97 @@ func (r *Repository) SaveIdempotentResponse(ctx context.Context, userID, key str
 	}
 	_, err := r.pool.Exec(ctx, `DELETE FROM idempotency_keys WHERE created_at < NOW() - INTERVAL '30 days';`)
 	return err
+}
+
+// ============================================================================
+// Vehicle Ownership
+// ============================================================================
+
+const ownershipColumns = `
+	vehicle_id, acquisition_type, start_date, start_odometer,
+	purchase_price, purchase_fees, incentives, expected_resale_value, expected_holding_months,
+	loan_amount, loan_rate_pct, loan_duration_months, loan_fees, loan_insurance_monthly,
+	lease_down_payment, lease_monthly_rent, lease_duration_months, lease_fees, lease_deposit,
+	lease_km_allowance_per_year, lease_excess_km_price, lease_end_fees_estimate, lease_purchase_option_price,
+	lease_includes_maintenance, lease_includes_insurance, lease_includes_tires, option_exercised_date,
+	end_date, sale_price, created_at, updated_at
+`
+
+func scanOwnership(row pgx.Row, o *models.VehicleOwnership) error {
+	return row.Scan(
+		&o.VehicleID, &o.AcquisitionType, &o.StartDate, &o.StartOdometer,
+		&o.PurchasePrice, &o.PurchaseFees, &o.Incentives, &o.ExpectedResaleValue, &o.ExpectedHoldingMonths,
+		&o.LoanAmount, &o.LoanRatePct, &o.LoanDurationMonths, &o.LoanFees, &o.LoanInsuranceMonthly,
+		&o.LeaseDownPayment, &o.LeaseMonthlyRent, &o.LeaseDurationMonths, &o.LeaseFees, &o.LeaseDeposit,
+		&o.LeaseKmAllowancePerYear, &o.LeaseExcessKmPrice, &o.LeaseEndFeesEstimate, &o.LeasePurchaseOptionPrice,
+		&o.LeaseIncludesMaintenance, &o.LeaseIncludesInsurance, &o.LeaseIncludesTires, &o.OptionExercisedDate,
+		&o.EndDate, &o.SalePrice, &o.CreatedAt, &o.UpdatedAt,
+	)
+}
+
+// GetVehicleOwnership returns the ownership contract of a vehicle, or ErrNotFound.
+func (r *Repository) GetVehicleOwnership(ctx context.Context, vehicleID string) (*models.VehicleOwnership, error) {
+	var o models.VehicleOwnership
+	err := scanOwnership(r.pool.QueryRow(ctx, `SELECT `+ownershipColumns+` FROM vehicle_ownership WHERE vehicle_id = $1;`, vehicleID), &o)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &o, nil
+}
+
+// SaveVehicleOwnership creates or replaces the ownership contract of a vehicle.
+func (r *Repository) SaveVehicleOwnership(ctx context.Context, o *models.VehicleOwnership) error {
+	return scanOwnership(r.pool.QueryRow(ctx, `
+		INSERT INTO vehicle_ownership (
+			vehicle_id, acquisition_type, start_date, start_odometer,
+			purchase_price, purchase_fees, incentives, expected_resale_value, expected_holding_months,
+			loan_amount, loan_rate_pct, loan_duration_months, loan_fees, loan_insurance_monthly,
+			lease_down_payment, lease_monthly_rent, lease_duration_months, lease_fees, lease_deposit,
+			lease_km_allowance_per_year, lease_excess_km_price, lease_end_fees_estimate, lease_purchase_option_price,
+			lease_includes_maintenance, lease_includes_insurance, lease_includes_tires, option_exercised_date,
+			end_date, sale_price
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19,
+		          $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+		ON CONFLICT (vehicle_id) DO UPDATE SET
+			acquisition_type = EXCLUDED.acquisition_type, start_date = EXCLUDED.start_date,
+			start_odometer = EXCLUDED.start_odometer, purchase_price = EXCLUDED.purchase_price,
+			purchase_fees = EXCLUDED.purchase_fees, incentives = EXCLUDED.incentives,
+			expected_resale_value = EXCLUDED.expected_resale_value, expected_holding_months = EXCLUDED.expected_holding_months,
+			loan_amount = EXCLUDED.loan_amount, loan_rate_pct = EXCLUDED.loan_rate_pct,
+			loan_duration_months = EXCLUDED.loan_duration_months, loan_fees = EXCLUDED.loan_fees,
+			loan_insurance_monthly = EXCLUDED.loan_insurance_monthly, lease_down_payment = EXCLUDED.lease_down_payment,
+			lease_monthly_rent = EXCLUDED.lease_monthly_rent, lease_duration_months = EXCLUDED.lease_duration_months,
+			lease_fees = EXCLUDED.lease_fees, lease_deposit = EXCLUDED.lease_deposit,
+			lease_km_allowance_per_year = EXCLUDED.lease_km_allowance_per_year,
+			lease_excess_km_price = EXCLUDED.lease_excess_km_price, lease_end_fees_estimate = EXCLUDED.lease_end_fees_estimate,
+			lease_purchase_option_price = EXCLUDED.lease_purchase_option_price,
+			lease_includes_maintenance = EXCLUDED.lease_includes_maintenance,
+			lease_includes_insurance = EXCLUDED.lease_includes_insurance, lease_includes_tires = EXCLUDED.lease_includes_tires,
+			option_exercised_date = EXCLUDED.option_exercised_date, end_date = EXCLUDED.end_date,
+			sale_price = EXCLUDED.sale_price, updated_at = NOW()
+		RETURNING `+ownershipColumns+`;
+	`,
+		o.VehicleID, o.AcquisitionType, o.StartDate, o.StartOdometer,
+		o.PurchasePrice, o.PurchaseFees, o.Incentives, o.ExpectedResaleValue, o.ExpectedHoldingMonths,
+		o.LoanAmount, o.LoanRatePct, o.LoanDurationMonths, o.LoanFees, o.LoanInsuranceMonthly,
+		o.LeaseDownPayment, o.LeaseMonthlyRent, o.LeaseDurationMonths, o.LeaseFees, o.LeaseDeposit,
+		o.LeaseKmAllowancePerYear, o.LeaseExcessKmPrice, o.LeaseEndFeesEstimate, o.LeasePurchaseOptionPrice,
+		o.LeaseIncludesMaintenance, o.LeaseIncludesInsurance, o.LeaseIncludesTires, o.OptionExercisedDate,
+		o.EndDate, o.SalePrice,
+	), o)
+}
+
+// DeleteVehicleOwnership removes the ownership contract of a vehicle.
+func (r *Repository) DeleteVehicleOwnership(ctx context.Context, vehicleID string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM vehicle_ownership WHERE vehicle_id = $1;`, vehicleID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }

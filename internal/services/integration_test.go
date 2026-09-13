@@ -195,18 +195,13 @@ func TestIntegrationTCOCompletenessRecurringAndInsurance(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Vehicle-level insurance only: pro rata, flagged.
-	annual := money.Cents(73050)
-	v.AnnualInsuranceCost = &annual
-	if err := repo.UpdateVehicle(ctx, v); err != nil {
-		t.Fatal(err)
-	}
+	// No insurance premium recorded yet: reported as missing.
 	sum, err := tco.ComputeVehicleTCO(ctx, v.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sum.InsuranceSource != InsuranceSourceVehicleSettings || sum.InsuranceCost <= 0 {
-		t.Fatalf("expected pro-rata insurance from vehicle settings, got %s %s", sum.InsuranceSource, sum.InsuranceCost)
+	if sum.InsuranceSource != InsuranceSourceNone || !sum.Completeness.InsuranceMissing || sum.InsuranceCost != 0 {
+		t.Fatalf("expected missing insurance, got %s %s", sum.InsuranceSource, sum.InsuranceCost)
 	}
 	if sum.Completeness.ChargesWithoutCost != 1 || sum.Completeness.IsComplete {
 		t.Fatalf("expected a charge without cost to be reported, got %+v", sum.Completeness)
@@ -376,10 +371,15 @@ func TestIntegrationLedgerAcquisitionAndDepreciation(t *testing.T) {
 	// Bought 24 months ago: 45,000 € − 5,000 € bonus, expected resale 20,000 € after 48 months,
 	// odometer 0 at purchase, 30,000 km today (TeslaMate only saw the last 1,000 km).
 	purchase := time.Now().AddDate(-2, 0, 0)
-	acq, price, bonus, resale, months, odo := "PURCHASE", money.Cents(4500000), money.Cents(500000), money.Cents(2000000), 48, 0.0
-	v.AcquisitionType, v.PurchasePrice, v.PurchaseIncentives, v.ExpectedResaleValue = &acq, &price, &bonus, &resale
-	v.PurchaseDate, v.ExpectedHoldingMonths, v.PurchaseOdometer, v.CurrentOdometer = &purchase, &months, &odo, 30000
+	price, bonus, resale, months, odo := money.Cents(4500000), money.Cents(500000), money.Cents(2000000), 48, 0.0
+	v.CurrentOdometer = 30000
 	if err := repo.UpdateVehicle(ctx, v); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveVehicleOwnership(ctx, &models.VehicleOwnership{
+		VehicleID: v.ID, AcquisitionType: models.AcquisitionCash, StartDate: purchase, StartOdometer: &odo,
+		PurchasePrice: &price, Incentives: &bonus, ExpectedResaleValue: &resale, ExpectedHoldingMonths: &months,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	mustDrive(t, repo, v.ID, 1, time.Now().AddDate(0, 0, -5), 29000, 1000)
@@ -475,5 +475,109 @@ func TestIntegrationOdometerContinuity(t *testing.T) {
 	}
 	if sum.Completeness.OdometerGaps != 1 || sum.Completeness.OdometerAnomalies != 2 {
 		t.Fatalf("expected continuity issues in completeness, got %+v", sum.Completeness)
+	}
+}
+
+func TestIntegrationOwnershipLoanLeaseAndInsuranceShare(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	tco := NewTCOService(db.Pool, "UTC")
+	rates := NewCarpoolService(db.Pool, repo)
+	now := time.Now().UTC()
+
+	// Loan: 30,000 € at 4.8 % over 60 months (payment 563.39 €), started 3 months ago:
+	// interest 120.00 € then 118.23 € then 116.45 €.
+	loanCar := mustVehicle(t, repo, "loan@example.com")
+	price, amount, rate, duration, fees := money.Cents(4500000), money.Cents(3000000), 4.8, 60, money.Cents(15000)
+	resale, holding := money.Cents(2000000), 60
+	if err := repo.SaveVehicleOwnership(ctx, &models.VehicleOwnership{
+		VehicleID: loanCar.ID, AcquisitionType: models.AcquisitionLoan, StartDate: now.AddDate(0, -3, 0).Add(-time.Hour),
+		PurchasePrice: &price, ExpectedResaleValue: &resale, ExpectedHoldingMonths: &holding,
+		LoanAmount: &amount, LoanRatePct: &rate, LoanDurationMonths: &duration, LoanFees: &fees,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sum, err := tco.ComputeVehicleTCO(ctx, loanCar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.AcquisitionType != models.AcquisitionLoan || sum.FinancingCost != 15000+12000+11823+11645 {
+		t.Fatalf("expected loan fees and 3 interest payments, got %s", sum.FinancingCost)
+	}
+
+	// LOA: 3,000 € down payment, 450 €/month over 36 months, started 12 months ago, 15,000 km/year allowance,
+	// maintenance and insurance included, 20,000 km driven.
+	leaseCar := mustVehicle(t, repo, "lease@example.com")
+	start := now.AddDate(-1, 0, 0).Add(-time.Hour)
+	down, rent, leaseMonths, option := money.Cents(300000), money.Cents(45000), 36, money.Cents(2200000)
+	allowance, excessPrice, startOdo := 15000.0, 0.10, 0.0
+	leaseCar.CurrentOdometer = 20000
+	if err := repo.UpdateVehicle(ctx, leaseCar); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.SaveVehicleOwnership(ctx, &models.VehicleOwnership{
+		VehicleID: leaseCar.ID, AcquisitionType: models.AcquisitionLOA, StartDate: start, StartOdometer: &startOdo,
+		LeaseDownPayment: &down, LeaseMonthlyRent: &rent, LeaseDurationMonths: &leaseMonths,
+		LeaseKmAllowancePerYear: &allowance, LeaseExcessKmPrice: &excessPrice, LeasePurchaseOptionPrice: &option,
+		LeaseIncludesMaintenance: true, LeaseIncludesInsurance: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	mustDrive(t, repo, leaseCar.ID, 1, now.AddDate(0, -1, 0), 19000, 1000)
+	sum, err = tco.ComputeVehicleTCO(ctx, leaseCar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cash: down payment + 13 rents (months 0..12)
+	if sum.FinancingCost != 300000+13*45000 {
+		t.Fatalf("expected down payment and 13 rents, got %s", sum.FinancingCost)
+	}
+	// Economic: down payment spread (≈ 1/3 consumed) + excess mileage ≈ 5,000 km × 0.10 €
+	if sum.FinancingFullCost >= sum.FinancingCost || sum.LeaseExcessKmCost < 40000 || sum.LeaseExcessKmProjected == 0 {
+		t.Fatalf("unexpected lease economics: full %s, excess %s, projected %s", sum.FinancingFullCost, sum.LeaseExcessKmCost, sum.LeaseExcessKmProjected)
+	}
+	if sum.InsuranceSource != InsuranceSourceIncluded || sum.Completeness.InsuranceMissing || sum.Completeness.AcquisitionMissing {
+		t.Fatalf("insurance included in the lease must not be reported missing: %+v", sum.Completeness)
+	}
+	r, err := rates.GetVehicleUnitRates(ctx, leaseCar.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.MaintenanceSource != RateSourceIncluded || r.MaintenancePerKm != 0 || r.InsuranceSource != InsuranceSourceIncluded {
+		t.Fatalf("included services must not be charged per km: %+v", r)
+	}
+
+	// Insurance share: monthly premium of 60 € started 6 months ago (7 premiums), 3,500 km driven since.
+	insured := mustVehicle(t, repo, "insured@example.com")
+	interval := 1
+	if err := repo.CreateMaintenanceExpense(ctx, &models.MaintenanceExpense{VehicleID: insured.ID, Category: "INSURANCE", Amount: 6000,
+		Currency: "EUR", Date: now.AddDate(0, -6, 0).Add(-time.Hour), IsRecurring: true, RecurrenceIntervalMonths: &interval,
+		Description: "Prime mensuelle"}); err != nil {
+		t.Fatal(err)
+	}
+	mustDrive(t, repo, insured.ID, 1, now.AddDate(0, -3, 0), 1000, 3500)
+	r, err = rates.GetVehicleUnitRates(ctx, insured.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.InsuranceSource != InsuranceSourceRecordedExpenses || r.InsuranceWindowCost == nil || *r.InsuranceWindowCost != 42000 || r.InsurancePerKm != 0.12 {
+		t.Fatalf("expected 420 € over 3,500 km = 0.12 €/km, got %+v", r)
+	}
+
+	// Sale: recurring premiums stop at the end of ownership.
+	end := now.AddDate(0, -2, 0)
+	sale := money.Cents(3000000)
+	if err := repo.SaveVehicleOwnership(ctx, &models.VehicleOwnership{
+		VehicleID: insured.ID, AcquisitionType: models.AcquisitionCash, StartDate: now.AddDate(-1, 0, 0),
+		PurchasePrice: &price, EndDate: &end, SalePrice: &sale,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	sum, err = tco.ComputeVehicleTCO(ctx, insured.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.InsuranceCost != 5*6000 || sum.DepreciationCost != 1500000 {
+		t.Fatalf("expected 5 premiums until the sale and realized depreciation 15,000 €, got %s / %s", sum.InsuranceCost, sum.DepreciationCost)
 	}
 }

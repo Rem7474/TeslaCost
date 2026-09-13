@@ -47,6 +47,34 @@ const selectedDriveIds = ref<string[]>([])
 
 const CURRENCIES = ['EUR', 'CHF', 'GBP', 'USD']
 
+const CATEGORY_LABELS: Record<string, string> = {
+  MAINTENANCE: 'Entretien',
+  REPAIR: 'Réparation / sinistre',
+  INSURANCE: 'Assurance',
+  SUBSCRIPTION: 'Abonnement',
+  TAX: 'Taxe',
+  FINANCING: 'Financement',
+  ACCESSORY: 'Accessoire',
+  OTHER: 'Autre',
+}
+
+const insuranceAnnualPremium = ref<number | ''>('')
+
+// Annual premium paid monthly: amount = premium / 12, recurring every month
+function applyMonthlyPremium() {
+  const annual = Number(insuranceAnnualPremium.value)
+  if (!annual || annual <= 0) {
+    alert('Veuillez saisir la prime annuelle')
+    return
+  }
+  maintForm.value.amount = (Math.round((annual / 12) * 100) / 100).toFixed(2)
+  maintForm.value.is_recurring = true
+  maintForm.value.recurrence_interval_months = 1
+  if (!maintForm.value.description) {
+    maintForm.value.description = `Prime d'assurance (${annual.toFixed(2)} €/an)`
+  }
+}
+
 const tollForm = ref({
   type: 'TOLL',
   amount: '',
@@ -556,7 +584,7 @@ function formatDriveTime(dateStr: string) {
           <div class="space-y-1">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-pink-500/10 text-pink-400 border border-pink-500/20">
-                {{ m.category }}
+                {{ CATEGORY_LABELS[m.category] || m.category }}
               </span>
               <span class="text-xs text-slate-400">{{ formatDate(m.date) }}</span>
               <span v-if="m.is_recurring" class="text-xs text-slate-400 flex items-center gap-1">
@@ -823,14 +851,43 @@ function formatDriveTime(dateStr: string) {
             <label for="expense-maint-category" class="block text-xs font-semibold text-slate-300 mb-1">Catégorie</label>
             <select id="expense-maint-category" v-model="maintForm.category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
               <option value="MAINTENANCE">Entretien / Révision</option>
-              <option value="INSURANCE">Assurance</option>
+              <option value="REPAIR">Réparation / sinistre (franchise)</option>
+              <option value="INSURANCE">Assurance (prime)</option>
               <option value="SUBSCRIPTION">Abonnement (Connectivité...)</option>
               <option value="TAX">Taxe / Carte grise</option>
-              <option value="FINANCING">Financement (loyer, intérêts de crédit)</option>
+              <option value="FINANCING">Autre financement (hors contrat du véhicule)</option>
               <option value="ACCESSORY">Accessoire</option>
               <option value="OTHER">Autre</option>
             </select>
           </div>
+          <!-- Insurance: annual premium paid monthly -->
+          <div v-if="maintForm.category === 'INSURANCE'" class="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 space-y-2">
+            <div class="flex items-end gap-2">
+              <div class="flex-1">
+                <label for="expense-insurance-annual" class="block text-xs font-semibold text-indigo-200 mb-1">Prime annuelle (€)</label>
+                <input
+                  id="expense-insurance-annual"
+                  v-model="insuranceAnnualPremium"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="ex: 850"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <button type="button" @click="applyMonthlyPremium" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl">
+                Mensualiser
+              </button>
+            </div>
+            <p class="text-[11px] text-indigo-200/80">
+              Crée une dépense récurrente mensuelle de prime / 12, à compter de la date de début de la couverture.
+              L'assurance est un coût fixe dans le temps : elle n'est répartie au kilomètre que pour le coût d'un trajet, sur les kilomètres réellement parcourus.
+            </p>
+          </div>
+          <p v-else-if="maintForm.category === 'FINANCING'" class="text-[11px] text-amber-300/90">
+            Les loyers de LOA/LLD, l'apport et les intérêts d'un crédit sont générés automatiquement depuis « Acquisition & financement » du véhicule : ne les saisissez pas ici.
+          </p>
+
           <div>
             <label for="expense-maint-description" class="block text-xs font-semibold text-slate-300 mb-1">Description</label>
             <input id="expense-maint-description" v-model="maintForm.description" required placeholder="ex: Remplacement filtre habitacle" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
