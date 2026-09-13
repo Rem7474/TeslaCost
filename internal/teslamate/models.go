@@ -105,19 +105,19 @@ type DrivesResponse struct {
 
 // Charge represents a single charging session returned by /api/v1/cars/:CarID/charges.
 type Charge struct {
-	ChargeID          int     `json:"charge_id"`
-	StartDate         string  `json:"start_date"`
-	EndDate           string  `json:"end_date"`
-	Address           string  `json:"address"`
-	ChargeEnergyAdded float64 `json:"charge_energy_added"`
-	ChargeEnergyUsed  float64 `json:"charge_energy_used"`
-	Cost              float64 `json:"cost"`
-	DurationMin       int     `json:"duration_min"`
-	DurationStr       string  `json:"duration_str"`
-	OutsideTempAvg    float64 `json:"outside_temp_avg"`
-	Odometer          float64 `json:"odometer"`
-	Latitude          float64 `json:"latitude"`
-	Longitude         float64 `json:"longitude"`
+	ChargeID          int      `json:"charge_id"`
+	StartDate         string   `json:"start_date"`
+	EndDate           string   `json:"end_date"`
+	Address           string   `json:"address"`
+	ChargeEnergyAdded float64  `json:"charge_energy_added"`
+	ChargeEnergyUsed  float64  `json:"charge_energy_used"`
+	Cost              *float64 `json:"cost"` // nil when no tariff is configured in TeslaMate
+	DurationMin       int      `json:"duration_min"`
+	DurationStr       string   `json:"duration_str"`
+	OutsideTempAvg    float64  `json:"outside_temp_avg"`
+	Odometer          float64  `json:"odometer"`
+	Latitude          float64  `json:"latitude"`
+	Longitude         float64  `json:"longitude"`
 }
 
 // ParsedStartTime parses StartDate into time.Time.

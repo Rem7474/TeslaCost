@@ -15,19 +15,25 @@ import (
 )
 
 type DriveCostBreakdown struct {
-	ElectricityCost float64 `json:"electricity_cost"`
-	ElectricityKwh  float64 `json:"electricity_kwh"`
-	ElectricityRate float64 `json:"electricity_rate"`
-	TiresCost       float64 `json:"tires_cost"`
-	TiresRate       float64 `json:"tires_rate"`
-	MaintenanceCost float64 `json:"maintenance_cost"`
-	MaintenanceRate float64 `json:"maintenance_rate"`
-	InsuranceCost   float64 `json:"insurance_cost"`
-	InsuranceRate   float64 `json:"insurance_rate"`
-	InsuranceSource string  `json:"insurance_source"`
-	TollsCost       float64 `json:"tolls_cost"`
-	TotalCost       float64 `json:"total_cost"`
-	CostPerKm       float64 `json:"cost_per_km"`
+	ElectricityCost       float64 `json:"electricity_cost"`
+	ElectricityKwh        float64 `json:"electricity_kwh"`
+	ElectricityRate       float64 `json:"electricity_rate"`
+	EnergySource          string  `json:"energy_source"`           // MEASURED | CONSUMPTION | DEFAULT
+	ElectricityRateSource string  `json:"electricity_rate_source"` // HISTORY | DEFAULT
+	TiresCost             float64 `json:"tires_cost"`
+	TiresRate             float64 `json:"tires_rate"`
+	TiresRateSource       string  `json:"tires_rate_source"`
+	MaintenanceCost       float64 `json:"maintenance_cost"`
+	MaintenanceRate       float64 `json:"maintenance_rate"`
+	MaintenanceRateSource string  `json:"maintenance_rate_source"`
+	InsuranceCost         float64 `json:"insurance_cost"`
+	InsuranceRate         float64 `json:"insurance_rate"`
+	InsuranceSource       string  `json:"insurance_source"`
+	TollsCost             float64 `json:"tolls_cost"` // Direct expenses + share of trip group expenses
+	TotalCost             float64 `json:"total_cost"`
+	CostPerKm             float64 `json:"cost_per_km"`
+	// HasEstimates is true when at least one component relies on a default assumption.
+	HasEstimates bool `json:"has_estimates"`
 }
 
 type EnrichedDrive struct {
@@ -57,7 +63,10 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag := r.URL.Query().Get("tag")
+	filter := database.DriveFilter{
+		Tag:             r.URL.Query().Get("tag"),
+		UnqualifiedOnly: r.URL.Query().Get("unqualified") == "true",
+	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page <= 0 {
 		page = 1
@@ -68,9 +77,9 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	offset := (page - 1) * limit
 
-	drives, total, err := h.repo.ListDrives(r.Context(), vehicleID, tag, limit, offset)
+	drives, total, err := h.repo.ListDrives(r.Context(), vehicleID, filter, limit, offset)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list drives")
+		writeRepoError(w, err, "Failed to list drives")
 		return
 	}
 	if drives == nil {
@@ -78,14 +87,10 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Calculate unit rates for real cost breakdown
-	rates, _ := h.carpoolService.GetVehicleUnitRates(r.Context(), vehicleID)
-	if rates == nil {
-		rates = &services.UnitRates{
-			ElectricityPerKwh: 0.22,
-			TiresPerKm:        0.020,
-			MaintenancePerKm:  0.015,
-			InsurancePerKm:    0.035,
-		}
+	rates, err := h.carpoolService.GetVehicleUnitRates(r.Context(), vehicleID)
+	if err != nil {
+		writeRepoError(w, err, "Failed to compute cost rates")
+		return
 	}
 
 	// Fetch toll expenses attached to these drives
@@ -93,21 +98,25 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 	for i, d := range drives {
 		driveIDs[i] = d.ID
 	}
-	tollsMap, _ := h.repo.GetTollExpensesForDrives(r.Context(), vehicleID, driveIDs)
-	if tollsMap == nil {
-		tollsMap = make(map[string]float64)
+	tollsMap, err := h.repo.GetTollExpensesForDrives(r.Context(), vehicleID, driveIDs)
+	if err != nil {
+		writeRepoError(w, err, "Failed to load drive expenses")
+		return
+	}
+	unqualifiedCount, err := h.repo.CountUnqualifiedDrives(r.Context(), vehicleID)
+	if err != nil {
+		writeRepoError(w, err, "Failed to list drives")
+		return
 	}
 
 	enriched := make([]EnrichedDrive, len(drives))
 	for i, d := range drives {
-		kwh := 0.0
-		if d.EnergyConsumedKwh != nil && *d.EnergyConsumedKwh > 0 {
-			kwh = *d.EnergyConsumedKwh
-		} else if d.ConsumptionKwh100km != nil && *d.ConsumptionKwh100km > 0 {
-			kwh = (d.DistanceKm * *d.ConsumptionKwh100km) / 100.0
-		} else if d.DistanceKm > 0 {
-			kwh = (d.DistanceKm * 16.5) / 100.0
-		}
+		kwh, energySource := services.DriveEnergyKwh(d.DistanceKm, d.EnergyConsumedKwh, d.ConsumptionKwh100km)
+		hasEstimates := energySource == services.EnergySourceDefault ||
+			rates.ElectricitySource == services.RateSourceDefault ||
+			rates.TiresSource == services.RateSourceDefault ||
+			rates.MaintenanceSource == services.RateSourceDefault ||
+			rates.InsuranceSource == services.InsuranceSourceDefault
 
 		elecCost := math.Round(kwh*rates.ElectricityPerKwh*100) / 100
 		tiresCost := math.Round(d.DistanceKm*rates.TiresPerKm*100) / 100
@@ -124,28 +133,34 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		enriched[i] = EnrichedDrive{
 			Drive: d,
 			Costs: DriveCostBreakdown{
-				ElectricityCost: elecCost,
-				ElectricityKwh:  math.Round(kwh*10) / 10,
-				ElectricityRate: rates.ElectricityPerKwh,
-				TiresCost:       tiresCost,
-				TiresRate:       rates.TiresPerKm,
-				MaintenanceCost: maintCost,
-				MaintenanceRate: rates.MaintenancePerKm,
-				InsuranceCost:   insCost,
-				InsuranceRate:   rates.InsurancePerKm,
-				InsuranceSource: rates.InsuranceSource,
-				TollsCost:       tollsCost,
-				TotalCost:       totalCost,
-				CostPerKm:       costPerKm,
+				ElectricityCost:       elecCost,
+				ElectricityKwh:        math.Round(kwh*10) / 10,
+				ElectricityRate:       rates.ElectricityPerKwh,
+				EnergySource:          energySource,
+				ElectricityRateSource: rates.ElectricitySource,
+				TiresCost:             tiresCost,
+				TiresRate:             rates.TiresPerKm,
+				TiresRateSource:       rates.TiresSource,
+				MaintenanceCost:       maintCost,
+				MaintenanceRate:       rates.MaintenancePerKm,
+				MaintenanceRateSource: rates.MaintenanceSource,
+				InsuranceCost:         insCost,
+				InsuranceRate:         rates.InsurancePerKm,
+				InsuranceSource:       rates.InsuranceSource,
+				TollsCost:             tollsCost,
+				TotalCost:             totalCost,
+				CostPerKm:             costPerKm,
+				HasEstimates:          hasEstimates,
 			},
 		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"drives": enriched,
-		"total":  total,
-		"page":   page,
-		"limit":  limit,
+		"drives":            enriched,
+		"total":             total,
+		"page":              page,
+		"limit":             limit,
+		"unqualified_count": unqualifiedCount,
 	})
 }
 
@@ -161,7 +176,7 @@ func (h *DriveHandler) GetDriveExpenses(w http.ResponseWriter, r *http.Request) 
 
 	expenses, err := h.repo.GetDriveExpensesByDriveID(r.Context(), vehicleID, driveID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to load drive expenses")
+		writeRepoError(w, err, "Failed to load drive expenses")
 		return
 	}
 	if expenses == nil {
@@ -196,7 +211,7 @@ func (h *DriveHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateDriveTags(r.Context(), driveID, vehicleID, req.Tags); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update tags")
+		writeRepoError(w, err, "Failed to update tags")
 		return
 	}
 
@@ -204,6 +219,35 @@ func (h *DriveHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"tags":    req.Tags,
 	})
+}
+
+type TollReviewRequest struct {
+	Reviewed bool `json:"reviewed"`
+}
+
+// SetTollReview marks a drive as reviewed without toll (or reopens it).
+func (h *DriveHandler) SetTollReview(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	driveID := chi.URLParam(r, "driveId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	var req TollReviewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	if err := h.repo.SetDriveTollReviewed(r.Context(), driveID, vehicleID, req.Reviewed); err != nil {
+		writeRepoError(w, err, "Failed to update toll review")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "reviewed": req.Reviewed})
 }
 
 type CreateTripGroupRequest struct {
@@ -238,8 +282,13 @@ func (h *DriveHandler) CreateTripGroup(w http.ResponseWriter, r *http.Request) {
 		Notes:     req.Notes,
 	}
 
+	if len(req.DriveIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "Un groupe doit contenir au moins un trajet")
+		return
+	}
+
 	if err := h.repo.CreateTripGroup(r.Context(), tg, req.DriveIDs); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create trip group")
+		writeRepoError(w, err, "Failed to create trip group")
 		return
 	}
 

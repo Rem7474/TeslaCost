@@ -3,6 +3,8 @@ package services
 import (
 	"math"
 	"testing"
+
+	"github.com/teslacost/teslacost/internal/models"
 )
 
 func TestDynamicTireStressModel(t *testing.T) {
@@ -68,3 +70,30 @@ func TestInsuranceRateCalculationHierarchy(t *testing.T) {
 		t.Errorf("invalid fallback rate")
 	}
 }
+
+func TestTireDistanceAtOdometerExcludesStorage(t *testing.T) {
+	summerEnd := 20000.0
+	sessions := []models.TireMountSession{
+		// Winter 1: mounted 10,000 → 15,000 km
+		{MountedOdometer: 10000, DismountedOdometer: floatPtr(15000)},
+		// Summer in storage, winter 2: mounted from 25,000 km (still mounted)
+		{MountedOdometer: 25000},
+	}
+
+	if got := TireDistanceAtOdometer(sessions, 12000); got != 2000 {
+		t.Errorf("expected 2000 km during first winter, got %f", got)
+	}
+	if got := TireDistanceAtOdometer(sessions, summerEnd); got != 5000 {
+		t.Errorf("expected storage period to add no distance (5000 km), got %f", got)
+	}
+	if got := TireDistanceAtOdometer(sessions, 28000); got != 8000 {
+		t.Errorf("expected 8000 km after 3000 km of second winter, got %f", got)
+	}
+	// Wear between a measure in March (odometer 15,000) and one in November (odometer 28,000)
+	// covers 3,000 tire km, not the 13,000 vehicle km.
+	if got := TireDistanceAtOdometer(sessions, 28000) - TireDistanceAtOdometer(sessions, 15000); got != 3000 {
+		t.Errorf("expected 3000 tire km between measures, got %f", got)
+	}
+}
+
+func floatPtr(v float64) *float64 { return &v }

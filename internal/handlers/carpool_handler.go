@@ -63,7 +63,7 @@ func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	trips, err := h.repo.ListCarpoolTrips(r.Context(), vehicleID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list carpool trips: "+err.Error())
+		writeRepoError(w, err, "Failed to list carpool trips")
 		return
 	}
 
@@ -159,7 +159,7 @@ func (h *CarpoolHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateCarpoolTrip(r.Context(), trip, passengers); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create carpool trip: "+err.Error())
+		writeRepoError(w, err, "Failed to create carpool trip")
 		return
 	}
 
@@ -230,7 +230,7 @@ func (h *CarpoolHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateCarpoolTrip(r.Context(), trip, passengers); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update carpool trip: "+err.Error())
+		writeRepoError(w, err, "Failed to update carpool trip")
 		return
 	}
 
@@ -291,7 +291,7 @@ func (h *CarpoolHandler) Estimate(w http.ResponseWriter, r *http.Request) {
 
 	estimate, err := h.carpoolService.EstimateCosts(r.Context(), vehicleID, driveID, tripGroupID, driveIDs, distanceKm)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to estimate costs: "+err.Error())
+		writeRepoError(w, err, "Failed to estimate costs")
 		return
 	}
 

@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // reporting timezone available even in minimal container images
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -54,7 +55,7 @@ func main() {
 	} else {
 		defer dbPool.Close()
 		if migErr := dbPool.Migrate(ctx); migErr != nil {
-			log.Printf("[warning] Database migration failed: %v", migErr)
+			log.Fatalf("Database migration failed: %v", migErr)
 		}
 		repo = database.NewRepository(dbPool.Pool)
 
@@ -76,7 +77,7 @@ func main() {
 
 		syncService = services.NewSyncService(repo, encryptor)
 		tireWearService = services.NewTireWearService(repo)
-		tcoService = services.NewTCOService(dbPool.Pool)
+		tcoService = services.NewTCOService(dbPool.Pool, cfg.ReportingTimezone)
 		carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
 	}
 
@@ -163,6 +164,7 @@ func main() {
 				r.Get("/{vehicleId}/drives", driveHandler.List)
 				r.Get("/{vehicleId}/drives/{driveId}/expenses", driveHandler.GetDriveExpenses)
 				r.Patch("/{vehicleId}/drives/{driveId}/tags", driveHandler.UpdateTags)
+				r.Patch("/{vehicleId}/drives/{driveId}/toll-review", driveHandler.SetTollReview)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
 
@@ -197,6 +199,9 @@ func main() {
 				r.Put("/{vehicleId}/maintenance/{maintenanceId}", expenseHandler.UpdateMaintenance)
 				r.Delete("/{vehicleId}/maintenance/{maintenanceId}", expenseHandler.DeleteMaintenance)
 				r.Get("/{vehicleId}/charges", expenseHandler.ListCharges)
+				r.Post("/{vehicleId}/charges", expenseHandler.CreateManualCharge)
+				r.Put("/{vehicleId}/charges/{chargeId}", expenseHandler.UpdateCharge)
+				r.Delete("/{vehicleId}/charges/{chargeId}", expenseHandler.DeleteManualCharge)
 
 				// TCO Analytics
 				r.Get("/{vehicleId}/tco", tcoHandler.GetTCO)
@@ -213,7 +218,7 @@ func main() {
 		Addr:         fmt.Sprintf(":%s", cfg.Port),
 		Handler:      r,
 		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		WriteTimeout: 75 * time.Second, // above the 60s request timeout so long syncs can still respond
 		IdleTimeout:  60 * time.Second,
 	}
 

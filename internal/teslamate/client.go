@@ -69,6 +69,10 @@ func NewClient(cfg Config) (*Client, error) {
 		password: cfg.Password,
 		httpClient: &http.Client{
 			Timeout: timeout,
+			// Never follow redirects: the API URL is user-provided and must not bounce to other hosts.
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
 		},
 		userAgent: userAgent,
 	}, nil
@@ -109,8 +113,15 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, queryPa
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("teslamateapi returned status %d: %s", resp.StatusCode, string(bodyBytes))
+		// The upstream body is not echoed back: the URL is user-provided and could target internal services.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return fmt.Errorf("teslamateapi returned status %d: authentification refusée", resp.StatusCode)
+		case http.StatusNotFound:
+			return fmt.Errorf("teslamateapi returned status %d: ressource introuvable (URL ou identifiant de véhicule incorrect)", resp.StatusCode)
+		}
+		return fmt.Errorf("teslamateapi returned status %d", resp.StatusCode)
 	}
 
 	if target != nil {
