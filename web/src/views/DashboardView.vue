@@ -224,8 +224,13 @@ function renderCharts() {
           tooltip: {
             callbacks: {
               label: (context) => {
+                const monthItem = monthlyList[context.dataIndex]
                 if (context.dataset.yAxisID === 'yDistance') {
-                  return `Distance : ${Number(context.raw).toLocaleString('fr-FR')} km`
+                  const dist = Number(context.raw).toLocaleString('fr-FR')
+                  if (monthItem && monthItem.smoothed_km > 0) {
+                    return `Distance : ${dist} km (dont ${Math.round(monthItem.smoothed_km).toLocaleString('fr-FR')} km lissés)`
+                  }
+                  return `Distance : ${dist} km`
                 }
                 return `Coût de revient : ${Number(context.raw).toFixed(3)} €/km`
               },
@@ -513,6 +518,7 @@ function renderCharts() {
           <p class="text-xs text-slate-400 mt-1">
             Usage direct (énergie + péages) : {{ (tco?.usage_cost_per_km || 0).toFixed(3) }} €/km
             • sur {{ Math.round(tco?.distance_basis_km || 0).toLocaleString('fr-FR') }} km
+            <template v-if="tco?.smoothed_distance_km"> (dont {{ Math.round(tco.smoothed_distance_km).toLocaleString('fr-FR') }} km lissés)</template>
           </p>
           <p class="text-[11px] text-slate-500 mt-0.5">
             Assurance : {{ insuranceSourceLabel }}

@@ -6,6 +6,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useOfflineStore } from '@/stores/offline'
 import Navigation from '@/components/Navigation.vue'
 import TopBar from '@/components/TopBar.vue'
+import ConfirmModal from '@/components/ConfirmModal.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -51,4 +52,6 @@ onMounted(async () => {
   <div v-else class="min-h-screen bg-slate-950">
     <router-view />
   </div>
+
+  <ConfirmModal />
 </template>

@@ -103,6 +103,15 @@ export const api = {
   deleteOwnership: (id: string) => request<any>(`/vehicles/${id}/ownership`, { method: 'DELETE' }),
   getDataQuality: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/data-quality`),
 
+  // Odometer Checkpoints
+  getOdometerCheckpoints: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/odometer-checkpoints`),
+  createOdometerCheckpoint: (vehicleId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/odometer-checkpoints`, { method: 'POST', body: JSON.stringify(data) }),
+  updateOdometerCheckpoint: (vehicleId: string, checkpointId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/odometer-checkpoints/${checkpointId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteOdometerCheckpoint: (vehicleId: string, checkpointId: string) =>
+    request<any>(`/vehicles/${vehicleId}/odometer-checkpoints/${checkpointId}`, { method: 'DELETE' }),
+
   // Drives
   getDrives: (vehicleId: string, params?: { tag?: string; page?: number; limit?: number; unqualified?: boolean; tripGroupId?: string }) => {
     const q = new URLSearchParams()

@@ -2,6 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
+import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import {
   Users,
@@ -29,6 +30,7 @@ import {
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
+const { showConfirm, showAlert } = useConfirm()
 const route = useRoute()
 const router = useRouter()
 
@@ -386,7 +388,7 @@ function removePassenger(index: number) {
 async function handleSave() {
   if (!vehicleStore.activeVehicle) return
   if (!form.value.title.trim()) {
-    alert('Veuillez indiquer un titre ou trajet (ex: Paris → Lyon)')
+    showAlert('Veuillez indiquer un titre ou trajet (ex: Paris → Lyon)', 'Champ requis', 'warning')
     return
   }
 
@@ -416,7 +418,7 @@ async function handleSave() {
     showModal.value = false
     await loadData()
   } catch (err: any) {
-    alert(`Erreur lors de l'enregistrement : ${err.message}`)
+    showAlert(`Erreur lors de l'enregistrement : ${err.message}`, 'Erreur', 'danger')
   } finally {
     modalSubmitting.value = false
   }
@@ -424,13 +426,19 @@ async function handleSave() {
 
 async function handleDelete(trip: any) {
   if (!vehicleStore.activeVehicle) return
-  if (!confirm(`Confirmez-vous la suppression du covoiturage "${trip.title}" ?`)) return
+  const ok = await showConfirm({
+    title: 'Supprimer le covoiturage',
+    message: `Confirmez-vous la suppression du covoiturage "${trip.title}" ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
 
   try {
     await api.deleteCarpool(vehicleStore.activeVehicle.id, trip.id)
     await loadData()
   } catch (err: any) {
-    alert(`Erreur lors de la suppression : ${err.message}`)
+    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
   }
 }
 

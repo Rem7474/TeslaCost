@@ -135,6 +135,7 @@ func main() {
 		expenseHandler := handlers.NewExpenseHandler(repo)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
+		checkpointHandler := handlers.NewCheckpointHandler(repo)
 
 		// Public Auth
 		r.Route("/api/auth", func(r chi.Router) {
@@ -165,6 +166,12 @@ func main() {
 				r.Put("/{id}/ownership", vehicleHandler.SaveOwnership)
 				r.Delete("/{id}/ownership", vehicleHandler.DeleteOwnership)
 				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
+
+				// Odometer Checkpoints
+				r.Get("/{vehicleId}/odometer-checkpoints", checkpointHandler.List)
+				r.Post("/{vehicleId}/odometer-checkpoints", checkpointHandler.Create)
+				r.Put("/{vehicleId}/odometer-checkpoints/{checkpointId}", checkpointHandler.Update)
+				r.Delete("/{vehicleId}/odometer-checkpoints/{checkpointId}", checkpointHandler.Delete)
 
 				// Drives
 				r.Get("/{vehicleId}/drives", driveHandler.List)

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
+import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import {
   Receipt,
@@ -25,6 +26,7 @@ import {
 
 const router = useRouter()
 const vehicleStore = useVehicleStore()
+const { showConfirm, showAlert } = useConfirm()
 const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'CHARGES'>('TOLLS')
 
 const driveExpenses = ref<any[]>([])
@@ -67,7 +69,7 @@ const insuranceAnnualPremium = ref<number | ''>('')
 function applyMonthlyPremium() {
   const annual = Number(insuranceAnnualPremium.value)
   if (!annual || annual <= 0) {
-    alert('Veuillez saisir la prime annuelle')
+    showAlert('Veuillez saisir la prime annuelle', 'Champ requis', 'warning')
     return
   }
   maintForm.value.amount = (Math.round((annual / 12) * 100) / 100).toFixed(2)
@@ -204,12 +206,18 @@ function openEditTollModal(e: any) {
 
 async function handleDeleteToll(e: any) {
   if (!vehicleStore.activeVehicle) return
-  if (!confirm(`Supprimer ce péage / parking de ${Number(e.amount).toFixed(2)} € ?`)) return
+  const ok = await showConfirm({
+    title: 'Supprimer la dépense',
+    message: `Supprimer ce péage / parking de ${Number(e.amount).toFixed(2)} € ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
   try {
     await api.deleteDriveExpense(vehicleStore.activeVehicle.id, e.id)
     await loadData()
   } catch (err: any) {
-    alert(`Erreur lors de la suppression : ${err.message}`)
+    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -285,7 +293,7 @@ async function handleCreateToll() {
     showAddTollModal.value = false
     await loadData()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -325,12 +333,18 @@ function openEditMaintModal(m: any) {
 
 async function handleDeleteMaint(m: any) {
   if (!vehicleStore.activeVehicle) return
-  if (!confirm(`Supprimer la dépense "${m.description}" de ${Number(m.amount).toFixed(2)} € ?`)) return
+  const ok = await showConfirm({
+    title: 'Supprimer la dépense',
+    message: `Supprimer la dépense "${m.description}" de ${Number(m.amount).toFixed(2)} € ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
   try {
     await api.deleteMaintenance(vehicleStore.activeVehicle.id, m.id)
     await loadData()
   } catch (err: any) {
-    alert(`Erreur lors de la suppression : ${err.message}`)
+    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -356,7 +370,7 @@ async function handleCreateMaint() {
     showAddMaintModal.value = false
     await loadData()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -370,7 +384,7 @@ async function loadMoreCharges() {
     charges.value = [...charges.value, ...res.charges]
     chargesTotal.value = res.total || 0
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   } finally {
     loadingMoreCharges.value = false
   }
@@ -436,18 +450,24 @@ async function handleSaveCharge() {
     showChargeModal.value = false
     await loadData()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
 async function handleDeleteCharge(c: any) {
   if (!vehicleStore.activeVehicle) return
-  if (!confirm(`Supprimer cette recharge manuelle de ${c.kwh_added} kWh ?`)) return
+  const ok = await showConfirm({
+    title: 'Supprimer la recharge',
+    message: `Supprimer cette recharge manuelle de ${c.kwh_added} kWh ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
   try {
     await api.deleteCharge(vehicleStore.activeVehicle.id, c.id)
     await loadData()
   } catch (err: any) {
-    alert(`Erreur lors de la suppression : ${err.message}`)
+    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
   }
 }
 

@@ -62,6 +62,17 @@ type Vehicle struct {
 	UpdatedAt                time.Time `json:"updated_at"`
 }
 
+// OdometerCheckpoint represents a manual odometer milestone at a specific date.
+type OdometerCheckpoint struct {
+	ID        string    `json:"id"`
+	VehicleID string    `json:"vehicle_id"`
+	Date      time.Time `json:"date"`
+	Odometer  float64   `json:"odometer"`
+	Notes     *string   `json:"notes,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Drive represents a single vehicle trip.
 type Drive struct {
 	ID                  string     `json:"id"`
