@@ -688,18 +688,19 @@ function formatDriveTime(dateStr: string) {
               </select>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
+              <label for="toll-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
               <div class="flex gap-1.5">
-                <input v-model="tollForm.amount" type="number" step="0.01" min="0.01" required placeholder="0.00" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-                <select v-model="tollForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+                <input id="toll-form-amount" v-model="tollForm.amount" type="number" step="0.01" min="0.01" required placeholder="0.00" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="toll-form-currency" class="sr-only">Devise</label>
+                <select id="toll-form-currency" v-model="tollForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
                   <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
                 </select>
               </div>
             </div>
           </div>
           <div v-if="tollForm.currency !== 'EUR'">
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ tollForm.currency }} = ? €)</label>
-            <input v-model="tollForm.fx_rate" type="number" step="0.000001" min="0.000001" required placeholder="ex: 1.05" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="toll-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ tollForm.currency }} = ? €)</label>
+            <input id="toll-form-fx-rate" v-model="tollForm.fx_rate" type="number" step="0.000001" min="0.000001" required placeholder="ex: 1.05" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <!-- Association à un/des trajets TeslaMate -->
@@ -841,18 +842,19 @@ function formatDriveTime(dateStr: string) {
               <input v-model="maintForm.date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
+              <label for="maint-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
               <div class="flex gap-1.5">
-                <input v-model="maintForm.amount" type="number" step="0.01" min="0.01" required class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-                <select v-model="maintForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+                <input id="maint-form-amount" v-model="maintForm.amount" type="number" step="0.01" min="0.01" required class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="maint-form-currency" class="sr-only">Devise</label>
+                <select id="maint-form-currency" v-model="maintForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
                   <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
                 </select>
               </div>
             </div>
           </div>
           <div v-if="maintForm.currency !== 'EUR'">
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ maintForm.currency }} = ? €)</label>
-            <input v-model="maintForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="maint-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ maintForm.currency }} = ? €)</label>
+            <input id="maint-form-fx-rate" v-model="maintForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div>
@@ -867,12 +869,12 @@ function formatDriveTime(dateStr: string) {
             </div>
             <div v-if="maintForm.is_recurring" class="pt-1 grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Intervalle (mois)</label>
-                <input v-model.number="maintForm.recurrence_interval_months" type="number" min="1" max="120" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="maint-form-recurrence-interval-months" class="block text-xs font-semibold text-slate-300 mb-1">Intervalle (mois)</label>
+                <input id="maint-form-recurrence-interval-months" v-model.number="maintForm.recurrence_interval_months" type="number" min="1" max="120" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Fin (optionnelle)</label>
-                <input v-model="maintForm.recurrence_end_date" type="date" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="maint-form-recurrence-end-date" class="block text-xs font-semibold text-slate-300 mb-1">Fin (optionnelle)</label>
+                <input id="maint-form-recurrence-end-date" v-model="maintForm.recurrence_end_date" type="date" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
               <p class="col-span-2 text-[11px] text-slate-400">
                 Chaque échéance est comptée dans le TCO jusqu'à aujourd'hui (ou jusqu'à la date de fin).
@@ -916,42 +918,43 @@ function formatDriveTime(dateStr: string) {
           <template v-if="!editingCharge || editingCharge.is_manual">
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
-                <input v-model="chargeForm.date" type="datetime-local" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+                <label for="charge-form-date" class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
+                <input id="charge-form-date" v-model="chargeForm.date" type="datetime-local" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Énergie ajoutée (kWh)</label>
-                <input v-model="chargeForm.kwh_added" type="number" step="0.001" min="0.001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="charge-form-kwh-added" class="block text-xs font-semibold text-slate-300 mb-1">Énergie ajoutée (kWh)</label>
+                <input id="charge-form-kwh-added" v-model="chargeForm.kwh_added" type="number" step="0.001" min="0.001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Lieu (optionnel)</label>
-                <input v-model="chargeForm.address" placeholder="Borne, domicile..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="charge-form-address" class="block text-xs font-semibold text-slate-300 mb-1">Lieu (optionnel)</label>
+                <input id="charge-form-address" v-model="chargeForm.address" placeholder="Borne, domicile..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
-                <input v-model="chargeForm.odometer" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="charge-form-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
+                <input id="charge-form-odometer" v-model="chargeForm.odometer" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
             </div>
           </template>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Coût</label>
+            <label for="charge-form-cost" class="block text-xs font-semibold text-slate-300 mb-1">Coût</label>
             <div class="flex gap-1.5">
-              <input v-model="chargeForm.cost" type="number" step="0.01" min="0" required placeholder="0.00 si gratuite" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-              <select v-model="chargeForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+              <input id="charge-form-cost" v-model="chargeForm.cost" type="number" step="0.01" min="0" required placeholder="0.00 si gratuite" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="charge-form-currency" class="sr-only">Devise</label>
+              <select id="charge-form-currency" v-model="chargeForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
                 <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
               </select>
             </div>
           </div>
           <div v-if="chargeForm.currency !== 'EUR'">
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ chargeForm.currency }} = ? €)</label>
-            <input v-model="chargeForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="charge-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ chargeForm.currency }} = ? €)</label>
+            <input id="charge-form-fx-rate" v-model="chargeForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Notes (optionnel)</label>
-            <input v-model="chargeForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="charge-form-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes (optionnel)</label>
+            <input id="charge-form-notes" v-model="chargeForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">

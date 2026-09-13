@@ -455,8 +455,8 @@ function clearCardTestResult(id: string) {
 
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Prime d'assurance (€/an)</label>
-                <input
+                <label for="vehicle-annual-insurance-cost" class="block text-xs font-semibold text-slate-300 mb-1">Prime d'assurance (€/an)</label>
+                <input id="vehicle-annual-insurance-cost"
                   v-model.number="form.annual_insurance_cost"
                   type="number"
                   step="0.01"
@@ -465,8 +465,8 @@ function clearCardTestResult(id: string) {
                 />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage annuel prévu (km/an)</label>
-                <input
+                <label for="vehicle-annual-expected-mileage" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage annuel prévu (km/an)</label>
+                <input id="vehicle-annual-expected-mileage"
                   v-model.number="form.annual_expected_mileage"
                   type="number"
                   placeholder="ex: 15000"
@@ -484,40 +484,40 @@ function clearCardTestResult(id: string) {
             <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Acquisition & décote</h4>
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Mode d'acquisition</label>
-                <select v-model="form.acquisition_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
+                <label for="vehicle-acquisition-type" class="block text-xs font-semibold text-slate-300 mb-1">Mode d'acquisition</label>
+                <select id="vehicle-acquisition-type" v-model="form.acquisition_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
                   <option value="">Non renseigné</option>
                   <option value="PURCHASE">Achat (comptant ou crédit)</option>
                   <option value="LEASE">Location (LOA / LLD)</option>
                 </select>
               </div>
               <div v-if="form.acquisition_type">
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Date d'acquisition</label>
-                <input v-model="form.purchase_date" type="date" :required="form.acquisition_type === 'PURCHASE'" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <label for="vehicle-purchase-date" class="block text-xs font-semibold text-slate-300 mb-1">Date d'acquisition</label>
+                <input id="vehicle-purchase-date" v-model="form.purchase_date" type="date" :required="form.acquisition_type === 'PURCHASE'" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
               </div>
             </div>
             <div v-if="form.acquisition_type" class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Odomètre à l'acquisition (km)</label>
-                <input v-model.number="form.purchase_odometer" type="number" min="0" placeholder="ex: 0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <label for="vehicle-purchase-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre à l'acquisition (km)</label>
+                <input id="vehicle-purchase-odometer" v-model.number="form.purchase_odometer" type="number" min="0" placeholder="ex: 0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
               </div>
               <div v-if="form.acquisition_type === 'PURCHASE'">
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Prix d'achat TTC (€)</label>
-                <input v-model.number="form.purchase_price" type="number" step="0.01" min="0" required placeholder="ex: 42990" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <label for="vehicle-purchase-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix d'achat TTC (€)</label>
+                <input id="vehicle-purchase-price" v-model.number="form.purchase_price" type="number" step="0.01" min="0" required placeholder="ex: 42990" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
               </div>
             </div>
             <div v-if="form.acquisition_type === 'PURCHASE'" class="grid grid-cols-3 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Aides / remises (€)</label>
-                <input v-model.number="form.purchase_incentives" type="number" step="0.01" min="0" placeholder="Bonus écologique" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <label for="vehicle-purchase-incentives" class="block text-xs font-semibold text-slate-300 mb-1">Aides / remises (€)</label>
+                <input id="vehicle-purchase-incentives" v-model.number="form.purchase_incentives" type="number" step="0.01" min="0" placeholder="Bonus écologique" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Revente estimée (€)</label>
-                <input v-model.number="form.expected_resale_value" type="number" step="0.01" min="0" placeholder="ex: 22000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <label for="vehicle-expected-resale-value" class="block text-xs font-semibold text-slate-300 mb-1">Revente estimée (€)</label>
+                <input id="vehicle-expected-resale-value" v-model.number="form.expected_resale_value" type="number" step="0.01" min="0" placeholder="ex: 22000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Détention (mois)</label>
-                <input v-model.number="form.expected_holding_months" type="number" min="1" max="360" placeholder="ex: 60" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
+                <label for="vehicle-expected-holding-months" class="block text-xs font-semibold text-slate-300 mb-1">Détention (mois)</label>
+                <input id="vehicle-expected-holding-months" v-model.number="form.expected_holding_months" type="number" min="1" max="360" placeholder="ex: 60" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
               </div>
             </div>
             <p v-if="form.acquisition_type === 'PURCHASE'" class="text-[11px] text-slate-400">

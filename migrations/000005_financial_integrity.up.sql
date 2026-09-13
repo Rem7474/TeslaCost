@@ -37,7 +37,8 @@ SET initial_distance_km = GREATEST(
         WHERE s.tire_id = t.id AND s.dismounted_date IS NOT NULL
     ), 0),
     0
-);
+)
+WHERE t.accumulated_distance_km > 0;
 
 -- 6. Drive expenses: a single link (drive OR trip group)
 UPDATE drive_expenses SET drive_id = NULL WHERE drive_id IS NOT NULL AND trip_group_id IS NOT NULL;
