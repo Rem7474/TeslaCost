@@ -101,7 +101,7 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	const AppVersion = "1.3.5"
+	const AppVersion = "1.4.0"
 
 	// Public Health Check Endpoint
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
