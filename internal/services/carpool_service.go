@@ -3,6 +3,9 @@ package services
 import (
 	"context"
 	"errors"
+	"math"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -238,43 +241,50 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		}
 	}
 
-	var distance, kwhConsumed float64
-	var tolls money.Cents
+	// One leg per drive, in chronological order
+	sort.Slice(drives, func(i, j int) bool { return drives[i].StartTime.Before(drives[j].StartTime) })
+	legs := make([]models.CarpoolLeg, 0, len(drives))
 	energySource := EnergySourceMeasured
+	costLeg := func(distance, kwh float64) models.CarpoolLeg {
+		return models.CarpoolLeg{
+			DistanceKm:      math.Round(distance*100) / 100,
+			ElectricityCost: money.FromFloat(kwh * rates.ElectricityPerKwh),
+			TiresCost:       money.FromFloat(distance * rates.TiresPerKm),
+			MaintenanceCost: money.FromFloat(distance * rates.MaintenancePerKm),
+			InsuranceCost:   money.FromFloat(distance * rates.InsurancePerKm),
+		}
+	}
+
 	if len(drives) > 0 {
 		ids := make([]string, len(drives))
 		for i, d := range drives {
 			ids[i] = d.ID
-			distance += d.DistanceKm
+		}
+		// Tolls allocated to each drive (a trip group toll is split by distance)
+		tolls, err := s.repo.GetTollExpensesForDrives(ctx, vehicleID, ids)
+		if err != nil {
+			return nil, err
+		}
+		for _, d := range drives {
 			kwh, src := DriveEnergyKwh(d.DistanceKm, d.EnergyConsumedKwh, d.ConsumptionKwh100km)
-			kwhConsumed += kwh
 			if src != EnergySourceMeasured {
 				energySource = src
 			}
-		}
-		if tolls, err = s.repo.GetTotalTollExpensesForDrives(ctx, vehicleID, ids); err != nil {
-			return nil, err
+			leg := costLeg(d.DistanceKm, kwh)
+			driveID := d.ID
+			leg.DriveID = &driveID
+			leg.StartLabel = placeLabel(d.StartAddress)
+			leg.EndLabel = placeLabel(d.EndAddress)
+			leg.TollsCost = tolls[d.ID]
+			legs = append(legs, leg)
 		}
 	} else {
-		distance = manualDistanceKm
-		kwhConsumed, energySource = DriveEnergyKwh(distance, nil, nil)
+		kwh, src := DriveEnergyKwh(manualDistanceKm, nil, nil)
+		energySource = src
+		legs = append(legs, costLeg(manualDistanceKm, kwh))
 	}
 
-	elecCost := money.FromFloat(kwhConsumed * rates.ElectricityPerKwh)
-	tiresCost := money.FromFloat(distance * rates.TiresPerKm)
-	maintCost := money.FromFloat(distance * rates.MaintenancePerKm)
-	insCost := money.FromFloat(distance * rates.InsurancePerKm)
-	totalCost := elecCost + tolls + tiresCost + maintCost + insCost
-
-	return &models.CarpoolCostEstimate{
-		DistanceKm:            round1(distance),
-		ElectricityCost:       elecCost,
-		TollsCost:             tolls,
-		TiresCost:             tiresCost,
-		MaintenanceCost:       maintCost,
-		InsuranceCost:         insCost,
-		OtherCost:             0,
-		TotalCost:             totalCost,
+	est := &models.CarpoolCostEstimate{
 		ElectricityRatePerKwh: rates.ElectricityPerKwh,
 		TiresRatePerKm:        rates.TiresPerKm,
 		MaintenanceRatePerKm:  rates.MaintenancePerKm,
@@ -286,5 +296,34 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		ElectricityRateSource: rates.ElectricitySource,
 		TiresRateSource:       rates.TiresSource,
 		MaintenanceRateSource: rates.MaintenanceSource,
-	}, nil
+		Legs:                  legs,
+	}
+	for i := range legs {
+		legs[i].OrderIndex = i
+		legs[i].TotalCost = legs[i].Total()
+		est.DistanceKm += legs[i].DistanceKm
+		est.ElectricityCost += legs[i].ElectricityCost
+		est.TollsCost += legs[i].TollsCost
+		est.TiresCost += legs[i].TiresCost
+		est.MaintenanceCost += legs[i].MaintenanceCost
+		est.InsuranceCost += legs[i].InsuranceCost
+	}
+	est.DistanceKm = round1(est.DistanceKm)
+	est.TotalCost = est.ElectricityCost + est.TollsCost + est.TiresCost + est.MaintenanceCost + est.InsuranceCost
+	return est, nil
+}
+
+// placeLabel shortens a TeslaMate address to its first part (place or street) for stop names.
+func placeLabel(address *string) *string {
+	if address == nil {
+		return nil
+	}
+	label := strings.TrimSpace(strings.Split(*address, ",")[0])
+	if label == "" {
+		return nil
+	}
+	if r := []rune(label); len(r) > 150 {
+		label = string(r[:150])
+	}
+	return &label
 }
