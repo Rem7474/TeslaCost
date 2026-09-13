@@ -116,8 +116,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		hasEstimates := energySource == services.EnergySourceDefault ||
 			rates.ElectricitySource == services.RateSourceDefault ||
 			rates.TiresSource == services.RateSourceDefault ||
-			rates.MaintenanceSource == services.RateSourceDefault ||
-			rates.InsuranceSource == services.InsuranceSourceDefault
+			rates.MaintenanceSource == services.RateSourceDefault
 
 		elecCost := money.FromFloat(kwh * rates.ElectricityPerKwh)
 		tiresCost := money.FromFloat(d.DistanceKm * rates.TiresPerKm)

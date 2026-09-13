@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -21,6 +22,7 @@ const (
 	LedgerTravelOther = "TRAVEL_OTHER"
 	LedgerTires       = "TIRES"
 	LedgerMaintenance = "MAINTENANCE"
+	LedgerRepair      = "REPAIR"
 	LedgerInsurance   = "INSURANCE"
 	LedgerFinancing   = "FINANCING"
 	LedgerTax         = "TAX"
@@ -31,9 +33,9 @@ const (
 // Insurance sources.
 const (
 	InsuranceSourceRecordedExpenses = "RECORDED_EXPENSES"
-	InsuranceSourceVehicleSettings  = "VEHICLE_SETTINGS"
+	InsuranceSourceIncluded         = "INCLUDED_IN_LEASE"
+	InsuranceSourceInsufficientKm   = "INSUFFICIENT_DISTANCE"
 	InsuranceSourceNone             = "NONE"
-	InsuranceSourceDefault          = "DEFAULT"
 )
 
 // MonthlyCost represents monthly expenditure (cash basis, acquisition excluded) and mileage.
@@ -159,10 +161,17 @@ type TCOSummary struct {
 	FullCost           money.Cents `json:"full_cost"`
 	FullCostPerKm      float64     `json:"full_cost_per_km"`
 
-	AcquisitionType       string      `json:"acquisition_type"`
-	AcquisitionCost       money.Cents `json:"acquisition_cost"` // Purchase price net of incentives
+	AcquisitionType       string      `json:"acquisition_type"` // CASH | LOAN | LOA | LLD
+	AcquisitionCost       money.Cents `json:"acquisition_cost"` // Purchase price and fees net of incentives, exercised LOA option
 	DepreciationCost      money.Cents `json:"depreciation_cost"`
 	DepreciationCostPerKm float64     `json:"depreciation_cost_per_km"`
+	ContractEndDate       *time.Time  `json:"contract_end_date,omitempty"`  // Lease term
+	OwnershipEndDate      *time.Time  `json:"ownership_end_date,omitempty"` // Sale or return
+
+	LeaseExcessKmCost      money.Cents `json:"lease_excess_km_cost"`      // Accrued against the pro-rata allowance
+	LeaseExcessKmProjected money.Cents `json:"lease_excess_km_projected"` // Expected at contract end at the current pace
+	LeaseKmDriven          float64     `json:"lease_km_driven"`
+	LeaseKmAllowanceToDate float64     `json:"lease_km_allowance_to_date"`
 
 	CarpoolRevenue   money.Cents `json:"carpool_revenue"`
 	FullCostNet      money.Cents `json:"full_cost_net"` // Full cost minus carpool revenue
@@ -183,12 +192,15 @@ type TCOSummary struct {
 
 	MaintenanceCost      money.Cents `json:"maintenance_cost"`
 	MaintenanceCostPerKm float64     `json:"maintenance_cost_per_km"`
+	RepairCost           money.Cents `json:"repair_cost"` // Unplanned repairs, insurance deductibles
+	RepairCostPerKm      float64     `json:"repair_cost_per_km"`
 
 	InsuranceCost      money.Cents `json:"insurance_cost"`
 	InsuranceCostPerKm float64     `json:"insurance_cost_per_km"`
 	InsuranceSource    string      `json:"insurance_source"`
 
-	FinancingCost      money.Cents `json:"financing_cost"` // Lease rents, loan interest
+	FinancingCost      money.Cents `json:"financing_cost"`      // Cash: rents, down payment, fees, loan interest
+	FinancingFullCost  money.Cents `json:"financing_full_cost"` // Prepaid amounts spread, return fees and excess mileage accrued
 	FinancingCostPerKm float64     `json:"financing_cost_per_km"`
 
 	SubscriptionCost money.Cents `json:"subscription_cost"`
@@ -205,6 +217,7 @@ type TCOSummary struct {
 // TCOService computes TCO metrics from the cost ledger.
 type TCOService struct {
 	pool     *pgxpool.Pool
+	repo     *database.Repository
 	timezone string
 }
 
@@ -213,7 +226,7 @@ func NewTCOService(pool *pgxpool.Pool, timezone string) *TCOService {
 	if timezone == "" {
 		timezone = "UTC"
 	}
-	return &TCOService{pool: pool, timezone: timezone}
+	return &TCOService{pool: pool, repo: database.NewRepository(pool), timezone: timezone}
 }
 
 func round3(v float64) float64 { return math.Round(v*1000) / 1000 }
@@ -226,73 +239,49 @@ func perKm(amount money.Cents, km float64) float64 {
 	return round3(amount.Float() / km)
 }
 
-// vehicleAcquisition is the acquisition configuration used for depreciation.
-type vehicleAcquisition struct {
-	acquisitionType  *string
-	purchasePrice    *money.Cents
-	purchaseDate     *time.Time
-	purchaseOdometer *float64
-	incentives       *money.Cents
-	resaleValue      *money.Cents
-	holdingMonths    *int
-	currentOdometer  float64
-	annualInsurance  *money.Cents
-}
-
-// Depreciation spreads the purchase price net of incentives and expected resale value linearly
-// over the expected holding period. ok is false when the settings needed are missing.
-func (a vehicleAcquisition) Depreciation(now time.Time) (amount money.Cents, ok bool) {
-	if a.purchasePrice == nil || a.purchaseDate == nil || a.resaleValue == nil || a.holdingMonths == nil || *a.holdingMonths <= 0 {
-		return 0, false
-	}
-	depreciable := *a.purchasePrice - *a.resaleValue
-	if a.incentives != nil {
-		depreciable -= *a.incentives
-	}
-	if depreciable <= 0 {
-		return 0, true
-	}
-	elapsedMonths := now.Sub(*a.purchaseDate).Hours() / 24 / (365.25 / 12)
-	ratio := math.Max(0, math.Min(1, elapsedMonths/float64(*a.holdingMonths)))
-	return money.FromFloat(depreciable.Float() * ratio), true
-}
-
 // ComputeVehicleTCO calculates complete TCO for a given vehicle.
 func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*TCOSummary, error) {
 	sum := &TCOSummary{}
 	comp := &sum.Completeness
 	now := time.Now()
 
-	// 1. Vehicle acquisition settings
-	var acq vehicleAcquisition
-	if err := s.pool.QueryRow(ctx, `
-		SELECT acquisition_type, purchase_price, purchase_date, purchase_odometer, purchase_incentives,
-		       expected_resale_value, expected_holding_months, current_odometer, annual_insurance_cost
-		FROM vehicles WHERE id = $1;
-	`, vehicleID).Scan(&acq.acquisitionType, &acq.purchasePrice, &acq.purchaseDate, &acq.purchaseOdometer, &acq.incentives,
-		&acq.resaleValue, &acq.holdingMonths, &acq.currentOdometer, &acq.annualInsurance); err != nil {
+	// 1. Ownership contract and odometer
+	ownership, err := s.repo.GetVehicleOwnership(ctx, vehicleID)
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
+		return nil, fmt.Errorf("ownership: %w", err)
+	}
+	var currentOdometer float64
+	if err := s.pool.QueryRow(ctx, `SELECT current_odometer FROM vehicles WHERE id = $1;`, vehicleID).Scan(&currentOdometer); err != nil {
 		return nil, fmt.Errorf("vehicle: %w", err)
 	}
 
-	// 2. Distance: tracked drives, odometer span, distance since acquisition
-	var trackedKm, odometerSpan float64
+	// 2. Distance: tracked drives, odometer span, distance since the start of the contract
+	var trackedKm, odometerSpan, trackedSinceStart float64
+	var contractStart *time.Time
+	if ownership != nil {
+		contractStart = &ownership.StartDate
+	}
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(distance_km), 0),
-		       COALESCE(MAX(end_odometer) FILTER (WHERE end_odometer > 0) - MIN(start_odometer) FILTER (WHERE start_odometer > 0), 0)
+		       COALESCE(MAX(end_odometer) FILTER (WHERE end_odometer > 0) - MIN(start_odometer) FILTER (WHERE start_odometer > 0), 0),
+		       COALESCE(SUM(distance_km) FILTER (WHERE $2::timestamptz IS NULL OR start_time >= $2), 0)
 		FROM drives
 		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
-	`, vehicleID).Scan(&trackedKm, &odometerSpan); err != nil {
+	`, vehicleID, contractStart).Scan(&trackedKm, &odometerSpan, &trackedSinceStart); err != nil {
 		return nil, fmt.Errorf("distance: %w", err)
 	}
 	basisKm := math.Max(trackedKm, odometerSpan)
-	if acq.purchaseOdometer != nil && acq.currentOdometer > *acq.purchaseOdometer {
-		basisKm = math.Max(basisKm, acq.currentOdometer-*acq.purchaseOdometer)
+	kmSinceStart := trackedSinceStart
+	if ownership != nil && ownership.StartOdometer != nil && currentOdometer > *ownership.StartOdometer {
+		kmSinceStart = math.Max(kmSinceStart, currentOdometer-*ownership.StartOdometer)
+		basisKm = math.Max(basisKm, kmSinceStart)
 	}
 	if untracked := basisKm - trackedKm; untracked > 50 && untracked > 0.01*basisKm {
 		comp.UntrackedDistanceKm = round1(untracked)
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
 			"%.0f km parcourus n'apparaissent dans aucun trajet (avant TeslaMate ou TeslaMate hors ligne) : le coût au km utilise la distance odométrique", untracked))
 	}
+	owned := ComputeOwnershipCosts(ownership, now, kmSinceStart)
 
 	// 3. Ledger totals per category
 	byCategory := map[string]money.Cents{}
@@ -353,12 +342,12 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	switch {
 	case insuranceEntries > 0:
 		sum.InsuranceSource = InsuranceSourceRecordedExpenses
-	case acq.annualInsurance != nil && *acq.annualInsurance > 0:
-		sum.InsuranceSource = InsuranceSourceVehicleSettings
+	case owned.IncludesInsurance:
+		sum.InsuranceSource = InsuranceSourceIncluded
 	default:
 		sum.InsuranceSource = InsuranceSourceNone
 		comp.InsuranceMissing = true
-		comp.Warnings = append(comp.Warnings, "Aucune assurance enregistrée (dépense « Assurance » ou montant annuel dans la fiche véhicule)")
+		comp.Warnings = append(comp.Warnings, "Aucune prime d'assurance enregistrée (dépense récurrente « Assurance »)")
 	}
 
 	// 6. Tires amortized by kilometers actually driven on each tire
@@ -380,27 +369,23 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		return nil, fmt.Errorf("tires: %w", err)
 	}
 
-	// 7. Acquisition and depreciation
-	switch {
-	case acq.acquisitionType == nil:
-		comp.AcquisitionMissing = true
-		comp.Warnings = append(comp.Warnings, "Mode d'acquisition non renseigné (achat ou location) : décote ou loyers absents du coût complet")
-	case *acq.acquisitionType == "PURCHASE":
-		sum.AcquisitionType = "PURCHASE"
-		sum.AcquisitionCost = byCategory[LedgerAcquisition]
-		dep, ok := acq.Depreciation(now)
-		if !ok {
-			comp.AcquisitionMissing = true
-			comp.Warnings = append(comp.Warnings, "Valeur de revente estimée ou durée de détention non renseignée : décote exclue du coût complet")
-		}
-		sum.DepreciationCost = dep
-	case *acq.acquisitionType == "LEASE":
-		sum.AcquisitionType = "LEASE"
-		if byCategory[LedgerFinancing] == 0 {
-			comp.AcquisitionMissing = true
-			comp.Warnings = append(comp.Warnings, "Véhicule en location sans loyer enregistré (dépense récurrente « Financement »)")
-		}
+	// 7. Acquisition, financing and depreciation
+	if ownership != nil {
+		sum.AcquisitionType = ownership.AcquisitionType
+		sum.ContractEndDate = owned.ContractEndDate
+		sum.OwnershipEndDate = ownership.EndDate
 	}
+	sum.AcquisitionCost = byCategory[LedgerAcquisition]
+	sum.DepreciationCost = owned.Depreciation
+	sum.LeaseExcessKmCost = owned.LeaseExcessKm
+	sum.LeaseExcessKmProjected = owned.LeaseExcessKmProjected
+	sum.LeaseKmDriven = round1(owned.LeaseKmDriven)
+	sum.LeaseKmAllowanceToDate = round1(owned.LeaseKmAllowanceToDate)
+	if len(owned.Missing) > 0 {
+		comp.AcquisitionMissing = true
+		comp.Warnings = append(comp.Warnings, owned.Missing...)
+	}
+	comp.Warnings = append(comp.Warnings, owned.LeaseWarnings(now)...)
 
 	// 8. Toll qualification backlog
 	var highwayDrives, drivesWithOdometer, ledgerEntries int
@@ -460,13 +445,14 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	travel := byCategory[LedgerToll] + byCategory[LedgerParking] + byCategory[LedgerTravelOther]
 	tires := byCategory[LedgerTires]
 	maintenance := byCategory[LedgerMaintenance]
+	repair := byCategory[LedgerRepair]
 	insurance := byCategory[LedgerInsurance]
 	financing := byCategory[LedgerFinancing]
 	subscription, tax := byCategory[LedgerSubscr], byCategory[LedgerTax]
 	var other money.Cents
 	for category, amount := range byCategory {
 		switch category {
-		case LedgerEnergy, LedgerToll, LedgerParking, LedgerTravelOther, LedgerTires, LedgerMaintenance,
+		case LedgerEnergy, LedgerToll, LedgerParking, LedgerTravelOther, LedgerTires, LedgerMaintenance, LedgerRepair,
 			LedgerInsurance, LedgerFinancing, LedgerTax, LedgerSubscr, LedgerAcquisition:
 		default:
 			other += amount
@@ -474,9 +460,11 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	}
 	otherTotal := subscription + tax + other
 
-	running := energy + travel + maintenance + insurance + financing + otherTotal
+	running := energy + travel + maintenance + repair + insurance + financing + otherTotal
 	sum.TotalCost = running + tires
-	sum.FullCost = running + sum.TiresAmortizedCost + sum.DepreciationCost
+	// Economic financing cost: prepaid lease amounts spread over the contract, return fees and excess mileage accrued
+	sum.FinancingFullCost = financing + owned.LeasePrepaidAdjustment + owned.LeaseEndFeesAdjustment + owned.LeaseExcessKm
+	sum.FullCost = running - financing + sum.FinancingFullCost + sum.TiresAmortizedCost + sum.DepreciationCost
 	sum.FullCostNet = sum.FullCost - sum.CarpoolRevenue
 
 	sum.TotalDistanceKm = round1(trackedKm)
@@ -500,10 +488,12 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	sum.TiresAmortizedCostPerKm = perKm(sum.TiresAmortizedCost, basisKm)
 	sum.MaintenanceCost = maintenance
 	sum.MaintenanceCostPerKm = perKm(maintenance, basisKm)
+	sum.RepairCost = repair
+	sum.RepairCostPerKm = perKm(repair, basisKm)
 	sum.InsuranceCost = insurance
 	sum.InsuranceCostPerKm = perKm(insurance, basisKm)
 	sum.FinancingCost = financing
-	sum.FinancingCostPerKm = perKm(financing, basisKm)
+	sum.FinancingCostPerKm = perKm(sum.FinancingFullCost, basisKm)
 	sum.SubscriptionCost = subscription
 	sum.TaxCost = tax
 	sum.OtherCost = other
@@ -593,7 +583,7 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, now tim
 			mc.Tolls += amount
 		case LedgerTires:
 			mc.Tires += amount
-		case LedgerMaintenance:
+		case LedgerMaintenance, LedgerRepair:
 			mc.Maintenance += amount
 		case LedgerInsurance:
 			mc.Insurance += amount

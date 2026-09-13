@@ -1000,25 +1000,31 @@ onMounted(() => {
               <div class="flex items-center justify-between mb-1">
                 <label for="carpool-insurance-cost" class="text-[11px] text-slate-400">🛡️ Assurance (€)</label>
                 <span
-                  v-if="currentRates?.insurance_source === 'VEHICLE_SETTINGS'"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
-                  title="Calculé selon la prime annuelle du véhicule"
-                >
-                  Contrat réel
-                </span>
-                <span
-                  v-else-if="currentRates?.insurance_source === 'RECORDED_EXPENSES'"
+                  v-if="currentRates?.insurance_source === 'RECORDED_EXPENSES'"
                   class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
-                  title="Calculé d'après vos dépenses d'assurance"
-                >
-                  Dépenses
+                  title="Primes payées sur les 12 derniers mois divisées par les kilomètres parcourus sur la même période"
+                  >
+                  Primes réelles
                 </span>
-                <span
-                  v-else-if="currentRates?.insurance_source === 'DEFAULT'"
+                  <span
+                  v-else-if="currentRates?.insurance_source === 'INCLUDED_IN_LEASE'"
+                  class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
+                  >
+                  Incluse dans la location
+                </span>
+                  <span
+                  v-else-if="currentRates?.insurance_source === 'INSUFFICIENT_DISTANCE'"
                   class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
-                  title="Aucune assurance renseignée : valeur par défaut"
-                >
-                  estimation
+                  title="Moins de 500 km parcourus depuis la première prime : quote-part non calculée"
+                  >
+                  Pas assez de km
+                </span>
+                  <span
+                  v-else
+                  class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
+                  title="Aucune prime d'assurance enregistrée dans les dépenses"
+                  >
+                  Non renseignée
                 </span>
               </div>
               <input id="carpool-insurance-cost"

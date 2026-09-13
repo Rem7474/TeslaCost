@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import {
@@ -13,7 +13,7 @@ import {
   X,
   Gauge,
   Link2,
-  Shield,
+  FileText,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
@@ -34,20 +34,51 @@ const form = ref({
   teslamate_api_key: '',
   teslamate_basic_user: '',
   teslamate_basic_pass: '',
-  annual_insurance_cost: null as number | null,
-  annual_expected_mileage: 15000 as number | null,
-  ...emptyAcquisition(),
 })
 
-function emptyAcquisition() {
+// Ownership contracts (purchase, loan, LOA, LLD) by vehicle id
+const ownerships = ref<Record<string, any | null>>({})
+const showOwnershipModal = ref(false)
+const ownershipVehicle = ref<any | null>(null)
+const ownershipForm = ref(emptyOwnership())
+
+const ACQUISITION_LABELS: Record<string, string> = {
+  CASH: 'Achat comptant',
+  LOAN: 'Achat à crédit',
+  LOA: 'LOA (location avec option d\'achat)',
+  LLD: 'LLD (location longue durée)',
+}
+
+function emptyOwnership() {
   return {
-    acquisition_type: '' as string,
+    acquisition_type: 'CASH',
+    start_date: new Date().toISOString().substring(0, 10),
+    start_odometer: null as number | null,
     purchase_price: null as number | null,
-    purchase_date: '' as string,
-    purchase_odometer: null as number | null,
-    purchase_incentives: null as number | null,
+    purchase_fees: null as number | null,
+    incentives: null as number | null,
     expected_resale_value: null as number | null,
     expected_holding_months: null as number | null,
+    loan_amount: null as number | null,
+    loan_rate_pct: null as number | null,
+    loan_duration_months: null as number | null,
+    loan_fees: null as number | null,
+    loan_insurance_monthly: null as number | null,
+    lease_down_payment: null as number | null,
+    lease_monthly_rent: null as number | null,
+    lease_duration_months: null as number | null,
+    lease_fees: null as number | null,
+    lease_deposit: null as number | null,
+    lease_km_allowance_per_year: null as number | null,
+    lease_excess_km_price: null as number | null,
+    lease_end_fees_estimate: null as number | null,
+    lease_purchase_option_price: null as number | null,
+    lease_includes_maintenance: false,
+    lease_includes_insurance: false,
+    lease_includes_tires: false,
+    option_exercised_date: '',
+    end_date: '',
+    sale_price: null as number | null,
   }
 }
 
@@ -56,9 +87,106 @@ function nullIfEmpty(v: any) {
   return v === '' || v === undefined ? null : v
 }
 
-onMounted(() => {
-  vehicleStore.fetchVehicles()
+function toDateInput(v?: string | null) {
+  return v ? new Date(v).toISOString().substring(0, 10) : ''
+}
+
+async function loadOwnerships() {
+  const entries = await Promise.all(
+    vehicleStore.vehicles.map(async (v) => {
+      try {
+        return [v.id, await api.getOwnership(v.id)] as const
+      } catch {
+        return [v.id, null] as const
+      }
+    })
+  )
+  ownerships.value = Object.fromEntries(entries)
+}
+
+onMounted(async () => {
+  await vehicleStore.fetchVehicles()
+  await loadOwnerships()
 })
+
+const isLease = computed(() => ['LOA', 'LLD'].includes(ownershipForm.value.acquisition_type))
+const isPurchase = computed(() => ['CASH', 'LOAN'].includes(ownershipForm.value.acquisition_type))
+const isOwnedPhase = computed(() => isPurchase.value || (ownershipForm.value.acquisition_type === 'LOA' && !!ownershipForm.value.option_exercised_date))
+
+// Loan annuity preview
+const loanPreview = computed(() => {
+  const f = ownershipForm.value
+  const p = Number(f.loan_amount) || 0
+  const n = Number(f.loan_duration_months) || 0
+  const r = (Number(f.loan_rate_pct) || 0) / 1200
+  if (!p || !n) return null
+  const payment = r === 0 ? p / n : (p * r) / (1 - Math.pow(1 + r, -n))
+  const insurance = Number(f.loan_insurance_monthly) || 0
+  return { payment, totalInterest: payment * n - p, totalCost: payment * n - p + insurance * n + (Number(f.loan_fees) || 0) }
+})
+
+// Lease total preview (cash paid over the contract, purchase option excluded)
+const leasePreview = computed(() => {
+  const f = ownershipForm.value
+  const rent = Number(f.lease_monthly_rent) || 0
+  const n = Number(f.lease_duration_months) || 0
+  if (!rent || !n) return null
+  const total = rent * n + (Number(f.lease_down_payment) || 0) + (Number(f.lease_fees) || 0) + (Number(f.lease_end_fees_estimate) || 0)
+  const allowance = Number(f.lease_km_allowance_per_year) || 0
+  return { total, perMonth: total / n, totalKm: (allowance * n) / 12 }
+})
+
+function ownershipSummary(o: any) {
+  if (!o) return null
+  const fmt = (v: number) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 0 })
+  if (o.acquisition_type === 'CASH' || o.acquisition_type === 'LOAN') {
+    return `${ACQUISITION_LABELS[o.acquisition_type]} • ${fmt(o.purchase_price)} €`
+  }
+  return `${o.acquisition_type} • ${fmt(o.lease_monthly_rent)} €/mois sur ${o.lease_duration_months} mois`
+}
+
+function openOwnershipModal(v: any) {
+  ownershipVehicle.value = v
+  const o = ownerships.value[v.id]
+  ownershipForm.value = o
+    ? {
+        ...emptyOwnership(),
+        ...o,
+        start_date: toDateInput(o.start_date),
+        option_exercised_date: toDateInput(o.option_exercised_date),
+        end_date: toDateInput(o.end_date),
+      }
+    : { ...emptyOwnership(), start_odometer: v.current_odometer ? Math.round(v.current_odometer) : null }
+  showOwnershipModal.value = true
+}
+
+async function handleSaveOwnership() {
+  if (!ownershipVehicle.value) return
+  const f: any = { ...ownershipForm.value }
+  for (const key of Object.keys(f)) {
+    if (typeof f[key] !== 'boolean') f[key] = nullIfEmpty(f[key])
+  }
+  try {
+    ownerships.value[ownershipVehicle.value.id] = await api.saveOwnership(ownershipVehicle.value.id, f)
+    showOwnershipModal.value = false
+    vehicleStore.lastSyncTimestamp = Date.now()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function handleDeleteOwnership() {
+  if (!ownershipVehicle.value) return
+  if (!confirm('Supprimer le contrat d\'acquisition de ce véhicule ?')) return
+  try {
+    await api.deleteOwnership(ownershipVehicle.value.id)
+    ownerships.value[ownershipVehicle.value.id] = null
+    showOwnershipModal.value = false
+    vehicleStore.lastSyncTimestamp = Date.now()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
 
 function openCreateModal() {
   isEditing.value = false
@@ -74,9 +202,6 @@ function openCreateModal() {
     teslamate_api_key: '',
     teslamate_basic_user: '',
     teslamate_basic_pass: '',
-    annual_insurance_cost: null,
-    annual_expected_mileage: 15000,
-    ...emptyAcquisition(),
   }
   showModal.value = true
 }
@@ -95,41 +220,20 @@ function openEditModal(v: any) {
     teslamate_api_key: '',
     teslamate_basic_user: v.teslamate_basic_user || '',
     teslamate_basic_pass: '',
-    annual_insurance_cost: v.annual_insurance_cost || null,
-    annual_expected_mileage: v.annual_expected_mileage || 15000,
-    acquisition_type: v.acquisition_type || '',
-    purchase_price: v.purchase_price ?? null,
-    purchase_date: v.purchase_date ? new Date(v.purchase_date).toISOString().substring(0, 10) : '',
-    purchase_odometer: v.purchase_odometer ?? null,
-    purchase_incentives: v.purchase_incentives ?? null,
-    expected_resale_value: v.expected_resale_value ?? null,
-    expected_holding_months: v.expected_holding_months ?? null,
   }
   showModal.value = true
 }
 
 async function handleSave() {
   try {
-    const f = form.value
-    const payload = {
-      ...f,
-      annual_insurance_cost: nullIfEmpty(f.annual_insurance_cost),
-      annual_expected_mileage: nullIfEmpty(f.annual_expected_mileage),
-      acquisition_type: f.acquisition_type || null,
-      purchase_price: nullIfEmpty(f.purchase_price),
-      purchase_date: f.purchase_date || null,
-      purchase_odometer: nullIfEmpty(f.purchase_odometer),
-      purchase_incentives: nullIfEmpty(f.purchase_incentives),
-      expected_resale_value: nullIfEmpty(f.expected_resale_value),
-      expected_holding_months: nullIfEmpty(f.expected_holding_months),
-    }
     if (isEditing.value && editingId.value) {
-      await api.updateVehicle(editingId.value, payload)
+      await api.updateVehicle(editingId.value, form.value)
     } else {
-      await api.createVehicle(payload)
+      await api.createVehicle(form.value)
     }
     showModal.value = false
     await vehicleStore.fetchVehicles()
+    await loadOwnerships()
   } catch (err: any) {
     alert(`Erreur : ${err.message}`)
   }
@@ -243,15 +347,14 @@ function clearCardTestResult(id: string) {
           </div>
 
           <div>
-            <span class="text-slate-400">Assurance réelle</span>
-            <p v-if="v.annual_insurance_cost" class="text-sm font-bold text-indigo-400 flex items-center gap-1 mt-0.5">
-              <Shield class="w-3.5 h-3.5 text-indigo-400" />
-              {{ ((Number(v.annual_insurance_cost) || 0) / (Number(v.annual_expected_mileage) || 15000)).toFixed(3) }} €/km
-              <span class="text-[11px] font-normal text-slate-400">({{ Number(v.annual_insurance_cost).toFixed(0) }} €/an)</span>
+            <span class="text-slate-400">Acquisition</span>
+            <p v-if="ownerships[v.id]" class="text-xs font-semibold text-indigo-300 mt-1">
+              {{ ownershipSummary(ownerships[v.id]) }}
+              <span v-if="ownerships[v.id].end_date" class="block text-[11px] font-normal text-slate-400">
+                Fin de détention le {{ new Date(ownerships[v.id].end_date).toLocaleDateString('fr-FR') }}
+              </span>
             </p>
-            <p v-else class="text-xs text-slate-500 mt-1 flex items-center gap-1">
-              <Shield class="w-3 h-3 text-slate-600" /> Défaut (0.035 €/km)
-            </p>
+            <p v-else class="text-xs text-amber-400/90 mt-1">Non renseignée</p>
           </div>
 
           <div>
@@ -282,7 +385,14 @@ function clearCardTestResult(id: string) {
         </div>
 
         <!-- Actions -->
-        <div class="mt-4 pt-3 flex items-center justify-between gap-2">
+        <div class="mt-4 pt-3 flex items-center justify-between gap-2 flex-wrap">
+          <button
+            @click="openOwnershipModal(v)"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
+          >
+            <FileText class="w-3.5 h-3.5 text-indigo-400" />
+            <span>Acquisition & financement</span>
+          </button>
           <button
             v-if="v.teslamate_api_url"
             @click="testCardConnection(v.id)"
@@ -438,96 +548,10 @@ function clearCardTestResult(id: string) {
             </div>
           </div>
 
-          <!-- Real Insurance Configuration Section -->
-          <div class="pt-2 border-t border-slate-800 space-y-3">
-            <div class="flex items-center justify-between">
-              <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Shield class="w-3.5 h-3.5" />
-                Assurance & Frais Fixes Réels
-              </h4>
-              <span
-                v-if="form.annual_insurance_cost && form.annual_expected_mileage"
-                class="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20"
-              >
-                {{ ((Number(form.annual_insurance_cost) || 0) / (Number(form.annual_expected_mileage) || 15000)).toFixed(3) }} €/km
-              </span>
-            </div>
-
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label for="vehicle-annual-insurance-cost" class="block text-xs font-semibold text-slate-300 mb-1">Prime d'assurance (€/an)</label>
-                <input id="vehicle-annual-insurance-cost"
-                  v-model.number="form.annual_insurance_cost"
-                  type="number"
-                  step="0.01"
-                  placeholder="ex: 850.00"
-                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-              <div>
-                <label for="vehicle-annual-expected-mileage" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage annuel prévu (km/an)</label>
-                <input id="vehicle-annual-expected-mileage"
-                  v-model.number="form.annual_expected_mileage"
-                  type="number"
-                  placeholder="ex: 15000"
-                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors"
-                />
-              </div>
-            </div>
-            <p class="text-[11px] text-slate-400">
-              💡 Cette valeur permet de calculer exactement la quote-part d'assurance réelle pour chaque trajet et covoiturage (Taux = Prime / Kilomètres).
-            </p>
-          </div>
-
-          <!-- Acquisition -->
-          <div class="pt-2 border-t border-slate-800 space-y-3">
-            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Acquisition & décote</h4>
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <label for="vehicle-acquisition-type" class="block text-xs font-semibold text-slate-300 mb-1">Mode d'acquisition</label>
-                <select id="vehicle-acquisition-type" v-model="form.acquisition_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors">
-                  <option value="">Non renseigné</option>
-                  <option value="PURCHASE">Achat (comptant ou crédit)</option>
-                  <option value="LEASE">Location (LOA / LLD)</option>
-                </select>
-              </div>
-              <div v-if="form.acquisition_type">
-                <label for="vehicle-purchase-date" class="block text-xs font-semibold text-slate-300 mb-1">Date d'acquisition</label>
-                <input id="vehicle-purchase-date" v-model="form.purchase_date" type="date" :required="form.acquisition_type === 'PURCHASE'" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-              </div>
-            </div>
-            <div v-if="form.acquisition_type" class="grid grid-cols-2 gap-3">
-              <div>
-                <label for="vehicle-purchase-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre à l'acquisition (km)</label>
-                <input id="vehicle-purchase-odometer" v-model.number="form.purchase_odometer" type="number" min="0" placeholder="ex: 0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-              </div>
-              <div v-if="form.acquisition_type === 'PURCHASE'">
-                <label for="vehicle-purchase-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix d'achat TTC (€)</label>
-                <input id="vehicle-purchase-price" v-model.number="form.purchase_price" type="number" step="0.01" min="0" required placeholder="ex: 42990" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-              </div>
-            </div>
-            <div v-if="form.acquisition_type === 'PURCHASE'" class="grid grid-cols-3 gap-3">
-              <div>
-                <label for="vehicle-purchase-incentives" class="block text-xs font-semibold text-slate-300 mb-1">Aides / remises (€)</label>
-                <input id="vehicle-purchase-incentives" v-model.number="form.purchase_incentives" type="number" step="0.01" min="0" placeholder="Bonus écologique" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-              </div>
-              <div>
-                <label for="vehicle-expected-resale-value" class="block text-xs font-semibold text-slate-300 mb-1">Revente estimée (€)</label>
-                <input id="vehicle-expected-resale-value" v-model.number="form.expected_resale_value" type="number" step="0.01" min="0" placeholder="ex: 22000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-              </div>
-              <div>
-                <label for="vehicle-expected-holding-months" class="block text-xs font-semibold text-slate-300 mb-1">Détention (mois)</label>
-                <input id="vehicle-expected-holding-months" v-model.number="form.expected_holding_months" type="number" min="1" max="360" placeholder="ex: 60" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 transition-colors" />
-              </div>
-            </div>
-            <p v-if="form.acquisition_type === 'PURCHASE'" class="text-[11px] text-slate-400">
-              La décote (prix net des aides − revente estimée) est répartie linéairement sur la durée de détention.
-              Pour un crédit, enregistrez uniquement les intérêts et l'assurance emprunteur en dépense récurrente « Financement » : le capital est déjà compté dans la décote.
-            </p>
-            <p v-else-if="form.acquisition_type === 'LEASE'" class="text-[11px] text-slate-400">
-              Enregistrez les loyers en dépense récurrente « Financement » et le premier loyer majoré en dépense ponctuelle de la même catégorie.
-            </p>
-          </div>
+          <p class="text-[11px] text-slate-400 pt-2 border-t border-slate-800">
+            L'acquisition (achat, crédit, LOA, LLD) se configure depuis la carte du véhicule, et l'assurance se saisit dans
+            Dépenses → Entretien & coûts fixes (catégorie « Assurance », dépense récurrente).
+          </p>
 
           <div class="flex justify-end gap-2 pt-3">
             <button type="button" @click="showModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
@@ -536,6 +560,218 @@ function clearCardTestResult(id: string) {
             <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">
               Enregistrer
             </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Ownership contract -->
+    <div
+      v-if="showOwnershipModal && ownershipVehicle"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <FileText class="w-5 h-5 text-indigo-400" />
+            Acquisition & financement — {{ ownershipVehicle.name }}
+          </h3>
+          <button @click="showOwnershipModal = false" class="text-slate-400 hover:text-white">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <form @submit.prevent="handleSaveOwnership" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label for="own-type" class="block text-xs font-semibold text-slate-300 mb-1">Mode d'acquisition</label>
+              <select id="own-type" v-model="ownershipForm.acquisition_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                <option v-for="(label, key) in ACQUISITION_LABELS" :key="key" :value="key">{{ label }}</option>
+              </select>
+            </div>
+              <div>
+                <label for="own-start-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ isLease ? 'Début du contrat' : 'Date d\'achat' }}</label>
+                <input id="own-start-date" v-model="ownershipForm.start_date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-start-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre au début (km)</label>
+                <input id="own-start-odometer" v-model.number="ownershipForm.start_odometer" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+          </div>
+
+          <!-- Purchase -->
+          <div v-if="isPurchase" class="space-y-3 pt-3 border-t border-slate-800">
+            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Achat</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label for="own-purchase-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix d'achat TTC (€)</label>
+                <input id="own-purchase-price" v-model.number="ownershipForm.purchase_price" type="number" step="0.01" min="0" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-purchase-fees" class="block text-xs font-semibold text-slate-300 mb-1">Frais (carte grise, malus, mise à la route) (€)</label>
+                <input id="own-purchase-fees" v-model.number="ownershipForm.purchase_fees" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-incentives" class="block text-xs font-semibold text-slate-300 mb-1">Aides et remises (€)</label>
+                <input id="own-incentives" v-model.number="ownershipForm.incentives" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Loan -->
+          <div v-if="ownershipForm.acquisition_type === 'LOAN'" class="space-y-3 pt-3 border-t border-slate-800">
+            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Crédit</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label for="own-loan-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant emprunté (€)</label>
+                <input id="own-loan-amount" v-model.number="ownershipForm.loan_amount" type="number" step="0.01" min="0" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-loan-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux annuel (%)</label>
+                <input id="own-loan-rate" v-model.number="ownershipForm.loan_rate_pct" type="number" step="0.001" min="0" max="30" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-loan-duration" class="block text-xs font-semibold text-slate-300 mb-1">Durée (mois)</label>
+                <input id="own-loan-duration" v-model.number="ownershipForm.loan_duration_months" type="number" min="1" max="360" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-loan-fees" class="block text-xs font-semibold text-slate-300 mb-1">Frais de dossier (€)</label>
+                <input id="own-loan-fees" v-model.number="ownershipForm.loan_fees" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-loan-insurance" class="block text-xs font-semibold text-slate-300 mb-1">Assurance emprunteur (€/mois)</label>
+                <input id="own-loan-insurance" v-model.number="ownershipForm.loan_insurance_monthly" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+            <p v-if="loanPreview" class="text-[11px] text-slate-400">
+              Mensualité {{ loanPreview.payment.toFixed(2) }} € • intérêts totaux {{ loanPreview.totalInterest.toFixed(2) }} €
+              • coût total du crédit {{ loanPreview.totalCost.toFixed(2) }} € (intérêts, assurance et frais comptés mois par mois dans le TCO ;
+              le capital est déjà compté dans la décote).
+            </p>
+          </div>
+
+          <!-- Lease -->
+          <div v-if="isLease" class="space-y-3 pt-3 border-t border-slate-800">
+            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Contrat de location</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label for="own-lease-down" class="block text-xs font-semibold text-slate-300 mb-1">Apport / 1er loyer majoré (€)</label>
+                <input id="own-lease-down" v-model.number="ownershipForm.lease_down_payment" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-lease-rent" class="block text-xs font-semibold text-slate-300 mb-1">Loyer mensuel (€)</label>
+                <input id="own-lease-rent" v-model.number="ownershipForm.lease_monthly_rent" type="number" step="0.01" min="0" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-lease-duration" class="block text-xs font-semibold text-slate-300 mb-1">Durée (mois)</label>
+                <input id="own-lease-duration" v-model.number="ownershipForm.lease_duration_months" type="number" min="1" max="360" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-lease-fees" class="block text-xs font-semibold text-slate-300 mb-1">Frais de dossier (€)</label>
+                <input id="own-lease-fees" v-model.number="ownershipForm.lease_fees" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-lease-deposit" class="block text-xs font-semibold text-slate-300 mb-1">Dépôt de garantie (€, remboursable)</label>
+                <input id="own-lease-deposit" v-model.number="ownershipForm.lease_deposit" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-lease-end-fees" class="block text-xs font-semibold text-slate-300 mb-1">Frais de restitution estimés (€)</label>
+                <input id="own-lease-end-fees" v-model.number="ownershipForm.lease_end_fees_estimate" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-lease-allowance" class="block text-xs font-semibold text-slate-300 mb-1">Forfait kilométrique (km/an)</label>
+                <input id="own-lease-allowance" v-model.number="ownershipForm.lease_km_allowance_per_year" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-lease-excess" class="block text-xs font-semibold text-slate-300 mb-1">Prix du km supplémentaire (€/km)</label>
+                <input id="own-lease-excess" v-model.number="ownershipForm.lease_excess_km_price" type="number" step="0.001" min="0" max="5" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div v-if="ownershipForm.acquisition_type === 'LOA'">
+                <label for="own-lease-option" class="block text-xs font-semibold text-slate-300 mb-1">Prix de l'option d'achat (€)</label>
+                <input id="own-lease-option" v-model.number="ownershipForm.lease_purchase_option_price" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-x-5 gap-y-2">
+              <div class="flex items-center gap-2">
+                <input id="own-incl-maintenance" v-model="ownershipForm.lease_includes_maintenance" type="checkbox" class="rounded border-slate-700 bg-slate-800 text-indigo-500" />
+                <label for="own-incl-maintenance" class="text-xs text-slate-300">Entretien inclus</label>
+              </div>
+              <div class="flex items-center gap-2">
+                <input id="own-incl-insurance" v-model="ownershipForm.lease_includes_insurance" type="checkbox" class="rounded border-slate-700 bg-slate-800 text-indigo-500" />
+                <label for="own-incl-insurance" class="text-xs text-slate-300">Assurance incluse</label>
+              </div>
+              <div class="flex items-center gap-2">
+                <input id="own-incl-tires" v-model="ownershipForm.lease_includes_tires" type="checkbox" class="rounded border-slate-700 bg-slate-800 text-indigo-500" />
+                <label for="own-incl-tires" class="text-xs text-slate-300">Pneus inclus</label>
+              </div>
+            </div>
+            <p v-if="leasePreview" class="text-[11px] text-slate-400">
+              Coût total du contrat {{ leasePreview.total.toFixed(2) }} € (≈ {{ leasePreview.perMonth.toFixed(2) }} €/mois tout compris)
+              <template v-if="leasePreview.totalKm"> • {{ Math.round(leasePreview.totalKm).toLocaleString('fr-FR') }} km inclus</template>.
+              L'apport et les frais sont étalés sur la durée dans le coût complet ; le dépassement kilométrique est estimé au fil du contrat.
+            </p>
+            <div v-if="ownershipForm.acquisition_type === 'LOA'" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label for="own-option-date" class="block text-xs font-semibold text-slate-300 mb-1">Option levée le (vide si non levée)</label>
+                <input id="own-option-date" v-model="ownershipForm.option_exercised_date" type="date"  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Owned phase: depreciation -->
+          <div v-if="isOwnedPhase" class="space-y-3 pt-3 border-t border-slate-800">
+            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Décote</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label for="own-resale" class="block text-xs font-semibold text-slate-300 mb-1">Revente estimée (€)</label>
+                <input id="own-resale" v-model.number="ownershipForm.expected_resale_value" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div>
+                <label for="own-holding" class="block text-xs font-semibold text-slate-300 mb-1">Durée de détention prévue (mois)</label>
+                <input id="own-holding" v-model.number="ownershipForm.expected_holding_months" type="number" min="1" max="360" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400">
+              Décote linéaire : (prix + frais − aides − revente estimée) répartie sur la durée de détention.
+              <template v-if="ownershipForm.acquisition_type === 'LOA'">Après la levée d'option, la base est le prix de l'option.</template>
+            </p>
+          </div>
+
+          <!-- End of ownership -->
+          <div class="space-y-3 pt-3 border-t border-slate-800">
+            <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Fin de détention</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label for="own-end-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ isLease && !ownershipForm.option_exercised_date ? 'Restitué le' : 'Vendu le' }}</label>
+                <input id="own-end-date" v-model="ownershipForm.end_date" type="date"  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+              <div v-if="isOwnedPhase">
+                <label for="own-sale-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix de revente (€)</label>
+                <input id="own-sale-price" v-model.number="ownershipForm.sale_price" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400">
+              Les dépenses récurrentes (assurance, abonnements…) s'arrêtent à cette date et la décote est figée sur le prix de revente réel.
+            </p>
+          </div>
+
+          <div class="flex justify-between gap-2 pt-3 border-t border-slate-800">
+            <button
+              v-if="ownerships[ownershipVehicle.id]"
+              type="button"
+              @click="handleDeleteOwnership"
+              class="px-4 py-2 bg-slate-800 hover:bg-rose-900/40 text-rose-400 text-xs font-semibold rounded-xl"
+            >
+              Supprimer le contrat
+            </button>
+            <div class="flex gap-2 ml-auto">
+              <button type="button" @click="showOwnershipModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
+                Annuler
+              </button>
+              <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">
+                Enregistrer
+              </button>
+            </div>
           </div>
         </form>
       </div>

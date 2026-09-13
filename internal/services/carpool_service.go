@@ -2,6 +2,8 @@ package services
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/teslacost/teslacost/internal/database"
@@ -26,6 +28,7 @@ const (
 	RateSourceHistory       = "HISTORY"
 	RateSourceMountedTires  = "MOUNTED_TIRES"
 	RateSourceDefault       = "DEFAULT"
+	RateSourceIncluded      = "INCLUDED_IN_LEASE"
 	EnergySourceMeasured    = "MEASURED"
 	EnergySourceConsumption = "CONSUMPTION"
 	EnergySourceDefault     = "DEFAULT"
@@ -36,22 +39,24 @@ const (
 	defaultElectricityPerKwh = 0.22
 	defaultTiresPerKm        = 0.020
 	defaultMaintenancePerKm  = 0.015
-	defaultInsurancePerKm    = 0.035
 	defaultConsumptionKwh100 = 16.5
-	defaultAnnualMileageKm   = 15000.0
+	// Minimum distance over the insurance window for a meaningful per-km share.
+	minInsuranceWindowKm = 500.0
 )
 
 type UnitRates struct {
-	ElectricityPerKwh     float64
-	ElectricitySource     string
-	TiresPerKm            float64
-	TiresSource           string
-	MaintenancePerKm      float64
-	MaintenanceSource     string
-	InsurancePerKm        float64
-	InsuranceSource       string // "VEHICLE_SETTINGS", "RECORDED_EXPENSES", "DEFAULT"
-	AnnualInsuranceCost   *money.Cents
-	AnnualExpectedMileage *float64
+	ElectricityPerKwh float64
+	ElectricitySource string
+	TiresPerKm        float64
+	TiresSource       string
+	MaintenancePerKm  float64
+	MaintenanceSource string
+	// InsurancePerKm shares the insurance premiums paid over the last 12 months (or since the first premium)
+	// across the kilometers actually driven over the same window.
+	InsurancePerKm      float64
+	InsuranceSource     string // RECORDED_EXPENSES | INCLUDED_IN_LEASE | INSUFFICIENT_DISTANCE | NONE
+	InsuranceWindowCost *money.Cents
+	InsuranceWindowKm   *float64
 }
 
 // DefaultUnitRates returns the fallback assumptions, all flagged as defaults.
@@ -63,8 +68,7 @@ func DefaultUnitRates() *UnitRates {
 		TiresSource:       RateSourceDefault,
 		MaintenancePerKm:  defaultMaintenancePerKm,
 		MaintenanceSource: RateSourceDefault,
-		InsurancePerKm:    defaultInsurancePerKm,
-		InsuranceSource:   InsuranceSourceDefault,
+		InsuranceSource:   InsuranceSourceNone,
 	}
 }
 
@@ -132,17 +136,12 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		rates.TiresSource = RateSourceHistory
 	}
 
-	// Maintenance and insurance from the cost ledger
-	var totalMaintCost, annualInsuranceExpenses money.Cents
-	var insuranceEntries int
+	// Maintenance and repairs from the cost ledger
+	var totalMaintCost money.Cents
 	if err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(amount_eur) FILTER (WHERE category = 'MAINTENANCE'), 0),
-		       COALESCE(SUM(amount_eur) FILTER (WHERE category = 'INSURANCE' AND source_table = 'maintenance_expenses'
-		                                         AND entry_date > NOW() - INTERVAL '365 days'), 0),
-		       (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND category = 'INSURANCE')
-		FROM cost_ledger
-		WHERE vehicle_id = $1;
-	`, vehicleID).Scan(&totalMaintCost, &annualInsuranceExpenses, &insuranceEntries); err != nil {
+		SELECT COALESCE(SUM(amount_eur), 0) FROM cost_ledger
+		WHERE vehicle_id = $1 AND category IN ('MAINTENANCE', 'REPAIR');
+	`, vehicleID).Scan(&totalMaintCost); err != nil {
 		return nil, err
 	}
 	if totalDistance > 500 && totalMaintCost > 0 {
@@ -150,34 +149,54 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		rates.MaintenanceSource = RateSourceHistory
 	}
 
-	var vAnnualIns *money.Cents
-	var vAnnualKm *float64
+	// Insurance: premiums paid over the window divided by the kilometers driven over the same window
+	var insuranceCost money.Cents
+	var windowKm float64
+	var windowStart *time.Time
 	if err := s.pool.QueryRow(ctx, `
-		SELECT annual_insurance_cost, annual_expected_mileage
-		FROM vehicles
-		WHERE id = $1;
-	`, vehicleID).Scan(&vAnnualIns, &vAnnualKm); err != nil {
+		WITH premiums AS (
+			SELECT entry_date, amount_eur FROM cost_ledger
+			WHERE vehicle_id = $1 AND category = 'INSURANCE' AND entry_date <= NOW()
+		),
+		window_start AS (
+			SELECT GREATEST(NOW() - INTERVAL '365 days', MIN(entry_date)) AS start FROM premiums
+		)
+		SELECT (SELECT start FROM window_start),
+		       COALESCE((SELECT SUM(amount_eur) FROM premiums WHERE entry_date >= (SELECT start FROM window_start)), 0),
+		       COALESCE((SELECT SUM(distance_km) FROM drives
+		                 WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
+		                   AND start_time >= (SELECT start FROM window_start)), 0);
+	`, vehicleID).Scan(&windowStart, &insuranceCost, &windowKm); err != nil {
 		return nil, err
 	}
 
-	expectedKm := defaultAnnualMileageKm
-	if vAnnualKm != nil && *vAnnualKm > 0 {
-		expectedKm = *vAnnualKm
-	} else if lastYearDistance > 1000 {
-		expectedKm = lastYearDistance
+	// Services included in a running lease contract
+	ownership, err := s.repo.GetVehicleOwnership(ctx, vehicleID)
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
+		return nil, err
+	}
+	now := time.Now()
+	if ownership != nil && ownership.InLeasePhase(now) {
+		if ownership.LeaseIncludesMaintenance {
+			rates.MaintenancePerKm, rates.MaintenanceSource = 0, RateSourceIncluded
+		}
+		if ownership.LeaseIncludesTires {
+			rates.TiresPerKm, rates.TiresSource = 0, RateSourceIncluded
+		}
 	}
 
 	switch {
-	case insuranceEntries > 0 && annualInsuranceExpenses > 0:
-		rates.InsurancePerKm = annualInsuranceExpenses.Float() / expectedKm
+	case windowStart != nil && insuranceCost > 0 && windowKm >= minInsuranceWindowKm:
+		rates.InsurancePerKm = insuranceCost.Float() / windowKm
 		rates.InsuranceSource = InsuranceSourceRecordedExpenses
-		rates.AnnualInsuranceCost = &annualInsuranceExpenses
-		rates.AnnualExpectedMileage = &expectedKm
-	case vAnnualIns != nil && *vAnnualIns > 0:
-		rates.InsurancePerKm = vAnnualIns.Float() / expectedKm
-		rates.InsuranceSource = InsuranceSourceVehicleSettings
-		rates.AnnualInsuranceCost = vAnnualIns
-		rates.AnnualExpectedMileage = &expectedKm
+		rates.InsuranceWindowCost = &insuranceCost
+		rates.InsuranceWindowKm = &windowKm
+	case windowStart != nil && insuranceCost > 0:
+		rates.InsuranceSource = InsuranceSourceInsufficientKm
+		rates.InsuranceWindowCost = &insuranceCost
+		rates.InsuranceWindowKm = &windowKm
+	case ownership != nil && ownership.InLeasePhase(now) && ownership.LeaseIncludesInsurance:
+		rates.InsuranceSource = InsuranceSourceIncluded
 	}
 
 	rates.ElectricityPerKwh = round3(rates.ElectricityPerKwh)
@@ -261,8 +280,8 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		MaintenanceRatePerKm:  rates.MaintenancePerKm,
 		InsuranceRatePerKm:    rates.InsurancePerKm,
 		InsuranceSource:       rates.InsuranceSource,
-		AnnualInsuranceCost:   rates.AnnualInsuranceCost,
-		AnnualExpectedMileage: rates.AnnualExpectedMileage,
+		InsuranceWindowCost:   rates.InsuranceWindowCost,
+		InsuranceWindowKm:     rates.InsuranceWindowKm,
 		EnergySource:          energySource,
 		ElectricityRateSource: rates.ElectricitySource,
 		TiresRateSource:       rates.TiresSource,

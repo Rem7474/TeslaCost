@@ -35,10 +35,12 @@
    - Registre des coûts unique (vue SQL `cost_ledger`) : recharges, péages, dépenses récurrentes générées échéance par échéance, pneus, assurance, achat du véhicule. Totaux, historique mensuel et taux au km en sont tous dérivés.
    - Montants stockés et calculés en centimes exacts (`NUMERIC` en base, entiers en Go).
    - Dépenses courantes décaissées (pneus au jour d'achat, achat du véhicule exclu) et coût complet (usure des pneus amortie au kilomètre, décote du véhicule).
-   - Acquisition : achat (prix, aides, valeur de revente estimée et durée de détention pour une décote linéaire) ou location (loyers en dépense « Financement »). Pour un crédit, seuls les intérêts et l'assurance emprunteur sont à saisir en « Financement ».
+   - Acquisition et financement par véhicule : achat comptant, achat à crédit (échéancier des intérêts calculé mois par mois, frais de dossier, assurance emprunteur), LOA ou LLD (apport, loyers, frais de dossier, dépôt de garantie, frais de restitution, forfait kilométrique et pénalité de dépassement estimée, services inclus, option d'achat et sa levée). Les flux sont générés automatiquement dans le registre des coûts.
+   - Décote linéaire (prix + frais − aides − revente estimée sur la durée de détention), figée sur le prix de revente réel à la fin de détention ; les dépenses récurrentes s'arrêtent à cette date.
+   - Coût complet : apport et frais de location étalés sur la durée du contrat, frais de restitution et dépassement kilométrique provisionnés au fil du contrat.
    - Coût d'usage au km (énergie + péages), coût complet au km et coût net des recettes de covoiturage, calculés sur la plus grande distance entre les trajets suivis, l'odomètre couvert par les trajets et le kilométrage depuis l'acquisition.
-   - Ventilation énergie / péages & parkings / pneus / entretien / assurance / financement / décote / abonnements, taxes & autres.
-   - Assurance : dépenses « Assurance » enregistrées, sinon prime annuelle de la fiche véhicule répartie au prorata du temps.
+   - Ventilation énergie / péages & parkings / pneus / entretien & réparations / assurance / financement & location / décote / abonnements, taxes & autres.
+   - Assurance : primes enregistrées en dépense récurrente (aide « prime annuelle → mensualité ») ; le coût d'un trajet en reprend une quote-part calculée sur les primes et les kilomètres réellement parcourus sur 12 mois. Une assurance incluse dans la location n'est pas signalée comme manquante.
    - Score de complétude pondéré (« TCO consolidé à X % ») : recharges avec coût, kilomètres couverts par des trajets, trajets autoroutiers qualifiés, assurance, acquisition, continuité de l'odomètre, conversion des devises ; chaque manque est détaillé avec un lien pour le corriger.
 
 ---
