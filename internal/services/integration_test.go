@@ -438,3 +438,42 @@ func TestIntegrationLedgerAcquisitionAndDepreciation(t *testing.T) {
 		t.Fatalf("ledger %s, monthly %s and total %s must match", ledgerTotal, monthly, sum.TotalCost)
 	}
 }
+
+func TestIntegrationOdometerContinuity(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "heidi@example.com")
+	base := time.Now().UTC().AddDate(0, 0, -10)
+
+	mustDrive(t, repo, v.ID, 1, base, 10000, 50)                  // 10000 → 10050
+	mustDrive(t, repo, v.ID, 2, base.Add(2*time.Hour), 10050, 30) // continuous
+	mustDrive(t, repo, v.ID, 3, base.Add(4*time.Hour), 10200, 20) // gap of 120 km
+	mustDrive(t, repo, v.ID, 4, base.Add(6*time.Hour), 10150, 10) // regression of 70 km
+	d5 := mustDrive(t, repo, v.ID, 5, base.Add(8*time.Hour), 10160, 40)
+	if _, err := db.Pool.Exec(ctx, `UPDATE drives SET distance_km = 60 WHERE id = $1`, d5.ID); err != nil { // mismatch: 60 vs 40
+		t.Fatal(err)
+	}
+
+	gaps, gapKm, anomalies, err := repo.DataQualitySummary(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gaps != 1 || gapKm != 120 || anomalies != 2 {
+		t.Fatalf("expected 1 gap of 120 km and 2 anomalies, got %d / %.0f / %d", gaps, gapKm, anomalies)
+	}
+	issues, err := repo.ListDataQualityIssues(ctx, v.ID, 10)
+	if err != nil || len(issues) != 3 {
+		t.Fatalf("expected 3 issues, got %+v (err %v)", issues, err)
+	}
+	if issues[0].Type != database.IssueDistanceMismatch || issues[1].Type != database.IssueOdometerRegression || issues[2].Type != database.IssueOdometerGap {
+		t.Fatalf("unexpected issue order/types: %+v", issues)
+	}
+
+	sum, err := NewTCOService(db.Pool, "UTC").ComputeVehicleTCO(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Completeness.OdometerGaps != 1 || sum.Completeness.OdometerAnomalies != 2 {
+		t.Fatalf("expected continuity issues in completeness, got %+v", sum.Completeness)
+	}
+}

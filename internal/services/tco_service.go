@@ -68,6 +68,8 @@ type TCOCompleteness struct {
 	UnconvertedExpenses int      `json:"unconverted_expenses"`
 	UnqualifiedDrives   int      `json:"unqualified_drives"`
 	UntrackedDistanceKm float64  `json:"untracked_distance_km"`
+	OdometerGaps        int      `json:"odometer_gaps"`
+	OdometerAnomalies   int      `json:"odometer_anomalies"`
 	InsuranceMissing    bool     `json:"insurance_missing"`
 	AcquisitionMissing  bool     `json:"acquisition_missing"`
 	Warnings            []string `json:"warnings"`
@@ -347,12 +349,26 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	if basisKm <= 0 {
 		comp.Warnings = append(comp.Warnings, "Aucun kilométrage enregistré : le coût au kilomètre ne peut pas être calculé")
 	}
+
+	// 9. Odometer continuity
+	var gapKm float64
+	if err := s.pool.QueryRow(ctx, database.OdometerContinuitySummarySQL, vehicleID).Scan(&comp.OdometerGaps, &gapKm, &comp.OdometerAnomalies); err != nil {
+		return nil, fmt.Errorf("odometer continuity: %w", err)
+	}
+	if comp.OdometerGaps > 0 {
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%d trou(s) d'odomètre entre trajets consécutifs (%.0f km sans trajet enregistré)", comp.OdometerGaps, gapKm))
+	}
+	if comp.OdometerAnomalies > 0 {
+		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+			"%d incohérence(s) d'odomètre (odomètre en recul ou distance différente du relevé) à vérifier dans TeslaMate", comp.OdometerAnomalies))
+	}
 	comp.IsComplete = len(comp.Warnings) == 0
 	if comp.Warnings == nil {
 		comp.Warnings = []string{}
 	}
 
-	// 9. Aggregates
+	// 10. Aggregates
 	energy := byCategory[LedgerEnergy]
 	travel := byCategory[LedgerToll] + byCategory[LedgerParking] + byCategory[LedgerTravelOther]
 	tires := byCategory[LedgerTires]

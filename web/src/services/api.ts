@@ -63,6 +63,8 @@ export const api = {
   testTeslaMateRaw: (payload: any) =>
     request<any>('/vehicles/test-connection', { method: 'POST', body: JSON.stringify(payload) }),
   syncVehicle: (id: string) => request<any>(`/vehicles/${id}/sync`, { method: 'POST' }),
+  getSyncStatus: (id: string) => request<any>(`/vehicles/${id}/sync`),
+  getDataQuality: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/data-quality`),
 
   // Drives
   getDrives: (vehicleId: string, params?: { tag?: string; page?: number; limit?: number; unqualified?: boolean }) => {

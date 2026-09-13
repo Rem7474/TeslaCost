@@ -72,6 +72,7 @@ type syncStore interface {
 type SyncService struct {
 	repo      syncStore
 	encryptor *crypto.Encryptor
+	jobs      syncJobs
 }
 
 // NewSyncService creates a new SyncService.
@@ -590,18 +591,6 @@ func (s *SyncService) runBackgroundSyncCycle(ctx context.Context) {
 	}
 
 	for _, v := range vehicles {
-		// Individual timeout per vehicle so one stuck instance doesn't block the whole worker (long enough for a first full import)
-		vCtx, cancel := context.WithTimeout(ctx, 10*time.Minute)
-		res, err := s.SyncVehicle(vCtx, &v)
-		cancel()
-
-		if err != nil {
-			log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v", v.Name, v.ID, err)
-		} else if res != nil {
-			if res.DrivesAdded > 0 || res.ChargesAdded > 0 {
-				log.Printf("[auto-sync] Vehicle %s (%s): +%d new drives, +%d new charges (odometer: %.0f km)",
-					v.Name, v.ID, res.DrivesAdded, res.ChargesAdded, res.CurrentOdometer)
-			}
-		}
+		s.runScheduledSync(ctx, v)
 	}
 }

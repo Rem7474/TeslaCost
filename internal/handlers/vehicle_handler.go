@@ -347,11 +347,28 @@ func (h *VehicleHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res, err := h.syncService.SyncVehicle(r.Context(), v)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+	job, started := h.syncService.StartSync(*v)
+	status := http.StatusAccepted
+	if !started {
+		status = http.StatusOK
+	}
+	writeJSON(w, status, job)
+}
+
+// GetSyncStatus returns the last synchronization job of the vehicle.
+func (h *VehicleHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "id")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
 		return
 	}
 
-	writeJSON(w, http.StatusOK, res)
+	job := h.syncService.GetSyncJob(vehicleID)
+	if job == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"vehicle_id": vehicleID, "status": "NONE"})
+		return
+	}
+	writeJSON(w, http.StatusOK, job)
 }

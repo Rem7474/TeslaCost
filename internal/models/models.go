@@ -303,3 +303,12 @@ type CarpoolSummary struct {
 	CoverageRatePct float64     `json:"coverage_rate_pct"`
 	NetCostPerKm    float64     `json:"net_cost_per_km"`
 }
+
+// DataQualityIssue reports an odometer continuity problem on synchronized drives.
+type DataQualityIssue struct {
+	Type            string    `json:"type"` // ODOMETER_GAP | ODOMETER_REGRESSION | DISTANCE_MISMATCH
+	DriveID         string    `json:"drive_id"`
+	PreviousDriveID *string   `json:"previous_drive_id,omitempty"`
+	Date            time.Time `json:"date"`
+	Km              float64   `json:"km"`
+}

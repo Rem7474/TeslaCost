@@ -29,6 +29,26 @@ const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
 const mileageChartRef = ref<HTMLCanvasElement | null>(null)
 const donutChartRef = ref<HTMLCanvasElement | null>(null)
 
+const dataQuality = ref<any | null>(null)
+const showDataQuality = ref(false)
+
+async function toggleDataQuality() {
+  showDataQuality.value = !showDataQuality.value
+  if (showDataQuality.value && vehicleStore.activeVehicle) {
+    try {
+      dataQuality.value = await api.getDataQuality(vehicleStore.activeVehicle.id)
+    } catch (err) {
+      console.error('Failed to load data quality', err)
+    }
+  }
+}
+
+const issueLabels: Record<string, string> = {
+  ODOMETER_GAP: 'Trou d\'odomètre avant ce trajet',
+  ODOMETER_REGRESSION: 'Odomètre en recul par rapport au trajet précédent',
+  DISTANCE_MISMATCH: 'Distance différente du relevé d\'odomètre',
+}
+
 const insuranceSourceLabel = computed(() => {
   switch (tco.value?.insurance_source) {
     case 'RECORDED_EXPENSES':
@@ -392,6 +412,23 @@ function renderCharts() {
           >
             Renseigner l'acquisition
           </router-link>
+          <button
+            v-if="tco.completeness.odometer_gaps > 0 || tco.completeness.odometer_anomalies > 0"
+            @click="toggleDataQuality"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+          >
+            {{ showDataQuality ? 'Masquer' : 'Voir' }} les incohérences d'odomètre
+          </button>
+        </div>
+        <div v-if="showDataQuality && dataQuality" class="pt-2 max-h-64 overflow-y-auto space-y-1">
+          <div
+            v-for="issue in dataQuality.issues"
+            :key="issue.type + issue.drive_id"
+            class="text-[11px] text-amber-100/90 flex items-center justify-between gap-3 bg-slate-950/40 rounded-lg px-2.5 py-1.5"
+          >
+            <span>{{ new Date(issue.date).toLocaleString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }} — {{ issueLabels[issue.type] || issue.type }}</span>
+            <span class="font-mono">{{ issue.km > 0 ? '+' : '' }}{{ issue.km }} km</span>
+          </div>
         </div>
       </div>
 

@@ -23,6 +23,7 @@ onMounted(async () => {
   await authStore.init()
   if (authStore.isAuthenticated) {
     await vehicleStore.fetchVehicles()
+    vehicleStore.resumeRunningSync()
   }
 })
 </script>

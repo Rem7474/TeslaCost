@@ -159,6 +159,8 @@ func main() {
 				r.Delete("/{id}", vehicleHandler.Delete)
 				r.Post("/{id}/teslamate/test", vehicleHandler.TestTeslaMate)
 				r.Post("/{id}/sync", vehicleHandler.Sync)
+				r.Get("/{id}/sync", vehicleHandler.GetSyncStatus)
+				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
 
 				// Drives
 				r.Get("/{vehicleId}/drives", driveHandler.List)

@@ -33,9 +33,38 @@ func (h *TCOHandler) GetTCO(w http.ResponseWriter, r *http.Request) {
 
 	summary, err := h.tcoService.ComputeVehicleTCO(r.Context(), vehicleID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to compute TCO: "+err.Error())
+		writeRepoError(w, err, "Failed to compute TCO")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, summary)
+}
+
+// GetDataQuality lists odometer continuity issues of the vehicle drives.
+func (h *TCOHandler) GetDataQuality(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	issues, err := h.repo.ListDataQualityIssues(r.Context(), vehicleID, 100)
+	if err != nil {
+		writeRepoError(w, err, "Failed to check data quality")
+		return
+	}
+	gaps, gapKm, anomalies, err := h.repo.DataQualitySummary(r.Context(), vehicleID)
+	if err != nil {
+		writeRepoError(w, err, "Failed to check data quality")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"issues":             issues,
+		"odometer_gaps":      gaps,
+		"odometer_gap_km":    gapKm,
+		"odometer_anomalies": anomalies,
+	})
 }

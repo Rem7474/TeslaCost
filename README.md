@@ -9,6 +9,8 @@
 1. **Multi-véhicules & Authentification JWT :** Gestion multi-utilisateurs et multi-véhicules avec contrôle d'accès sécurisé.
 2. **Synchronisation TeslaMate API :**
    - Récupération de l'odomètre en temps réel.
+   - Synchronisation lancée en arrière-plan : l'API répond immédiatement et l'interface suit l'avancement ; une seule synchronisation à la fois par véhicule (manuelle ou planifiée).
+   - Contrôle de continuité de l'odomètre : trous entre trajets consécutifs, odomètre en recul, distance différente du relevé (`GET /api/vehicles/{id}/data-quality`).
    - Import complet de l'historique des trajets (`/drives`) et des charges (`/charges`), repris automatiquement à la synchronisation suivante en cas d'interruption.
    - Synchronisation incrémentale relisant les 30 derniers jours pour récupérer les coûts complétés après coup dans TeslaMate.
    - Une recharge sans tarif TeslaMate est enregistrée « sans coût » (jamais 0 €) et signalée ; son coût peut être saisi manuellement sans être écrasé par les synchronisations.
