@@ -6,11 +6,11 @@ WORKDIR /app/web
 
 # Copy package descriptors first to leverage caching
 COPY web/package*.json ./
-RUN if [ -f package.json ]; then npm install; fi
+RUN npm ci --ignore-scripts
 
 # Copy source code and build
 COPY web/ ./
-RUN if [ -f package.json ]; then npm run build; else mkdir -p dist && echo "<h1>TeslaCost</h1>" > dist/index.html; fi
+RUN npm run build
 
 # ==============================================================================
 # Stage 2: Development environment for Go
@@ -51,12 +51,14 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} go build -
 # ==============================================================================
 FROM alpine:3.20 AS prod
 WORKDIR /app
-RUN apk add --no-cache ca-certificates tzdata
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S teslacost && adduser -S -G teslacost -H teslacost
 
 COPY --from=backend-builder /app/teslacost /app/teslacost
 COPY --from=backend-builder /app/migrations /app/migrations
 
 EXPOSE 8080
 ENV PORT=8080
+USER teslacost
 
 CMD ["/app/teslacost"]

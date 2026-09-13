@@ -1063,8 +1063,8 @@ function formatDate(d: string) {
 
         <!-- Dimension Dropdown -->
         <div class="space-y-1">
-          <label class="block text-xs font-semibold text-slate-400">Dimension homologuée :</label>
-          <select
+          <label for="tire-dimension-preset" class="block text-xs font-semibold text-slate-400">Dimension homologuée :</label>
+          <select id="tire-dimension-preset"
             v-model="dimensionPreset"
             @change="onDimensionPresetChange"
             class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500 font-mono"
@@ -1074,7 +1074,8 @@ function formatDate(d: string) {
             </option>
           </select>
           <div v-if="isCustomDimension" class="pt-1.5">
-            <input
+            <label for="tire-add-tire-dimension" class="sr-only">Ex: 245/40 R19 98Y</label>
+            <input id="tire-add-tire-dimension"
               v-model="addTireForm.dimension"
               type="text"
               placeholder="Ex: 245/40 R19 98Y"
@@ -1086,8 +1087,8 @@ function formatDate(d: string) {
         <!-- Brand, Model, Season -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Marque</label>
-            <input
+            <label for="tire-add-tire-brand" class="block text-xs font-semibold text-slate-400 mb-1">Marque</label>
+            <input id="tire-add-tire-brand"
               v-model="addTireForm.brand"
               type="text"
               placeholder="Michelin, Pirelli, Hankook..."
@@ -1095,8 +1096,8 @@ function formatDate(d: string) {
             />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Modèle</label>
-            <input
+            <label for="tire-add-tire-model" class="block text-xs font-semibold text-slate-400 mb-1">Modèle</label>
+            <input id="tire-add-tire-model"
               v-model="addTireForm.model"
               type="text"
               placeholder="Pilot Sport EV, Winter Sottozero..."
@@ -1104,8 +1105,8 @@ function formatDate(d: string) {
             />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Saison</label>
-            <select
+            <label for="tire-add-tire-season" class="block text-xs font-semibold text-slate-400 mb-1">Saison</label>
+            <select id="tire-add-tire-season"
               v-model="addTireForm.season"
               class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
             >
@@ -1120,7 +1121,7 @@ function formatDate(d: string) {
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
           <div>
             <div class="flex items-center justify-between mb-1">
-              <label class="text-xs font-semibold text-slate-400">
+              <label for="tire-add-tire-total-price" class="text-xs font-semibold text-slate-400">
                 {{ isTotalPrice ? 'Prix total du lot (€)' : 'Prix par pneu (€)' }}
               </label>
               <button
@@ -1131,14 +1132,14 @@ function formatDate(d: string) {
                 Passer en {{ isTotalPrice ? 'prix unitaire' : 'prix total' }}
               </button>
             </div>
-            <input
+            <input id="tire-add-tire-total-price"
               v-if="isTotalPrice"
               v-model.number="addTireForm.total_price"
               type="number"
               step="10"
               class="w-full bg-slate-900 text-emerald-400 font-bold text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
             />
-            <input
+            <input id="tire-add-tire-total-price"
               v-else
               v-model.number="addTireForm.unit_price"
               type="number"
@@ -1148,8 +1149,8 @@ function formatDate(d: string) {
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Durée de vie estimée (km)</label>
-            <input
+            <label for="tire-add-tire-estimated-lifespan-km" class="block text-xs font-semibold text-slate-400 mb-1">Durée de vie estimée (km)</label>
+            <input id="tire-add-tire-estimated-lifespan-km"
               v-model.number="addTireForm.estimated_lifespan_km"
               type="number"
               step="5000"
@@ -1161,16 +1162,16 @@ function formatDate(d: string) {
         <!-- Odometers: Mounted Odo & Accumulated -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Odomètre de montage (km)</label>
-            <input
+            <label for="tire-add-tire-mounted-odometer" class="block text-xs font-semibold text-slate-400 mb-1">Odomètre de montage (km)</label>
+            <input id="tire-add-tire-mounted-odometer"
               v-model.number="addTireForm.mounted_odometer"
               type="number"
               class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
             />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Km déjà parcourus (si occasion)</label>
-            <input
+            <label for="tire-add-tire-accumulated-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">Km déjà parcourus (si occasion)</label>
+            <input id="tire-add-tire-accumulated-distance-km"
               v-model.number="addTireForm.accumulated_distance_km"
               type="number"
               class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
@@ -1181,16 +1182,16 @@ function formatDate(d: string) {
         <!-- Date & Sculptures -->
         <div class="grid grid-cols-3 gap-3">
           <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Date d'achat</label>
-            <input
+            <label for="tire-add-tire-purchase-date" class="block text-[11px] text-slate-400 mb-1">Date d'achat</label>
+            <input id="tire-add-tire-purchase-date"
               v-model="addTireForm.purchase_date"
               type="date"
               class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-2.5 py-1.5 border border-slate-700"
             />
           </div>
           <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Gomme neuve (mm)</label>
-            <input
+            <label for="tire-add-tire-initial-depth-mm" class="block text-[11px] text-slate-400 mb-1">Gomme neuve (mm)</label>
+            <input id="tire-add-tire-initial-depth-mm"
               v-model.number="addTireForm.initial_depth_mm"
               type="number"
               step="0.1"
@@ -1198,8 +1199,8 @@ function formatDate(d: string) {
             />
           </div>
           <div>
-            <label class="block text-[11px] text-slate-400 mb-1">Témoin légal (mm)</label>
-            <input
+            <label for="tire-add-tire-min-legal-depth-mm" class="block text-[11px] text-slate-400 mb-1">Témoin légal (mm)</label>
+            <input id="tire-add-tire-min-legal-depth-mm"
               v-model.number="addTireForm.min_legal_depth_mm"
               type="number"
               step="0.1"
@@ -1458,8 +1459,8 @@ function formatDate(d: string) {
 
         <div class="space-y-3 text-xs">
           <div>
-            <label class="block text-slate-400 mb-1 font-semibold">Position occupée</label>
-            <select
+            <label for="tire-session-position" class="block text-slate-400 mb-1 font-semibold">Position occupée</label>
+            <select id="tire-session-position"
               v-model="sessionForm.position"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
             >
@@ -1472,16 +1473,16 @@ function formatDate(d: string) {
 
           <div class="grid grid-cols-2 gap-2">
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Date de montage</label>
-              <input
+              <label for="tire-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">Date de montage</label>
+              <input id="tire-session-mounted-date"
                 v-model="sessionForm.mounted_date"
                 type="date"
                 class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
               />
             </div>
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Odomètre montage (km)</label>
-              <input
+              <label for="tire-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre montage (km)</label>
+              <input id="tire-session-mounted-odometer"
                 v-model.number="sessionForm.mounted_odometer"
                 type="number"
                 class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
@@ -1498,16 +1499,16 @@ function formatDate(d: string) {
 
           <div v-if="sessionForm.is_dismounted" class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Date démontage</label>
-              <input
+              <label for="tire-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">Date démontage</label>
+              <input id="tire-session-dismounted-date"
                 v-model="sessionForm.dismounted_date"
                 type="date"
                 class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
               />
             </div>
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Odomètre démontage (km)</label>
-              <input
+              <label for="tire-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre démontage (km)</label>
+              <input id="tire-session-dismounted-odometer"
                 v-model.number="sessionForm.dismounted_odometer"
                 type="number"
                 class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
@@ -1516,8 +1517,8 @@ function formatDate(d: string) {
           </div>
 
           <div>
-            <label class="block text-slate-400 mb-1 font-semibold">Distance de la session (km)</label>
-            <input
+            <label for="tire-session-distance-km" class="block text-slate-400 mb-1 font-semibold">Distance de la session (km)</label>
+            <input id="tire-session-distance-km"
               v-model.number="sessionForm.distance_km"
               type="number"
               placeholder="Auto-calculé ou forcé"
@@ -1526,8 +1527,8 @@ function formatDate(d: string) {
           </div>
 
           <div>
-            <label class="block text-slate-400 mb-1 font-semibold">Commentaire / Notes</label>
-            <input
+            <label for="tire-session-notes" class="block text-slate-400 mb-1 font-semibold">Commentaire / Notes</label>
+            <input id="tire-session-notes"
               v-model="sessionForm.notes"
               type="text"
               placeholder="Ex: Saison hivernale 2024"
@@ -1573,8 +1574,8 @@ function formatDate(d: string) {
 
         <div class="space-y-3 text-xs">
           <div>
-            <label class="block text-slate-400 mb-1 font-semibold">Profondeur mesurée (mm)</label>
-            <input
+            <label for="tire-new-log-depth-mm" class="block text-slate-400 mb-1 font-semibold">Profondeur mesurée (mm)</label>
+            <input id="tire-new-log-depth-mm"
               v-model.number="newLogForm.depth_mm"
               type="number"
               step="0.1"
@@ -1584,16 +1585,16 @@ function formatDate(d: string) {
             />
           </div>
           <div>
-            <label class="block text-slate-400 mb-1 font-semibold">Odomètre actuel (km)</label>
-            <input
+            <label for="tire-new-log-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre actuel (km)</label>
+            <input id="tire-new-log-odometer"
               v-model.number="newLogForm.odometer"
               type="number"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
             />
           </div>
           <div>
-            <label class="block text-slate-400 mb-1 font-semibold">Notes (optionnel)</label>
-            <input
+            <label for="tire-new-log-notes" class="block text-slate-400 mb-1 font-semibold">Notes (optionnel)</label>
+            <input id="tire-new-log-notes"
               v-model="newLogForm.notes"
               type="text"
               placeholder="Ex: Contrôle avant vacances"
@@ -1639,8 +1640,8 @@ function formatDate(d: string) {
 
         <div class="space-y-3 text-xs">
           <div>
-            <label class="block text-slate-400 mb-1 font-semibold">Odomètre de la permutation (km)</label>
-            <input
+            <label for="tire-pack-swap-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre de la permutation (km)</label>
+            <input id="tire-pack-swap-odometer"
               v-model.number="packSwapForm.odometer"
               type="number"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
@@ -1649,8 +1650,8 @@ function formatDate(d: string) {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Avant Gauche (FL)</label>
-              <select
+              <label for="tire-pack-swap-tires-fl" class="block text-slate-400 mb-1 font-semibold">Avant Gauche (FL)</label>
+              <select id="tire-pack-swap-tires-fl"
                 v-model="packSwapForm.tires.FL"
                 class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
               >
@@ -1662,8 +1663,8 @@ function formatDate(d: string) {
             </div>
 
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Avant Droit (FR)</label>
-              <select
+              <label for="tire-pack-swap-tires-fr" class="block text-slate-400 mb-1 font-semibold">Avant Droit (FR)</label>
+              <select id="tire-pack-swap-tires-fr"
                 v-model="packSwapForm.tires.FR"
                 class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
               >
@@ -1675,8 +1676,8 @@ function formatDate(d: string) {
             </div>
 
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Arrière Gauche (RL)</label>
-              <select
+              <label for="tire-pack-swap-tires-rl" class="block text-slate-400 mb-1 font-semibold">Arrière Gauche (RL)</label>
+              <select id="tire-pack-swap-tires-rl"
                 v-model="packSwapForm.tires.RL"
                 class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
               >
@@ -1688,8 +1689,8 @@ function formatDate(d: string) {
             </div>
 
             <div>
-              <label class="block text-slate-400 mb-1 font-semibold">Arrière Droit (RR)</label>
-              <select
+              <label for="tire-pack-swap-tires-rr" class="block text-slate-400 mb-1 font-semibold">Arrière Droit (RR)</label>
+              <select id="tire-pack-swap-tires-rr"
                 v-model="packSwapForm.tires.RR"
                 class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
               >

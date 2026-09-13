@@ -344,18 +344,18 @@ function clearCardTestResult(id: string) {
 
         <form @submit.prevent="handleSave" class="space-y-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Nom du véhicule</label>
-            <input v-model="form.name" required placeholder="ex: Tesla Model Y LR" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="vehicle-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du véhicule</label>
+            <input id="vehicle-name" v-model="form.name" required placeholder="ex: Tesla Model Y LR" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">VIN (optionnel)</label>
-              <input v-model="form.vin" placeholder="5YJ3E1EB..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1">VIN (optionnel)</label>
+              <input id="vehicle-vin" v-model="form.vin" placeholder="5YJ3E1EB..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Odomètre initial (km)</label>
-              <input v-model.number="form.current_odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre initial (km)</label>
+              <input id="vehicle-current-odometer" v-model.number="form.current_odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
 
@@ -364,8 +364,8 @@ function clearCardTestResult(id: string) {
             <h4 class="text-xs font-bold text-rose-400 uppercase tracking-wider">Connexion TeslaMateApi (Optionnelle)</h4>
 
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">URL de base teslamateapi</label>
-              <input v-model="form.teslamate_api_url" placeholder="http://192.168.1.50:8080 ou https://tm.mondomaine.com" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="vehicle-teslamate-api-url" class="block text-xs font-semibold text-slate-300 mb-1">URL de base teslamateapi</label>
+              <input id="vehicle-teslamate-api-url" v-model="form.teslamate_api_url" placeholder="http://192.168.1.50:8080 ou https://tm.mondomaine.com" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               <p class="text-[11px] text-slate-400 mt-1">
                 💡 Si TeslaCost s'exécute dans Docker, utilisez <code class="text-rose-300">http://host.docker.internal:PORT</code> ou l'IP locale (ex: <code class="text-rose-300">192.168.x.x</code>) au lieu de <code class="text-slate-500">localhost</code>.
               </p>
@@ -373,12 +373,12 @@ function clearCardTestResult(id: string) {
 
             <div class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">ID Voiture dans TeslaMate</label>
-                <input v-model.number="form.teslamate_car_id" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="vehicle-teslamate-car-id" class="block text-xs font-semibold text-slate-300 mb-1">ID Voiture dans TeslaMate</label>
+                <input id="vehicle-teslamate-car-id" v-model.number="form.teslamate_car_id" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Mode d'authentification</label>
-                <select v-model="form.teslamate_auth_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+                <label for="vehicle-teslamate-auth-type" class="block text-xs font-semibold text-slate-300 mb-1">Mode d'authentification</label>
+                <select id="vehicle-teslamate-auth-type" v-model="form.teslamate_auth_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
                   <option value="NONE">Aucun (LAN)</option>
                   <option value="BEARER">Token Bearer (API_TOKEN)</option>
                   <option value="BASIC">HTTP Basic Auth</option>
@@ -387,18 +387,18 @@ function clearCardTestResult(id: string) {
             </div>
 
             <div v-if="form.teslamate_auth_type === 'BEARER'">
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Clé / Token API TeslaMate</label>
-              <input v-model="form.teslamate_api_key" type="password" placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="vehicle-teslamate-api-key" class="block text-xs font-semibold text-slate-300 mb-1">Clé / Token API TeslaMate</label>
+              <input id="vehicle-teslamate-api-key" v-model="form.teslamate_api_key" type="password" placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
 
             <div v-if="form.teslamate_auth_type === 'BASIC'" class="grid grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Utilisateur Basic Auth</label>
-                <input v-model="form.teslamate_basic_user" placeholder="admin" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="vehicle-teslamate-basic-user" class="block text-xs font-semibold text-slate-300 mb-1">Utilisateur Basic Auth</label>
+                <input id="vehicle-teslamate-basic-user" v-model="form.teslamate_basic_user" placeholder="admin" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1">Mot de passe Basic Auth</label>
-                <input v-model="form.teslamate_basic_pass" type="password" placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <label for="vehicle-teslamate-basic-pass" class="block text-xs font-semibold text-slate-300 mb-1">Mot de passe Basic Auth</label>
+                <input id="vehicle-teslamate-basic-pass" v-model="form.teslamate_basic_pass" type="password" placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
             </div>
 
