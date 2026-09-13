@@ -173,6 +173,8 @@ func main() {
 				r.Patch("/{vehicleId}/drives/{driveId}/toll-review", driveHandler.SetTollReview)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
+				r.Put("/{vehicleId}/trip-groups/{groupId}", driveHandler.UpdateTripGroup)
+				r.Delete("/{vehicleId}/trip-groups/{groupId}", driveHandler.DeleteTripGroup)
 
 				// Carpooling / BlaBlaCar
 				r.Get("/{vehicleId}/carpools", carpoolHandler.List)
@@ -186,13 +188,18 @@ func main() {
 				r.Get("/{vehicleId}/tires", tireHandler.List)
 				r.Post("/{vehicleId}/tires", tireHandler.Create)
 				r.Post("/{vehicleId}/tires/batch", tireHandler.BatchCreate)
+				r.Patch("/{vehicleId}/tires/batch", tireHandler.BatchUpdate)
 				r.Post("/{vehicleId}/tires/quick-rotate", tireHandler.QuickRotate)
 				r.Put("/{vehicleId}/tires/{tireId}", tireHandler.Update)
+				r.Delete("/{vehicleId}/tires/{tireId}", tireHandler.Delete)
+				r.Post("/{vehicleId}/tires/{tireId}/dispose", tireHandler.Dispose)
 				r.Get("/{vehicleId}/tires/{tireId}/history", tireHandler.GetHistory)
 				r.Post("/{vehicleId}/tires/{tireId}/sessions", tireHandler.CreateSession)
 				r.Put("/{vehicleId}/tires/{tireId}/sessions/{sessionId}", tireHandler.UpdateSession)
 				r.Delete("/{vehicleId}/tires/{tireId}/sessions/{sessionId}", tireHandler.DeleteSession)
 				r.Post("/{vehicleId}/tires/{tireId}/logs", tireHandler.AddLog)
+				r.Put("/{vehicleId}/tires/{tireId}/logs/{logId}", tireHandler.UpdateLog)
+				r.Delete("/{vehicleId}/tires/{tireId}/logs/{logId}", tireHandler.DeleteLog)
 				r.Post("/{vehicleId}/tire-rotations", tireHandler.Rotate)
 
 				// Expenses

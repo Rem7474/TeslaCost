@@ -5,6 +5,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -67,6 +68,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 	filter := database.DriveFilter{
 		Tag:             r.URL.Query().Get("tag"),
 		UnqualifiedOnly: r.URL.Query().Get("unqualified") == "true",
+		TripGroupID:     r.URL.Query().Get("trip_group_id"),
 	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page <= 0 {
@@ -314,4 +316,51 @@ func (h *DriveHandler) ListTripGroups(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, groups)
+}
+
+type UpdateTripGroupRequest struct {
+	Name     string   `json:"name"`
+	Notes    *string  `json:"notes"`
+	DriveIDs []string `json:"drive_ids"` // Omitted: drives unchanged
+}
+
+// UpdateTripGroup renames a trip group and optionally replaces its drives.
+func (h *DriveHandler) UpdateTripGroup(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	var req UpdateTripGroupRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if strings.TrimSpace(req.Name) == "" {
+		writeError(w, http.StatusBadRequest, "Le nom du voyage est requis")
+		return
+	}
+	tg := &models.TripGroup{ID: chi.URLParam(r, "groupId"), VehicleID: vehicleID, Name: req.Name, Notes: req.Notes}
+	if err := h.repo.UpdateTripGroup(r.Context(), tg, req.DriveIDs); err != nil {
+		writeRepoError(w, err, "Failed to update trip group")
+		return
+	}
+	writeJSON(w, http.StatusOK, tg)
+}
+
+// DeleteTripGroup deletes a trip group; ?delete_expenses=true also deletes the expenses attached to it.
+func (h *DriveHandler) DeleteTripGroup(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	deleteExpenses := r.URL.Query().Get("delete_expenses") == "true"
+	if err := h.repo.DeleteTripGroup(r.Context(), vehicleID, chi.URLParam(r, "groupId"), deleteExpenses); err != nil {
+		writeRepoError(w, err, "Failed to delete trip group")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }

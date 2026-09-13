@@ -27,6 +27,10 @@ import {
   Check,
   ChevronRight,
   Zap,
+  Pencil,
+  Archive,
+  CheckSquare,
+  Square,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
@@ -34,7 +38,7 @@ const tires = ref<any[]>([])
 const loading = ref(false)
 
 // Active tab: 'chassis' (Montés) or 'storage' (Au garage)
-const activeTab = ref<'chassis' | 'storage'>('chassis')
+const activeTab = ref<'chassis' | 'storage' | 'disposed'>('chassis')
 
 // Modals
 const showAddTireModal = ref(false)
@@ -116,7 +120,167 @@ const newLogForm = ref({
   depth_mm: 6.5,
   odometer: 0,
   notes: '',
+  date: new Date().toISOString().substring(0, 10),
 })
+const editingLogId = ref<string | null>(null)
+
+// Selection for batch edition
+const selectedTireIds = ref<string[]>([])
+function toggleTireSelection(id: string) {
+  selectedTireIds.value = selectedTireIds.value.includes(id)
+    ? selectedTireIds.value.filter((x) => x !== id)
+    : [...selectedTireIds.value, id]
+}
+function selectMountedTires() {
+  selectedTireIds.value = ['FL', 'FR', 'RL', 'RR'].map((pos) => mountedTires.value[pos]?.tire.id).filter(Boolean)
+}
+
+// Edit (single or batch): empty fields are left unchanged
+const showTireEditModal = ref(false)
+const tireEditIds = ref<string[]>([])
+const tireEditPriceMode = ref<'UNIT' | 'TOTAL'>('UNIT')
+const tireEditForm = ref(emptyTireEdit())
+
+function emptyTireEdit() {
+  return {
+    brand: '',
+    model: '',
+    dimension: '',
+    season: '',
+    purchase_date: '',
+    price: '' as number | string,
+    dot_code: '',
+    initial_depth_mm: '' as number | string,
+    min_legal_depth_mm: '' as number | string,
+    initial_distance_km: '' as number | string,
+    estimated_lifespan_km: '' as number | string,
+    mounted_date: '',
+    mounted_odometer: '' as number | string,
+  }
+}
+
+const editedTires = computed(() => tires.value.filter((t) => tireEditIds.value.includes(t.tire.id)))
+const editIncludesMounted = computed(() => editedTires.value.some((t) => ['FL', 'FR', 'RL', 'RR'].includes(t.tire.current_position)))
+
+function openTireEdit(ids: string[]) {
+  tireEditIds.value = [...ids]
+  tireEditPriceMode.value = ids.length > 1 ? 'TOTAL' : 'UNIT'
+  const form = emptyTireEdit()
+  if (ids.length === 1) {
+    const stats = tires.value.find((t) => t.tire.id === ids[0]) || selectedTireStats.value
+    const t = stats?.tire || selectedTire.value
+    const activeSession = (stats?.sessions || []).find((ss: any) => !ss.dismounted_date)
+    Object.assign(form, {
+      brand: t.brand,
+      model: t.model,
+      dimension: t.dimension,
+      season: t.season,
+      purchase_date: t.purchase_date ? new Date(t.purchase_date).toISOString().substring(0, 10) : '',
+      price: t.purchase_price,
+      dot_code: t.dot_code || '',
+      initial_depth_mm: t.initial_depth_mm,
+      min_legal_depth_mm: t.min_legal_depth_mm,
+      initial_distance_km: t.initial_distance_km,
+      estimated_lifespan_km: t.estimated_lifespan_km,
+      mounted_date: activeSession ? new Date(activeSession.mounted_date).toISOString().substring(0, 10) : '',
+      mounted_odometer: activeSession ? activeSession.mounted_odometer : '',
+    })
+  }
+  tireEditForm.value = form
+  showTireEditModal.value = true
+}
+
+async function handleSaveTireEdit() {
+  if (!vehicleStore.activeVehicle || !tireEditIds.value.length) return
+  const f = tireEditForm.value
+  const text = (v: string) => (v.trim() ? v.trim() : undefined)
+  const num = (v: number | string) => (v === '' || v === null ? undefined : Number(v))
+  const payload: any = {
+    tire_ids: tireEditIds.value,
+    brand: text(f.brand),
+    model: text(f.model),
+    dimension: text(f.dimension),
+    season: f.season || undefined,
+    purchase_date: f.purchase_date || undefined,
+    dot_code: text(f.dot_code),
+    initial_depth_mm: num(f.initial_depth_mm),
+    min_legal_depth_mm: num(f.min_legal_depth_mm),
+    initial_distance_km: num(f.initial_distance_km),
+    estimated_lifespan_km: num(f.estimated_lifespan_km),
+    mounted_date: f.mounted_date ? new Date(f.mounted_date).toISOString() : undefined,
+    mounted_odometer: num(f.mounted_odometer),
+  }
+  if (num(f.price) !== undefined) {
+    payload[tireEditPriceMode.value === 'TOTAL' ? 'total_price' : 'purchase_price'] = num(f.price)
+  }
+  try {
+    await api.batchUpdateTires(vehicleStore.activeVehicle.id, payload)
+    showTireEditModal.value = false
+    selectedTireIds.value = []
+    await loadTires()
+    if (showHistoryModal.value && selectedTire.value) await openHistoryModal({ tire: selectedTire.value })
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+// Dispose (worn out, damaged, sold) keeps history and cost; delete removes an erroneous entry
+const showDisposeModal = ref(false)
+const disposeForm = ref({ date: new Date().toISOString().substring(0, 10), odometer: 0 as number | string })
+
+function openDisposeModal() {
+  disposeForm.value = {
+    date: new Date().toISOString().substring(0, 10),
+    odometer: Math.round(vehicleStore.activeVehicle?.current_odometer || 0),
+  }
+  showDisposeModal.value = true
+}
+
+async function handleDisposeTire() {
+  if (!vehicleStore.activeVehicle || !selectedTire.value) return
+  try {
+    await api.disposeTire(vehicleStore.activeVehicle.id, selectedTire.value.id, {
+      date: new Date(disposeForm.value.date).toISOString(),
+      odometer: disposeForm.value.odometer === '' ? null : Number(disposeForm.value.odometer),
+    })
+    showDisposeModal.value = false
+    showHistoryModal.value = false
+    await loadTires()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function handleDeleteTire(t: any) {
+  if (!vehicleStore.activeVehicle) return
+  if (
+    !confirm(
+      `Supprimer définitivement le pneu ${t.brand} ${t.model} (${t.dimension}) avec son historique et son coût ?\n` +
+        'Pour un pneu usé, crevé ou vendu, préférez « Mettre au rebut » qui conserve son coût dans le TCO.'
+    )
+  )
+    return
+  try {
+    await api.deleteTire(vehicleStore.activeVehicle.id, t.id)
+    showHistoryModal.value = false
+    selectedTireIds.value = selectedTireIds.value.filter((id) => id !== t.id)
+    await loadTires()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function handleDeleteLog(l: any) {
+  if (!vehicleStore.activeVehicle || !selectedTire.value) return
+  if (!confirm(`Supprimer le relevé de ${l.depth_mm} mm du ${formatDate(l.date)} ?`)) return
+  try {
+    await api.deleteTireLog(vehicleStore.activeVehicle.id, selectedTire.value.id, l.id)
+    await openHistoryModal({ tire: selectedTire.value })
+    await loadTires()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
 
 // Form: Seasonal Swap Pack
 const packSwapForm = ref({
@@ -144,6 +308,8 @@ const mountedTires = computed(() => {
 const storageTires = computed(() => {
   return tires.value.filter((t) => t.tire.current_position === 'STORAGE')
 })
+
+const disposedTires = computed(() => tires.value.filter((t) => t.tire.current_position === 'DISPOSED'))
 
 async function loadTires() {
   if (!vehicleStore.activeVehicle) return
@@ -389,22 +555,34 @@ async function handleDeleteSession(session: any) {
 }
 
 // Open log modal (mesure de gomme)
-function openLogModal(t: any) {
+function openLogModal(t: any, log?: any) {
   selectedTire.value = t.tire
-  newLogForm.value.depth_mm = t.current_depth_mm || 6.5
-  newLogForm.value.odometer = Math.round(vehicleStore.activeVehicle?.current_odometer || 0)
+  editingLogId.value = log ? log.id : null
+  newLogForm.value = log
+    ? { depth_mm: log.depth_mm, odometer: Math.round(log.odometer), notes: log.notes || '', date: new Date(log.date).toISOString().substring(0, 10) }
+    : {
+        depth_mm: t.current_depth_mm || 6.5,
+        odometer: Math.round(vehicleStore.activeVehicle?.current_odometer || 0),
+        notes: '',
+        date: new Date().toISOString().substring(0, 10),
+      }
   showLogModal.value = true
 }
 
 async function handleAddLog() {
   if (!vehicleStore.activeVehicle || !selectedTire.value) return
   try {
-    await api.addTireLog(vehicleStore.activeVehicle.id, selectedTire.value.id, {
+    const payload = {
       depth_mm: Number(newLogForm.value.depth_mm),
       odometer: Number(newLogForm.value.odometer),
       notes: newLogForm.value.notes ? newLogForm.value.notes : null,
-      date: new Date().toISOString(),
-    })
+      date: new Date(newLogForm.value.date).toISOString(),
+    }
+    if (editingLogId.value) {
+      await api.updateTireLog(vehicleStore.activeVehicle.id, selectedTire.value.id, editingLogId.value, payload)
+    } else {
+      await api.addTireLog(vehicleStore.activeVehicle.id, selectedTire.value.id, payload)
+    }
     showLogModal.value = false
     await loadTires()
     if (showHistoryModal.value) {
@@ -508,6 +686,22 @@ function formatDate(d: string) {
       </div>
     </div>
 
+    <!-- Batch selection bar -->
+    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+      <button type="button" @click="selectMountedTires" class="text-slate-400 hover:text-white flex items-center gap-1.5">
+        <CheckSquare class="w-3.5 h-3.5 text-rose-400" /> Sélectionner les pneus montés
+      </button>
+      <div v-if="selectedTireIds.length" class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-1.5">
+        <span class="text-slate-200 font-semibold">{{ selectedTireIds.length }} pneu(s) sélectionné(s)</span>
+        <button type="button" @click="openTireEdit(selectedTireIds)" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg flex items-center gap-1">
+          <Pencil class="w-3 h-3" /> Modifier par lot
+        </button>
+        <button type="button" @click="selectedTireIds = []" class="text-slate-400 hover:text-white" title="Vider la sélection">
+          <X class="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+
     <!-- View Switcher Tabs -->
     <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
       <button
@@ -535,6 +729,16 @@ function formatDate(d: string) {
         <Package class="w-4 h-4" />
         Catalogue & Stock au garage ({{ storageTires.length }})
       </button>
+
+      <button
+        v-if="disposedTires.length"
+        @click="activeTab = 'disposed'"
+        class="px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+        :class="activeTab === 'disposed' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white hover:bg-slate-800/40'"
+      >
+        <Archive class="w-4 h-4" />
+        Mis au rebut ({{ disposedTires.length }})
+      </button>
     </div>
 
     <!-- TAB 1: CHASSIS INTERACTIF (PNEUS MONTÉS) -->
@@ -547,7 +751,7 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <div class="text-[11px] font-bold uppercase tracking-wider text-rose-400">Avant Gauche (FL)</div>
+              <button type="button" @click="toggleTireSelection(mountedTires.FL.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.FL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.FL.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Avant Gauche (FL)</button>
               <h3 class="text-base font-bold text-white">{{ mountedTires.FL.tire.brand }} {{ mountedTires.FL.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.FL.tire.dimension }}</div>
             </div>
@@ -650,7 +854,7 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <div class="text-[11px] font-bold uppercase tracking-wider text-rose-400">Avant Droit (FR)</div>
+              <button type="button" @click="toggleTireSelection(mountedTires.FR.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.FR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.FR.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Avant Droit (FR)</button>
               <h3 class="text-base font-bold text-white">{{ mountedTires.FR.tire.brand }} {{ mountedTires.FR.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.FR.tire.dimension }}</div>
             </div>
@@ -750,7 +954,7 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <div class="text-[11px] font-bold uppercase tracking-wider text-rose-400">Arrière Gauche (RL)</div>
+              <button type="button" @click="toggleTireSelection(mountedTires.RL.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.RL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.RL.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Arrière Gauche (RL)</button>
               <h3 class="text-base font-bold text-white">{{ mountedTires.RL.tire.brand }} {{ mountedTires.RL.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.RL.tire.dimension }}</div>
             </div>
@@ -850,7 +1054,7 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <div class="text-[11px] font-bold uppercase tracking-wider text-rose-400">Arrière Droit (RR)</div>
+              <button type="button" @click="toggleTireSelection(mountedTires.RR.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.RR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.RR.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Arrière Droit (RR)</button>
               <h3 class="text-base font-bold text-white">{{ mountedTires.RR.tire.brand }} {{ mountedTires.RR.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.RR.tire.dimension }}</div>
             </div>
@@ -967,7 +1171,12 @@ function formatDate(d: string) {
                 <component :is="getSeasonIcon(t.tire.season).icon" class="w-3.5 h-3.5" :class="getSeasonIcon(t.tire.season).color" />
                 <span class="text-slate-300">{{ getSeasonIcon(t.tire.season).label }}</span>
               </div>
-              <h4 class="text-sm font-bold text-white mt-1">{{ t.tire.brand }} {{ t.tire.model }}</h4>
+              <h4 class="text-sm font-bold text-white mt-1 flex items-center gap-1.5">
+                <button type="button" @click="toggleTireSelection(t.tire.id)" class="text-rose-400" title="Sélectionner pour une modification par lot">
+                  <component :is="selectedTireIds.includes(t.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />
+                </button>
+                {{ t.tire.brand }} {{ t.tire.model }}
+              </h4>
               <div class="text-[11px] text-slate-400 font-mono">{{ t.tire.dimension }}</div>
             </div>
             <span class="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 font-medium">
@@ -1228,6 +1437,23 @@ function formatDate(d: string) {
       </div>
     </div>
 
+    <!-- TAB 3: PNEUS MIS AU REBUT -->
+    <div v-if="activeTab === 'disposed'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div v-for="t in disposedTires" :key="t.tire.id" class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <h4 class="text-sm font-bold text-slate-300">{{ t.tire.brand }} {{ t.tire.model }}</h4>
+        <div class="text-[11px] text-slate-500 font-mono">{{ t.tire.dimension }}</div>
+        <div class="text-xs text-slate-400">{{ Math.round(t.total_distance_km).toLocaleString('fr-FR') }} km parcourus • {{ t.tire.purchase_price }} €</div>
+        <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+          <button @click="openHistoryModal(t)" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold">
+            <History class="w-3.5 h-3.5" /> Historique
+          </button>
+          <button @click="handleDeleteTire(t.tire)" class="text-xs text-slate-500 hover:text-rose-400 flex items-center gap-1">
+            <Trash2 class="w-3.5 h-3.5" /> Supprimer
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- MODAL: HISTORIQUE COMPLET & TIMELINE D'UN PNEU -->
     <div
       v-if="showHistoryModal && selectedTire"
@@ -1247,9 +1473,25 @@ function formatDate(d: string) {
               Acheté le {{ formatDate(selectedTire.purchase_date) }} • {{ selectedTire.purchase_price }} €
             </div>
           </div>
-          <button @click="showHistoryModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg">
-            <X class="w-5 h-5" />
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button @click="openTireEdit([selectedTire.id])" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg" title="Modifier le pneu">
+              <Pencil class="w-4 h-4" />
+            </button>
+            <button
+              v-if="selectedTire.current_position !== 'DISPOSED'"
+              @click="openDisposeModal"
+              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg"
+              title="Mettre au rebut (usé, crevé, vendu)"
+            >
+              <Archive class="w-4 h-4" />
+            </button>
+            <button @click="handleDeleteTire(selectedTire)" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg" title="Supprimer (saisie erronée)">
+              <Trash2 class="w-4 h-4" />
+            </button>
+            <button @click="showHistoryModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg">
+              <X class="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         <!-- Life KPI Card -->
@@ -1435,7 +1677,17 @@ function formatDate(d: string) {
                 <span class="font-bold text-emerald-400">{{ l.depth_mm }} mm</span>
                 <span class="text-[10px] text-slate-500">{{ formatDate(l.date) }}</span>
               </div>
-              <div class="text-[10px] text-slate-400">à {{ Math.round(l.odometer).toLocaleString('fr-FR') }} km</div>
+              <div class="flex items-center justify-between text-[10px] text-slate-400">
+                <span>à {{ Math.round(l.odometer).toLocaleString('fr-FR') }} km</span>
+                <span class="flex items-center gap-1">
+                  <button @click="openLogModal(selectedTireStats || { tire: selectedTire }, l)" class="text-slate-500 hover:text-emerald-400" title="Modifier le relevé">
+                    <Pencil class="w-3 h-3" />
+                  </button>
+                  <button @click="handleDeleteLog(l)" class="text-slate-500 hover:text-rose-400" title="Supprimer le relevé">
+                    <Trash2 class="w-3 h-3" />
+                  </button>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -1565,7 +1817,7 @@ function formatDate(d: string) {
         <div class="flex items-center justify-between pb-2 border-b border-slate-800">
           <h3 class="text-sm font-bold text-white flex items-center gap-2">
             <Ruler class="w-4 h-4 text-emerald-400" />
-            Relevé de sculpture
+            {{ editingLogId ? 'Modifier le relevé' : 'Relevé de sculpture' }}
           </h3>
           <button @click="showLogModal = false" class="text-slate-400 hover:text-white p-1">
             <X class="w-4 h-4" />
@@ -1591,6 +1843,10 @@ function formatDate(d: string) {
               type="number"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
             />
+          </div>
+          <div>
+            <label for="tire-new-log-date" class="block text-slate-400 mb-1 font-semibold">Date du relevé</label>
+            <input id="tire-new-log-date" v-model="newLogForm.date" type="date" class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700" />
           </div>
           <div>
             <label for="tire-new-log-notes" class="block text-slate-400 mb-1 font-semibold">Notes (optionnel)</label>
@@ -1716,6 +1972,126 @@ function formatDate(d: string) {
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- MODAL: MODIFIER UN OU PLUSIEURS PNEUS -->
+    <div v-if="showTireEditModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+      <form @submit.prevent="handleSaveTireEdit" class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl my-8">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <Pencil class="w-4 h-4 text-rose-400" />
+            {{ tireEditIds.length > 1 ? `Modifier ${tireEditIds.length} pneus` : 'Modifier le pneu' }}
+          </h3>
+          <button type="button" @click="showTireEditModal = false" class="text-slate-400 hover:text-white p-1"><X class="w-4 h-4" /></button>
+        </div>
+        <p v-if="tireEditIds.length > 1" class="text-[11px] text-slate-400">
+          {{ editedTires.map((t) => `${t.tire.brand} ${t.tire.current_position}`).join(' • ') }} — les champs laissés vides ne sont pas modifiés.
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label for="tire-edit-brand" class="block text-[11px] text-slate-400 mb-1 font-semibold">Marque</label>
+            <input id="tire-edit-brand" v-model="tireEditForm.brand" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-model" class="block text-[11px] text-slate-400 mb-1 font-semibold">Modèle</label>
+            <input id="tire-edit-model" v-model="tireEditForm.model" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-dimension" class="block text-[11px] text-slate-400 mb-1 font-semibold">Dimension</label>
+            <input id="tire-edit-dimension" v-model="tireEditForm.dimension" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-season" class="block text-[11px] text-slate-400 mb-1 font-semibold">Saison</label>
+            <select id="tire-edit-season" v-model="tireEditForm.season" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
+              <option value="">{{ tireEditIds.length > 1 ? 'Inchangée' : '—' }}</option>
+              <option value="SUMMER">Été</option>
+              <option value="WINTER">Hiver</option>
+              <option value="ALL_SEASON">4 saisons</option>
+            </select>
+          </div>
+          <div>
+            <label for="tire-edit-purchase-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date d'achat</label>
+            <input id="tire-edit-purchase-date" v-model="tireEditForm.purchase_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-dot" class="block text-[11px] text-slate-400 mb-1 font-semibold">Code DOT</label>
+            <input id="tire-edit-dot" v-model="tireEditForm.dot_code" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+          <div>
+            <label for="tire-edit-price-mode" class="block text-[11px] text-slate-400 mb-1 font-semibold">Saisie du prix</label>
+            <select id="tire-edit-price-mode" v-model="tireEditPriceMode" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
+              <option value="UNIT">Prix unitaire</option>
+              <option value="TOTAL" :disabled="tireEditIds.length < 2">Prix total réparti</option>
+            </select>
+          </div>
+          <div>
+            <label for="tire-edit-price" class="block text-[11px] text-slate-400 mb-1 font-semibold">Prix (€)</label>
+            <input id="tire-edit-price" v-model.number="tireEditForm.price" type="number" step="0.01" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-lifespan" class="block text-[11px] text-slate-400 mb-1 font-semibold">Durée de vie estimée (km)</label>
+            <input id="tire-edit-lifespan" v-model.number="tireEditForm.estimated_lifespan_km" type="number" min="1" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-initial-depth" class="block text-[11px] text-slate-400 mb-1 font-semibold">Profondeur neuve (mm)</label>
+            <input id="tire-edit-initial-depth" v-model.number="tireEditForm.initial_depth_mm" type="number" step="0.1" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-min-depth" class="block text-[11px] text-slate-400 mb-1 font-semibold">Profondeur minimale (mm)</label>
+            <input id="tire-edit-min-depth" v-model.number="tireEditForm.min_legal_depth_mm" type="number" step="0.1" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-initial-distance" class="block text-[11px] text-slate-400 mb-1 font-semibold">Km avant TeslaCost (occasion)</label>
+            <input id="tire-edit-initial-distance" v-model.number="tireEditForm.initial_distance_km" type="number" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+        </div>
+
+        <div v-if="editIncludesMounted" class="space-y-2 pt-3 border-t border-slate-800">
+          <h4 class="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Montage en cours</h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="tire-edit-mounted-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date de montage</label>
+            <input id="tire-edit-mounted-date" v-model="tireEditForm.mounted_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="tire-edit-mounted-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au montage (km)</label>
+            <input id="tire-edit-mounted-odometer" v-model.number="tireEditForm.mounted_odometer" type="number" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          </div>
+          <p class="text-[11px] text-slate-400">S'applique à la session de montage en cours des pneus montés sélectionnés (les pneus au garage ne sont pas concernés).</p>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+          <button type="button" @click="showTireEditModal = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Annuler</button>
+          <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-xl">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- MODAL: METTRE AU REBUT -->
+    <div v-if="showDisposeModal && selectedTire" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <form @submit.prevent="handleDisposeTire" class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2"><Archive class="w-4 h-4 text-amber-400" /> Mettre au rebut</h3>
+        <p class="text-[11px] text-slate-400">
+          {{ selectedTire.brand }} {{ selectedTire.model }} : le montage en cours est clôturé, l'historique est conservé et le prix d'achat est compté comme entièrement consommé.
+        </p>
+        <div>
+          <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date</label>
+          <input id="tire-dispose-date" v-model="disposeForm.date" type="date" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+        </div>
+        <div v-if="['FL', 'FR', 'RL', 'RR'].includes(selectedTire.current_position)">
+          <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au démontage (km)</label>
+          <input id="tire-dispose-odometer" v-model.number="disposeForm.odometer" type="number" min="0" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showDisposeModal = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Annuler</button>
+          <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-xl">Mettre au rebut</button>
+        </div>
+      </form>
     </div>
   </div>
 </template>

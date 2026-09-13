@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
@@ -26,6 +26,10 @@ import {
   TrendingUp,
   AlertTriangle,
   Ban,
+  Pencil,
+  Trash2,
+  Save,
+  List,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -39,8 +43,34 @@ const unqualifiedOnly = ref(false)
 const unqualifiedCount = ref(0)
 const loading = ref(true)
 
-// Multi-selection for trip grouping & tolls & carpooling
-const selectedDriveIds = ref<string[]>([])
+// Multi-selection for trip grouping & tolls & carpooling. Drives are kept by id so that the selection
+// survives pagination and filters.
+const selectedDrives = ref<Record<string, any>>({})
+const selectedDriveIds = computed(() => Object.keys(selectedDrives.value))
+const selectedList = computed(() =>
+  Object.values(selectedDrives.value).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+)
+const selectedOffPage = computed(() => selectedDriveIds.value.filter((id) => !drives.value.some((d) => d.id === id)).length)
+const allPageSelected = computed(() => drives.value.length > 0 && drives.value.every((d) => selectedDrives.value[d.id]))
+
+function clearSelection() {
+  selectedDrives.value = {}
+}
+
+// View mode: drives list or trip groups ("voyages")
+const viewMode = ref<'DRIVES' | 'TRIPS'>('DRIVES')
+const tripGroups = ref<any[]>([])
+const loadingTrips = ref(false)
+const expandedTripId = ref<string | null>(null)
+const tripDrives = ref<any[]>([])
+const showTripEditModal = ref(false)
+const tripEditForm = ref({ id: '', name: '', notes: '' })
+const showAddToTripModal = ref(false)
+const addToTripId = ref('')
+
+// Expense edition inside the cost modal
+const editingExpenseId = ref<string | null>(null)
+const expenseEditForm = ref({ type: 'TOLL', amount: '' as number | string, notes: '' })
 const showGroupModal = ref(false)
 const groupName = ref('')
 const tollAmount = ref<number | ''>('')
@@ -84,9 +114,14 @@ watch(
   () => [vehicleStore.activeVehicle?.id, selectedTag.value, unqualifiedOnly.value, vehicleStore.lastSyncTimestamp],
   () => {
     page.value = 1
-    selectedDriveIds.value = []
     loadDrives()
+    if (viewMode.value === 'TRIPS') loadTripGroups()
   }
+)
+
+watch(
+  () => vehicleStore.activeVehicle?.id,
+  () => clearSelection()
 )
 
 onMounted(() => {
@@ -118,21 +153,143 @@ function openTollEntry(d: any) {
   showAddTollInline.value = true
 }
 
-function toggleSelectDrive(id: string) {
-  const idx = selectedDriveIds.value.indexOf(id)
-  if (idx > -1) {
-    selectedDriveIds.value.splice(idx, 1)
+function toggleSelectDrive(d: any) {
+  const next = { ...selectedDrives.value }
+  if (next[d.id]) {
+    delete next[d.id]
   } else {
-    selectedDriveIds.value.push(id)
+    next[d.id] = d
+  }
+  selectedDrives.value = next
+}
+
+// Selects or unselects the drives of the current page, keeping selections made on other pages
+function selectAll() {
+  const next = { ...selectedDrives.value }
+  const select = !allPageSelected.value
+  for (const d of drives.value) {
+    if (select) next[d.id] = d
+    else delete next[d.id]
+  }
+  selectedDrives.value = next
+}
+
+// ----- Trip groups ("voyages") -----
+async function loadTripGroups() {
+  if (!vehicleStore.activeVehicle) return
+  loadingTrips.value = true
+  try {
+    tripGroups.value = await api.getTripGroups(vehicleStore.activeVehicle.id)
+  } catch (err) {
+    console.error('Failed to load trip groups', err)
+  } finally {
+    loadingTrips.value = false
   }
 }
 
-function selectAll() {
-  if (selectedDriveIds.value.length === drives.value.length) {
-    selectedDriveIds.value = []
-  } else {
-    selectedDriveIds.value = drives.value.map((d) => d.id)
+function switchView(mode: 'DRIVES' | 'TRIPS') {
+  viewMode.value = mode
+  if (mode === 'TRIPS') loadTripGroups()
+}
+
+async function toggleTripDetails(tg: any) {
+  if (expandedTripId.value === tg.id) {
+    expandedTripId.value = null
+    return
   }
+  expandedTripId.value = tg.id
+  tripDrives.value = []
+  try {
+    const res = await api.getDrives(vehicleStore.activeVehicle!.id, { tripGroupId: tg.id, limit: 200 })
+    tripDrives.value = [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+function openTripEdit(tg: any) {
+  tripEditForm.value = { id: tg.id, name: tg.name, notes: tg.notes || '' }
+  showTripEditModal.value = true
+}
+
+async function handleSaveTripEdit() {
+  if (!vehicleStore.activeVehicle || !tripEditForm.value.name.trim()) return
+  try {
+    await api.updateTripGroup(vehicleStore.activeVehicle.id, tripEditForm.value.id, {
+      name: tripEditForm.value.name,
+      notes: tripEditForm.value.notes || null,
+    })
+    showTripEditModal.value = false
+    await loadTripGroups()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function removeDriveFromTrip(tg: any, driveId: string) {
+  if (!vehicleStore.activeVehicle) return
+  const remaining = (tg.drive_ids || []).filter((id: string) => id !== driveId)
+  if (!remaining.length) {
+    alert('Un voyage doit garder au moins un trajet : supprimez le voyage à la place.')
+    return
+  }
+  try {
+    await api.updateTripGroup(vehicleStore.activeVehicle.id, tg.id, { name: tg.name, notes: tg.notes, drive_ids: remaining })
+    await loadTripGroups()
+    const updated = tripGroups.value.find((g) => g.id === tg.id)
+    expandedTripId.value = null
+    if (updated) await toggleTripDetails(updated)
+    loadDrives()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function handleDeleteTrip(tg: any) {
+  if (!vehicleStore.activeVehicle) return
+  if (!confirm(`Supprimer le voyage « ${tg.name} » ? Les trajets ne sont pas supprimés.`)) return
+  let deleteExpenses = false
+  if (tg.expense_count > 0) {
+    deleteExpenses = confirm(
+      `Ce voyage porte ${tg.expense_count} frais (${Number(tg.expenses_total).toFixed(2)} €).\n` +
+        'OK : supprimer aussi ces frais.\nAnnuler : les conserver dans les dépenses, sans lien avec des trajets.'
+    )
+  }
+  try {
+    await api.deleteTripGroup(vehicleStore.activeVehicle.id, tg.id, deleteExpenses)
+    await loadTripGroups()
+    loadDrives()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function openAddToTrip() {
+  await loadTripGroups()
+  addToTripId.value = tripGroups.value[0]?.id || ''
+  showAddToTripModal.value = true
+}
+
+async function handleAddToTrip() {
+  const tg = tripGroups.value.find((g) => g.id === addToTripId.value)
+  if (!vehicleStore.activeVehicle || !tg) return
+  const driveIds = Array.from(new Set([...(tg.drive_ids || []), ...selectedDriveIds.value]))
+  try {
+    await api.updateTripGroup(vehicleStore.activeVehicle.id, tg.id, { name: tg.name, notes: tg.notes, drive_ids: driveIds })
+    showAddToTripModal.value = false
+    clearSelection()
+    await loadTripGroups()
+    loadDrives()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+function formatTripDates(tg: any) {
+  if (!tg.start_time) return 'Aucun trajet'
+  const start = new Date(tg.start_time).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+  const end = tg.end_time ? new Date(tg.end_time).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : start
+  return start === end ? start : `${start} → ${end}`
 }
 
 async function toggleDriveTag(drive: any, tagToToggle: string) {
@@ -169,10 +326,7 @@ async function handleCreateGroupAndExpense() {
   try {
     if (tollAmount.value && Number(tollAmount.value) > 0) {
       // Group and expense are created atomically by the backend; the expense is dated at the trip start
-      const firstStart = drives.value
-        .filter((d) => selectedDriveIds.value.includes(d.id))
-        .map((d) => new Date(d.start_time).getTime())
-        .sort((a, b) => a - b)[0]
+      const firstStart = selectedList.value.length ? new Date(selectedList.value[0].start_time).getTime() : undefined
       await api.createDriveExpense(vehicleStore.activeVehicle.id, {
         drive_ids: selectedDriveIds.value,
         type: expenseType.value,
@@ -190,7 +344,7 @@ async function handleCreateGroupAndExpense() {
 
     alert('Groupe de trajets créé avec succès !')
     showGroupModal.value = false
-    selectedDriveIds.value = []
+    clearSelection()
     groupName.value = ''
     tollAmount.value = ''
     loadDrives()
@@ -208,22 +362,19 @@ async function handleCarpoolSelectedDrives() {
   }
 
   // Multi-drives: sort chronologically to identify first origin and last destination
-  const selectedDrives = drives.value
-    .filter((d) => selectedDriveIds.value.includes(d.id))
-    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
-
-  const first = selectedDrives[0]
-  const last = selectedDrives[selectedDrives.length - 1]
+  const ordered = selectedList.value
+  const first = ordered[0]
+  const last = ordered[ordered.length - 1]
   const fromCity = (first.start_address || 'Départ').split(',')[0]
   const toCity = (last.end_address || 'Arrivée').split(',')[0]
-  const groupTitle = `${fromCity} → ${toCity} (${selectedDrives.length} étapes)`
+  const groupTitle = `${fromCity} → ${toCity} (${ordered.length} étapes)`
 
   try {
     const tg = await api.createTripGroup(vehicleStore.activeVehicle.id, {
       name: groupTitle,
-      drive_ids: selectedDrives.map((d) => d.id),
+      drive_ids: ordered.map((d: any) => d.id),
     })
-    selectedDriveIds.value = []
+    clearSelection()
     router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })
   } catch (err: any) {
     alert(`Erreur lors de la préparation du voyage : ${err.message}`)
@@ -234,6 +385,7 @@ async function openCostModal(drive: any) {
   selectedCostDrive.value = drive
   showCostModal.value = true
   showAddTollInline.value = false
+  editingExpenseId.value = null
   inlineTollAmount.value = ''
   inlineTollNotes.value = ''
   loadDriveExpenses(drive.id)
@@ -271,20 +423,7 @@ async function handleAddTollToDrive() {
       notes: inlineTollNotes.value || 'Ajouté depuis la vue trajet',
     })
 
-    // Update local costs
-    if (selectedCostDrive.value.costs) {
-      if (needsTollQualification(selectedCostDrive.value)) {
-        unqualifiedCount.value = Math.max(0, unqualifiedCount.value - 1)
-      }
-      selectedCostDrive.value.costs.tolls_cost = (selectedCostDrive.value.costs.tolls_cost || 0) + amountNum
-      selectedCostDrive.value.costs.total_cost = (selectedCostDrive.value.costs.total_cost || 0) + amountNum
-      if (selectedCostDrive.value.distance_km > 0) {
-        selectedCostDrive.value.costs.cost_per_km =
-          selectedCostDrive.value.costs.total_cost / selectedCostDrive.value.distance_km
-      }
-    }
-
-    await loadDriveExpenses(selectedCostDrive.value.id)
+    await refreshCostModal()
     showAddTollInline.value = false
     inlineTollAmount.value = ''
     inlineTollNotes.value = ''
@@ -292,6 +431,58 @@ async function handleAddTollToDrive() {
     alert(`Erreur : ${err.message}`)
   } finally {
     addingToll.value = false
+  }
+}
+
+// Reloads the drive costs (computed server-side, with trip group allocation) and its expenses
+async function refreshCostModal() {
+  if (!selectedCostDrive.value) return
+  const driveId = selectedCostDrive.value.id
+  await Promise.all([loadDriveExpenses(driveId), loadDrives()])
+  const refreshed = drives.value.find((d) => d.id === driveId)
+  if (refreshed) selectedCostDrive.value = refreshed
+}
+
+function startEditExpense(exp: any) {
+  editingExpenseId.value = exp.id
+  expenseEditForm.value = { type: exp.type, amount: exp.amount, notes: exp.notes || '' }
+}
+
+async function handleSaveExpenseEdit(exp: any) {
+  if (!vehicleStore.activeVehicle) return
+  const amount = Number(expenseEditForm.value.amount)
+  if (!amount || amount <= 0) {
+    alert('Veuillez entrer un montant valide')
+    return
+  }
+  try {
+    await api.updateDriveExpense(vehicleStore.activeVehicle.id, exp.id, {
+      type: expenseEditForm.value.type,
+      amount,
+      currency: exp.currency,
+      fx_rate: exp.fx_rate ?? null,
+      date: exp.date,
+      notes: expenseEditForm.value.notes || null,
+      // Keep the current link: single drive or trip group
+      drive_id: exp.drive_id ?? null,
+      trip_group_id: exp.trip_group_id ?? null,
+    })
+    editingExpenseId.value = null
+    await refreshCostModal()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
+  }
+}
+
+async function handleDeleteExpense(exp: any) {
+  if (!vehicleStore.activeVehicle) return
+  const scope = exp.trip_group_id ? ` (frais du voyage « ${exp.trip_group_name} », tous les trajets du voyage sont concernés)` : ''
+  if (!confirm(`Supprimer ce frais de ${Number(exp.amount).toFixed(2)} ${exp.currency}${scope} ?`)) return
+  try {
+    await api.deleteDriveExpense(vehicleStore.activeVehicle.id, exp.id)
+    await refreshCostModal()
+  } catch (err: any) {
+    alert(`Erreur : ${err.message}`)
   }
 }
 
@@ -314,10 +505,26 @@ function formatDate(dateStr: string) {
         <p class="text-sm text-slate-400">
           {{ total }} trajets • Énergie et péages réels, usure et charges fixes réparties au kilomètre
         </p>
+        <div class="flex items-center gap-1 mt-2 bg-slate-900 border border-slate-800 p-1 rounded-xl w-fit">
+          <button
+            @click="switchView('DRIVES')"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            :class="viewMode === 'DRIVES' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+          >
+            <List class="w-3.5 h-3.5" /> Trajets
+          </button>
+          <button
+            @click="switchView('TRIPS')"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors"
+            :class="viewMode === 'TRIPS' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-white'"
+          >
+            <Layers class="w-3.5 h-3.5" /> Voyages
+          </button>
+        </div>
       </div>
 
       <!-- Tag Filters -->
-      <div class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start sm:self-auto flex-wrap">
+      <div v-if="viewMode === 'DRIVES'" class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start sm:self-auto flex-wrap">
         <button
           v-if="unqualifiedCount > 0 || unqualifiedOnly"
           @click="unqualifiedOnly = !unqualifiedOnly"
@@ -362,6 +569,7 @@ function formatDate(dateStr: string) {
           {{ selectedDriveIds.length }}
         </span>
         <span>trajet(s) sélectionné(s)</span>
+        <span v-if="selectedOffPage" class="text-xs text-slate-400">dont {{ selectedOffPage }} sur d'autres pages ou filtres</span>
       </div>
 
       <div class="flex items-center gap-2">
@@ -384,7 +592,15 @@ function formatDate(dateStr: string) {
         </button>
 
         <button
-          @click="selectedDriveIds = []"
+          @click="openAddToTrip"
+          class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          <span>Ajouter à un voyage</span>
+        </button>
+
+        <button
+          @click="clearSelection"
           class="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-xl transition-colors"
           title="Annuler la sélection"
         >
@@ -393,6 +609,7 @@ function formatDate(dateStr: string) {
       </div>
     </div>
 
+    <template v-if="viewMode === 'DRIVES'">
     <!-- SKELETON LOADING STATE -->
     <div v-if="loading" class="space-y-3 animate-pulse">
       <div v-for="i in 5" :key="i" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex items-center justify-between gap-4">
@@ -425,8 +642,8 @@ function formatDate(dateStr: string) {
       <!-- Select all toggle & Total info -->
       <div class="flex items-center justify-between text-xs text-slate-400 px-2">
         <button @click="selectAll" class="flex items-center gap-2 hover:text-slate-200 transition-colors">
-          <component :is="selectedDriveIds.length === drives.length ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
-          <span>{{ selectedDriveIds.length === drives.length ? 'Tout désélectionner' : 'Tout sélectionner' }}</span>
+          <component :is="allPageSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
+          <span>{{ allPageSelected ? 'Désélectionner la page' : 'Sélectionner la page' }}</span>
         </button>
         <span>Page {{ page }} sur {{ Math.ceil(total / limit) || 1 }}</span>
       </div>
@@ -440,7 +657,7 @@ function formatDate(dateStr: string) {
       >
         <div class="flex items-start gap-3">
           <!-- Selection checkbox -->
-          <button @click="toggleSelectDrive(d.id)" class="mt-1 text-slate-500 hover:text-rose-400 transition-colors">
+          <button @click="toggleSelectDrive(d)" class="mt-1 text-slate-500 hover:text-rose-400 transition-colors">
             <component :is="selectedDriveIds.includes(d.id) ? CheckSquare : Square" class="w-5 h-5 text-rose-400" />
           </button>
 
@@ -564,6 +781,62 @@ function formatDate(dateStr: string) {
           <ChevronRight class="w-5 h-5" />
         </button>
       </div>
+    </div>
+    </template>
+
+    <!-- TRIP GROUPS ("VOYAGES") -->
+    <div v-else class="space-y-3">
+      <div v-if="loadingTrips" class="text-center py-12 text-slate-400">Chargement...</div>
+      <div v-else-if="!tripGroups.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
+        Aucun voyage. Sélectionnez plusieurs trajets puis « Fusionner & Péage » pour en créer un.
+      </div>
+      <template v-else>
+      <div v-for="tg in tripGroups" :key="tg.id" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <div class="text-sm font-bold text-white flex items-center gap-2">
+              <Layers class="w-4 h-4 text-indigo-400" /> {{ tg.name }}
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">
+              {{ formatTripDates(tg) }} • {{ tg.drive_ids.length }} trajet(s) • {{ Math.round(tg.distance_km).toLocaleString('fr-FR') }} km
+              <template v-if="tg.expense_count"> • {{ tg.expense_count }} frais ({{ Number(tg.expenses_total).toFixed(2) }} €)</template>
+              <template v-if="tg.carpool_count"> • {{ tg.carpool_count }} covoiturage(s)</template>
+            </p>
+            <p v-if="tg.notes" class="text-xs text-slate-500 mt-0.5">{{ tg.notes }}</p>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button @click="toggleTripDetails(tg)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700/60">
+              {{ expandedTripId === tg.id ? 'Masquer' : 'Trajets' }}
+            </button>
+            <button
+              @click="router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })"
+              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60"
+              title="Covoiturer ce voyage"
+            >
+              <Users class="w-3.5 h-3.5" />
+            </button>
+            <button @click="openTripEdit(tg)" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl border border-slate-700/60" title="Renommer">
+              <Pencil class="w-3.5 h-3.5" />
+            </button>
+            <button @click="handleDeleteTrip(tg)" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60" title="Supprimer le voyage">
+              <Trash2 class="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+        <div v-if="expandedTripId === tg.id" class="space-y-1.5 border-t border-slate-800 pt-2">
+          <div v-for="d in tripDrives" :key="d.id" class="flex items-center justify-between gap-3 text-xs text-slate-300 bg-slate-800/40 rounded-lg px-2.5 py-1.5">
+            <span class="truncate">
+              {{ formatDate(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}
+              <span class="text-slate-500">({{ d.distance_km }} km)</span>
+            </span>
+            <button @click="removeDriveFromTrip(tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0" title="Retirer ce trajet du voyage">
+              <X class="w-3.5 h-3.5" />
+            </button>
+          </div>
+          <p v-if="!tripDrives.length" class="text-xs text-slate-500">Chargement des trajets...</p>
+        </div>
+      </div>
+      </template>
     </div>
 
     <!-- MODAL : DÉCOMPOSITION COMPLÈTE DU COÛT D'UN TRAJET -->
@@ -753,17 +1026,43 @@ function formatDate(dateStr: string) {
 
             <!-- List of attached expenses -->
             <div v-if="driveExpenses.length" class="space-y-1 pt-1 border-t border-slate-700/50">
-              <div
-                v-for="exp in driveExpenses"
-                :key="exp.id"
-                class="flex items-center justify-between text-[11px] text-slate-300 pl-9"
-              >
-                <span>
-                  {{ exp.type === 'TOLL' ? 'Péage' : exp.type }}
-                  <span v-if="exp.notes" class="text-slate-500">({{ exp.notes }})</span>
-                  <span v-if="exp.trip_group_id" class="text-indigo-400"> • part du voyage sur {{ exp.amount.toFixed(2) }} {{ exp.currency }}</span>
-                </span>
-                <span class="font-mono text-amber-400">{{ (exp.allocated_amount ?? exp.amount).toFixed(2) }} €</span>
+              <div v-for="exp in driveExpenses" :key="exp.id" class="text-[11px] text-slate-300 pl-9">
+                <div v-if="editingExpenseId !== exp.id" class="flex items-center justify-between gap-2">
+                  <span>
+                    {{ exp.type === 'TOLL' ? 'Péage' : exp.type }}
+                    <span v-if="exp.notes" class="text-slate-500">({{ exp.notes }})</span>
+                    <span v-if="exp.trip_group_id" class="text-indigo-400"> • part du voyage sur {{ exp.amount.toFixed(2) }} {{ exp.currency }}</span>
+                  </span>
+                  <span class="flex items-center gap-1.5">
+                    <span class="font-mono text-amber-400">{{ (exp.allocated_amount ?? exp.amount).toFixed(2) }} €</span>
+                    <button @click="startEditExpense(exp)" class="p-0.5 text-slate-500 hover:text-amber-400" title="Modifier ce frais">
+                      <Pencil class="w-3 h-3" />
+                    </button>
+                    <button @click="handleDeleteExpense(exp)" class="p-0.5 text-slate-500 hover:text-rose-400" title="Supprimer ce frais">
+                      <Trash2 class="w-3 h-3" />
+                    </button>
+                  </span>
+                </div>
+                <div v-else class="grid grid-cols-12 gap-1.5 items-center py-1">
+                  <label :for="`drive-expense-type-${exp.id}`" class="sr-only">Type de frais</label>
+                  <select :id="`drive-expense-type-${exp.id}`" v-model="expenseEditForm.type" class="col-span-3 bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-[11px] text-white">
+                    <option value="TOLL">Péage</option>
+                    <option value="PARKING">Parking</option>
+                    <option value="FERRY">Ferry</option>
+                    <option value="OTHER">Autre</option>
+                  </select>
+                  <label :for="`drive-expense-amount-${exp.id}`" class="sr-only">Montant total</label>
+                  <input :id="`drive-expense-amount-${exp.id}`" v-model="expenseEditForm.amount" type="number" step="0.01" min="0.01" class="col-span-3 bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-[11px] text-white" />
+                  <label :for="`drive-expense-notes-${exp.id}`" class="sr-only">Notes</label>
+                  <input :id="`drive-expense-notes-${exp.id}`" v-model="expenseEditForm.notes" placeholder="Notes" class="col-span-4 bg-slate-800 border border-slate-700 rounded-lg px-1.5 py-1 text-[11px] text-white" />
+                  <button @click="handleSaveExpenseEdit(exp)" class="col-span-1 p-1 text-emerald-400 hover:text-emerald-300" title="Enregistrer">
+                    <Save class="w-3.5 h-3.5" />
+                  </button>
+                  <button @click="editingExpenseId = null" class="col-span-1 p-1 text-slate-500 hover:text-white" title="Annuler">
+                    <X class="w-3.5 h-3.5" />
+                  </button>
+                  <p v-if="exp.trip_group_id" class="col-span-12 text-[10px] text-indigo-300/80">Montant total du voyage, réparti entre ses trajets au prorata des km.</p>
+                </div>
               </div>
             </div>
 
@@ -919,6 +1218,44 @@ function formatDate(dateStr: string) {
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- MODAL : RENOMMER UN VOYAGE -->
+    <div v-if="showTripEditModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <form @submit.prevent="handleSaveTripEdit" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <h3 class="text-base font-bold text-white flex items-center gap-2"><Layers class="w-5 h-5 text-indigo-400" /> Modifier le voyage</h3>
+        <div>
+          <label for="trip-edit-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom</label>
+          <input id="trip-edit-name" v-model="tripEditForm.name" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
+        </div>
+        <div>
+          <label for="trip-edit-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes</label>
+          <input id="trip-edit-notes" v-model="tripEditForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showTripEditModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">Annuler</button>
+          <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- MODAL : AJOUTER LA SÉLECTION À UN VOYAGE -->
+    <div v-if="showAddToTripModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <form @submit.prevent="handleAddToTrip" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <h3 class="text-base font-bold text-white flex items-center gap-2"><Plus class="w-5 h-5 text-indigo-400" /> Ajouter {{ selectedDriveIds.length }} trajet(s) à un voyage</h3>
+        <p v-if="!tripGroups.length" class="text-xs text-slate-400">Aucun voyage existant : utilisez « Fusionner & Péage » pour en créer un.</p>
+        <div v-else>
+          <label for="add-to-trip" class="block text-xs font-semibold text-slate-300 mb-1">Voyage</label>
+          <select id="add-to-trip" v-model="addToTripId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500">
+            <option v-for="tg in tripGroups" :key="tg.id" :value="tg.id">{{ tg.name }} ({{ tg.drive_ids.length }} trajets)</option>
+          </select>
+          <p class="text-[11px] text-slate-400 mt-1">Les frais du voyage seront répartis sur l'ensemble de ses trajets au prorata des km.</p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" @click="showAddToTripModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">Annuler</button>
+          <button type="submit" :disabled="!tripGroups.length" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl">Ajouter</button>
+        </div>
+      </form>
     </div>
   </div>
 </template>
