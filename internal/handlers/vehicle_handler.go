@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -40,6 +42,68 @@ type SaveVehicleRequest struct {
 	TeslaMateBasicPass    *string         `json:"teslamate_basic_pass"` // Plain text from frontend
 	AnnualInsuranceCost   *money.Cents    `json:"annual_insurance_cost"`
 	AnnualExpectedMileage *float64        `json:"annual_expected_mileage"`
+	AcquisitionType       *string         `json:"acquisition_type"`
+	PurchasePrice         *money.Cents    `json:"purchase_price"`
+	PurchaseDate          *string         `json:"purchase_date"`
+	PurchaseOdometer      *float64        `json:"purchase_odometer"`
+	PurchaseIncentives    *money.Cents    `json:"purchase_incentives"`
+	ExpectedResaleValue   *money.Cents    `json:"expected_resale_value"`
+	ExpectedHoldingMonths *int            `json:"expected_holding_months"`
+}
+
+// applyAcquisition validates and copies the acquisition settings of a vehicle payload.
+func applyAcquisition(v *models.Vehicle, req *SaveVehicleRequest) error {
+	v.AcquisitionType, v.PurchasePrice, v.PurchaseDate, v.PurchaseOdometer = nil, nil, nil, nil
+	v.PurchaseIncentives, v.ExpectedResaleValue, v.ExpectedHoldingMonths = nil, nil, nil
+	if req.AcquisitionType == nil || *req.AcquisitionType == "" {
+		return nil
+	}
+	acqType := strings.ToUpper(*req.AcquisitionType)
+	if acqType != "PURCHASE" && acqType != "LEASE" {
+		return errors.New("type d'acquisition invalide (PURCHASE ou LEASE)")
+	}
+	v.AcquisitionType = &acqType
+
+	date, err := parseOptionalDate(req.PurchaseDate)
+	if err != nil {
+		return err
+	}
+	v.PurchaseDate = date
+	if req.PurchaseOdometer != nil {
+		if err := validateQuantity(*req.PurchaseOdometer, 2_000_000); err != nil {
+			return errors.New("odomètre d'acquisition invalide")
+		}
+		v.PurchaseOdometer = req.PurchaseOdometer
+	}
+	if acqType == "LEASE" {
+		return nil
+	}
+
+	for _, amount := range []*money.Cents{req.PurchasePrice, req.PurchaseIncentives, req.ExpectedResaleValue} {
+		if amount != nil {
+			if err := validateAmount(*amount, true); err != nil {
+				return err
+			}
+		}
+	}
+	if req.PurchasePrice == nil || *req.PurchasePrice == 0 || date == nil {
+		return errors.New("un achat requiert un prix et une date d'acquisition")
+	}
+	net := *req.PurchasePrice
+	if req.PurchaseIncentives != nil {
+		net -= *req.PurchaseIncentives
+	}
+	if req.ExpectedResaleValue != nil && *req.ExpectedResaleValue > net {
+		return errors.New("la valeur de revente dépasse le prix d'achat net des aides")
+	}
+	if req.ExpectedHoldingMonths != nil && (*req.ExpectedHoldingMonths <= 0 || *req.ExpectedHoldingMonths > 360) {
+		return errors.New("la durée de détention doit être comprise entre 1 et 360 mois")
+	}
+	v.PurchasePrice = req.PurchasePrice
+	v.PurchaseIncentives = req.PurchaseIncentives
+	v.ExpectedResaleValue = req.ExpectedResaleValue
+	v.ExpectedHoldingMonths = req.ExpectedHoldingMonths
+	return nil
 }
 
 func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -102,9 +166,13 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		AnnualInsuranceCost:      req.AnnualInsuranceCost,
 		AnnualExpectedMileage:    req.AnnualExpectedMileage,
 	}
+	if err := applyAcquisition(v, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	if err := h.repo.CreateVehicle(r.Context(), v); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to create vehicle: "+err.Error())
+		writeRepoError(w, err, "Failed to create vehicle")
 		return
 	}
 
@@ -169,6 +237,10 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	existing.AnnualInsuranceCost = req.AnnualInsuranceCost
 	existing.AnnualExpectedMileage = req.AnnualExpectedMileage
+	if err := applyAcquisition(existing, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	if err := h.repo.UpdateVehicle(r.Context(), existing); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update vehicle")

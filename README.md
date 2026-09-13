@@ -29,9 +29,12 @@
    - Kilométrage initial conservé pour les pneus achetés d'occasion.
 5. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
 6. **Calculateur de TCO :**
-   - Montant décaissé (achats de pneus au jour d'achat) et coût complet (usure des pneus amortie au kilomètre).
-   - Coût d'usage au km (énergie + péages) et coût complet au km, calculés sur la distance odométrique couverte par les trajets.
-   - Ventilation énergie / péages & parkings / pneus / entretien / assurance / abonnements, taxes & autres.
+   - Registre des coûts unique (vue SQL `cost_ledger`) : recharges, péages, dépenses récurrentes générées échéance par échéance, pneus, assurance, achat du véhicule. Totaux, historique mensuel et taux au km en sont tous dérivés.
+   - Montants stockés et calculés en centimes exacts (`NUMERIC` en base, entiers en Go).
+   - Dépenses courantes décaissées (pneus au jour d'achat, achat du véhicule exclu) et coût complet (usure des pneus amortie au kilomètre, décote du véhicule).
+   - Acquisition : achat (prix, aides, valeur de revente estimée et durée de détention pour une décote linéaire) ou location (loyers en dépense « Financement »). Pour un crédit, seuls les intérêts et l'assurance emprunteur sont à saisir en « Financement ».
+   - Coût d'usage au km (énergie + péages), coût complet au km et coût net des recettes de covoiturage, calculés sur la plus grande distance entre les trajets suivis, l'odomètre couvert par les trajets et le kilométrage depuis l'acquisition.
+   - Ventilation énergie / péages & parkings / pneus / entretien / assurance / financement / décote / abonnements, taxes & autres.
    - Assurance : dépenses « Assurance » enregistrées, sinon prime annuelle de la fiche véhicule répartie au prorata du temps.
    - Indicateur de complétude : recharges sans coût, dépenses non converties, trajets à qualifier, kilomètres non suivis, assurance absente.
 

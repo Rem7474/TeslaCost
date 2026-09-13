@@ -60,8 +60,16 @@ type Vehicle struct {
 	TeslaMateBasicPassEnc    *string      `json:"-"`
 	AnnualInsuranceCost      *money.Cents `json:"annual_insurance_cost,omitempty"`
 	AnnualExpectedMileage    *float64     `json:"annual_expected_mileage,omitempty"`
-	CreatedAt                time.Time    `json:"created_at"`
-	UpdatedAt                time.Time    `json:"updated_at"`
+	// Acquisition: PURCHASE (depreciation from price, incentives, resale value and holding period) or LEASE
+	AcquisitionType       *string      `json:"acquisition_type,omitempty"`
+	PurchasePrice         *money.Cents `json:"purchase_price,omitempty"`
+	PurchaseDate          *time.Time   `json:"purchase_date,omitempty"`
+	PurchaseOdometer      *float64     `json:"purchase_odometer,omitempty"`
+	PurchaseIncentives    *money.Cents `json:"purchase_incentives,omitempty"`
+	ExpectedResaleValue   *money.Cents `json:"expected_resale_value,omitempty"`
+	ExpectedHoldingMonths *int         `json:"expected_holding_months,omitempty"`
+	CreatedAt             time.Time    `json:"created_at"`
+	UpdatedAt             time.Time    `json:"updated_at"`
 }
 
 // Drive represents a single vehicle trip.

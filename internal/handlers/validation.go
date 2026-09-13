@@ -21,6 +21,7 @@ var maintenanceCategories = map[string]bool{
 	"INSURANCE":    true,
 	"SUBSCRIPTION": true,
 	"TAX":          true,
+	"FINANCING":    true,
 	"ACCESSORY":    true,
 	"OTHER":        true,
 }

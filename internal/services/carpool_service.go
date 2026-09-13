@@ -132,15 +132,16 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		rates.TiresSource = RateSourceHistory
 	}
 
-	// Maintenance and insurance from expanded occurrences
+	// Maintenance and insurance from the cost ledger
 	var totalMaintCost, annualInsuranceExpenses money.Cents
 	var insuranceEntries int
 	if err := s.pool.QueryRow(ctx, `
-		WITH `+maintenanceOccurrencesCTE+`
-		SELECT COALESCE((SELECT SUM(amount_eur) FROM maintenance_occurrences WHERE category = 'MAINTENANCE'), 0),
-		       COALESCE((SELECT SUM(amount_eur) FROM maintenance_occurrences
-		                 WHERE category = 'INSURANCE' AND occ_date > NOW() - INTERVAL '365 days'), 0),
-		       (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND category = 'INSURANCE');
+		SELECT COALESCE(SUM(amount_eur) FILTER (WHERE category = 'MAINTENANCE'), 0),
+		       COALESCE(SUM(amount_eur) FILTER (WHERE category = 'INSURANCE' AND source_table = 'maintenance_expenses'
+		                                         AND entry_date > NOW() - INTERVAL '365 days'), 0),
+		       (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND category = 'INSURANCE')
+		FROM cost_ledger
+		WHERE vehicle_id = $1;
 	`, vehicleID).Scan(&totalMaintCost, &annualInsuranceExpenses, &insuranceEntries); err != nil {
 		return nil, err
 	}

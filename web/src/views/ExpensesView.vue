@@ -825,6 +825,7 @@ function formatDriveTime(dateStr: string) {
               <option value="INSURANCE">Assurance</option>
               <option value="SUBSCRIPTION">Abonnement (Connectivité...)</option>
               <option value="TAX">Taxe / Carte grise</option>
+              <option value="FINANCING">Financement (loyer, intérêts de crédit)</option>
               <option value="ACCESSORY">Accessoire</option>
               <option value="OTHER">Autre</option>
             </select>

@@ -101,14 +101,38 @@ func (r *Repository) GetUserCount(ctx context.Context) (int, error) {
 // Vehicles
 // ============================================================================
 
+const vehicleColumns = `
+	id, user_id, name, vin, teslamate_car_id, current_odometer,
+	teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
+	teslamate_basic_user, teslamate_basic_pass_encrypted,
+	annual_insurance_cost, annual_expected_mileage,
+	acquisition_type, purchase_price, purchase_date, purchase_odometer,
+	purchase_incentives, expected_resale_value, expected_holding_months,
+	created_at, updated_at
+`
+
+func scanVehicle(row pgx.Row, v *models.Vehicle) error {
+	return row.Scan(
+		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
+		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
+		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
+		&v.AnnualInsuranceCost, &v.AnnualExpectedMileage,
+		&v.AcquisitionType, &v.PurchasePrice, &v.PurchaseDate, &v.PurchaseOdometer,
+		&v.PurchaseIncentives, &v.ExpectedResaleValue, &v.ExpectedHoldingMonths,
+		&v.CreatedAt, &v.UpdatedAt,
+	)
+}
+
 func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error {
 	query := `
 		INSERT INTO vehicles (
 			user_id, name, vin, teslamate_car_id, current_odometer,
 			teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
 			teslamate_basic_user, teslamate_basic_pass_encrypted,
-			annual_insurance_cost, annual_expected_mileage
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			annual_insurance_cost, annual_expected_mileage,
+			acquisition_type, purchase_price, purchase_date, purchase_odometer,
+			purchase_incentives, expected_resale_value, expected_holding_months
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
 		RETURNING id, created_at, updated_at;
 	`
 	err := r.pool.QueryRow(ctx, query,
@@ -116,6 +140,8 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
 		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
+		v.AcquisitionType, v.PurchasePrice, v.PurchaseDate, v.PurchaseOdometer,
+		v.PurchaseIncentives, v.ExpectedResaleValue, v.ExpectedHoldingMonths,
 	).Scan(&v.ID, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create vehicle: %w", err)
@@ -123,17 +149,8 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 	return nil
 }
 
-func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([]models.Vehicle, error) {
-	query := `
-		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
-		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted,
-		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
-		FROM vehicles
-		WHERE user_id = $1
-		ORDER BY created_at ASC;
-	`
-	rows, err := r.pool.Query(ctx, query, userID)
+func (r *Repository) listVehicles(ctx context.Context, where string, args ...any) ([]models.Vehicle, error) {
+	rows, err := r.pool.Query(ctx, `SELECT `+vehicleColumns+` FROM vehicles WHERE `+where+` ORDER BY created_at ASC;`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list vehicles: %w", err)
 	}
@@ -142,67 +159,25 @@ func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([
 	var list []models.Vehicle
 	for rows.Next() {
 		var v models.Vehicle
-		if err := rows.Scan(
-			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
-			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-			&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
-		); err != nil {
+		if err := scanVehicle(rows, &v); err != nil {
 			return nil, err
 		}
 		list = append(list, v)
 	}
-	return list, nil
+	return list, rows.Err()
+}
+
+func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([]models.Vehicle, error) {
+	return r.listVehicles(ctx, `user_id = $1`, userID)
 }
 
 func (r *Repository) ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models.Vehicle, error) {
-	query := `
-		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
-		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted,
-		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
-		FROM vehicles
-		WHERE teslamate_api_url IS NOT NULL AND teslamate_api_url != ''
-		ORDER BY created_at ASC;
-	`
-	rows, err := r.pool.Query(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list vehicles with teslamate: %w", err)
-	}
-	defer rows.Close()
-
-	var list []models.Vehicle
-	for rows.Next() {
-		var v models.Vehicle
-		if err := rows.Scan(
-			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
-			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-			&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		list = append(list, v)
-	}
-	return list, nil
+	return r.listVehicles(ctx, `teslamate_api_url IS NOT NULL AND teslamate_api_url != ''`)
 }
 
 func (r *Repository) GetVehicleByID(ctx context.Context, id, userID string) (*models.Vehicle, error) {
-	query := `
-		SELECT id, user_id, name, vin, teslamate_car_id, current_odometer,
-		       teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-		       teslamate_basic_user, teslamate_basic_pass_encrypted,
-		       annual_insurance_cost, annual_expected_mileage, created_at, updated_at
-		FROM vehicles
-		WHERE id = $1 AND user_id = $2;
-	`
 	var v models.Vehicle
-	err := r.pool.QueryRow(ctx, query, id, userID).Scan(
-		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
-		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
-		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-		&v.AnnualInsuranceCost, &v.AnnualExpectedMileage, &v.CreatedAt, &v.UpdatedAt,
-	)
+	err := scanVehicle(r.pool.QueryRow(ctx, `SELECT `+vehicleColumns+` FROM vehicles WHERE id::text = $1 AND user_id = $2;`, id, userID), &v)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -220,14 +195,18 @@ func (r *Repository) UpdateVehicle(ctx context.Context, v *models.Vehicle) error
 		    teslamate_api_key_encrypted = $7, teslamate_basic_user = $8,
 		    teslamate_basic_pass_encrypted = $9,
 		    annual_insurance_cost = $10, annual_expected_mileage = $11,
+		    acquisition_type = $12, purchase_price = $13, purchase_date = $14, purchase_odometer = $15,
+		    purchase_incentives = $16, expected_resale_value = $17, expected_holding_months = $18,
 		    updated_at = NOW()
-		WHERE id = $12 AND user_id = $13;
+		WHERE id = $19 AND user_id = $20;
 	`
 	tag, err := r.pool.Exec(ctx, query,
 		v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
 		v.AnnualInsuranceCost, v.AnnualExpectedMileage,
+		v.AcquisitionType, v.PurchasePrice, v.PurchaseDate, v.PurchaseOdometer,
+		v.PurchaseIncentives, v.ExpectedResaleValue, v.ExpectedHoldingMonths,
 		v.ID, v.UserID,
 	)
 	if err != nil {

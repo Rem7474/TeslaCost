@@ -3,7 +3,6 @@ package services
 import (
 	"context"
 	"errors"
-	"math"
 	"os"
 	"strings"
 	"testing"
@@ -207,7 +206,7 @@ func TestIntegrationTCOCompletenessRecurringAndInsurance(t *testing.T) {
 		t.Fatal(err)
 	}
 	if sum.InsuranceSource != InsuranceSourceVehicleSettings || sum.InsuranceCost <= 0 {
-		t.Fatalf("expected pro-rata insurance from vehicle settings, got %s %.2f", sum.InsuranceSource, sum.InsuranceCost)
+		t.Fatalf("expected pro-rata insurance from vehicle settings, got %s %s", sum.InsuranceSource, sum.InsuranceCost)
 	}
 	if sum.Completeness.ChargesWithoutCost != 1 || sum.Completeness.IsComplete {
 		t.Fatalf("expected a charge without cost to be reported, got %+v", sum.Completeness)
@@ -234,21 +233,21 @@ func TestIntegrationTCOCompletenessRecurringAndInsurance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sum.InsuranceSource != InsuranceSourceRecordedExpenses || sum.InsuranceCost != 200 {
-		t.Fatalf("expected 4 × 50 € of recorded insurance, got %s %.2f", sum.InsuranceSource, sum.InsuranceCost)
+	if sum.InsuranceSource != InsuranceSourceRecordedExpenses || sum.InsuranceCost != 20000 {
+		t.Fatalf("expected 4 × 50 € of recorded insurance, got %s %s", sum.InsuranceSource, sum.InsuranceCost)
 	}
 	if sum.Completeness.UnconvertedExpenses != 1 || sum.TollsCost != 0 {
-		t.Fatalf("expected the CHF expense to be excluded and reported, got %+v tolls=%.2f", sum.Completeness, sum.TollsCost)
+		t.Fatalf("expected the CHF expense to be excluded and reported, got %+v tolls=%s", sum.Completeness, sum.TollsCost)
 	}
-	if sum.TotalCost != 212 {
-		t.Fatalf("expected total 12 € energy + 200 € insurance, got %.2f", sum.TotalCost)
+	if sum.TotalCost != 21200 {
+		t.Fatalf("expected total 12 € energy + 200 € insurance, got %s", sum.TotalCost)
 	}
-	var monthlyInsurance float64
+	var monthlyInsurance money.Cents
 	for _, m := range sum.MonthlyCosts {
 		monthlyInsurance += m.Insurance
 	}
-	if math.Abs(monthlyInsurance-200) > 0.01 {
-		t.Fatalf("monthly timeline must match the total insurance, got %.2f", monthlyInsurance)
+	if monthlyInsurance != 20000 {
+		t.Fatalf("monthly timeline must match the total insurance, got %s", monthlyInsurance)
 	}
 }
 
@@ -343,8 +342,8 @@ func TestIntegrationUpstreamDeletions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sum.TotalDistanceKm != 1100 || sum.TollsCost != 30 {
-		t.Fatalf("expected 1,100 km and the toll still paid (30 €), got %.0f km / %.2f €", sum.TotalDistanceKm, sum.TollsCost)
+	if sum.TotalDistanceKm != 1100 || sum.TollsCost != 3000 {
+		t.Fatalf("expected 1,100 km and the toll still paid (30 €), got %.0f km / %s €", sum.TotalDistanceKm, sum.TollsCost)
 	}
 	alloc, _ := repo.GetTollExpensesForDrives(ctx, v.ID, []string{drives[10].ID})
 	if alloc[drives[10].ID] != 3000 {
@@ -365,5 +364,77 @@ func TestIntegrationUpstreamDeletions(t *testing.T) {
 	alloc, _ = repo.GetTollExpensesForDrives(ctx, v.ID, []string{drives[10].ID, drives[11].ID})
 	if alloc[drives[10].ID] != 1500 || alloc[drives[11].ID] != 1500 {
 		t.Fatalf("expected the group toll split again after restoration, got %v", alloc)
+	}
+}
+
+func TestIntegrationLedgerAcquisitionAndDepreciation(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "grace@example.com")
+	tco := NewTCOService(db.Pool, "Europe/Paris")
+
+	// Bought 24 months ago: 45,000 € − 5,000 € bonus, expected resale 20,000 € after 48 months,
+	// odometer 0 at purchase, 30,000 km today (TeslaMate only saw the last 1,000 km).
+	purchase := time.Now().AddDate(-2, 0, 0)
+	acq, price, bonus, resale, months, odo := "PURCHASE", money.Cents(4500000), money.Cents(500000), money.Cents(2000000), 48, 0.0
+	v.AcquisitionType, v.PurchasePrice, v.PurchaseIncentives, v.ExpectedResaleValue = &acq, &price, &bonus, &resale
+	v.PurchaseDate, v.ExpectedHoldingMonths, v.PurchaseOdometer, v.CurrentOdometer = &purchase, &months, &odo, 30000
+	if err := repo.UpdateVehicle(ctx, v); err != nil {
+		t.Fatal(err)
+	}
+	mustDrive(t, repo, v.ID, 1, time.Now().AddDate(0, 0, -5), 29000, 1000)
+
+	// Lease-style financing and tires bought for 800 €, 4 tires with 25 % of their life used.
+	interval := 1
+	if err := repo.CreateMaintenanceExpense(ctx, &models.MaintenanceExpense{VehicleID: v.ID, Category: "FINANCING", Amount: 1000,
+		Currency: "EUR", Date: time.Now().AddDate(0, -2, 0).Add(-time.Hour), IsRecurring: true, RecurrenceIntervalMonths: &interval,
+		Description: "Intérêts crédit"}); err != nil {
+		t.Fatal(err)
+	}
+	mountOdo := 20000.0
+	for i := 0; i < 4; i++ {
+		pos := []models.TirePosition{models.TirePosFL, models.TirePosFR, models.TirePosRL, models.TirePosRR}[i]
+		if err := repo.CreateTire(ctx, &models.Tire{VehicleID: &v.ID, Brand: "M", Model: "X", Dimension: "235", Season: models.TireSeasonSummer,
+			PurchaseDate: time.Now().AddDate(-1, 0, 0), PurchasePrice: 20000, CurrentPosition: pos, InitialDepthMm: 8, MinLegalDepthMm: 1.6,
+			MountedOdometer: &mountOdo, EstimatedLifespanKm: 40000}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	sum, err := tco.ComputeVehicleTCO(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.AcquisitionCost != 4000000 {
+		t.Fatalf("expected acquisition net of bonus 40,000 €, got %s", sum.AcquisitionCost)
+	}
+	// (40,000 − 20,000) × 24/48 ≈ 10,000 € (± a day of rounding)
+	if sum.DepreciationCost < 999000 || sum.DepreciationCost > 1001000 {
+		t.Fatalf("expected ~10,000 € depreciation, got %s", sum.DepreciationCost)
+	}
+	if sum.DistanceBasisKm != 30000 {
+		t.Fatalf("expected distance since purchase (30,000 km), got %.0f", sum.DistanceBasisKm)
+	}
+	if sum.FinancingCost != 3000 || sum.TiresCost != 80000 || sum.TiresAmortizedCost != 20000 {
+		t.Fatalf("unexpected financing/tires: %s / %s / %s", sum.FinancingCost, sum.TiresCost, sum.TiresAmortizedCost)
+	}
+	if sum.TotalCost != 83000 {
+		t.Fatalf("expected running cash costs 30 € + 800 €, got %s", sum.TotalCost)
+	}
+	if sum.FullCost != 3000+20000+sum.DepreciationCost {
+		t.Fatalf("full cost must add amortized tires and depreciation, got %s", sum.FullCost)
+	}
+
+	// The ledger is the single source: its sum (acquisition excluded) equals the cash total.
+	var ledgerTotal money.Cents
+	if err := db.Pool.QueryRow(ctx, `SELECT COALESCE(SUM(amount_eur), 0) FROM cost_ledger WHERE vehicle_id = $1 AND category <> 'ACQUISITION'`, v.ID).Scan(&ledgerTotal); err != nil {
+		t.Fatal(err)
+	}
+	var monthly money.Cents
+	for _, m := range sum.MonthlyCosts {
+		monthly += m.Total
+	}
+	if ledgerTotal != sum.TotalCost || monthly != sum.TotalCost {
+		t.Fatalf("ledger %s, monthly %s and total %s must match", ledgerTotal, monthly, sum.TotalCost)
 	}
 }

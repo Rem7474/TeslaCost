@@ -114,6 +114,7 @@ function renderCharts() {
     const maintData = monthlyList.map((m: any) => m.maintenance)
     const insuranceData = monthlyList.map((m: any) => m.insurance || 0)
     const otherData = monthlyList.map((m: any) => m.other || 0)
+    const financingData = monthlyList.map((m: any) => m.financing || 0)
 
     monthlyChartInstance = new Chart(monthlyChartRef.value, {
       type: 'bar',
@@ -125,6 +126,7 @@ function renderCharts() {
           { label: 'Pneus (€)', data: tiresData, backgroundColor: '#10b981', borderRadius: 4 },
           { label: 'Entretien (€)', data: maintData, backgroundColor: '#ec4899', borderRadius: 4 },
           { label: 'Assurance (€)', data: insuranceData, backgroundColor: '#a855f7', borderRadius: 4 },
+          { label: 'Financement (€)', data: financingData, backgroundColor: '#f97316', borderRadius: 4 },
           { label: 'Abonnements, taxes & autres (€)', data: otherData, backgroundColor: '#64748b', borderRadius: 4 },
         ],
       },
@@ -244,7 +246,7 @@ function renderCharts() {
     donutChartInstance = new Chart(donutChartRef.value, {
       type: 'doughnut',
       data: {
-        labels: ['Énergie', 'Péages & Parkings', 'Pneus (usure amortie)', 'Entretien', 'Assurance', 'Abonnements, taxes & autres'],
+        labels: ['Énergie', 'Péages & Parkings', 'Pneus (usure amortie)', 'Entretien', 'Assurance', 'Financement', 'Décote', 'Abonnements, taxes & autres'],
         datasets: [
           {
             data: [
@@ -253,9 +255,11 @@ function renderCharts() {
               tco.value.tires_amortized_cost || 0,
               tco.value.maintenance_cost || 0,
               tco.value.insurance_cost || 0,
+              tco.value.financing_cost || 0,
+              tco.value.depreciation_cost || 0,
               (tco.value.subscription_cost || 0) + (tco.value.tax_cost || 0) + (tco.value.other_cost || 0),
             ],
-            backgroundColor: ['#38bdf8', '#f59e0b', '#10b981', '#ec4899', '#a855f7', '#64748b'],
+            backgroundColor: ['#38bdf8', '#f59e0b', '#10b981', '#ec4899', '#a855f7', '#f97316', '#e11d48', '#64748b'],
             borderWidth: 0,
           },
         ],
@@ -381,6 +385,13 @@ function renderCharts() {
           >
             Renseigner l'assurance
           </router-link>
+          <router-link
+            v-if="tco.completeness.acquisition_missing"
+            to="/vehicles"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+          >
+            Renseigner l'acquisition
+          </router-link>
         </div>
       </div>
 
@@ -398,8 +409,14 @@ function renderCharts() {
             {{ (tco?.total_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
           </div>
           <p class="text-xs text-slate-400 mt-1">
-            Décaissé cumulé • coût complet (pneus amortis) :
-            {{ (tco?.full_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+            Dépenses courantes décaissées (hors achat du véhicule)
+          </p>
+          <p class="text-xs text-slate-300 mt-1">
+            Coût complet : {{ (tco?.full_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+            <span v-if="tco?.depreciation_cost" class="text-slate-400">dont décote {{ tco.depreciation_cost.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €</span>
+          </p>
+          <p v-if="tco?.carpool_revenue" class="text-[11px] text-emerald-400 mt-0.5">
+            Net des covoiturages : {{ (tco.full_cost_net || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} € ({{ (tco.full_cost_net_per_km || 0).toFixed(3) }} €/km)
           </p>
         </div>
 
@@ -418,7 +435,10 @@ function renderCharts() {
             Usage direct (énergie + péages) : {{ (tco?.usage_cost_per_km || 0).toFixed(3) }} €/km
             • sur {{ Math.round(tco?.distance_basis_km || 0).toLocaleString('fr-FR') }} km
           </p>
-          <p class="text-[11px] text-slate-500 mt-0.5">Assurance : {{ insuranceSourceLabel }}</p>
+          <p class="text-[11px] text-slate-500 mt-0.5">
+            Assurance : {{ insuranceSourceLabel }}
+            <template v-if="tco?.depreciation_cost_per_km"> • décote {{ tco.depreciation_cost_per_km.toFixed(3) }} €/km</template>
+          </p>
         </div>
 
         <!-- Energy Cost -->
