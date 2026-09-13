@@ -679,8 +679,8 @@ function formatDriveTime(dateStr: string) {
         <form @submit.prevent="handleCreateToll" class="space-y-4">
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Type</label>
-              <select v-model="tollForm.type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+              <label for="expense-toll-type" class="block text-xs font-semibold text-slate-300 mb-1">Type</label>
+              <select id="expense-toll-type" v-model="tollForm.type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
                 <option value="TOLL">Péage</option>
                 <option value="PARKING">Parking</option>
                 <option value="FERRY">Ferry</option>
@@ -741,8 +741,8 @@ function formatDriveTime(dateStr: string) {
 
             <!-- Single drive selection -->
             <div v-if="associationMode === 'SINGLE'" class="pt-2 space-y-1.5">
-              <label class="block text-xs text-slate-400">Choisir le trajet :</label>
-              <select
+              <label for="expense-selected-drive-id" class="block text-xs text-slate-400">Choisir le trajet :</label>
+              <select id="expense-selected-drive-id"
                 v-model="selectedDriveId"
                 @change="onSingleDriveChange"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
@@ -781,12 +781,12 @@ function formatDriveTime(dateStr: string) {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
-              <input v-model="tollForm.date" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              <label for="expense-toll-date" class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
+              <input id="expense-toll-date" v-model="tollForm.date" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Notes / Description</label>
-              <input v-model="tollForm.notes" placeholder="A10 Paris-Bordeaux..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              <label for="expense-toll-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes / Description</label>
+              <input id="expense-toll-notes" v-model="tollForm.notes" placeholder="A10 Paris-Bordeaux..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
             </div>
           </div>
 
@@ -820,8 +820,8 @@ function formatDriveTime(dateStr: string) {
 
         <form @submit.prevent="handleCreateMaint" class="space-y-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Catégorie</label>
-            <select v-model="maintForm.category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+            <label for="expense-maint-category" class="block text-xs font-semibold text-slate-300 mb-1">Catégorie</label>
+            <select id="expense-maint-category" v-model="maintForm.category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
               <option value="MAINTENANCE">Entretien / Révision</option>
               <option value="INSURANCE">Assurance</option>
               <option value="SUBSCRIPTION">Abonnement (Connectivité...)</option>
@@ -832,14 +832,14 @@ function formatDriveTime(dateStr: string) {
             </select>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Description</label>
-            <input v-model="maintForm.description" required placeholder="ex: Remplacement filtre habitacle" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="expense-maint-description" class="block text-xs font-semibold text-slate-300 mb-1">Description</label>
+            <input id="expense-maint-description" v-model="maintForm.description" required placeholder="ex: Remplacement filtre habitacle" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Date</label>
-              <input v-model="maintForm.date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="expense-maint-date" class="block text-xs font-semibold text-slate-300 mb-1">Date</label>
+              <input id="expense-maint-date" v-model="maintForm.date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
               <label for="maint-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
@@ -858,8 +858,8 @@ function formatDriveTime(dateStr: string) {
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
-            <input v-model.number="maintForm.odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
+            <input id="expense-maint-odometer" v-model.number="maintForm.odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div class="space-y-2 pt-1">

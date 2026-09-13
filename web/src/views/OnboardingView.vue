@@ -26,7 +26,7 @@ const vehicleOdometer = ref(15000)
 
 // Step 3: TeslaMate Connection (Optional)
 const enableTeslaMate = ref(false)
-const teslamateUrl = ref('http://teslamateapi:8080')
+const teslamateUrl = ref('')
 const teslamateAuthType = ref<'BEARER' | 'BASIC' | 'NONE'>('NONE')
 const teslamateApiKey = ref('')
 const teslamateUser = ref('')
@@ -190,8 +190,8 @@ function finishOnboarding() {
 
         <form @submit.prevent="handleStep1Submit" class="space-y-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email Administrateur</label>
-            <input
+            <label for="onboarding-admin-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email Administrateur</label>
+            <input id="onboarding-admin-email"
               v-model="adminEmail"
               type="email"
               required
@@ -201,8 +201,8 @@ function finishOnboarding() {
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe (8 car. min)</label>
-            <input
+            <label for="onboarding-admin-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe (8 car. min)</label>
+            <input id="onboarding-admin-password"
               v-model="adminPassword"
               type="password"
               required
@@ -212,8 +212,8 @@ function finishOnboarding() {
           </div>
 
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Confirmer le mot de passe</label>
-            <input
+            <label for="onboarding-admin-confirm-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Confirmer le mot de passe</label>
+            <input id="onboarding-admin-confirm-password"
               v-model="adminConfirmPassword"
               type="password"
               required
@@ -245,8 +245,8 @@ function finishOnboarding() {
 
         <form @submit.prevent="handleStep2Submit" class="space-y-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Nom du véhicule</label>
-            <input
+            <label for="onboarding-vehicle-name" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Nom du véhicule</label>
+            <input id="onboarding-vehicle-name"
               v-model="vehicleName"
               type="text"
               required
@@ -257,8 +257,8 @@ function finishOnboarding() {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Odomètre actuel (km)</label>
-              <input
+              <label for="onboarding-vehicle-odometer" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Odomètre actuel (km)</label>
+              <input id="onboarding-vehicle-odometer"
                 v-model.number="vehicleOdometer"
                 type="number"
                 min="0"
@@ -268,8 +268,8 @@ function finishOnboarding() {
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Numéro VIN (Optionnel)</label>
-              <input
+              <label for="onboarding-vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Numéro VIN (Optionnel)</label>
+              <input id="onboarding-vehicle-vin"
                 v-model="vehicleVin"
                 type="text"
                 placeholder="5YJ3E7EB..."
@@ -309,8 +309,8 @@ function finishOnboarding() {
 
           <div v-if="enableTeslaMate" class="p-4 bg-slate-800/40 border border-slate-800 rounded-2xl space-y-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">URL de l'API TeslaMate</label>
-              <input
+              <label for="onboarding-teslamate-url" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">URL de l'API TeslaMate</label>
+              <input id="onboarding-teslamate-url"
                 v-model="teslamateUrl"
                 type="url"
                 placeholder="http://192.168.1.50:8080 ou http://host.docker.internal:8080"
@@ -322,8 +322,8 @@ function finishOnboarding() {
             </div>
 
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mode d'authentification</label>
-              <select
+              <label for="onboarding-teslamate-auth-type" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mode d'authentification</label>
+              <select id="onboarding-teslamate-auth-type"
                 v-model="teslamateAuthType"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
               >
@@ -334,8 +334,8 @@ function finishOnboarding() {
             </div>
 
             <div v-if="teslamateAuthType === 'BEARER'">
-              <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Token API</label>
-              <input
+              <label for="onboarding-teslamate-api-key" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Token API</label>
+              <input id="onboarding-teslamate-api-key"
                 v-model="teslamateApiKey"
                 type="password"
                 placeholder="votre-token-secret"
@@ -345,8 +345,8 @@ function finishOnboarding() {
 
             <div v-if="teslamateAuthType === 'BASIC'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Utilisateur</label>
-                <input
+                <label for="onboarding-teslamate-user" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Utilisateur</label>
+                <input id="onboarding-teslamate-user"
                   v-model="teslamateUser"
                   type="text"
                   placeholder="admin"
@@ -354,8 +354,8 @@ function finishOnboarding() {
                 />
               </div>
               <div>
-                <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe</label>
-                <input
+                <label for="onboarding-teslamate-pass" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe</label>
+                <input id="onboarding-teslamate-pass"
                   v-model="teslamatePass"
                   type="password"
                   placeholder="••••••••"

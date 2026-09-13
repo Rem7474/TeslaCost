@@ -149,7 +149,7 @@ function openCreateModal(preselectedDriveId?: string) {
   editingTripId.value = null
   selectedDriveId.value = preselectedDriveId || ''
   selectedMultiDriveIds.value = []
-  sourceMode.value = preselectedDriveId ? 'SINGLE' : 'SINGLE'
+  sourceMode.value = 'SINGLE'
   form.value = {
     title: '',
     date: new Date().toISOString().substring(0, 10),
@@ -830,7 +830,8 @@ onMounted(() => {
 
           <!-- Mode 1: Single Drive -->
           <div v-if="sourceMode === 'SINGLE'" class="space-y-2">
-            <select
+            <label for="carpool-selected-drive-id" class="sr-only">Trajet TeslaMate associé</label>
+            <select id="carpool-selected-drive-id"
               v-model="selectedDriveId"
               @change="onSelectDrive(selectedDriveId)"
               class="w-full bg-slate-900 text-slate-200 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
@@ -901,8 +902,8 @@ onMounted(() => {
         <!-- Trip Details -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="sm:col-span-2">
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Titre / Trajet</label>
-            <input
+            <label for="carpool-title" class="block text-xs font-semibold text-slate-400 mb-1">Titre / Trajet</label>
+            <input id="carpool-title"
               v-model="form.title"
               type="text"
               placeholder="Ex: Paris → Lyon (via Auxerre)"
@@ -910,8 +911,8 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Date</label>
-            <input
+            <label for="carpool-date" class="block text-xs font-semibold text-slate-400 mb-1">Date</label>
+            <input id="carpool-date"
               v-model="form.date"
               type="date"
               class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
@@ -922,8 +923,8 @@ onMounted(() => {
         <!-- Distance & Re-estimate Button -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
           <div>
-            <label class="block text-xs font-semibold text-slate-400 mb-1">Distance parcourue (km)</label>
-            <input
+            <label for="carpool-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">Distance parcourue (km)</label>
+            <input id="carpool-distance-km"
               v-model.number="form.distance_km"
               type="number"
               step="0.1"
@@ -956,8 +957,8 @@ onMounted(() => {
 
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div>
-              <label class="block text-[11px] text-slate-400 mb-1">⚡ Électricité (€)</label>
-              <input
+              <label for="carpool-electricity-cost" class="block text-[11px] text-slate-400 mb-1">⚡ Électricité (€)</label>
+              <input id="carpool-electricity-cost"
                 v-model.number="form.electricity_cost"
                 type="number"
                 step="0.01"
@@ -966,8 +967,8 @@ onMounted(() => {
               />
             </div>
             <div>
-              <label class="block text-[11px] text-slate-400 mb-1">🛣️ Péages (€)</label>
-              <input
+              <label for="carpool-tolls-cost" class="block text-[11px] text-slate-400 mb-1">🛣️ Péages (€)</label>
+              <input id="carpool-tolls-cost"
                 v-model.number="form.tolls_cost"
                 type="number"
                 step="0.01"
@@ -976,8 +977,8 @@ onMounted(() => {
               />
             </div>
             <div>
-              <label class="block text-[11px] text-slate-400 mb-1">🛞 Usure pneus (€)</label>
-              <input
+              <label for="carpool-tires-cost" class="block text-[11px] text-slate-400 mb-1">🛞 Usure pneus (€)</label>
+              <input id="carpool-tires-cost"
                 v-model.number="form.tires_cost"
                 type="number"
                 step="0.01"
@@ -986,8 +987,8 @@ onMounted(() => {
               />
             </div>
             <div>
-              <label class="block text-[11px] text-slate-400 mb-1">🔧 Entretien (€)</label>
-              <input
+              <label for="carpool-maintenance-cost" class="block text-[11px] text-slate-400 mb-1">🔧 Entretien (€)</label>
+              <input id="carpool-maintenance-cost"
                 v-model.number="form.maintenance_cost"
                 type="number"
                 step="0.01"
@@ -997,7 +998,7 @@ onMounted(() => {
             </div>
             <div>
               <div class="flex items-center justify-between mb-1">
-                <label class="text-[11px] text-slate-400">🛡️ Assurance (€)</label>
+                <label for="carpool-insurance-cost" class="text-[11px] text-slate-400">🛡️ Assurance (€)</label>
                 <span
                   v-if="currentRates?.insurance_source === 'VEHICLE_SETTINGS'"
                   class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
@@ -1020,7 +1021,7 @@ onMounted(() => {
                   estimation
                 </span>
               </div>
-              <input
+              <input id="carpool-insurance-cost"
                 v-model.number="form.insurance_cost"
                 type="number"
                 step="0.01"
@@ -1029,8 +1030,8 @@ onMounted(() => {
               />
             </div>
             <div>
-              <label class="block text-[11px] text-slate-400 mb-1">📦 Divers (€)</label>
-              <input
+              <label for="carpool-other-cost" class="block text-[11px] text-slate-400 mb-1">📦 Divers (€)</label>
+              <input id="carpool-other-cost"
                 v-model.number="form.other_cost"
                 type="number"
                 step="0.01"
@@ -1078,7 +1079,8 @@ onMounted(() => {
 
               <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
                 <div class="sm:col-span-2">
-                  <input
+                  <label :for="`carpool-p-passenger-name-${index}`" class="sr-only">Nom du passager (ex: Sophie - BlaBlaCar)</label>
+                  <input :id="`carpool-p-passenger-name-${index}`"
                     v-model="p.passenger_name"
                     type="text"
                     placeholder="Nom du passager (ex: Sophie - BlaBlaCar)"
@@ -1086,7 +1088,8 @@ onMounted(() => {
                   />
                 </div>
                 <div>
-                  <input
+                  <label :for="`carpool-p-amount-paid-${index}`" class="sr-only">Montant (€)</label>
+                  <input :id="`carpool-p-amount-paid-${index}`"
                     v-model.number="p.amount_paid"
                     type="number"
                     step="0.5"
@@ -1096,7 +1099,8 @@ onMounted(() => {
                   />
                 </div>
                 <div>
-                  <input
+                  <label :for="`carpool-p-seats-${index}`" class="sr-only">Places (1)</label>
+                  <input :id="`carpool-p-seats-${index}`"
                     v-model.number="p.seats"
                     type="number"
                     min="1"
@@ -1107,13 +1111,15 @@ onMounted(() => {
               </div>
 
               <div class="grid grid-cols-2 gap-2">
-                <input
+                <label :for="`carpool-p-origin-${index}`" class="sr-only">Départ tronçon (ex: Paris)</label>
+                <input :id="`carpool-p-origin-${index}`"
                   v-model="p.origin"
                   type="text"
                   placeholder="Départ tronçon (ex: Paris)"
                   class="w-full bg-slate-900 text-slate-200 text-[11px] rounded-lg px-2 py-1 border border-slate-800 focus:outline-none focus:border-slate-600"
                 />
-                <input
+                <label :for="`carpool-p-destination-${index}`" class="sr-only">Arrivée tronçon (ex: Auxerre)</label>
+                <input :id="`carpool-p-destination-${index}`"
                   v-model="p.destination"
                   type="text"
                   placeholder="Arrivée tronçon (ex: Auxerre)"
@@ -1154,8 +1160,8 @@ onMounted(() => {
 
         <!-- Notes -->
         <div>
-          <label class="block text-xs font-semibold text-slate-400 mb-1">Notes ou commentaires (optionnel)</label>
-          <input
+          <label for="carpool-notes" class="block text-xs font-semibold text-slate-400 mb-1">Notes ou commentaires (optionnel)</label>
+          <input id="carpool-notes"
             v-model="form.notes"
             type="text"
             placeholder="Ex: Aller-retour week-end, super covoitureurs"

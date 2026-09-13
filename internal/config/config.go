@@ -37,7 +37,7 @@ func Load() *Config {
 	if dbHost := getEnv("DB_HOST", ""); dbHost != "" {
 		dbPort := getEnv("DB_PORT", "5432")
 		dbUser := getEnv("DB_USER", "teslacost")
-		dbPass := getEnv("DB_PASSWORD", "teslacost_dev_secret")
+		dbPass := getEnv("DB_PASSWORD", "")
 		dbName := getEnv("DB_NAME", "teslacost")
 		dbSSL := getEnv("DB_SSLMODE", "disable")
 
@@ -50,7 +50,8 @@ func Load() *Config {
 		}
 		dbURL = u.String()
 	} else {
-		rawURL := getEnv("DATABASE_URL", "postgres://teslacost:teslacost_dev_secret@localhost:5432/teslacost?sslmode=disable")
+		// No credentials in code: the password comes from DATABASE_URL, DB_PASSWORD or PGPASSWORD.
+		rawURL := getEnv("DATABASE_URL", "postgres://teslacost@localhost:5432/teslacost?sslmode=disable")
 		dbURL = NormalizeDatabaseURL(rawURL)
 	}
 

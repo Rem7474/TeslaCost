@@ -82,10 +82,10 @@ async function handleSubmit() {
 
       <form v-else @submit.prevent="handleSubmit" class="space-y-4">
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email</label>
+          <label for="register-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email</label>
           <div class="relative">
             <Mail class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
+            <input id="register-email"
               v-model="email"
               type="email"
               required
@@ -96,10 +96,10 @@ async function handleSubmit() {
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe (8 car. min)</label>
+          <label for="register-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe (8 car. min)</label>
           <div class="relative">
             <Lock class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
+            <input id="register-password"
               v-model="password"
               type="password"
               required
@@ -110,10 +110,10 @@ async function handleSubmit() {
         </div>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Confirmer le mot de passe</label>
+          <label for="register-confirm-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Confirmer le mot de passe</label>
           <div class="relative">
             <Lock class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
+            <input id="register-confirm-password"
               v-model="confirmPassword"
               type="password"
               required

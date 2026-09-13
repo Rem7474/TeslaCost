@@ -762,7 +762,8 @@ function formatDate(dateStr: string) {
             <div v-if="showAddTollInline" class="p-3 bg-slate-900 border border-slate-700 rounded-xl space-y-2 mt-2">
               <div class="text-xs font-bold text-white">Ajouter un péage / parking</div>
               <div class="grid grid-cols-2 gap-2">
-                <select
+                <label for="drive-inline-toll-type" class="sr-only">Type de frais</label>
+                <select id="drive-inline-toll-type"
                   v-model="inlineTollType"
                   class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white"
                 >
@@ -770,7 +771,8 @@ function formatDate(dateStr: string) {
                   <option value="PARKING">Parking</option>
                   <option value="FERRY">Ferry</option>
                 </select>
-                <input
+                <label for="drive-inline-toll-amount" class="sr-only">Montant (€)</label>
+                <input id="drive-inline-toll-amount"
                   v-model="inlineTollAmount"
                   type="number"
                   step="0.01"
@@ -778,7 +780,8 @@ function formatDate(dateStr: string) {
                   class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white"
                 />
               </div>
-              <input
+              <label for="drive-inline-toll-notes" class="sr-only">Notes (ex: Péage A6 Beaune)</label>
+              <input id="drive-inline-toll-notes"
                 v-model="inlineTollNotes"
                 type="text"
                 placeholder="Notes (ex: Péage A6 Beaune)"
@@ -859,8 +862,8 @@ function formatDate(dateStr: string) {
         </p>
 
         <div>
-          <label class="block text-xs font-semibold text-slate-300 mb-1">Nom du voyage / groupe</label>
-          <input
+          <label for="drive-group-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du voyage / groupe</label>
+          <input id="drive-group-name"
             v-model="groupName"
             type="text"
             placeholder="ex: Vacances Bretagne - Aller"
@@ -870,8 +873,8 @@ function formatDate(dateStr: string) {
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Type de frais</label>
-            <select
+            <label for="drive-expense-type" class="block text-xs font-semibold text-slate-300 mb-1">Type de frais</label>
+            <select id="drive-expense-type"
               v-model="expenseType"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
             >
@@ -881,8 +884,8 @@ function formatDate(dateStr: string) {
             </select>
           </div>
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
-            <input
+            <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
+            <input id="drive-toll-amount"
               v-model="tollAmount"
               type="number"
               step="0.01"
