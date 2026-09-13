@@ -247,7 +247,7 @@ function startEditCheckpoint(cp: any) {
 async function handleSaveCheckpoint() {
   if (!checkpointsVehicle.value) return
   const odo = Number(checkpointForm.value.odometer)
-  if (isNaN(odo) || odo < 0) {
+  if (Number.isNaN(odo) || odo < 0) {
     showAlert("Veuillez saisir un kilométrage d'odomètre valide", 'Champ requis', 'warning')
     return
   }
@@ -943,8 +943,9 @@ function clearCardTestResult(id: string) {
 
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Date du relevé</label>
+              <label for="checkpoint-date" class="block text-xs font-semibold text-slate-300 mb-1">Date du relevé</label>
               <input
+                id="checkpoint-date"
                 v-model="checkpointForm.date"
                 type="date"
                 required
@@ -952,8 +953,9 @@ function clearCardTestResult(id: string) {
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage (km)</label>
+              <label for="checkpoint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage (km)</label>
               <input
+                id="checkpoint-odometer"
                 v-model="checkpointForm.odometer"
                 type="number"
                 step="1"
@@ -965,8 +967,9 @@ function clearCardTestResult(id: string) {
               />
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">Motif / Événement</label>
+              <label for="checkpoint-notes" class="block text-xs font-semibold text-slate-300 mb-1">Motif / Événement</label>
               <input
+                id="checkpoint-notes"
                 v-model="checkpointForm.notes"
                 type="text"
                 placeholder="ex: Contrôle technique"

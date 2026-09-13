@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -24,6 +26,30 @@ type SaveCheckpointRequest struct {
 	Date     string  `json:"date"`
 	Odometer float64 `json:"odometer"`
 	Notes    *string `json:"notes"`
+}
+
+// decodeCheckpointRequest reads and validates the shared payload used by Create and Update.
+func decodeCheckpointRequest(r *http.Request) (time.Time, float64, *string, error) {
+	var req SaveCheckpointRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return time.Time{}, 0, nil, errors.New("Invalid request payload")
+	}
+
+	d, err := parseDate(req.Date)
+	if err != nil {
+		return time.Time{}, 0, nil, errors.New("Date invalide")
+	}
+	if req.Odometer < 0 || req.Odometer > 2_000_000 {
+		return time.Time{}, 0, nil, errors.New("Odomètre invalide (doit être compris entre 0 et 2 000 000 km)")
+	}
+
+	var notes *string
+	if req.Notes != nil && strings.TrimSpace(*req.Notes) != "" {
+		n := strings.TrimSpace(*req.Notes)
+		notes = &n
+	}
+
+	return d, req.Odometer, notes, nil
 }
 
 func (h *CheckpointHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -61,32 +87,16 @@ func (h *CheckpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req SaveCheckpointRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
-
-	d, err := parseDate(req.Date)
+	d, odometer, notes, err := decodeCheckpointRequest(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Date invalide")
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	if req.Odometer < 0 || req.Odometer > 2_000_000 {
-		writeError(w, http.StatusBadRequest, "Odomètre invalide (doit être compris entre 0 et 2 000 000 km)")
-		return
-	}
-
-	var notes *string
-	if req.Notes != nil && strings.TrimSpace(*req.Notes) != "" {
-		n := strings.TrimSpace(*req.Notes)
-		notes = &n
 	}
 
 	c := &models.OdometerCheckpoint{
 		VehicleID: vehicleID,
 		Date:      d,
-		Odometer:  req.Odometer,
+		Odometer:  odometer,
 		Notes:     notes,
 	}
 
@@ -111,33 +121,17 @@ func (h *CheckpointHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req SaveCheckpointRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
-
-	d, err := parseDate(req.Date)
+	d, odometer, notes, err := decodeCheckpointRequest(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Date invalide")
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
-	}
-	if req.Odometer < 0 || req.Odometer > 2_000_000 {
-		writeError(w, http.StatusBadRequest, "Odomètre invalide (doit être compris entre 0 et 2 000 000 km)")
-		return
-	}
-
-	var notes *string
-	if req.Notes != nil && strings.TrimSpace(*req.Notes) != "" {
-		n := strings.TrimSpace(*req.Notes)
-		notes = &n
 	}
 
 	c := &models.OdometerCheckpoint{
 		ID:        checkpointID,
 		VehicleID: vehicleID,
 		Date:      d,
-		Odometer:  req.Odometer,
+		Odometer:  odometer,
 		Notes:     notes,
 	}
 

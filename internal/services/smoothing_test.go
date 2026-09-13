@@ -17,36 +17,9 @@ func TestMileageSmoothingDistribution(t *testing.T) {
 	t2 := time.Date(2023, 4, 1, 0, 0, 0, 0, loc)
 	deltaOdo := 9000.0
 	trackedKm := 0.0
-
 	missingKm := deltaOdo - trackedKm
-	totalHours := t2.Sub(t1).Hours()
 
-	cur := time.Date(t1.Year(), t1.Month(), 1, 0, 0, 0, 0, loc)
-	endMonth := time.Date(t2.Year(), t2.Month(), 1, 0, 0, 0, 0, loc)
-
-	smoothedByMonth := make(map[string]float64)
-
-	for !cur.After(endMonth) {
-		nextMonth := cur.AddDate(0, 1, 0)
-		monthStr := cur.Format("2006-01")
-
-		overlapStart := t1
-		if cur.After(overlapStart) {
-			overlapStart = cur
-		}
-		overlapEnd := t2
-		if nextMonth.Before(overlapEnd) {
-			overlapEnd = nextMonth
-		}
-
-		if overlapEnd.After(overlapStart) {
-			overlapHours := overlapEnd.Sub(overlapStart).Hours()
-			ratio := overlapHours / totalHours
-			smoothedByMonth[monthStr] += missingKm * ratio
-		}
-
-		cur = nextMonth
-	}
+	smoothedByMonth := allocateMissingKmByMonth(t1, t2, missingKm)
 
 	// January: 31 days / 90 days * 9000 = 3100 km
 	jan := smoothedByMonth["2023-01"]
@@ -89,36 +62,9 @@ func TestMileageSmoothingWithPartialDrives(t *testing.T) {
 	t2 := time.Date(2023, 6, 1, 0, 0, 0, 0, loc)
 	deltaOdo := 3000.0
 	trackedKm := 1000.0
-
 	missingKm := deltaOdo - trackedKm
-	totalHours := t2.Sub(t1).Hours()
 
-	cur := time.Date(t1.Year(), t1.Month(), 1, 0, 0, 0, 0, loc)
-	endMonth := time.Date(t2.Year(), t2.Month(), 1, 0, 0, 0, 0, loc)
-
-	smoothedByMonth := make(map[string]float64)
-
-	for !cur.After(endMonth) {
-		nextMonth := cur.AddDate(0, 1, 0)
-		monthStr := cur.Format("2006-01")
-
-		overlapStart := t1
-		if cur.After(overlapStart) {
-			overlapStart = cur
-		}
-		overlapEnd := t2
-		if nextMonth.Before(overlapEnd) {
-			overlapEnd = nextMonth
-		}
-
-		if overlapEnd.After(overlapStart) {
-			overlapHours := overlapEnd.Sub(overlapStart).Hours()
-			ratio := overlapHours / totalHours
-			smoothedByMonth[monthStr] += missingKm * ratio
-		}
-
-		cur = nextMonth
-	}
+	smoothedByMonth := allocateMissingKmByMonth(t1, t2, missingKm)
 
 	may := smoothedByMonth["2023-05"]
 	if math.Abs(may-2000.0) > 0.01 {
