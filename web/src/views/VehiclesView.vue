@@ -313,7 +313,7 @@ function openEditModal(v: any) {
   form.value = {
     name: v.name,
     vin: v.vin || '',
-    current_odometer: v.current_odometer,
+    current_odometer: v.current_odometer ? Math.round(v.current_odometer) : 0,
     teslamate_car_id: v.teslamate_car_id || 1,
     teslamate_api_url: v.teslamate_api_url || '',
     teslamate_auth_type: v.teslamate_auth_type || 'NONE',
@@ -579,7 +579,17 @@ function clearCardTestResult(id: string) {
             </div>
             <div>
               <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre initial (km)</label>
-              <input id="vehicle-current-odometer" v-model.number="form.current_odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input
+                id="vehicle-current-odometer"
+                v-model.number="form.current_odometer"
+                type="number"
+                step="1"
+                :disabled="!!form.teslamate_api_url"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p v-if="form.teslamate_api_url" class="text-[11px] text-slate-400 mt-1">
+                Géré automatiquement par la synchronisation TeslaMate.
+              </p>
             </div>
           </div>
 
