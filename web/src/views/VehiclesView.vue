@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
+import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import {
   Car,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
+const { showConfirm, showAlert } = useConfirm()
 const showModal = ref(false)
 const isEditing = ref(false)
 const modalTestLoading = ref(false)
@@ -41,6 +43,18 @@ const ownerships = ref<Record<string, any | null>>({})
 const showOwnershipModal = ref(false)
 const ownershipVehicle = ref<any | null>(null)
 const ownershipForm = ref(emptyOwnership())
+
+// Odometer Checkpoints & Smoothing state
+const showCheckpointsModal = ref(false)
+const checkpointsVehicle = ref<any | null>(null)
+const checkpoints = ref<any[]>([])
+const loadingCheckpoints = ref(false)
+const editingCheckpointId = ref<string | null>(null)
+const checkpointForm = ref({
+  date: new Date().toISOString().substring(0, 10),
+  odometer: '',
+  notes: '',
+})
 
 const ACQUISITION_LABELS: Record<string, string> = {
   CASH: 'Achat comptant',
@@ -177,14 +191,100 @@ async function handleSaveOwnership() {
 
 async function handleDeleteOwnership() {
   if (!ownershipVehicle.value) return
-  if (!confirm('Supprimer le contrat d\'acquisition de ce véhicule ?')) return
+  const ok = await showConfirm({
+    title: "Supprimer le contrat d'acquisition",
+    message: "Supprimer le contrat d'acquisition de ce véhicule ?",
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
   try {
     await api.deleteOwnership(ownershipVehicle.value.id)
     ownerships.value[ownershipVehicle.value.id] = null
     showOwnershipModal.value = false
     vehicleStore.lastSyncTimestamp = Date.now()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+async function openCheckpointsModal(v: any) {
+  checkpointsVehicle.value = v
+  showCheckpointsModal.value = true
+  resetCheckpointForm()
+  await loadCheckpoints(v.id)
+}
+
+async function loadCheckpoints(vehicleId: string) {
+  loadingCheckpoints.value = true
+  try {
+    checkpoints.value = await api.getOdometerCheckpoints(vehicleId)
+  } catch (err: any) {
+    showAlert(`Erreur de chargement des relevés : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    loadingCheckpoints.value = false
+  }
+}
+
+function resetCheckpointForm() {
+  editingCheckpointId.value = null
+  checkpointForm.value = {
+    date: new Date().toISOString().substring(0, 10),
+    odometer: checkpointsVehicle.value?.current_odometer ? String(Math.round(checkpointsVehicle.value.current_odometer)) : '',
+    notes: '',
+  }
+}
+
+function startEditCheckpoint(cp: any) {
+  editingCheckpointId.value = cp.id
+  checkpointForm.value = {
+    date: new Date(cp.date).toISOString().substring(0, 10),
+    odometer: String(Math.round(cp.odometer)),
+    notes: cp.notes || '',
+  }
+}
+
+async function handleSaveCheckpoint() {
+  if (!checkpointsVehicle.value) return
+  const odo = Number(checkpointForm.value.odometer)
+  if (Number.isNaN(odo) || odo < 0) {
+    showAlert("Veuillez saisir un kilométrage d'odomètre valide", 'Champ requis', 'warning')
+    return
+  }
+  try {
+    const payload = {
+      date: checkpointForm.value.date,
+      odometer: odo,
+      notes: checkpointForm.value.notes.trim() || undefined,
+    }
+    if (editingCheckpointId.value) {
+      await api.updateOdometerCheckpoint(checkpointsVehicle.value.id, editingCheckpointId.value, payload)
+    } else {
+      await api.createOdometerCheckpoint(checkpointsVehicle.value.id, payload)
+    }
+    resetCheckpointForm()
+    await loadCheckpoints(checkpointsVehicle.value.id)
+    vehicleStore.lastSyncTimestamp = Date.now()
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+async function handleDeleteCheckpoint(cp: any) {
+  if (!checkpointsVehicle.value) return
+  const ok = await showConfirm({
+    title: 'Supprimer le relevé kilométrique',
+    message: `Supprimer le relevé de ${Math.round(cp.odometer).toLocaleString('fr-FR')} km du ${new Date(cp.date).toLocaleDateString('fr-FR')} ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
+  try {
+    await api.deleteOdometerCheckpoint(checkpointsVehicle.value.id, cp.id)
+    await loadCheckpoints(checkpointsVehicle.value.id)
+    vehicleStore.lastSyncTimestamp = Date.now()
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -235,17 +335,23 @@ async function handleSave() {
     await vehicleStore.fetchVehicles()
     await loadOwnerships()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
 async function handleDelete(id: string) {
-  if (!confirm('Supprimer ce véhicule et tout son historique ?')) return
+  const ok = await showConfirm({
+    title: 'Supprimer le véhicule',
+    message: 'Supprimer ce véhicule et tout son historique ? Cette action est irréversible.',
+    confirmText: 'Supprimer définitivement',
+    type: 'danger',
+  })
+  if (!ok) return
   try {
     await api.deleteVehicle(id)
     await vehicleStore.fetchVehicles()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -392,6 +498,14 @@ function clearCardTestResult(id: string) {
           >
             <FileText class="w-3.5 h-3.5 text-indigo-400" />
             <span>Acquisition & financement</span>
+          </button>
+          <button
+            @click="openCheckpointsModal(v)"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
+            title="Relevés manuels au compteur pour lissage kilométrique"
+          >
+            <Gauge class="w-3.5 h-3.5 text-cyan-400" />
+            <span>Relevés kilométriques</span>
           </button>
           <button
             v-if="v.teslamate_api_url"
@@ -774,6 +888,178 @@ function clearCardTestResult(id: string) {
             </div>
           </div>
         </form>
+      </div>
+    </div>
+
+    <!-- Odometer Checkpoints & Smoothing Modal -->
+    <div
+      v-if="showCheckpointsModal && checkpointsVehicle"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+      @click.self="showCheckpointsModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-6">
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl">
+              <Gauge class="w-5 h-5" />
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white">Relevés Kilométriques & Lissage</h3>
+              <p class="text-xs text-slate-400">{{ checkpointsVehicle.name }}</p>
+            </div>
+          </div>
+          <button @click="showCheckpointsModal = false" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <!-- Explanatory Banner -->
+        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 text-xs text-slate-300 space-y-2">
+          <div class="font-semibold text-white flex items-center gap-1.5">
+            <span>ℹ️</span> Comment fonctionne le lissage kilométrique automatique ?
+          </div>
+          <p class="text-slate-400 leading-relaxed">
+            Si votre véhicule a roulé sans TeslaMate (ex. avant l'installation, ou achat d'occasion), renseignez vos relevés kilométriques (contrôle technique, révision, déclaration d'assurance…).
+            TeslaCost calcule automatiquement les kilomètres non suivis et les distribue au prorata temporis dans l'historique mensuel.
+          </p>
+        </div>
+
+        <!-- Add / Edit Form -->
+        <form @submit.prevent="handleSaveCheckpoint" class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider">
+              {{ editingCheckpointId ? 'Modifier le relevé' : 'Nouveau relevé kilométrique' }}
+            </span>
+            <button
+              v-if="editingCheckpointId"
+              type="button"
+              @click="resetCheckpointForm"
+              class="text-xs text-slate-400 hover:text-white"
+            >
+              Annuler modification
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label for="checkpoint-date" class="block text-xs font-semibold text-slate-300 mb-1">Date du relevé</label>
+              <input
+                id="checkpoint-date"
+                v-model="checkpointForm.date"
+                type="date"
+                required
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label for="checkpoint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage (km)</label>
+              <input
+                id="checkpoint-odometer"
+                v-model="checkpointForm.odometer"
+                type="number"
+                step="1"
+                min="0"
+                max="2000000"
+                required
+                placeholder="ex: 45000"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div>
+              <label for="checkpoint-notes" class="block text-xs font-semibold text-slate-300 mb-1">Motif / Événement</label>
+              <input
+                id="checkpoint-notes"
+                v-model="checkpointForm.notes"
+                type="text"
+                placeholder="ex: Contrôle technique"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button
+              type="submit"
+              class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-lg shadow-cyan-600/20"
+            >
+              <span>{{ editingCheckpointId ? 'Mettre à jour' : 'Ajouter le relevé' }}</span>
+            </button>
+          </div>
+        </form>
+
+        <!-- Existing Checkpoints List -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Historique des relevés enregistrés</h4>
+            <span class="text-xs text-slate-400">{{ checkpoints.length }} relevé(s)</span>
+          </div>
+
+          <div v-if="loadingCheckpoints" class="py-8 text-center text-xs text-slate-400">
+            Chargement des relevés...
+          </div>
+
+          <div v-else-if="checkpoints.length === 0" class="py-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 text-xs text-slate-500">
+            Aucun relevé manuel pour l'instant. Utilisez le formulaire ci-dessus pour en créer un.
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="cp in checkpoints"
+              :key="cp.id"
+              class="bg-slate-950/70 border border-slate-800/80 rounded-xl p-3.5 flex items-center justify-between gap-3"
+            >
+              <div class="flex items-center gap-3 min-w-0">
+                <div class="p-2 bg-slate-800/80 text-cyan-400 rounded-lg shrink-0">
+                  <Gauge class="w-4 h-4" />
+                </div>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    <span class="text-sm font-bold text-white font-mono">
+                      {{ Math.round(cp.odometer).toLocaleString('fr-FR') }} km
+                    </span>
+                    <span class="text-xs text-slate-400">
+                      le {{ new Date(cp.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                    </span>
+                  </div>
+                  <p v-if="cp.notes" class="text-xs text-slate-400 truncate mt-0.5">
+                    {{ cp.notes }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  @click="startEditCheckpoint(cp)"
+                  class="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors"
+                  title="Modifier"
+                >
+                  <Edit2 class="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  @click="handleDeleteCheckpoint(cp)"
+                  class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                  title="Supprimer"
+                >
+                  <Trash2 class="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex justify-end pt-3 border-t border-slate-800">
+          <button
+            type="button"
+            @click="showCheckpointsModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl"
+          >
+            Fermer
+          </button>
+        </div>
       </div>
     </div>
   </div>

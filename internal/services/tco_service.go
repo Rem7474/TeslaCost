@@ -11,6 +11,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/teslacost/teslacost/internal/database"
+	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 )
 
@@ -40,17 +41,19 @@ const (
 
 // MonthlyCost represents monthly expenditure (cash basis, acquisition excluded) and mileage.
 type MonthlyCost struct {
-	Month       string      `json:"month"` // YYYY-MM
-	DistanceKm  float64     `json:"distance_km"`
-	Energy      money.Cents `json:"energy"`
-	Tolls       money.Cents `json:"tolls"`
-	Maintenance money.Cents `json:"maintenance"`
-	Insurance   money.Cents `json:"insurance"`
-	Financing   money.Cents `json:"financing"`
-	Other       money.Cents `json:"other"` // Subscriptions, taxes, accessories, other
-	Tires       money.Cents `json:"tires"`
-	Total       money.Cents `json:"total"`
-	CostPerKm   float64     `json:"cost_per_km"`
+	Month             string      `json:"month"` // YYYY-MM
+	DistanceKm        float64     `json:"distance_km"` // Total effective distance (tracked + smoothed)
+	TrackedDistanceKm float64     `json:"tracked_distance_km"` // Exact GPS drives distance
+	SmoothedKm        float64     `json:"smoothed_km"` // Linearly smoothed / interpolated distance
+	Energy            money.Cents `json:"energy"`
+	Tolls             money.Cents `json:"tolls"`
+	Maintenance       money.Cents `json:"maintenance"`
+	Insurance         money.Cents `json:"insurance"`
+	Financing         money.Cents `json:"financing"`
+	Other             money.Cents `json:"other"` // Subscriptions, taxes, accessories, other
+	Tires             money.Cents `json:"tires"`
+	Total             money.Cents `json:"total"`
+	CostPerKm         float64     `json:"cost_per_km"`
 }
 
 // TagCostBreakdown represents costs split by tag (e.g. Pro vs Perso).
@@ -154,6 +157,7 @@ func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
 type TCOSummary struct {
 	TotalDistanceKm    float64     `json:"total_distance_km"`
 	OdometerDistanceKm float64     `json:"odometer_distance_km"`
+	SmoothedDistanceKm float64     `json:"smoothed_distance_km"`
 	DistanceBasisKm    float64     `json:"distance_basis_km"`
 	TotalCost          money.Cents `json:"total_cost"`
 	TotalCostPerKm     float64     `json:"total_cost_per_km"`
@@ -502,8 +506,26 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	if sum.TagBreakdown, err = s.tagBreakdown(ctx, vehicleID, trackedKm); err != nil {
 		return nil, fmt.Errorf("tag breakdown: %w", err)
 	}
-	if sum.MonthlyCosts, err = s.monthlyCosts(ctx, vehicleID, now); err != nil {
+	if sum.MonthlyCosts, sum.SmoothedDistanceKm, err = s.monthlyCosts(ctx, vehicleID, ownership, currentOdometer, now); err != nil {
 		return nil, fmt.Errorf("monthly costs: %w", err)
+	}
+	if sum.SmoothedDistanceKm > 0 {
+		basisKm = math.Max(basisKm, trackedKm+sum.SmoothedDistanceKm)
+		sum.DistanceBasisKm = round1(basisKm)
+		sum.TotalCostPerKm = perKm(sum.TotalCost, basisKm)
+		sum.UsageCostPerKm = perKm(energy+travel, basisKm)
+		sum.FullCostPerKm = perKm(sum.FullCost, basisKm)
+		sum.FullCostNetPerKm = perKm(sum.FullCostNet, basisKm)
+		sum.DepreciationCostPerKm = perKm(sum.DepreciationCost, basisKm)
+		sum.EnergyCostPerKm = perKm(energy, basisKm)
+		sum.TollsCostPerKm = perKm(travel, basisKm)
+		sum.TiresCostPerKm = perKm(tires, basisKm)
+		sum.TiresAmortizedCostPerKm = perKm(sum.TiresAmortizedCost, basisKm)
+		sum.MaintenanceCostPerKm = perKm(maintenance, basisKm)
+		sum.RepairCostPerKm = perKm(repair, basisKm)
+		sum.InsuranceCostPerKm = perKm(insurance, basisKm)
+		sum.FinancingCostPerKm = perKm(sum.FinancingFullCost, basisKm)
+		sum.OtherCostPerKm = perKm(otherTotal, basisKm)
 	}
 	return sum, nil
 }
@@ -549,8 +571,123 @@ func (s *TCOService) tagBreakdown(ctx context.Context, vehicleID string, totalDi
 	return list, rows.Err()
 }
 
-// monthlyCosts builds the cash-basis monthly timeline (acquisition excluded) in the reporting timezone.
-func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, now time.Time) ([]MonthlyCost, error) {
+// computeMileageSmoothing interpolates missing mileage across months between known odometer checkpoints.
+func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, now time.Time) (map[string]float64, error) {
+	loc, err := time.LoadLocation(s.timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	checkpoints, err := s.repo.ListOdometerCheckpoints(ctx, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+
+	type odoPoint struct {
+		date time.Time
+		odo  float64
+	}
+
+	var points []odoPoint
+	if ownership != nil && ownership.StartOdometer != nil && *ownership.StartOdometer > 0 {
+		points = append(points, odoPoint{
+			date: ownership.StartDate.In(loc),
+			odo:  *ownership.StartOdometer,
+		})
+	}
+	for _, cp := range checkpoints {
+		points = append(points, odoPoint{
+			date: cp.Date.In(loc),
+			odo:  cp.Odometer,
+		})
+	}
+	if currentOdometer > 0 {
+		points = append(points, odoPoint{
+			date: now.In(loc),
+			odo:  currentOdometer,
+		})
+	}
+
+	if len(points) < 2 {
+		return nil, nil
+	}
+
+	// Sort chronologically by date
+	sort.Slice(points, func(i, j int) bool {
+		if points[i].date.Equal(points[j].date) {
+			return points[i].odo < points[j].odo
+		}
+		return points[i].date.Before(points[j].date)
+	})
+
+	// Deduplicate by date (keep highest odometer on same day) and eliminate regressions
+	var cleanPoints []odoPoint
+	for _, p := range points {
+		if len(cleanPoints) == 0 {
+			cleanPoints = append(cleanPoints, p)
+			continue
+		}
+		last := &cleanPoints[len(cleanPoints)-1]
+		if last.date.Format("2006-01-02") == p.date.Format("2006-01-02") {
+			if p.odo > last.odo {
+				last.odo = p.odo
+			}
+			continue
+		}
+		if p.odo >= last.odo {
+			cleanPoints = append(cleanPoints, p)
+		}
+	}
+
+	if len(cleanPoints) < 2 {
+		return nil, nil
+	}
+
+	smoothedByMonth := make(map[string]float64)
+
+	for i := 0; i < len(cleanPoints)-1; i++ {
+		p1 := cleanPoints[i]
+		p2 := cleanPoints[i+1]
+
+		deltaOdo := p2.odo - p1.odo
+		if deltaOdo <= 0 {
+			continue
+		}
+
+		t1 := p1.date
+		t2 := p2.date
+		if !t2.After(t1) {
+			continue
+		}
+
+		// Calculate tracked distance in [t1, t2]
+		var trackedKm float64
+		err := s.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(distance_km), 0)
+			FROM drives
+			WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
+			  AND start_time >= $2 AND start_time < $3;
+		`, vehicleID, t1, t2).Scan(&trackedKm)
+		if err != nil {
+			return nil, err
+		}
+
+		missingKm := deltaOdo - trackedKm
+		if missingKm <= 1.0 {
+			continue
+		}
+
+		for month, km := range allocateMissingKmByMonth(t1, t2, missingKm) {
+			smoothedByMonth[month] += km
+		}
+	}
+
+	return smoothedByMonth, nil
+}
+
+// monthlyCosts builds the cash-basis monthly timeline (acquisition excluded) in the reporting timezone,
+// including linear smoothing of missing mileage between odometer checkpoints.
+func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, now time.Time) ([]MonthlyCost, float64, error) {
 	monthlyMap := make(map[string]*MonthlyCost)
 	get := func(m string) *MonthlyCost {
 		if _, ok := monthlyMap[m]; !ok {
@@ -566,14 +703,14 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, now tim
 		GROUP BY m, category;
 	`, vehicleID, s.timezone)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for rows.Next() {
 		var m, category string
 		var amount money.Cents
 		if err := rows.Scan(&m, &category, &amount); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, 0, err
 		}
 		mc := get(m)
 		switch category {
@@ -595,7 +732,7 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, now tim
 	}
 	rows.Close()
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	distRows, err := s.pool.Query(ctx, `
@@ -603,25 +740,40 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, now tim
 		FROM drives WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL GROUP BY m;
 	`, vehicleID, s.timezone)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	for distRows.Next() {
 		var m string
 		var km float64
 		if err := distRows.Scan(&m, &km); err != nil {
 			distRows.Close()
-			return nil, err
+			return nil, 0, err
 		}
 		get(m).DistanceKm += km
 	}
 	distRows.Close()
 	if err := distRows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
+	// Compute smoothed missing distance between checkpoints
+	smoothedMap, err := s.computeMileageSmoothing(ctx, vehicleID, ownership, currentOdometer, now)
+	if err != nil {
+		return nil, 0, err
+	}
+	for m, smoothed := range smoothedMap {
+		if smoothed > 0 {
+			get(m).SmoothedKm += round1(smoothed)
+		}
+	}
+
+	var totalSmoothed float64
 	monthlyCosts := make([]MonthlyCost, 0, len(monthlyMap))
 	for _, mc := range monthlyMap {
-		mc.DistanceKm = round1(mc.DistanceKm)
+		mc.TrackedDistanceKm = round1(mc.DistanceKm)
+		mc.SmoothedKm = round1(mc.SmoothedKm)
+		mc.DistanceKm = round1(mc.TrackedDistanceKm + mc.SmoothedKm)
+		totalSmoothed += mc.SmoothedKm
 		mc.Total = mc.Energy + mc.Tolls + mc.Maintenance + mc.Insurance + mc.Financing + mc.Other + mc.Tires
 		mc.CostPerKm = perKm(mc.Total, mc.DistanceKm)
 		monthlyCosts = append(monthlyCosts, *mc)
@@ -633,5 +785,5 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, now tim
 	if len(monthlyCosts) == 0 {
 		monthlyCosts = append(monthlyCosts, MonthlyCost{Month: now.Format("2006-01")})
 	}
-	return monthlyCosts, nil
+	return monthlyCosts, round1(totalSmoothed), nil
 }

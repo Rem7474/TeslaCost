@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
+import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import {
   Navigation as NavIcon,
@@ -34,6 +35,7 @@ import {
 
 const router = useRouter()
 const vehicleStore = useVehicleStore()
+const { showConfirm, showAlert } = useConfirm()
 const drives = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -247,20 +249,30 @@ async function removeDriveFromTrip(tg: any, driveId: string) {
 
 async function handleDeleteTrip(tg: any) {
   if (!vehicleStore.activeVehicle) return
-  if (!confirm(`Supprimer le voyage « ${tg.name} » ? Les trajets ne sont pas supprimés.`)) return
+  const ok = await showConfirm({
+    title: 'Supprimer le voyage',
+    message: `Supprimer le voyage « ${tg.name} » ? Les trajets ne sont pas supprimés.`,
+    confirmText: 'Supprimer le voyage',
+    type: 'danger',
+  })
+  if (!ok) return
+
   let deleteExpenses = false
   if (tg.expense_count > 0) {
-    deleteExpenses = confirm(
-      `Ce voyage porte ${tg.expense_count} frais (${Number(tg.expenses_total).toFixed(2)} €).\n` +
-        'OK : supprimer aussi ces frais.\nAnnuler : les conserver dans les dépenses, sans lien avec des trajets.'
-    )
+    deleteExpenses = await showConfirm({
+      title: 'Frais associés au voyage',
+      message: `Ce voyage porte ${tg.expense_count} frais (${Number(tg.expenses_total).toFixed(2)} €). Souhaitez-vous également supprimer ces frais ?`,
+      confirmText: 'Supprimer aussi les frais',
+      cancelText: 'Conserver les frais sans lien',
+      type: 'warning',
+    })
   }
   try {
     await api.deleteTripGroup(vehicleStore.activeVehicle.id, tg.id, deleteExpenses)
     await loadTripGroups()
     loadDrives()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -457,12 +469,18 @@ async function handleSaveExpenseEdit(exp: any) {
 async function handleDeleteExpense(exp: any) {
   if (!vehicleStore.activeVehicle) return
   const scope = exp.trip_group_id ? ` (frais du voyage « ${exp.trip_group_name} », tous les trajets du voyage sont concernés)` : ''
-  if (!confirm(`Supprimer ce frais de ${Number(exp.amount).toFixed(2)} ${exp.currency}${scope} ?`)) return
+  const ok = await showConfirm({
+    title: 'Supprimer le frais',
+    message: `Supprimer ce frais de ${Number(exp.amount).toFixed(2)} ${exp.currency}${scope} ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
   try {
     await api.deleteDriveExpense(vehicleStore.activeVehicle.id, exp.id)
     await refreshCostModal()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 

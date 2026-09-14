@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
+import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import {
   Disc,
@@ -34,6 +35,7 @@ import {
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
+const { showConfirm, showAlert } = useConfirm()
 const tires = ref<any[]>([])
 const loading = ref(false)
 
@@ -253,32 +255,40 @@ async function handleDisposeTire() {
 
 async function handleDeleteTire(t: any) {
   if (!vehicleStore.activeVehicle) return
-  if (
-    !confirm(
-      `Supprimer définitivement le pneu ${t.brand} ${t.model} (${t.dimension}) avec son historique et son coût ?\n` +
-        'Pour un pneu usé, crevé ou vendu, préférez « Mettre au rebut » qui conserve son coût dans le TCO.'
-    )
-  )
-    return
+  const ok = await showConfirm({
+    title: 'Supprimer définitivement le pneu',
+    message: `Supprimer définitivement le pneu ${t.brand} ${t.model} (${t.dimension}) avec son historique et son coût ? Pour un pneu usé, crevé ou vendu, préférez « Mettre au rebut » qui conserve son coût dans le TCO.`,
+    confirmText: 'Supprimer définitivement',
+    type: 'danger',
+  })
+  if (!ok) return
+
   try {
     await api.deleteTire(vehicleStore.activeVehicle.id, t.id)
     showHistoryModal.value = false
     selectedTireIds.value = selectedTireIds.value.filter((id) => id !== t.id)
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
 async function handleDeleteLog(l: any) {
   if (!vehicleStore.activeVehicle || !selectedTire.value) return
-  if (!confirm(`Supprimer le relevé de ${l.depth_mm} mm du ${formatDate(l.date)} ?`)) return
+  const ok = await showConfirm({
+    title: 'Supprimer le relevé de gomme',
+    message: `Supprimer le relevé de ${l.depth_mm} mm du ${formatDate(l.date)} ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
+
   try {
     await api.deleteTireLog(vehicleStore.activeVehicle.id, selectedTire.value.id, l.id)
     await openHistoryModal({ tire: selectedTire.value })
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -345,7 +355,13 @@ async function handleQuickRotate(mode: 'FRONT_BACK' | 'CROSS') {
   if (!vehicleStore.activeVehicle) return
   const odo = Math.round(vehicleStore.activeVehicle.current_odometer || 0)
   const label = mode === 'FRONT_BACK' ? 'Avant ⇄ Arrière (FL ⇄ RL, FR ⇄ RR)' : 'Croisée (FL ⇄ RR, FR ⇄ RL)'
-  if (!confirm(`Confirmez-vous la permutation rapide ${label} à ${odo.toLocaleString('fr-FR')} km ?`)) return
+  const ok = await showConfirm({
+    title: 'Permutation rapide',
+    message: `Confirmez-vous la permutation rapide ${label} à ${odo.toLocaleString('fr-FR')} km ?`,
+    confirmText: 'Permuter',
+    type: 'warning',
+  })
+  if (!ok) return
 
   try {
     await api.quickRotateTires(vehicleStore.activeVehicle.id, {
@@ -354,7 +370,7 @@ async function handleQuickRotate(mode: 'FRONT_BACK' | 'CROSS') {
     })
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur lors de la permutation : ${err.message}`)
+    showAlert(`Erreur lors de la permutation : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -543,14 +559,20 @@ async function handleSaveSession() {
 
 async function handleDeleteSession(session: any) {
   if (!vehicleStore.activeVehicle || !selectedTire.value) return
-  if (!confirm('Confirmez-vous la suppression de cette session de montage ?')) return
+  const ok = await showConfirm({
+    title: 'Supprimer la session de montage',
+    message: 'Confirmez-vous la suppression de cette session de montage ?',
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
 
   try {
     await api.deleteTireSession(vehicleStore.activeVehicle.id, selectedTire.value.id, session.id)
     await openHistoryModal({ tire: selectedTire.value })
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur lors de la suppression : ${err.message}`)
+    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
