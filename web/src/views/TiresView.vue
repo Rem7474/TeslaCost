@@ -1289,7 +1289,38 @@ function formatDate(d: string) {
             >
               Essieu arrière monté (2 pneus)
             </button>
+            <button
+              type="button"
+              @click="addType = 'SET_2_STORAGE'"
+              class="p-2.5 rounded-xl border text-left transition-all"
+              :class="addType === 'SET_2_STORAGE' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
+            >
+              Paire au garage (2 pneus)
+            </button>
+            <button
+              type="button"
+              @click="addType = 'SINGLE'"
+              class="p-2.5 rounded-xl border text-left transition-all"
+              :class="addType === 'SINGLE' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
+            >
+              Pneu isolé (achat unique)
+            </button>
           </div>
+        </div>
+
+        <!-- Position (single tire only) -->
+        <div v-if="addType === 'SINGLE'" class="space-y-1">
+          <label for="tire-add-tire-position" class="block text-xs font-semibold text-slate-400">Position :</label>
+          <select id="tire-add-tire-position"
+            v-model="addTireForm.current_position"
+            class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
+          >
+            <option value="FL">Avant Gauche (FL)</option>
+            <option value="FR">Avant Droit (FR)</option>
+            <option value="RL">Arrière Gauche (RL)</option>
+            <option value="RR">Arrière Droit (RR)</option>
+            <option value="STORAGE">Stock au garage (non monté)</option>
+          </select>
         </div>
 
         <!-- Dimension Dropdown -->

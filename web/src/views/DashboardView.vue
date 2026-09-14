@@ -29,6 +29,30 @@ const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
 const mileageChartRef = ref<HTMLCanvasElement | null>(null)
 const donutChartRef = ref<HTMLCanvasElement | null>(null)
 
+const monthlyRangeOptions = [
+  { key: 'ALL', label: 'Tout' },
+  { key: '1Y', label: '1 an' },
+  { key: '6M', label: '6 mois' },
+  { key: '3M', label: '3 mois' },
+  { key: '1M', label: '1 mois' },
+] as const
+type MonthlyRangeKey = (typeof monthlyRangeOptions)[number]['key']
+const monthlyChartRange = ref<MonthlyRangeKey>('ALL')
+
+const monthlyRangeMonths: Record<MonthlyRangeKey, number | null> = {
+  ALL: null,
+  '1Y': 12,
+  '6M': 6,
+  '3M': 3,
+  '1M': 1,
+}
+
+const filteredMonthlyCosts = computed(() => {
+  const list = tco.value?.monthly_costs || []
+  const months = monthlyRangeMonths[monthlyChartRange.value]
+  return months ? list.slice(-months) : list
+})
+
 const dataQuality = ref<any | null>(null)
 const showDataQuality = ref(false)
 
@@ -108,6 +132,10 @@ watch(
   }
 )
 
+watch(monthlyChartRange, () => {
+  renderCharts()
+})
+
 onMounted(() => {
   loadTCO()
 })
@@ -128,18 +156,20 @@ function renderCharts() {
   if (monthlyChartRef.value) {
     if (monthlyChartInstance) monthlyChartInstance.destroy()
 
-    const energyData = monthlyList.map((m: any) => m.energy)
-    const tollsData = monthlyList.map((m: any) => m.tolls)
-    const tiresData = monthlyList.map((m: any) => m.tires || 0)
-    const maintData = monthlyList.map((m: any) => m.maintenance)
-    const insuranceData = monthlyList.map((m: any) => m.insurance || 0)
-    const otherData = monthlyList.map((m: any) => m.other || 0)
-    const financingData = monthlyList.map((m: any) => m.financing || 0)
+    const filteredList = filteredMonthlyCosts.value
+    const filteredLabels = filteredList.map((m: any) => m.month)
+    const energyData = filteredList.map((m: any) => m.energy)
+    const tollsData = filteredList.map((m: any) => m.tolls)
+    const tiresData = filteredList.map((m: any) => m.tires || 0)
+    const maintData = filteredList.map((m: any) => m.maintenance)
+    const insuranceData = filteredList.map((m: any) => m.insurance || 0)
+    const otherData = filteredList.map((m: any) => m.other || 0)
+    const financingData = filteredList.map((m: any) => m.financing || 0)
 
     monthlyChartInstance = new Chart(monthlyChartRef.value, {
       type: 'bar',
       data: {
-        labels,
+        labels: filteredLabels,
         datasets: [
           { label: 'Énergie (€)', data: energyData, backgroundColor: '#38bdf8', borderRadius: 4 },
           { label: 'Péages & Parkings (€)', data: tollsData, backgroundColor: '#f59e0b', borderRadius: 4 },
@@ -607,10 +637,26 @@ function renderCharts() {
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Monthly Evolution Bar Chart -->
         <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-          <h3 class="text-sm font-bold text-white mb-4 flex items-center justify-between">
-            <span>Évolution mensuelle des dépenses (€)</span>
-            <span class="text-xs text-slate-400 font-normal">Montants décaissés par mois</span>
-          </h3>
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <span>Évolution mensuelle des dépenses (€)</span>
+              <span class="text-xs text-slate-400 font-normal">Montants décaissés par mois</span>
+            </h3>
+            <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5 self-start sm:self-auto">
+              <button
+                v-for="opt in monthlyRangeOptions"
+                :key="opt.key"
+                type="button"
+                @click="monthlyChartRange = opt.key"
+                :class="[
+                  'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+                  monthlyChartRange === opt.key ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white',
+                ]"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
           <div class="h-64 sm:h-72">
             <canvas ref="monthlyChartRef"></canvas>
           </div>
