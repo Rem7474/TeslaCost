@@ -538,7 +538,9 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		}
 	}
 	if sum.SmoothedDistanceKm > 0 {
-		basisKm = math.Max(basisKm, trackedKm+sum.SmoothedDistanceKm)
+		if (trackedKm + sum.SmoothedDistanceKm) > basisKm+0.5 {
+			basisKm = trackedKm + sum.SmoothedDistanceKm
+		}
 		sum.DistanceBasisKm = round1(basisKm)
 		sum.TotalCostPerKm = perKm(sum.TotalCost, basisKm)
 		sum.UsageCostPerKm = perKm(energy+travel, basisKm)
@@ -816,17 +818,24 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 	if err != nil {
 		return nil, 0, err
 	}
+	var rawSmoothedTotal float64
 	for m, smoothed := range smoothedMap {
 		if smoothed > 0 {
 			get(m).SmoothedKm += round1(smoothed)
+			rawSmoothedTotal += smoothed
 		}
 	}
+	targetSmoothed := round1(rawSmoothedTotal)
 
 	var totalSmoothed float64
+	var lastSmoothedMc *MonthlyCost
 	monthlyCosts := make([]MonthlyCost, 0, len(monthlyMap))
 	for _, mc := range monthlyMap {
 		mc.TrackedDistanceKm = round1(mc.DistanceKm)
 		mc.SmoothedKm = round1(mc.SmoothedKm)
+		if mc.SmoothedKm > 0 {
+			lastSmoothedMc = mc
+		}
 		mc.DistanceKm = round1(mc.TrackedDistanceKm + mc.SmoothedKm)
 		totalSmoothed += mc.SmoothedKm
 		if preKwh100km != nil && *preKwh100km > 0 && preEurPerKwh != nil && *preEurPerKwh > 0 && mc.SmoothedKm > 0 {
@@ -838,6 +847,16 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 		mc.CostPerKm = perKm(mc.Total, mc.DistanceKm)
 		monthlyCosts = append(monthlyCosts, *mc)
 	}
+
+	if lastSmoothedMc != nil && targetSmoothed > 0 {
+		diff := round1(targetSmoothed - totalSmoothed)
+		if math.Abs(diff) > 0.001 && math.Abs(diff) < 1.0 {
+			lastSmoothedMc.SmoothedKm = round1(lastSmoothedMc.SmoothedKm + diff)
+			lastSmoothedMc.DistanceKm = round1(lastSmoothedMc.TrackedDistanceKm + lastSmoothedMc.SmoothedKm)
+			totalSmoothed = targetSmoothed
+		}
+	}
+
 	sort.Slice(monthlyCosts, func(i, j int) bool {
 		return monthlyCosts[i].Month < monthlyCosts[j].Month
 	})
