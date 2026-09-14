@@ -117,7 +117,7 @@ function onVehicleChange(event: Event) {
         >
           <CheckCircle2 class="w-3 h-3 shrink-0" />
           <span>{{ syncSummary }}</span>
-          <button @click="vehicleStore.clearSyncStatus" class="ml-1 text-slate-400 hover:text-slate-200">
+          <button @click="vehicleStore.clearSyncStatus" class="ml-1 text-slate-400 hover:text-slate-200" title="Fermer" aria-label="Fermer">
             <X class="w-3 h-3" />
           </button>
         </div>
@@ -149,7 +149,7 @@ function onVehicleChange(event: Event) {
           {{ offlineStore.failures.map((f) => `${f.label} (${f.error})`).join(' ; ') }}
         </span>
       </div>
-      <button @click="offlineStore.dismissFailures" class="text-rose-400 hover:text-white p-1 rounded transition-colors">
+      <button @click="offlineStore.dismissFailures" class="text-rose-400 hover:text-white p-1 rounded transition-colors" title="Fermer" aria-label="Fermer">
         <X class="w-4 h-4" />
       </button>
     </div>
@@ -166,6 +166,8 @@ function onVehicleChange(event: Event) {
       <button
         @click="vehicleStore.clearSyncStatus"
         class="text-rose-400 hover:text-white p-1 rounded transition-colors"
+        title="Fermer"
+        aria-label="Fermer"
       >
         <X class="w-4 h-4" />
       </button>
@@ -186,6 +188,8 @@ function onVehicleChange(event: Event) {
       <button
         @click="vehicleStore.clearSyncStatus"
         class="text-amber-400 hover:text-white p-1 rounded transition-colors"
+        title="Fermer"
+        aria-label="Fermer"
       >
         <X class="w-4 h-4" />
       </button>

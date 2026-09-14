@@ -82,6 +82,7 @@ function handleLogout() {
           @click="handleLogout"
           class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
           title="Déconnexion"
+          aria-label="Déconnexion"
         >
           <LogOut class="w-4 h-4" />
         </button>

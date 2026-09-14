@@ -104,6 +104,7 @@ onUnmounted(() => {
                 @click="onCancel"
                 class="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
                 title="Fermer"
+                aria-label="Fermer"
               >
                 <X class="w-4 h-4" />
               </button>
