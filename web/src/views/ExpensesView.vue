@@ -668,6 +668,28 @@ function formatDriveTime(dateStr: string) {
 
     <!-- Content: Charges -->
     <div v-if="activeTab === 'CHARGES'" class="space-y-3">
+      <!-- Pre-TeslaMate Charges Banner if configured -->
+      <div
+        v-if="vehicleStore.activeVehicle?.pre_teslamate_kwh_100km && vehicleStore.activeVehicle?.pre_teslamate_eur_per_kwh"
+        class="p-3 bg-sky-500/10 border border-sky-500/20 rounded-2xl flex items-center justify-between text-xs text-sky-300"
+      >
+        <div class="flex items-center gap-2">
+          <Zap class="w-4 h-4 shrink-0 text-sky-400" />
+          <span>
+            Estimation avant TeslaMate active :
+            <strong>{{ vehicleStore.activeVehicle.pre_teslamate_kwh_100km }} kWh/100km</strong> à
+            <strong>{{ Number(vehicleStore.activeVehicle.pre_teslamate_eur_per_kwh).toFixed(4) }} €/kWh</strong>
+            (intégrée automatiquement dans le TCO).
+          </span>
+        </div>
+        <button
+          @click="router.push('/vehicles')"
+          class="shrink-0 font-medium underline hover:text-sky-200 transition-colors ml-2"
+        >
+          Modifier
+        </button>
+      </div>
+
       <button
         v-if="chargesWithoutCost > 0 || missingCostOnly"
         @click="toggleMissingCostFilter"

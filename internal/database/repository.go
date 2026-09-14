@@ -106,6 +106,7 @@ const vehicleColumns = `
 	id, user_id, name, vin, teslamate_car_id, current_odometer,
 	teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
 	teslamate_basic_user, teslamate_basic_pass_encrypted,
+	pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh,
 	created_at, updated_at
 `
 
@@ -114,6 +115,7 @@ func scanVehicle(row pgx.Row, v *models.Vehicle) error {
 		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
 		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
 		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
+		&v.PreTeslaMateKwh100km, &v.PreTeslaMateEurPerKwh,
 		&v.CreatedAt, &v.UpdatedAt,
 	)
 }
@@ -123,14 +125,16 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 		INSERT INTO vehicles (
 			user_id, name, vin, teslamate_car_id, current_odometer,
 			teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
-			teslamate_basic_user, teslamate_basic_pass_encrypted
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			teslamate_basic_user, teslamate_basic_pass_encrypted,
+			pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING id, created_at, updated_at;
 	`
 	err := r.pool.QueryRow(ctx, query,
 		v.UserID, v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
+		v.PreTeslaMateKwh100km, v.PreTeslaMateEurPerKwh,
 	).Scan(&v.ID, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create vehicle: %w", err)
@@ -183,17 +187,35 @@ func (r *Repository) UpdateVehicle(ctx context.Context, v *models.Vehicle) error
 		    teslamate_api_url = $5, teslamate_auth_type = $6,
 		    teslamate_api_key_encrypted = $7, teslamate_basic_user = $8,
 		    teslamate_basic_pass_encrypted = $9,
+		    pre_teslamate_kwh_100km = $10, pre_teslamate_eur_per_kwh = $11,
 		    updated_at = NOW()
-		WHERE id = $10 AND user_id = $11;
+		WHERE id = $12 AND user_id = $13;
 	`
 	tag, err := r.pool.Exec(ctx, query,
 		v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
+		v.PreTeslaMateKwh100km, v.PreTeslaMateEurPerKwh,
 		v.ID, v.UserID,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update vehicle: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *Repository) UpdateVehiclePreTeslaMateEnergy(ctx context.Context, vehicleID, userID string, kwh100km, eurPerKwh *float64) error {
+	query := `
+		UPDATE vehicles
+		SET pre_teslamate_kwh_100km = $1, pre_teslamate_eur_per_kwh = $2, updated_at = NOW()
+		WHERE id = $3 AND user_id = $4;
+	`
+	tag, err := r.pool.Exec(ctx, query, kwh100km, eurPerKwh, vehicleID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update pre-teslamate energy: %w", err)
 	}
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound

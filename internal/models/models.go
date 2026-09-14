@@ -58,6 +58,8 @@ type Vehicle struct {
 	TeslaMateAPIKeyEncrypted *string   `json:"-"`
 	TeslaMateBasicUser       *string   `json:"teslamate_basic_user,omitempty"`
 	TeslaMateBasicPassEnc    *string   `json:"-"`
+	PreTeslaMateKwh100km     *float64  `json:"pre_teslamate_kwh_100km,omitempty"`
+	PreTeslaMateEurPerKwh    *float64  `json:"pre_teslamate_eur_per_kwh,omitempty"`
 	CreatedAt                time.Time `json:"created_at"`
 	UpdatedAt                time.Time `json:"updated_at"`
 }
