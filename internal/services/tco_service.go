@@ -629,6 +629,10 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 			odo:  cp.Odometer,
 		})
 	}
+	if len(points) == 0 {
+		return nil, nil
+	}
+
 	var firstDriveTime *time.Time
 	var firstDriveOdo *float64
 	_ = s.pool.QueryRow(ctx, `
@@ -638,10 +642,19 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 		ORDER BY start_time ASC LIMIT 1;
 	`, vehicleID).Scan(&firstDriveTime, &firstDriveOdo)
 	if firstDriveTime != nil && firstDriveOdo != nil && *firstDriveOdo > 0 {
-		points = append(points, odoPoint{
-			date: firstDriveTime.In(loc),
-			odo:  *firstDriveOdo,
-		})
+		hasPriorPoint := false
+		for _, p := range points {
+			if p.odo < *firstDriveOdo && !p.date.After(*firstDriveTime) {
+				hasPriorPoint = true
+				break
+			}
+		}
+		if hasPriorPoint {
+			points = append(points, odoPoint{
+				date: firstDriveTime.In(loc),
+				odo:  *firstDriveOdo,
+			})
+		}
 	}
 	if currentOdometer > 0 {
 		points = append(points, odoPoint{
