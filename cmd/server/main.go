@@ -165,6 +165,7 @@ func main() {
 				r.Get("/{id}/ownership", vehicleHandler.GetOwnership)
 				r.Put("/{id}/ownership", vehicleHandler.SaveOwnership)
 				r.Delete("/{id}/ownership", vehicleHandler.DeleteOwnership)
+				r.Put("/{id}/pre-teslamate-energy", vehicleHandler.UpdatePreTeslaMateEnergy)
 				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
 
 				// Odometer Checkpoints

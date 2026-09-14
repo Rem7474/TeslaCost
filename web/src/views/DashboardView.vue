@@ -157,6 +157,14 @@ function renderCharts() {
           legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
           tooltip: {
             callbacks: {
+              label: (context) => {
+                const monthItem = monthlyList[context.dataIndex]
+                const val = Number(context.raw || 0).toFixed(2)
+                if (context.dataset.label?.startsWith('Énergie') && monthItem && monthItem.smoothed_energy > 0) {
+                  return `${context.dataset.label} : ${val} € (dont ${monthItem.smoothed_energy.toFixed(2)} € estimés avant TeslaMate)`
+                }
+                return `${context.dataset.label} : ${val} €`
+              },
               footer: (items) => {
                 const total = items.reduce((sum, item) => sum + (Number(item.raw) || 0), 0)
                 return `Total mois : ${total.toFixed(2)} €`
@@ -434,6 +442,13 @@ function renderCharts() {
           >
             Renseigner l'acquisition
           </router-link>
+          <router-link
+            v-if="tco.completeness.untracked_distance_km > 0 && !tco.pre_teslamate_cost"
+            to="/vehicles"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+          >
+            Compléter recharges avant TeslaMate
+          </router-link>
           <button
             v-if="tco.completeness.odometer_gaps > 0 || tco.completeness.odometer_anomalies > 0"
             @click="toggleDataQuality"
@@ -539,6 +554,9 @@ function renderCharts() {
           </div>
           <p class="text-xs text-slate-400 mt-1">
             {{ (tco?.energy_cost_per_km || 0).toFixed(3) }} €/km ({{ Math.round(tco?.total_kwh_added || 0).toLocaleString('fr-FR') }} kWh)
+          </p>
+          <p v-if="tco?.pre_teslamate_cost" class="text-[11px] text-sky-300/90 mt-0.5">
+            dont {{ tco.pre_teslamate_cost.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} € estimés avant TeslaMate ({{ Math.round(tco.pre_teslamate_kwh || 0).toLocaleString('fr-FR') }} kWh)
           </p>
           <p v-if="tco?.completeness?.charges_without_cost" class="text-[11px] text-amber-400 mt-0.5">
             {{ tco.completeness.charges_without_cost }} recharge(s) sans coût

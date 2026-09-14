@@ -76,3 +76,23 @@ func TestMileageSmoothingWithPartialDrives(t *testing.T) {
 		t.Errorf("expected total effective May distance to equal deltaOdo (3000 km), got %f", totalEffectiveMay)
 	}
 }
+
+func TestPreTeslaMateEnergyCalculation(t *testing.T) {
+	// 9000 km smoothed over Jan, Feb, Mar
+	smoothedKm := 9000.0
+	kwh100km := 16.5
+	eurPerKwh := 0.22
+
+	totalKwh := math.Round(smoothedKm*(kwh100km/100.0)*10) / 10
+	expectedKwh := 1485.0
+	if math.Abs(totalKwh-expectedKwh) > 0.01 {
+		t.Errorf("expected total kWh to be %f, got %f", expectedKwh, totalKwh)
+	}
+
+	totalCostEur := totalKwh * eurPerKwh
+	expectedCost := 326.70
+	if math.Abs(totalCostEur-expectedCost) > 0.01 {
+		t.Errorf("expected total cost to be %f €, got %f €", expectedCost, totalCostEur)
+	}
+}
+
