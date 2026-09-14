@@ -1056,6 +1056,21 @@ func (r *Repository) CreateTiresBatch(ctx context.Context, tires []*models.Tire)
 	}
 	defer tx.Rollback(ctx)
 
+	// Two tires must never end up on the same wheel: lock the vehicle's existing
+	// tires so a concurrent insert can't slip a second one onto the same position.
+	occupied := make(map[models.TirePosition]string)
+	if len(tires) > 0 && tires[0].VehicleID != nil {
+		existing, err := lockVehicleTires(ctx, tx, *tires[0].VehicleID)
+		if err != nil {
+			return err
+		}
+		for _, et := range existing {
+			if isMountedPosition(et.CurrentPosition) {
+				occupied[et.CurrentPosition] = et.Brand + " " + et.Model
+			}
+		}
+	}
+
 	for _, t := range tires {
 		lifespan := t.EstimatedLifespanKm
 		if lifespan <= 0 {
@@ -1066,6 +1081,12 @@ func (r *Repository) CreateTiresBatch(ctx context.Context, tires []*models.Tire)
 		}
 		if isMountedPosition(t.CurrentPosition) && (t.MountedOdometer == nil || t.VehicleID == nil) {
 			return validationErrorf("un pneu monté requiert l'odomètre de montage")
+		}
+		if isMountedPosition(t.CurrentPosition) {
+			if other, taken := occupied[t.CurrentPosition]; taken {
+				return validationErrorf("la position %s est déjà occupée par %s : mettez-le au rebut ou changez sa position avant d'en monter un nouveau", t.CurrentPosition, other)
+			}
+			occupied[t.CurrentPosition] = t.Brand + " " + t.Model
 		}
 		if !isMountedPosition(t.CurrentPosition) {
 			t.MountedOdometer = nil
