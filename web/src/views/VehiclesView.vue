@@ -948,7 +948,9 @@ function clearCardTestResult(id: string) {
                 <input id="own-resale" v-model.number="ownershipForm.expected_resale_value" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-holding" class="block text-xs font-semibold text-slate-300 mb-1">Durée de détention prévue (mois)</label>
+                <label for="own-holding" class="block text-xs font-semibold text-slate-300 mb-1">
+                  {{ ownershipForm.acquisition_type === 'LOA' && ownershipForm.option_exercised_date ? 'Durée de détention après rachat (mois)' : 'Durée de détention prévue (mois)' }}
+                </label>
                 <input id="own-holding" v-model.number="ownershipForm.expected_holding_months" type="number" min="1" max="360" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>
