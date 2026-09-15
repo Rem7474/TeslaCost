@@ -213,6 +213,10 @@ type MaintenanceExpense struct {
 	IsRecurring              bool        `json:"is_recurring"`
 	RecurrenceIntervalMonths *int        `json:"recurrence_interval_months,omitempty"`
 	RecurrenceEndDate        *time.Time  `json:"recurrence_end_date,omitempty"`
+	AmortizationMode         string      `json:"amortization_mode"`
+	CoverageKm               *float64    `json:"coverage_km,omitempty"`
+	CoverageMonths           *int        `json:"coverage_months,omitempty"`
+	ClosesMaintenanceID     *string     `json:"closes_maintenance_id,omitempty"`
 	Description              string      `json:"description"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`

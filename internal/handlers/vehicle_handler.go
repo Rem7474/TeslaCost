@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -343,3 +344,42 @@ func (h *VehicleHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, job)
 }
+
+// GetOdometerAtDate returns the estimated or recorded odometer for the vehicle at a specific date.
+func (h *VehicleHandler) GetOdometerAtDate(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "id")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	dateStr := r.URL.Query().Get("date")
+	targetTime := time.Now()
+	if dateStr != "" {
+		parsed, err := parseDate(dateStr)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "Date invalide")
+			return
+		}
+		// If only date was provided (00:00:00), check drives up to end of that day
+		if parsed.Hour() == 0 && parsed.Minute() == 0 && parsed.Second() == 0 {
+			targetTime = parsed.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+		} else {
+			targetTime = parsed
+		}
+	}
+
+	odo, source, err := h.repo.GetOdometerAtDate(r.Context(), vehicleID, targetTime)
+	if err != nil {
+		writeRepoError(w, err, "Failed to resolve odometer")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"odometer": odo,
+		"source":   source,
+	})
+}
+

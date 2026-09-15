@@ -774,3 +774,108 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 		t.Fatalf("expected foreign drives to be rejected, got %v", err)
 	}
 }
+
+func TestIntegrationMaintenanceAmortizationAndOdometer(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "maint_test@example.com")
+	loc := time.UTC
+	base := time.Date(2024, time.March, 1, 10, 0, 0, 0, loc)
+
+	// 1. Odometer resolution tests
+	mustDrive(t, repo, v.ID, 101, base.Add(-10*24*time.Hour), 48000, 50)
+	mustDrive(t, repo, v.ID, 102, base, 48500, 100)
+
+	odo1, _, err := repo.GetOdometerAtDate(ctx, v.ID, base.Add(-5*24*time.Hour))
+	if err != nil || odo1 != 48050 {
+		t.Fatalf("expected 48050 odometer before second drive, got %v (err %v)", odo1, err)
+	}
+	odo2, _, err := repo.GetOdometerAtDate(ctx, v.ID, base.Add(2*time.Hour))
+	if err != nil || odo2 != 48600 {
+		t.Fatalf("expected 48600 odometer after second drive, got %v (err %v)", odo2, err)
+	}
+
+	// 2. Create maintenance expenses:
+	// m1: 50,000 km revision (500 €) amortized over 50,000 km
+	covKm := 50000.0
+	covMonths := 24
+	m1 := &models.MaintenanceExpense{
+		VehicleID:        v.ID,
+		Category:         "MAINTENANCE",
+		Amount:           50000, // 500.00 €
+		Currency:         "EUR",
+		Date:             base,
+		Odometer:         &odo2,
+		AmortizationMode: "DISTANCE",
+		CoverageKm:       &covKm,
+		Description:      "Grande Révision 50k",
+	}
+	if err := repo.CreateMaintenanceExpense(ctx, m1); err != nil {
+		t.Fatal(err)
+	}
+
+	// m2: Wiper blades (40 €) immediate (NONE)
+	m2 := &models.MaintenanceExpense{
+		VehicleID:        v.ID,
+		Category:         "MAINTENANCE",
+		Amount:           4000, // 40.00 €
+		Currency:         "EUR",
+		Date:             base.Add(35 * 24 * time.Hour), // April 2024
+		AmortizationMode: "NONE",
+		Description:      "Balais essuie-glaces",
+	}
+	if err := repo.CreateMaintenanceExpense(ctx, m2); err != nil {
+		t.Fatal(err)
+	}
+
+	// m3: Revision 80,000 km (600 €) amortized over 50,000 km which closes m1
+	m3 := &models.MaintenanceExpense{
+		VehicleID:            v.ID,
+		Category:             "MAINTENANCE",
+		Amount:               60000, // 600.00 €
+		Currency:             "EUR",
+		Date:                 base.Add(180 * 24 * time.Hour), // September 2024
+		AmortizationMode:     "DISTANCE",
+		CoverageKm:           &covKm,
+		CoverageMonths:       &covMonths,
+		ClosesMaintenanceID: &m1.ID,
+		Description:          "Révision 80k",
+	}
+	if err := repo.CreateMaintenanceExpense(ctx, m3); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := repo.ListMaintenanceExpenses(ctx, v.ID)
+	if err != nil || len(list) != 3 {
+		t.Fatalf("expected 3 maintenance expenses, got %d (err %v)", len(list), err)
+	}
+
+	tcoSvc := NewTCOService(db.Pool, "UTC")
+	monthlyDistances := map[string]float64{
+		"2024-03": 1000,
+		"2024-04": 2000,
+		"2024-05": 2000,
+		"2024-09": 1500,
+	}
+	now := base.Add(200 * 24 * time.Hour)
+	maintMap, err := tcoSvc.computeMonthlyMaintenanceAmortization(ctx, v.ID, monthlyDistances, now)
+	if err != nil {
+		t.Fatalf("computeMonthlyMaintenanceAmortization failed: %v", err)
+	}
+
+	// March 2024: 1000 km * (50000 / 50000) = 1000 cents (10.00 €)
+	if maintMap["2024-03"] != 1000 {
+		t.Fatalf("expected 1000 cents in 2024-03, got %d", maintMap["2024-03"])
+	}
+
+	// April 2024: 2000 km * 1.00 cent/km = 2000 cents + m2 (4000 cents) = 6000 cents (60.00 €)
+	if maintMap["2024-04"] != 6000 {
+		t.Fatalf("expected 6000 cents in 2024-04, got %d", maintMap["2024-04"])
+	}
+
+	// September 2024: m1 was closed by m3, so m1 stops! m3 starts: 1500 km * (60000 / 50000 = 1.20) = 1800 cents
+	if maintMap["2024-09"] != 1800 {
+		t.Fatalf("expected 1800 cents in 2024-09, got %d", maintMap["2024-09"])
+	}
+}
+

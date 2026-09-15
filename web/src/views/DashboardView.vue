@@ -281,8 +281,15 @@ function renderCharts() {
                   return `Distance : ${dist} km`
                 }
                 const costPerKm = Number(context.raw).toFixed(3)
+                const extras: string[] = []
                 if (monthItem && monthItem.tires_amortized > 0) {
-                  return `Coût de revient : ${costPerKm} €/km (dont ${monthItem.tires_amortized.toFixed(2)} € de pneus lissés sur l'usure)`
+                  extras.push(`${monthItem.tires_amortized.toFixed(2)} € pneus lissés`)
+                }
+                if (monthItem && monthItem.maintenance_amortized > 0) {
+                  extras.push(`${monthItem.maintenance_amortized.toFixed(2)} € entretien lissé`)
+                }
+                if (extras.length > 0) {
+                  return `Coût de revient : ${costPerKm} €/km (dont ${extras.join(', ')})`
                 }
                 return `Coût de revient : ${costPerKm} €/km`
               },
