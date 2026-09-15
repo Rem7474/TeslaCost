@@ -51,7 +51,8 @@ type MonthlyCost struct {
 	Insurance         money.Cents `json:"insurance"`
 	Financing         money.Cents `json:"financing"`
 	Other             money.Cents `json:"other"` // Subscriptions, taxes, accessories, other
-	Tires             money.Cents `json:"tires"`
+	Tires             money.Cents `json:"tires"` // Cash basis: full price in the purchase month
+	TiresAmortized    money.Cents `json:"tires_amortized"` // Prorated by km driven while mounted, used for cost_per_km
 	Total             money.Cents `json:"total"`
 	CostPerKm         float64     `json:"cost_per_km"`
 }
@@ -685,6 +686,139 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 	return smoothedByMonth, nil
 }
 
+// computeMonthlyTireAmortization prorates each tire's purchase price across the months it was
+// actually driven on, mirroring the lifetime formula used for TiresAmortizedCost (km used /
+// estimated lifespan) but as a month-by-month delta of the cumulative amortized amount. A tire
+// disposed or archived before reaching 100% of its lifespan recognizes the remaining balance in
+// the month it was last dismounted, matching the "fully consumed at disposal" rule used overall.
+func (s *TCOService) computeMonthlyTireAmortization(ctx context.Context, vehicleID string, now time.Time) (map[string]money.Cents, error) {
+	type tireInfo struct {
+		purchasePrice     money.Cents
+		lifespanKm        float64
+		disposed          bool
+		lastDismountMonth string
+	}
+	tires := make(map[string]*tireInfo)
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT id::text, purchase_price, GREATEST(estimated_lifespan_km - initial_distance_km, 1),
+		       (current_position = 'DISPOSED' OR is_archived)
+		FROM tires
+		WHERE vehicle_id = $1 AND purchase_price > 0;
+	`, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var id string
+		info := &tireInfo{}
+		if err := rows.Scan(&id, &info.purchasePrice, &info.lifespanKm, &info.disposed); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		tires[id] = info
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(tires) == 0 {
+		return nil, nil
+	}
+
+	// Km driven by the vehicle while each tire was actually mounted, bucketed by month.
+	kmRows, err := s.pool.Query(ctx, `
+		SELECT s.tire_id::text, TO_CHAR(d.start_time AT TIME ZONE $3, 'YYYY-MM') AS m, SUM(d.distance_km)
+		FROM tire_mount_sessions s
+		JOIN drives d ON d.vehicle_id = s.vehicle_id
+		    AND d.deleted_upstream_at IS NULL
+		    AND d.start_time >= s.mounted_date
+		    AND d.start_time < COALESCE(s.dismounted_date, $2)
+		WHERE s.vehicle_id = $1
+		GROUP BY s.tire_id, m;
+	`, vehicleID, now, s.timezone)
+	if err != nil {
+		return nil, err
+	}
+	kmByTireMonth := make(map[string]map[string]float64)
+	months := map[string]bool{}
+	for kmRows.Next() {
+		var tireID, month string
+		var km float64
+		if err := kmRows.Scan(&tireID, &month, &km); err != nil {
+			kmRows.Close()
+			return nil, err
+		}
+		if kmByTireMonth[tireID] == nil {
+			kmByTireMonth[tireID] = map[string]float64{}
+		}
+		kmByTireMonth[tireID][month] = km
+		months[month] = true
+	}
+	kmRows.Close()
+	if err := kmRows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Last dismount month per tire, to book a disposed tire's remaining balance where it belongs.
+	dismountRows, err := s.pool.Query(ctx, `
+		SELECT tire_id::text, TO_CHAR(MAX(dismounted_date) AT TIME ZONE $2, 'YYYY-MM')
+		FROM tire_mount_sessions
+		WHERE vehicle_id = $1 AND dismounted_date IS NOT NULL
+		GROUP BY tire_id;
+	`, vehicleID, s.timezone)
+	if err != nil {
+		return nil, err
+	}
+	for dismountRows.Next() {
+		var tireID, month string
+		if err := dismountRows.Scan(&tireID, &month); err != nil {
+			dismountRows.Close()
+			return nil, err
+		}
+		if info, ok := tires[tireID]; ok {
+			info.lastDismountMonth = month
+		}
+	}
+	dismountRows.Close()
+	if err := dismountRows.Err(); err != nil {
+		return nil, err
+	}
+
+	sortedMonths := make([]string, 0, len(months))
+	for m := range months {
+		sortedMonths = append(sortedMonths, m)
+	}
+	sort.Strings(sortedMonths)
+
+	result := make(map[string]money.Cents)
+	for tireID, info := range tires {
+		var cumKm float64
+		var cumAmortized money.Cents
+		for _, m := range sortedMonths {
+			km := kmByTireMonth[tireID][m]
+			if km <= 0 {
+				continue
+			}
+			cumKm += km
+			fraction := math.Min(1.0, cumKm/info.lifespanKm)
+			newCum := money.Cents(math.Round(float64(info.purchasePrice) * fraction))
+			if delta := newCum - cumAmortized; delta > 0 {
+				result[m] += delta
+				cumAmortized = newCum
+			}
+		}
+		if info.disposed && cumAmortized < info.purchasePrice {
+			month := info.lastDismountMonth
+			if month == "" {
+				month = now.Format("2006-01")
+			}
+			result[month] += info.purchasePrice - cumAmortized
+		}
+	}
+	return result, nil
+}
+
 // monthlyCosts builds the cash-basis monthly timeline (acquisition excluded) in the reporting timezone,
 // including linear smoothing of missing mileage between odometer checkpoints.
 func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, now time.Time) ([]MonthlyCost, float64, error) {
@@ -767,6 +901,16 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 		}
 	}
 
+	// Tires: prorate each purchase by km driven while mounted instead of dumping the full
+	// price into the purchase month, so a low-mileage purchase month doesn't spike cost/km.
+	tireAmortMap, err := s.computeMonthlyTireAmortization(ctx, vehicleID, now)
+	if err != nil {
+		return nil, 0, err
+	}
+	for m, amount := range tireAmortMap {
+		get(m).TiresAmortized += amount
+	}
+
 	var totalSmoothed float64
 	monthlyCosts := make([]MonthlyCost, 0, len(monthlyMap))
 	for _, mc := range monthlyMap {
@@ -775,7 +919,8 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 		mc.DistanceKm = round1(mc.TrackedDistanceKm + mc.SmoothedKm)
 		totalSmoothed += mc.SmoothedKm
 		mc.Total = mc.Energy + mc.Tolls + mc.Maintenance + mc.Insurance + mc.Financing + mc.Other + mc.Tires
-		mc.CostPerKm = perKm(mc.Total, mc.DistanceKm)
+		costForPerKm := mc.Energy + mc.Tolls + mc.Maintenance + mc.Insurance + mc.Financing + mc.Other + mc.TiresAmortized
+		mc.CostPerKm = perKm(costForPerKm, mc.DistanceKm)
 		monthlyCosts = append(monthlyCosts, *mc)
 	}
 	sort.Slice(monthlyCosts, func(i, j int) bool {
