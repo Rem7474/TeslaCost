@@ -270,7 +270,11 @@ function renderCharts() {
                   }
                   return `Distance : ${dist} km`
                 }
-                return `Coût de revient : ${Number(context.raw).toFixed(3)} €/km`
+                const costPerKm = Number(context.raw).toFixed(3)
+                if (monthItem && monthItem.tires_amortized > 0) {
+                  return `Coût de revient : ${costPerKm} €/km (dont ${monthItem.tires_amortized.toFixed(2)} € de pneus lissés sur l'usure)`
+                }
+                return `Coût de revient : ${costPerKm} €/km`
               },
             },
           },
