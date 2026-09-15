@@ -52,8 +52,9 @@ type MonthlyCost struct {
 	Maintenance          money.Cents `json:"maintenance"`
 	MaintenanceAmortized money.Cents `json:"maintenance_amortized"`
 	Insurance            money.Cents `json:"insurance"`
-	Financing         money.Cents `json:"financing"`
-	Other             money.Cents `json:"other"` // Subscriptions, taxes, accessories, other
+	Financing            money.Cents `json:"financing"`
+	FinancingAmortized   money.Cents `json:"financing_amortized"`
+	Other                money.Cents `json:"other"` // Subscriptions, taxes, accessories, other
 	Tires             money.Cents `json:"tires"` // Cash basis: full price in the purchase month
 	TiresAmortized    money.Cents `json:"tires_amortized"` // Prorated by km driven while mounted, used for cost_per_km
 	Total             money.Cents `json:"total"`
@@ -1062,6 +1063,132 @@ func calculateMaintenanceAmortization(items []*MaintenanceAmortItem, monthlyDist
 	return result
 }
 
+// computeMonthlyFinancingAmortization spreads one-off lease down payment and application fees
+// (or loan fees) over the contract duration, so the first month does not spike cost/km.
+func (s *TCOService) computeMonthlyFinancingAmortization(ownership *models.VehicleOwnership, monthlyMap map[string]*MonthlyCost, now time.Time) {
+	for _, mc := range monthlyMap {
+		mc.FinancingAmortized = mc.Financing
+	}
+
+	if ownership == nil {
+		return
+	}
+
+	loc, err := time.LoadLocation(s.timezone)
+	if err != nil {
+		loc = time.UTC
+	}
+
+	if ownership.IsLease() && ownership.LeaseDurationMonths != nil && *ownership.LeaseDurationMonths > 0 {
+		prepaid := centsOrZero(ownership.LeaseDownPayment) + centsOrZero(ownership.LeaseFees)
+		duration := *ownership.LeaseDurationMonths
+		if prepaid > 0 && duration > 0 {
+			monthlyPrepaid := money.FromFloat(prepaid.Float() / float64(duration))
+
+			startInTz := ownership.StartDate.In(loc)
+			startYear := startInTz.Year()
+			startMonth := int(startInTz.Month())
+
+			var endYearMonth string
+			if ownership.EndDate != nil {
+				endYearMonth = ownership.EndDate.In(loc).Format("2006-01")
+			}
+			var optionYearMonth string
+			if ownership.OptionExercisedDate != nil {
+				optionYearMonth = ownership.OptionExercisedDate.In(loc).Format("2006-01")
+			}
+
+			var cumPrepaid money.Cents
+			for k := 0; k < duration; k++ {
+				totalM := (startMonth - 1) + k
+				y := startYear + totalM/12
+				m := (totalM % 12) + 1
+				monthStr := fmt.Sprintf("%04d-%02d", y, m)
+
+				if endYearMonth != "" && monthStr > endYearMonth {
+					break
+				}
+				if optionYearMonth != "" && monthStr >= optionYearMonth {
+					break
+				}
+
+				mc, exists := monthlyMap[monthStr]
+				if !exists {
+					continue
+				}
+
+				var share money.Cents
+				if k == duration-1 {
+					share = prepaid - cumPrepaid
+				} else {
+					share = monthlyPrepaid
+				}
+				cumPrepaid += share
+
+				if k == 0 {
+					if mc.Financing >= prepaid {
+						mc.FinancingAmortized = mc.Financing - prepaid + share
+					} else {
+						mc.FinancingAmortized = share
+					}
+				} else {
+					mc.FinancingAmortized = mc.Financing + share
+				}
+			}
+		}
+	} else if ownership.AcquisitionType == models.AcquisitionLoan && ownership.LoanDurationMonths != nil && *ownership.LoanDurationMonths > 0 {
+		loanFees := centsOrZero(ownership.LoanFees)
+		duration := *ownership.LoanDurationMonths
+		if loanFees > 0 && duration > 0 {
+			monthlyFee := money.FromFloat(loanFees.Float() / float64(duration))
+
+			startInTz := ownership.StartDate.In(loc)
+			startYear := startInTz.Year()
+			startMonth := int(startInTz.Month())
+
+			var endYearMonth string
+			if ownership.EndDate != nil {
+				endYearMonth = ownership.EndDate.In(loc).Format("2006-01")
+			}
+
+			var cumFees money.Cents
+			for k := 0; k < duration; k++ {
+				totalM := (startMonth - 1) + k
+				y := startYear + totalM/12
+				m := (totalM % 12) + 1
+				monthStr := fmt.Sprintf("%04d-%02d", y, m)
+
+				if endYearMonth != "" && monthStr > endYearMonth {
+					break
+				}
+
+				mc, exists := monthlyMap[monthStr]
+				if !exists {
+					continue
+				}
+
+				var share money.Cents
+				if k == duration-1 {
+					share = loanFees - cumFees
+				} else {
+					share = monthlyFee
+				}
+				cumFees += share
+
+				if k == 0 {
+					if mc.Financing >= loanFees {
+						mc.FinancingAmortized = mc.Financing - loanFees + share
+					} else {
+						mc.FinancingAmortized = share
+					}
+				} else {
+					mc.FinancingAmortized = mc.Financing + share
+				}
+			}
+		}
+	}
+}
+
 // monthlyCosts builds the cash-basis monthly timeline (acquisition excluded) in the reporting timezone,
 // including linear smoothing of missing mileage between odometer checkpoints.
 func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, preKwh100km, preEurPerKwh *float64, now time.Time) ([]MonthlyCost, float64, error) {
@@ -1196,10 +1323,12 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 		get(m).MaintenanceAmortized += amount
 	}
 
+	s.computeMonthlyFinancingAmortization(ownership, monthlyMap, now)
+
 	monthlyCosts := make([]MonthlyCost, 0, len(monthlyMap))
 	for _, mc := range monthlyMap {
 		mc.Total = mc.Energy + mc.Tolls + mc.Maintenance + mc.Insurance + mc.Financing + mc.Other + mc.Tires
-		costForPerKm := mc.Energy + mc.Tolls + mc.MaintenanceAmortized + mc.Insurance + mc.Financing + mc.Other + mc.TiresAmortized
+		costForPerKm := mc.Energy + mc.Tolls + mc.MaintenanceAmortized + mc.Insurance + mc.FinancingAmortized + mc.Other + mc.TiresAmortized
 		mc.CostPerKm = perKm(costForPerKm, mc.DistanceKm)
 		monthlyCosts = append(monthlyCosts, *mc)
 	}

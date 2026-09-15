@@ -504,6 +504,11 @@ func TestIntegrationOwnershipLoanLeaseAndInsuranceShare(t *testing.T) {
 	if sum.AcquisitionType != models.AcquisitionLoan || sum.FinancingCost != 15000+12000+11823+11645 {
 		t.Fatalf("expected loan fees and 3 interest payments, got %s", sum.FinancingCost)
 	}
+	if len(sum.MonthlyCosts) > 0 {
+		if sum.MonthlyCosts[0].FinancingAmortized != sum.MonthlyCosts[0].Financing-15000+250 {
+			t.Fatalf("expected loan fees smoothed in first month, got financing %s amortized %s", sum.MonthlyCosts[0].Financing, sum.MonthlyCosts[0].FinancingAmortized)
+		}
+	}
 
 	// LOA: 3,000 € down payment, 450 €/month over 36 months, started 12 months ago, 15,000 km/year allowance,
 	// maintenance and insurance included, 20,000 km driven.
@@ -531,6 +536,28 @@ func TestIntegrationOwnershipLoanLeaseAndInsuranceShare(t *testing.T) {
 	// Cash: down payment + 13 rents (months 0..12)
 	if sum.FinancingCost != 300000+13*45000 {
 		t.Fatalf("expected down payment and 13 rents, got %s", sum.FinancingCost)
+	}
+	// Verify monthly costs financing smoothing:
+	// Month 0 has cash financing = 300,000 + 45,000 = 345,000 cents (3,450 €)
+	// But amortized financing = 45,000 + 300,000/36 = 53,333 cents (533.33 €)
+	if len(sum.MonthlyCosts) == 0 {
+		t.Fatal("expected monthly costs for lease vehicle")
+	}
+	firstMonth := sum.MonthlyCosts[0]
+	if firstMonth.Financing != 345000 {
+		t.Fatalf("expected first month cash financing 345,000 cents, got %s", firstMonth.Financing)
+	}
+	if firstMonth.FinancingAmortized != 53333 {
+		t.Fatalf("expected first month amortized financing 53,333 cents, got %s", firstMonth.FinancingAmortized)
+	}
+	if len(sum.MonthlyCosts) > 1 {
+		secondMonth := sum.MonthlyCosts[1]
+		if secondMonth.Financing != 45000 {
+			t.Fatalf("expected second month cash financing 45,000 cents, got %s", secondMonth.Financing)
+		}
+		if secondMonth.FinancingAmortized != 53333 {
+			t.Fatalf("expected second month amortized financing 53,333 cents, got %s", secondMonth.FinancingAmortized)
+		}
 	}
 	// Economic: down payment spread (≈ 1/3 consumed) + excess mileage ≈ 5,000 km × 0.10 €
 	if sum.FinancingFullCost >= sum.FinancingCost || sum.LeaseExcessKmCost < 40000 || sum.LeaseExcessKmProjected == 0 {
