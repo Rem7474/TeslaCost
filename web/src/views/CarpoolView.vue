@@ -772,7 +772,7 @@ onMounted(() => {
             <Users class="w-5 h-5 text-rose-400" />
             {{ editingTripId ? 'Modifier le covoiturage' : 'Nouveau covoiturage' }}
           </h3>
-          <button @click="showModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg"><X class="w-5 h-5" /></button>
+          <button @click="showModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg" title="Fermer" aria-label="Fermer"><X class="w-5 h-5" /></button>
         </div>
 
         <!-- Source -->

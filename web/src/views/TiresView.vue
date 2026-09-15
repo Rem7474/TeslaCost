@@ -2035,7 +2035,7 @@ function formatDate(d: string) {
             <Pencil class="w-4 h-4 text-rose-400" />
             {{ tireEditIds.length > 1 ? `Modifier ${tireEditIds.length} pneus` : 'Modifier le pneu' }}
           </h3>
-          <button type="button" @click="showTireEditModal = false" class="text-slate-400 hover:text-white p-1"><X class="w-4 h-4" /></button>
+          <button type="button" @click="showTireEditModal = false" class="text-slate-400 hover:text-white p-1" title="Fermer" aria-label="Fermer"><X class="w-4 h-4" /></button>
         </div>
         <p v-if="tireEditIds.length > 1" class="text-[11px] text-slate-400">
           {{ editedTires.map((t) => `${t.tire.brand} ${t.tire.current_position}`).join(' • ') }} — les champs laissés vides ne sont pas modifiés.
