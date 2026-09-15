@@ -906,3 +906,174 @@ func TestIntegrationMaintenanceAmortizationAndOdometer(t *testing.T) {
 	}
 }
 
+func TestExpenseDocumentsIntegration(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	_ = db
+	v := mustVehicle(t, repo, "user_doc@example.com")
+
+	// 1. Create a document
+	pdfData := []byte("%PDF-1.4 test document content for invoice")
+	desc := "Facture Révision Tesla Chambourcy"
+	doc := &models.ExpenseDocument{
+		UserID:      v.UserID,
+		VehicleID:   v.ID,
+		Filename:    "facture_chambourcy.pdf",
+		MimeType:    "application/pdf",
+		FileSize:    int64(len(pdfData)),
+		Data:        pdfData,
+		Description: &desc,
+	}
+	if err := repo.SaveExpenseDocument(ctx, doc); err != nil {
+		t.Fatalf("SaveExpenseDocument failed: %v", err)
+	}
+	if doc.ID == "" {
+		t.Fatal("expected generated doc ID")
+	}
+
+	// 2. Fetch document by ID
+	fetched, err := repo.GetExpenseDocumentByID(ctx, doc.ID, v.ID, v.UserID)
+	if err != nil {
+		t.Fatalf("GetExpenseDocumentByID failed: %v", err)
+	}
+	if fetched.Filename != "facture_chambourcy.pdf" || string(fetched.Data) != string(pdfData) {
+		t.Fatalf("fetched doc mismatch: %+v", fetched)
+	}
+
+	// 3. Link document to 2 drive expenses (many-to-one)
+	de1 := &models.DriveExpense{
+		VehicleID:  v.ID,
+		Type:       "TOLL",
+		Amount:     1250,
+		Currency:   "EUR",
+		Date:       time.Now(),
+		DocumentID: &doc.ID,
+	}
+	if err := repo.SaveDriveExpense(ctx, de1, nil, ""); err != nil {
+		t.Fatalf("SaveDriveExpense de1 failed: %v", err)
+	}
+	if de1.DocumentFilename == nil || *de1.DocumentFilename != "facture_chambourcy.pdf" {
+		t.Fatalf("expected DocumentFilename to be populated, got %v", de1.DocumentFilename)
+	}
+
+	de2 := &models.DriveExpense{
+		VehicleID:  v.ID,
+		Type:       "TOLL",
+		Amount:     850,
+		Currency:   "EUR",
+		Date:       time.Now(),
+		DocumentID: &doc.ID,
+	}
+	if err := repo.SaveDriveExpense(ctx, de2, nil, ""); err != nil {
+		t.Fatalf("SaveDriveExpense de2 failed: %v", err)
+	}
+
+	// 4. Link document to 1 maintenance expense
+	m := &models.MaintenanceExpense{
+		VehicleID:        v.ID,
+		Category:         "MAINTENANCE",
+		Amount:           35000,
+		Currency:         "EUR",
+		Date:             time.Now(),
+		Description:      "Révision complète",
+		AmortizationMode: "DISTANCE",
+		DocumentID:       &doc.ID,
+	}
+	if err := repo.CreateMaintenanceExpense(ctx, m); err != nil {
+		t.Fatalf("CreateMaintenanceExpense failed: %v", err)
+	}
+	if m.DocumentFilename == nil || *m.DocumentFilename != "facture_chambourcy.pdf" {
+		t.Fatalf("expected DocumentFilename to be populated, got %v", m.DocumentFilename)
+	}
+
+	// 5. Link document to 1 charge log
+	chargeCost := money.Cents(1850)
+	c := &models.ChargeLog{
+		VehicleID:  v.ID,
+		Date:       time.Now(),
+		KwhAdded:   45.2,
+		Cost:       &chargeCost,
+		Currency:   "EUR",
+		DocumentID: &doc.ID,
+	}
+	if err := repo.CreateManualCharge(ctx, c); err != nil {
+		t.Fatalf("CreateManualCharge failed: %v", err)
+	}
+	if c.DocumentFilename == nil || *c.DocumentFilename != "facture_chambourcy.pdf" {
+		t.Fatalf("expected DocumentFilename to be populated, got %v", c.DocumentFilename)
+	}
+
+	// 6. List documents - verify linked expenses count = 4
+	docs, err := repo.ListExpenseDocuments(ctx, v.ID, v.UserID)
+	if err != nil {
+		t.Fatalf("ListExpenseDocuments failed: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("expected 1 document, got %d", len(docs))
+	}
+	if docs[0].LinkedExpensesCount != 4 {
+		t.Fatalf("expected LinkedExpensesCount=4 (2 tolls + 1 maint + 1 charge), got %d", docs[0].LinkedExpensesCount)
+	}
+
+	// 7. Verify listing includes DocumentID and DocumentFilename
+	tolls, err := repo.ListDriveExpenses(ctx, v.ID)
+	if err != nil || len(tolls) != 2 {
+		t.Fatalf("expected 2 tolls, got %d (err %v)", len(tolls), err)
+	}
+	for _, toll := range tolls {
+		if toll.DocumentID == nil || *toll.DocumentID != doc.ID {
+			t.Fatalf("expected toll DocumentID %s, got %v", doc.ID, toll.DocumentID)
+		}
+		if toll.DocumentFilename == nil || *toll.DocumentFilename != "facture_chambourcy.pdf" {
+			t.Fatalf("expected toll DocumentFilename 'facture_chambourcy.pdf', got %v", toll.DocumentFilename)
+		}
+	}
+
+	maints, err := repo.ListMaintenanceExpenses(ctx, v.ID)
+	if err != nil || len(maints) != 1 {
+		t.Fatalf("expected 1 maintenance, got %d (err %v)", len(maints), err)
+	}
+	if maints[0].DocumentID == nil || *maints[0].DocumentID != doc.ID {
+		t.Fatalf("expected maintenance DocumentID %s, got %v", doc.ID, maints[0].DocumentID)
+	}
+
+	charges, _, err := repo.ListCharges(ctx, v.ID, false, 50, 0)
+	if err != nil || len(charges) != 1 {
+		t.Fatalf("expected 1 charge, got %d (err %v)", len(charges), err)
+	}
+	if charges[0].DocumentID == nil || *charges[0].DocumentID != doc.ID {
+		t.Fatalf("expected charge DocumentID %s, got %v", doc.ID, charges[0].DocumentID)
+	}
+
+	// 8. Delete document and verify ON DELETE SET NULL on all linked expenses
+	if err := repo.DeleteExpenseDocument(ctx, doc.ID, v.ID, v.UserID); err != nil {
+		t.Fatalf("DeleteExpenseDocument failed: %v", err)
+	}
+
+	tollsAfter, err := repo.ListDriveExpenses(ctx, v.ID)
+	if err != nil || len(tollsAfter) != 2 {
+		t.Fatalf("expected tolls to be preserved, got %d (err %v)", len(tollsAfter), err)
+	}
+	for _, toll := range tollsAfter {
+		if toll.DocumentID != nil {
+			t.Fatalf("expected toll DocumentID to be cleared to nil, got %v", *toll.DocumentID)
+		}
+	}
+
+	maintsAfter, err := repo.ListMaintenanceExpenses(ctx, v.ID)
+	if err != nil || len(maintsAfter) != 1 {
+		t.Fatalf("expected maintenance to be preserved, got %d (err %v)", len(maintsAfter), err)
+	}
+	if maintsAfter[0].DocumentID != nil {
+		t.Fatalf("expected maintenance DocumentID to be cleared to nil, got %v", *maintsAfter[0].DocumentID)
+	}
+
+	chargesAfter, _, err := repo.ListCharges(ctx, v.ID, false, 50, 0)
+	if err != nil || len(chargesAfter) != 1 {
+		t.Fatalf("expected charge to be preserved, got %d (err %v)", len(chargesAfter), err)
+	}
+	if chargesAfter[0].DocumentID != nil {
+		t.Fatalf("expected charge DocumentID to be cleared to nil, got %v", *chargesAfter[0].DocumentID)
+	}
+}
+

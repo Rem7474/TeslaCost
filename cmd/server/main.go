@@ -225,6 +225,12 @@ func main() {
 				r.Put("/{vehicleId}/charges/{chargeId}", expenseHandler.UpdateCharge)
 				r.Delete("/{vehicleId}/charges/{chargeId}", expenseHandler.DeleteManualCharge)
 
+				// Documents & Invoices
+				r.Get("/{vehicleId}/documents", expenseHandler.ListDocuments)
+				r.Post("/{vehicleId}/documents", expenseHandler.UploadDocument)
+				r.Get("/{vehicleId}/documents/{docId}", expenseHandler.DownloadDocument)
+				r.Delete("/{vehicleId}/documents/{docId}", expenseHandler.DeleteDocument)
+
 				// TCO Analytics
 				r.Get("/{vehicleId}/tco", tcoHandler.GetTCO)
 			})
