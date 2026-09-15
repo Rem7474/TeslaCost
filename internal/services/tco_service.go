@@ -888,7 +888,7 @@ func (s *TCOService) computeMonthlyTireAmortization(ctx context.Context, vehicle
 func (s *TCOService) computeMonthlyMaintenanceAmortization(ctx context.Context, vehicleID string, monthlyDistances map[string]float64, now time.Time) (map[string]money.Cents, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT id::text, date, TO_CHAR(date AT TIME ZONE $2, 'YYYY-MM') AS m,
-		       ROUND(CASE WHEN currency = 'EUR' THEN amount ELSE amount * COALESCE(fx_rate, 1.0) END, 2)::bigint,
+		       ROUND((CASE WHEN currency = 'EUR' THEN amount ELSE amount * COALESCE(fx_rate, 1.0) END) * 100, 0)::bigint,
 		       COALESCE(amortization_mode, 'NONE'),
 		       COALESCE(coverage_km, 50000),
 		       COALESCE(coverage_months, 24),
