@@ -28,15 +28,17 @@ func NewVehicleHandler(repo *database.Repository, encryptor *crypto.Encryptor, s
 }
 
 type SaveVehicleRequest struct {
-	Name               string          `json:"name"`
-	Vin                *string         `json:"vin"`
-	TeslaMateCarID     *int            `json:"teslamate_car_id"`
-	CurrentOdometer    float64         `json:"current_odometer"`
-	TeslaMateAPIURL    *string         `json:"teslamate_api_url"`
-	TeslaMateAuthType  models.AuthMode `json:"teslamate_auth_type"`
-	TeslaMateAPIKey    *string         `json:"teslamate_api_key"` // Plain text from frontend
-	TeslaMateBasicUser *string         `json:"teslamate_basic_user"`
-	TeslaMateBasicPass *string         `json:"teslamate_basic_pass"` // Plain text from frontend
+	Name                  string          `json:"name"`
+	Vin                   *string         `json:"vin"`
+	TeslaMateCarID        *int            `json:"teslamate_car_id"`
+	CurrentOdometer       float64         `json:"current_odometer"`
+	TeslaMateAPIURL       *string         `json:"teslamate_api_url"`
+	TeslaMateAuthType     models.AuthMode `json:"teslamate_auth_type"`
+	TeslaMateAPIKey       *string         `json:"teslamate_api_key"` // Plain text from frontend
+	TeslaMateBasicUser    *string         `json:"teslamate_basic_user"`
+	TeslaMateBasicPass    *string         `json:"teslamate_basic_pass"` // Plain text from frontend
+	PreTeslaMateKwh100km  *float64        `json:"pre_teslamate_kwh_100km"`
+	PreTeslaMateEurPerKwh *float64        `json:"pre_teslamate_eur_per_kwh"`
 }
 
 func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -96,6 +98,8 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TeslaMateAPIKeyEncrypted: encKey,
 		TeslaMateBasicUser:       req.TeslaMateBasicUser,
 		TeslaMateBasicPassEnc:    encPass,
+		PreTeslaMateKwh100km:     req.PreTeslaMateKwh100km,
+		PreTeslaMateEurPerKwh:    req.PreTeslaMateEurPerKwh,
 	}
 
 	if err := h.repo.CreateVehicle(r.Context(), v); err != nil {
@@ -161,6 +165,12 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 			existing.TeslaMateBasicPassEnc = &encrypted
 		}
 	}
+	if req.PreTeslaMateKwh100km != nil {
+		existing.PreTeslaMateKwh100km = req.PreTeslaMateKwh100km
+	}
+	if req.PreTeslaMateEurPerKwh != nil {
+		existing.PreTeslaMateEurPerKwh = req.PreTeslaMateEurPerKwh
+	}
 
 	if err := h.repo.UpdateVehicle(r.Context(), existing); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to update vehicle")
@@ -168,6 +178,47 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, existing)
+}
+
+type SavePreTeslaMateEnergyRequest struct {
+	PreTeslaMateKwh100km  *float64 `json:"pre_teslamate_kwh_100km"`
+	PreTeslaMateEurPerKwh *float64 `json:"pre_teslamate_eur_per_kwh"`
+}
+
+func (h *VehicleHandler) UpdatePreTeslaMateEnergy(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "id")
+	if vehicleID == "" {
+		vehicleID = chi.URLParam(r, "vehicleId")
+	}
+
+	var req SavePreTeslaMateEnergyRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	if req.PreTeslaMateKwh100km != nil && (*req.PreTeslaMateKwh100km <= 0 || *req.PreTeslaMateKwh100km > 100) {
+		writeError(w, http.StatusBadRequest, "La consommation moyenne doit être comprise entre 0 et 100 kWh/100km")
+		return
+	}
+	if req.PreTeslaMateEurPerKwh != nil && (*req.PreTeslaMateEurPerKwh <= 0 || *req.PreTeslaMateEurPerKwh > 10) {
+		writeError(w, http.StatusBadRequest, "Le tarif de l'électricité doit être compris entre 0 et 10 €/kWh")
+		return
+	}
+
+	if err := h.repo.UpdateVehiclePreTeslaMateEnergy(r.Context(), vehicleID, userID, req.PreTeslaMateKwh100km, req.PreTeslaMateEurPerKwh); err != nil {
+		writeRepoError(w, err, "Failed to update pre-teslamate energy")
+		return
+	}
+
+	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
+		writeRepoError(w, err, "Failed to get vehicle")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, v)
 }
 
 func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {

@@ -101,7 +101,7 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	const AppVersion = "1.4.0"
+	const AppVersion = "1.7.0"
 
 	// Public Health Check Endpoint
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
@@ -165,6 +165,7 @@ func main() {
 				r.Get("/{id}/ownership", vehicleHandler.GetOwnership)
 				r.Put("/{id}/ownership", vehicleHandler.SaveOwnership)
 				r.Delete("/{id}/ownership", vehicleHandler.DeleteOwnership)
+				r.Put("/{id}/pre-teslamate-energy", vehicleHandler.UpdatePreTeslaMateEnergy)
 				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
 
 				// Odometer Checkpoints

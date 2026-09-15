@@ -15,6 +15,7 @@ import {
   Gauge,
   Link2,
   FileText,
+  Zap,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
@@ -36,6 +37,8 @@ const form = ref({
   teslamate_api_key: '',
   teslamate_basic_user: '',
   teslamate_basic_pass: '',
+  pre_teslamate_kwh_100km: null as number | null,
+  pre_teslamate_eur_per_kwh: null as number | null,
 })
 
 // Ownership contracts (purchase, loan, LOA, LLD) by vehicle id
@@ -208,11 +211,74 @@ async function handleDeleteOwnership() {
   }
 }
 
+// Pre-TeslaMate Energy state
+const preTeslaMateForm = ref<{ kwh_100km: number | null; eur_per_kwh: number | null }>({
+  kwh_100km: null,
+  eur_per_kwh: null,
+})
+const savingPreTeslaMate = ref(false)
+const checkpointsVehicleTco = ref<any | null>(null)
+
+const preTeslaMatePreview = computed(() => {
+  const kwh100 = Number(preTeslaMateForm.value.kwh_100km)
+  const rate = Number(preTeslaMateForm.value.eur_per_kwh)
+  if (!kwh100 || !rate || kwh100 <= 0 || rate <= 0) return null
+  const distance = checkpointsVehicleTco.value?.smoothed_distance_km || checkpointsVehicleTco.value?.completeness?.untracked_distance_km || 0
+  if (distance <= 0) return null
+  const kwh = (distance * kwh100) / 100
+  const cost = kwh * rate
+  return { distance, kwh, cost }
+})
+
 async function openCheckpointsModal(v: any) {
   checkpointsVehicle.value = v
   showCheckpointsModal.value = true
+  preTeslaMateForm.value = {
+    kwh_100km: v.pre_teslamate_kwh_100km ?? null,
+    eur_per_kwh: v.pre_teslamate_eur_per_kwh ?? null,
+  }
   resetCheckpointForm()
-  await loadCheckpoints(v.id)
+  await Promise.all([
+    loadCheckpoints(v.id),
+    api.getTCO(v.id).then(t => { checkpointsVehicleTco.value = t }).catch(() => { checkpointsVehicleTco.value = null }),
+  ])
+}
+
+async function handleSavePreTeslaMateEnergy() {
+  if (!checkpointsVehicle.value) return
+  const kwh100 = preTeslaMateForm.value.kwh_100km !== null && preTeslaMateForm.value.kwh_100km !== '' ? Number(preTeslaMateForm.value.kwh_100km) : null
+  const rate = preTeslaMateForm.value.eur_per_kwh !== null && preTeslaMateForm.value.eur_per_kwh !== '' ? Number(preTeslaMateForm.value.eur_per_kwh) : null
+  if (kwh100 !== null && (kwh100 <= 0 || kwh100 > 100)) {
+    showAlert('Consommation moyenne invalide (doit être comprise entre 1 et 100 kWh/100km)', 'Champ invalide', 'warning')
+    return
+  }
+  if (rate !== null && (rate <= 0 || rate > 10)) {
+    showAlert('Tarif électricité invalide (doit être compris entre 0.01 et 10 €/kWh)', 'Champ invalide', 'warning')
+    return
+  }
+  savingPreTeslaMate.value = true
+  try {
+    const res = await api.updatePreTeslaMateEnergy(checkpointsVehicle.value.id, {
+      pre_teslamate_kwh_100km: kwh100,
+      pre_teslamate_eur_per_kwh: rate,
+    })
+    checkpointsVehicle.value.pre_teslamate_kwh_100km = res.pre_teslamate_kwh_100km
+    checkpointsVehicle.value.pre_teslamate_eur_per_kwh = res.pre_teslamate_eur_per_kwh
+    await vehicleStore.fetchVehicles()
+    checkpointsVehicleTco.value = await api.getTCO(checkpointsVehicle.value.id).catch(() => null)
+    vehicleStore.lastSyncTimestamp = Date.now()
+    showAlert('Coûts de recharge avant TeslaMate enregistrés avec succès !', 'Succès', 'info')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    savingPreTeslaMate.value = false
+  }
+}
+
+async function handleClearPreTeslaMateEnergy() {
+  if (!checkpointsVehicle.value) return
+  preTeslaMateForm.value = { kwh_100km: null, eur_per_kwh: null }
+  await handleSavePreTeslaMateEnergy()
 }
 
 async function loadCheckpoints(vehicleId: string) {
@@ -302,6 +368,8 @@ function openCreateModal() {
     teslamate_api_key: '',
     teslamate_basic_user: '',
     teslamate_basic_pass: '',
+    pre_teslamate_kwh_100km: null,
+    pre_teslamate_eur_per_kwh: null,
   }
   showModal.value = true
 }
@@ -320,6 +388,8 @@ function openEditModal(v: any) {
     teslamate_api_key: '',
     teslamate_basic_user: v.teslamate_basic_user || '',
     teslamate_basic_pass: '',
+    pre_teslamate_kwh_100km: v.pre_teslamate_kwh_100km ?? null,
+    pre_teslamate_eur_per_kwh: v.pre_teslamate_eur_per_kwh ?? null,
   }
   showModal.value = true
 }
@@ -443,7 +513,7 @@ function clearCardTestResult(id: string) {
         </div>
 
         <!-- Telemetry & Stats -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-800 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-800 text-xs">
           <div>
             <span class="text-slate-400">Odomètre actuel</span>
             <p class="text-sm font-bold text-slate-200 flex items-center gap-1.5 mt-0.5">
@@ -487,6 +557,15 @@ function clearCardTestResult(id: string) {
                   : 'Non configurée'
               }}
             </p>
+          </div>
+
+          <div>
+            <span class="text-slate-400">Recharge avant TM</span>
+            <p v-if="v.pre_teslamate_kwh_100km && v.pre_teslamate_eur_per_kwh" class="text-xs font-semibold text-sky-400 flex items-center gap-1 mt-1">
+              <Zap class="w-3.5 h-3.5 text-sky-400" />
+              {{ v.pre_teslamate_kwh_100km }} kWh/100km • {{ v.pre_teslamate_eur_per_kwh }} €/kWh
+            </p>
+            <p v-else class="text-xs text-slate-500 mt-1">Non configurée</p>
           </div>
         </div>
 
@@ -591,6 +670,24 @@ function clearCardTestResult(id: string) {
                 Géré automatiquement par la synchronisation TeslaMate.
               </p>
             </div>
+          </div>
+
+          <!-- Pre-TeslaMate energy section -->
+          <div class="pt-2 border-t border-slate-800 space-y-3">
+            <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Recharge avant TeslaMate (Optionnel)</h4>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="vehicle-pre-kwh" class="block text-xs font-semibold text-slate-300 mb-1">Conso (kWh/100km)</label>
+                <input id="vehicle-pre-kwh" v-model.number="form.pre_teslamate_kwh_100km" type="number" step="0.1" min="1" max="100" placeholder="ex: 16.5" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+              <div>
+                <label for="vehicle-pre-rate" class="block text-xs font-semibold text-slate-300 mb-1">Tarif (€/kWh)</label>
+                <input id="vehicle-pre-rate" v-model.number="form.pre_teslamate_eur_per_kwh" type="number" step="0.0001" min="0.01" max="5" placeholder="ex: 0.22" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400">
+              💡 Utilisé pour estimer les coûts énergétiques des kilomètres parcourus avant l'installation de TeslaMate.
+            </p>
           </div>
 
           <!-- TeslaMate API Section -->
@@ -997,6 +1094,109 @@ function clearCardTestResult(id: string) {
             </button>
           </div>
         </form>
+
+        <!-- Pre-TeslaMate Charging & Energy Section -->
+        <div class="bg-gradient-to-br from-sky-950/40 to-slate-950/60 border border-sky-500/20 rounded-xl p-4 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+              <div class="p-2 bg-sky-500/10 text-sky-400 rounded-lg">
+                <Zap class="w-4 h-4" />
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">
+                  Coûts de recharge avant TeslaMate
+                </h4>
+                <p class="text-[11px] text-slate-400">
+                  Complétez automatiquement l'énergie et le coût des kilomètres non suivis
+                </p>
+              </div>
+            </div>
+            <span
+              v-if="checkpointsVehicle?.pre_teslamate_kwh_100km && checkpointsVehicle?.pre_teslamate_eur_per_kwh"
+              class="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1"
+            >
+              <CheckCircle2 class="w-3 h-3" /> Actif
+            </span>
+            <span v-else class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+              Non configuré
+            </span>
+          </div>
+
+          <form @submit.prevent="handleSavePreTeslaMateEnergy" class="space-y-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="pre-tm-kwh" class="block text-xs font-semibold text-slate-300 mb-1">
+                  Consommation moyenne (kWh/100km)
+                </label>
+                <input
+                  id="pre-tm-kwh"
+                  v-model.number="preTeslaMateForm.kwh_100km"
+                  type="number"
+                  step="0.1"
+                  min="1"
+                  max="100"
+                  placeholder="ex: 16.5"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <div>
+                <label for="pre-tm-rate" class="block text-xs font-semibold text-slate-300 mb-1">
+                  Tarif de l'électricité (€/kWh)
+                </label>
+                <input
+                  id="pre-tm-rate"
+                  v-model.number="preTeslaMateForm.eur_per_kwh"
+                  type="number"
+                  step="0.0001"
+                  min="0.01"
+                  max="5"
+                  placeholder="ex: 0.22"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500"
+                />
+              </div>
+            </div>
+
+            <!-- Live calculation summary -->
+            <div
+              v-if="preTeslaMatePreview"
+              class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1"
+            >
+              <div class="text-slate-300 font-semibold flex items-center justify-between">
+                <span>Estimation sur {{ Math.round(preTeslaMatePreview.distance).toLocaleString('fr-FR') }} km lissés :</span>
+                <span class="text-sky-400 font-bold font-mono">
+                  ≈ {{ preTeslaMatePreview.cost.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+                </span>
+              </div>
+              <p class="text-slate-400 text-[11px]">
+                Volume estimé :
+                <strong class="text-slate-200 font-mono">{{ Math.round(preTeslaMatePreview.kwh).toLocaleString('fr-FR') }} kWh</strong>
+                ({{ (preTeslaMatePreview.cost / (preTeslaMatePreview.distance || 1)).toFixed(3) }} €/km)
+                distribués au prorata dans chaque mois lissé.
+              </p>
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <button
+                v-if="checkpointsVehicle?.pre_teslamate_kwh_100km || checkpointsVehicle?.pre_teslamate_eur_per_kwh"
+                type="button"
+                @click="handleClearPreTeslaMateEnergy"
+                class="text-xs text-slate-400 hover:text-rose-400 transition-colors"
+              >
+                Réinitialiser (désactiver)
+              </button>
+              <span v-else></span>
+
+              <button
+                type="submit"
+                :disabled="savingPreTeslaMate"
+                class="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-lg shadow-sky-600/20"
+              >
+                <Zap class="w-3.5 h-3.5" />
+                <span>{{ savingPreTeslaMate ? 'Enregistrement...' : 'Enregistrer la recharge avant TM' }}</span>
+              </button>
+            </div>
+          </form>
+        </div>
 
         <!-- Existing Checkpoints List -->
         <div class="space-y-3">

@@ -45,6 +45,8 @@ type MonthlyCost struct {
 	DistanceKm        float64     `json:"distance_km"` // Total effective distance (tracked + smoothed)
 	TrackedDistanceKm float64     `json:"tracked_distance_km"` // Exact GPS drives distance
 	SmoothedKm        float64     `json:"smoothed_km"` // Linearly smoothed / interpolated distance
+	SmoothedKwh       float64     `json:"smoothed_kwh,omitempty"` // Estimated pre-TeslaMate kWh
+	SmoothedEnergy    money.Cents `json:"smoothed_energy,omitempty"` // Estimated pre-TeslaMate energy cost
 	Energy            money.Cents `json:"energy"`
 	Tolls             money.Cents `json:"tolls"`
 	Maintenance       money.Cents `json:"maintenance"`
@@ -187,6 +189,11 @@ type TCOSummary struct {
 	TotalKwhAdded   float64     `json:"total_kwh_added"`
 	AvgCostPerKwh   float64     `json:"avg_cost_per_kwh"`
 
+	PreTeslaMateKwh       float64     `json:"pre_teslamate_kwh,omitempty"`
+	PreTeslaMateCost      money.Cents `json:"pre_teslamate_cost,omitempty"`
+	PreTeslaMateKwh100km  *float64    `json:"pre_teslamate_kwh_100km,omitempty"`
+	PreTeslaMateEurPerKwh *float64    `json:"pre_teslamate_eur_per_kwh,omitempty"`
+
 	TollsCost      money.Cents `json:"tolls_cost"` // Tolls, parking, ferries
 	TollsCostPerKm float64     `json:"tolls_cost_per_km"`
 
@@ -256,9 +263,12 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		return nil, fmt.Errorf("ownership: %w", err)
 	}
 	var currentOdometer float64
-	if err := s.pool.QueryRow(ctx, `SELECT current_odometer FROM vehicles WHERE id = $1;`, vehicleID).Scan(&currentOdometer); err != nil {
+	var preKwh100km, preEurPerKwh *float64
+	if err := s.pool.QueryRow(ctx, `SELECT current_odometer, pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh FROM vehicles WHERE id = $1;`, vehicleID).Scan(&currentOdometer, &preKwh100km, &preEurPerKwh); err != nil {
 		return nil, fmt.Errorf("vehicle: %w", err)
 	}
+	sum.PreTeslaMateKwh100km = preKwh100km
+	sum.PreTeslaMateEurPerKwh = preEurPerKwh
 
 	// 2. Distance: tracked drives, odometer span, distance since the start of the contract
 	var trackedKm, odometerSpan, trackedSinceStart float64
@@ -283,8 +293,13 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	}
 	if untracked := basisKm - trackedKm; untracked > 50 && untracked > 0.01*basisKm {
 		comp.UntrackedDistanceKm = round1(untracked)
-		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-			"%.0f km parcourus n'apparaissent dans aucun trajet (avant TeslaMate ou TeslaMate hors ligne) : le coût au km utilise la distance odométrique", untracked))
+		if preKwh100km != nil && *preKwh100km > 0 && preEurPerKwh != nil && *preEurPerKwh > 0 {
+			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+				"%.0f km parcourus avant TeslaMate : recharges estimées et complétées (%.1f kWh/100km à %.3f €/kWh)", untracked, *preKwh100km, *preEurPerKwh))
+		} else {
+			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
+				"%.0f km parcourus n'apparaissent dans aucun trajet (avant TeslaMate ou TeslaMate hors ligne) : le coût au km utilise la distance odométrique", untracked))
+		}
 	}
 	owned := ComputeOwnershipCosts(ownership, now, kmSinceStart)
 
@@ -507,11 +522,26 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	if sum.TagBreakdown, err = s.tagBreakdown(ctx, vehicleID, trackedKm); err != nil {
 		return nil, fmt.Errorf("tag breakdown: %w", err)
 	}
-	if sum.MonthlyCosts, sum.SmoothedDistanceKm, err = s.monthlyCosts(ctx, vehicleID, ownership, currentOdometer, now); err != nil {
+	if sum.MonthlyCosts, sum.SmoothedDistanceKm, err = s.monthlyCosts(ctx, vehicleID, ownership, currentOdometer, preKwh100km, preEurPerKwh, now); err != nil {
 		return nil, fmt.Errorf("monthly costs: %w", err)
 	}
+	if preKwh100km != nil && *preKwh100km > 0 && preEurPerKwh != nil && *preEurPerKwh > 0 && sum.SmoothedDistanceKm > 0 {
+		sum.PreTeslaMateKwh = round1(sum.SmoothedDistanceKm * (*preKwh100km / 100.0))
+		sum.PreTeslaMateCost = money.FromFloat(sum.PreTeslaMateKwh * *preEurPerKwh)
+		sum.TotalKwhAdded = round1(sum.TotalKwhAdded + sum.PreTeslaMateKwh)
+		energy += sum.PreTeslaMateCost
+		sum.EnergyCost = energy
+		sum.TotalCost += sum.PreTeslaMateCost
+		sum.FullCost += sum.PreTeslaMateCost
+		sum.FullCostNet += sum.PreTeslaMateCost
+		if sum.TotalKwhAdded > 0 {
+			sum.AvgCostPerKwh = round3(sum.EnergyCost.Float() / sum.TotalKwhAdded)
+		}
+	}
 	if sum.SmoothedDistanceKm > 0 {
-		basisKm = math.Max(basisKm, trackedKm+sum.SmoothedDistanceKm)
+		if (trackedKm + sum.SmoothedDistanceKm) > basisKm+0.5 {
+			basisKm = trackedKm + sum.SmoothedDistanceKm
+		}
 		sum.DistanceBasisKm = round1(basisKm)
 		sum.TotalCostPerKm = perKm(sum.TotalCost, basisKm)
 		sum.UsageCostPerKm = perKm(energy+travel, basisKm)
@@ -590,7 +620,7 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 	}
 
 	var points []odoPoint
-	if ownership != nil && ownership.StartOdometer != nil && *ownership.StartOdometer > 0 {
+	if ownership != nil && ownership.StartOdometer != nil && *ownership.StartOdometer >= 0 {
 		points = append(points, odoPoint{
 			date: ownership.StartDate.In(loc),
 			odo:  *ownership.StartOdometer,
@@ -601,6 +631,33 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 			date: cp.Date.In(loc),
 			odo:  cp.Odometer,
 		})
+	}
+	if len(points) == 0 {
+		return nil, nil
+	}
+
+	var firstDriveTime *time.Time
+	var firstDriveOdo *float64
+	_ = s.pool.QueryRow(ctx, `
+		SELECT start_time, start_odometer
+		FROM drives
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND start_odometer > 0
+		ORDER BY start_time ASC LIMIT 1;
+	`, vehicleID).Scan(&firstDriveTime, &firstDriveOdo)
+	if firstDriveTime != nil && firstDriveOdo != nil && *firstDriveOdo > 0 {
+		hasPriorPoint := false
+		for _, p := range points {
+			if p.odo < *firstDriveOdo && !p.date.After(*firstDriveTime) {
+				hasPriorPoint = true
+				break
+			}
+		}
+		if hasPriorPoint {
+			points = append(points, odoPoint{
+				date: firstDriveTime.In(loc),
+				odo:  *firstDriveOdo,
+			})
+		}
 	}
 	if currentOdometer > 0 {
 		points = append(points, odoPoint{
@@ -821,7 +878,7 @@ func (s *TCOService) computeMonthlyTireAmortization(ctx context.Context, vehicle
 
 // monthlyCosts builds the cash-basis monthly timeline (acquisition excluded) in the reporting timezone,
 // including linear smoothing of missing mileage between odometer checkpoints.
-func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, now time.Time) ([]MonthlyCost, float64, error) {
+func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, preKwh100km, preEurPerKwh *float64, now time.Time) ([]MonthlyCost, float64, error) {
 	monthlyMap := make(map[string]*MonthlyCost)
 	get := func(m string) *MonthlyCost {
 		if _, ok := monthlyMap[m]; !ok {
@@ -895,11 +952,14 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 	if err != nil {
 		return nil, 0, err
 	}
+	var rawSmoothedTotal float64
 	for m, smoothed := range smoothedMap {
 		if smoothed > 0 {
 			get(m).SmoothedKm += round1(smoothed)
+			rawSmoothedTotal += smoothed
 		}
 	}
+	targetSmoothed := round1(rawSmoothedTotal)
 
 	// Tires: prorate each purchase by km driven while mounted instead of dumping the full
 	// price into the purchase month, so a low-mileage purchase month doesn't spike cost/km.
@@ -912,17 +972,36 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 	}
 
 	var totalSmoothed float64
+	var lastSmoothedMc *MonthlyCost
 	monthlyCosts := make([]MonthlyCost, 0, len(monthlyMap))
 	for _, mc := range monthlyMap {
 		mc.TrackedDistanceKm = round1(mc.DistanceKm)
 		mc.SmoothedKm = round1(mc.SmoothedKm)
+		if mc.SmoothedKm > 0 {
+			lastSmoothedMc = mc
+		}
 		mc.DistanceKm = round1(mc.TrackedDistanceKm + mc.SmoothedKm)
 		totalSmoothed += mc.SmoothedKm
+		if preKwh100km != nil && *preKwh100km > 0 && preEurPerKwh != nil && *preEurPerKwh > 0 && mc.SmoothedKm > 0 {
+			mc.SmoothedKwh = round1(mc.SmoothedKm * (*preKwh100km / 100.0))
+			mc.SmoothedEnergy = money.FromFloat(mc.SmoothedKwh * *preEurPerKwh)
+			mc.Energy += mc.SmoothedEnergy
+		}
 		mc.Total = mc.Energy + mc.Tolls + mc.Maintenance + mc.Insurance + mc.Financing + mc.Other + mc.Tires
 		costForPerKm := mc.Energy + mc.Tolls + mc.Maintenance + mc.Insurance + mc.Financing + mc.Other + mc.TiresAmortized
 		mc.CostPerKm = perKm(costForPerKm, mc.DistanceKm)
 		monthlyCosts = append(monthlyCosts, *mc)
 	}
+
+	if lastSmoothedMc != nil && targetSmoothed > 0 {
+		diff := round1(targetSmoothed - totalSmoothed)
+		if math.Abs(diff) > 0.001 && math.Abs(diff) < 1.0 {
+			lastSmoothedMc.SmoothedKm = round1(lastSmoothedMc.SmoothedKm + diff)
+			lastSmoothedMc.DistanceKm = round1(lastSmoothedMc.TrackedDistanceKm + lastSmoothedMc.SmoothedKm)
+			totalSmoothed = targetSmoothed
+		}
+	}
+
 	sort.Slice(monthlyCosts, func(i, j int) bool {
 		return monthlyCosts[i].Month < monthlyCosts[j].Month
 	})
