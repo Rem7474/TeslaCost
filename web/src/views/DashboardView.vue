@@ -53,6 +53,14 @@ const filteredMonthlyCosts = computed(() => {
   return months ? list.slice(-months) : list
 })
 
+const mileageChartRange = ref<MonthlyRangeKey>('ALL')
+
+const filteredMileageCosts = computed(() => {
+  const list = tco.value?.monthly_costs || []
+  const months = monthlyRangeMonths[mileageChartRange.value]
+  return months ? list.slice(-months) : list
+})
+
 const dataQuality = ref<any | null>(null)
 const showDataQuality = ref(false)
 
@@ -132,7 +140,7 @@ watch(
   }
 )
 
-watch(monthlyChartRange, () => {
+watch([monthlyChartRange, mileageChartRange], () => {
   renderCharts()
 })
 
@@ -188,7 +196,7 @@ function renderCharts() {
           tooltip: {
             callbacks: {
               label: (context) => {
-                const monthItem = monthlyList[context.dataIndex]
+                const monthItem = filteredList[context.dataIndex]
                 const val = Number(context.raw || 0).toFixed(2)
                 if (context.dataset.label?.startsWith('Énergie') && monthItem && monthItem.smoothed_energy > 0) {
                   return `${context.dataset.label} : ${val} € (dont ${monthItem.smoothed_energy.toFixed(2)} € estimés avant TeslaMate)`
@@ -218,13 +226,15 @@ function renderCharts() {
   if (mileageChartRef.value) {
     if (mileageChartInstance) mileageChartInstance.destroy()
 
-    const distanceData = monthlyList.map((m: any) => m.distance_km || 0)
-    const costPerKmData = monthlyList.map((m: any) => m.cost_per_km || 0)
+    const filteredMileageList = filteredMileageCosts.value
+    const mileageLabels = filteredMileageList.map((m: any) => m.month)
+    const distanceData = filteredMileageList.map((m: any) => m.distance_km || 0)
+    const costPerKmData = filteredMileageList.map((m: any) => m.cost_per_km || 0)
 
     mileageChartInstance = new Chart(mileageChartRef.value, {
       type: 'bar',
       data: {
-        labels,
+        labels: mileageLabels,
         datasets: [
           {
             type: 'bar',
@@ -262,7 +272,7 @@ function renderCharts() {
           tooltip: {
             callbacks: {
               label: (context) => {
-                const monthItem = monthlyList[context.dataIndex]
+                const monthItem = filteredMileageList[context.dataIndex]
                 if (context.dataset.yAxisID === 'yDistance') {
                   const dist = Number(context.raw).toLocaleString('fr-FR')
                   if (monthItem && monthItem.smoothed_km > 0) {
@@ -687,15 +697,31 @@ function renderCharts() {
               Histogramme des kilomètres parcourus chaque mois et courbe du coût de revient au km
             </p>
           </div>
-          <div class="flex items-center gap-3 text-xs">
-            <span class="flex items-center gap-1.5 text-indigo-300">
-              <span class="w-3 h-3 rounded bg-indigo-500/80 inline-block"></span>
-              Distance (km)
-            </span>
-            <span class="flex items-center gap-1.5 text-emerald-400">
-              <span class="w-3 h-1 rounded bg-emerald-400 inline-block"></span>
-              Coût (€/km)
-            </span>
+          <div class="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+            <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5">
+              <button
+                v-for="opt in monthlyRangeOptions"
+                :key="opt.key"
+                type="button"
+                @click="mileageChartRange = opt.key"
+                :class="[
+                  'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+                  mileageChartRange === opt.key ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white',
+                ]"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="flex items-center gap-1.5 text-indigo-300">
+                <span class="w-3 h-3 rounded bg-indigo-500/80 inline-block"></span>
+                Distance (km)
+              </span>
+              <span class="flex items-center gap-1.5 text-emerald-400">
+                <span class="w-3 h-1 rounded bg-emerald-400 inline-block"></span>
+                Coût (€/km)
+              </span>
+            </div>
           </div>
         </div>
         <div class="h-64 sm:h-72">
