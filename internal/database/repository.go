@@ -1554,16 +1554,24 @@ func (r *Repository) ListTireLogs(ctx context.Context, tireID string) ([]models.
 // ============================================================================
 
 func (r *Repository) CreateMaintenanceExpense(ctx context.Context, m *models.MaintenanceExpense) error {
+	mode := m.AmortizationMode
+	if mode == "" {
+		mode = "NONE"
+	}
+	m.AmortizationMode = mode
+
 	query := `
 		INSERT INTO maintenance_expenses (
 			vehicle_id, category, amount, currency, fx_rate, date,
-			odometer, is_recurring, recurrence_interval_months, recurrence_end_date, description
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			odometer, is_recurring, recurrence_interval_months, recurrence_end_date, description,
+			amortization_mode, coverage_km, coverage_months, closes_maintenance_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		RETURNING id, created_at, updated_at;
 	`
 	return r.pool.QueryRow(ctx, query,
 		m.VehicleID, m.Category, m.Amount, m.Currency, m.FxRate, m.Date,
 		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.RecurrenceEndDate, m.Description,
+		m.AmortizationMode, m.CoverageKm, m.CoverageMonths, m.ClosesMaintenanceID,
 	).Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt)
 }
 
@@ -1571,6 +1579,7 @@ func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID stri
 	query := `
 		SELECT id, vehicle_id, category, amount, currency, fx_rate, date,
 		       odometer, is_recurring, recurrence_interval_months, recurrence_end_date, description,
+		       amortization_mode, coverage_km, coverage_months, closes_maintenance_id,
 		       created_at, updated_at
 		FROM maintenance_expenses
 		WHERE vehicle_id = $1
@@ -1588,6 +1597,7 @@ func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID stri
 		if err := rows.Scan(
 			&m.ID, &m.VehicleID, &m.Category, &m.Amount, &m.Currency, &m.FxRate, &m.Date,
 			&m.Odometer, &m.IsRecurring, &m.RecurrenceIntervalMonths, &m.RecurrenceEndDate, &m.Description,
+			&m.AmortizationMode, &m.CoverageKm, &m.CoverageMonths, &m.ClosesMaintenanceID,
 			&m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -1598,6 +1608,12 @@ func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID stri
 }
 
 func (r *Repository) UpdateMaintenanceExpense(ctx context.Context, m *models.MaintenanceExpense) error {
+	mode := m.AmortizationMode
+	if mode == "" {
+		mode = "NONE"
+	}
+	m.AmortizationMode = mode
+
 	query := `
 		UPDATE maintenance_expenses
 		SET category = $1,
@@ -1610,13 +1626,18 @@ func (r *Repository) UpdateMaintenanceExpense(ctx context.Context, m *models.Mai
 		    recurrence_interval_months = $8,
 		    recurrence_end_date = $9,
 		    description = $10,
+		    amortization_mode = $11,
+		    coverage_km = $12,
+		    coverage_months = $13,
+		    closes_maintenance_id = $14,
 		    updated_at = NOW()
-		WHERE id::text = $11 AND vehicle_id = $12
+		WHERE id::text = $15 AND vehicle_id = $16
 		RETURNING created_at, updated_at;
 	`
 	err := r.pool.QueryRow(ctx, query,
 		m.Category, m.Amount, m.Currency, m.FxRate, m.Date,
 		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.RecurrenceEndDate, m.Description,
+		m.AmortizationMode, m.CoverageKm, m.CoverageMonths, m.ClosesMaintenanceID,
 		m.ID, m.VehicleID,
 	).Scan(&m.CreatedAt, &m.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -1636,6 +1657,30 @@ func (r *Repository) DeleteMaintenanceExpense(ctx context.Context, vehicleID, ma
 	}
 	return nil
 }
+
+// GetOdometerAtDate resolves the vehicle odometer at or near a specific timestamp
+// using TeslaMate drives, falling back to current_odometer.
+func (r *Repository) GetOdometerAtDate(ctx context.Context, vehicleID string, at time.Time) (float64, string, error) {
+	query := `
+		SELECT COALESCE(
+			(SELECT end_odometer FROM drives
+			 WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND end_time <= $2 AND end_odometer > 0
+			 ORDER BY end_time DESC LIMIT 1),
+			(SELECT start_odometer FROM drives
+			 WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND start_time >= $2 AND start_odometer > 0
+			 ORDER BY start_time ASC LIMIT 1),
+			(SELECT current_odometer FROM vehicles WHERE id = $1),
+			0
+		);
+	`
+	var odo float64
+	err := r.pool.QueryRow(ctx, query, vehicleID, at).Scan(&odo)
+	if err != nil {
+		return 0, "unknown", err
+	}
+	return odo, "teslamate", nil
+}
+
 
 // ============================================================================
 // Charges

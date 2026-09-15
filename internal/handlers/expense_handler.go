@@ -186,6 +186,10 @@ type CreateMaintenanceRequest struct {
 	IsRecurring              bool        `json:"is_recurring"`
 	RecurrenceIntervalMonths *int        `json:"recurrence_interval_months"`
 	RecurrenceEndDate        *string     `json:"recurrence_end_date"`
+	AmortizationMode         string      `json:"amortization_mode"`
+	CoverageKm               *float64    `json:"coverage_km"`
+	CoverageMonths           *int        `json:"coverage_months"`
+	ClosesMaintenanceID     *string     `json:"closes_maintenance_id"`
 	Description              string      `json:"description"`
 }
 
@@ -231,6 +235,37 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 		odometer = nil
 	}
 
+	amortMode := strings.ToUpper(strings.TrimSpace(req.AmortizationMode))
+	if amortMode == "" {
+		amortMode = "NONE"
+	}
+	if amortMode != "NONE" && amortMode != "DISTANCE" && amortMode != "DURATION" && amortMode != "HYBRID" {
+		return nil, errors.New("mode d'amortissement invalide (NONE, DISTANCE, DURATION, HYBRID)")
+	}
+
+	var covKm *float64
+	var covMonths *int
+	var closesID *string
+
+	if amortMode == "DISTANCE" || amortMode == "HYBRID" {
+		defaultKm := 50000.0
+		if req.CoverageKm != nil && *req.CoverageKm > 0 {
+			defaultKm = *req.CoverageKm
+		}
+		covKm = &defaultKm
+	}
+	if amortMode == "DURATION" || amortMode == "HYBRID" {
+		defaultM := 24
+		if req.CoverageMonths != nil && *req.CoverageMonths > 0 {
+			defaultM = *req.CoverageMonths
+		}
+		covMonths = &defaultM
+	}
+	if req.ClosesMaintenanceID != nil && strings.TrimSpace(*req.ClosesMaintenanceID) != "" {
+		trimmed := strings.TrimSpace(*req.ClosesMaintenanceID)
+		closesID = &trimmed
+	}
+
 	return &models.MaintenanceExpense{
 		VehicleID:                vehicleID,
 		Category:                 category,
@@ -242,6 +277,10 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 		IsRecurring:              req.IsRecurring,
 		RecurrenceIntervalMonths: interval,
 		RecurrenceEndDate:        endDate,
+		AmortizationMode:         amortMode,
+		CoverageKm:               covKm,
+		CoverageMonths:           covMonths,
+		ClosesMaintenanceID:     closesID,
 		Description:              req.Description,
 	}, nil
 }
@@ -265,6 +304,12 @@ func (h *ExpenseHandler) CreateMaintenance(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	if m.Odometer == nil && m.AmortizationMode != "NONE" {
+		if odo, _, err := h.repo.GetOdometerAtDate(r.Context(), vehicleID, m.Date); err == nil && odo > 0 {
+			m.Odometer = &odo
+		}
 	}
 
 	if err := h.repo.CreateMaintenanceExpense(r.Context(), m); err != nil {
@@ -318,6 +363,12 @@ func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	m.ID = maintID
+
+	if m.Odometer == nil && m.AmortizationMode != "NONE" {
+		if odo, _, err := h.repo.GetOdometerAtDate(r.Context(), vehicleID, m.Date); err == nil && odo > 0 {
+			m.Odometer = &odo
+		}
+	}
 
 	if err := h.repo.UpdateMaintenanceExpense(r.Context(), m); err != nil {
 		writeRepoError(w, err, "Failed to update maintenance expense")

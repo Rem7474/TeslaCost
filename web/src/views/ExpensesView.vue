@@ -99,7 +99,54 @@ const maintForm = ref({
   is_recurring: false,
   recurrence_interval_months: 12,
   recurrence_end_date: '',
+  amortization_mode: 'DISTANCE',
+  coverage_km: 50000,
+  coverage_months: 24,
+  closes_maintenance_id: null as string | null,
   description: '',
+})
+
+const detectedOdometer = ref<number | null>(null)
+const detectingOdometer = ref(false)
+const shouldClosePrevious = ref(false)
+
+const closeCandidateMaintenance = computed(() => {
+  if (!maintenanceExpenses.value || !maintenanceExpenses.value.length) return null
+  const currentId = editingMaintId.value
+  const formDate = maintForm.value.date
+  return maintenanceExpenses.value.find(
+    (m) =>
+      m.id !== currentId &&
+      m.amortization_mode &&
+      m.amortization_mode !== 'NONE' &&
+      new Date(m.date).toISOString().substring(0, 10) <= formDate
+  ) || null
+})
+
+async function checkOdometerForDate(dateVal: string) {
+  if (!vehicleStore.activeVehicle || !dateVal) return
+  detectingOdometer.value = true
+  try {
+    const res = await api.getOdometerAt(vehicleStore.activeVehicle.id, dateVal)
+    if (res && typeof res.odometer === 'number' && res.odometer > 0) {
+      detectedOdometer.value = res.odometer
+      if (!maintForm.value.odometer || maintForm.value.odometer === 0) {
+        maintForm.value.odometer = Math.round(res.odometer)
+      }
+    } else {
+      detectedOdometer.value = null
+    }
+  } catch {
+    detectedOdometer.value = null
+  } finally {
+    detectingOdometer.value = false
+  }
+}
+
+watch(() => maintForm.value.date, (newDate) => {
+  if (showAddMaintModal.value && newDate) {
+    checkOdometerForDate(newDate)
+  }
 })
 
 // Charges: manual entry and cost completion
@@ -299,6 +346,8 @@ async function handleCreateToll() {
 
 function openAddMaintModal() {
   editingMaintId.value = null
+  detectedOdometer.value = null
+  shouldClosePrevious.value = false
   maintForm.value = {
     category: 'MAINTENANCE',
     amount: '',
@@ -309,13 +358,20 @@ function openAddMaintModal() {
     is_recurring: false,
     recurrence_interval_months: 12,
     recurrence_end_date: '',
+    amortization_mode: 'DISTANCE',
+    coverage_km: 50000,
+    coverage_months: 24,
+    closes_maintenance_id: null,
     description: '',
   }
   showAddMaintModal.value = true
+  checkOdometerForDate(maintForm.value.date)
 }
 
 function openEditMaintModal(m: any) {
   editingMaintId.value = m.id
+  detectedOdometer.value = null
+  shouldClosePrevious.value = Boolean(m.closes_maintenance_id)
   maintForm.value = {
     category: m.category || 'MAINTENANCE',
     amount: String(m.amount),
@@ -326,6 +382,10 @@ function openEditMaintModal(m: any) {
     is_recurring: Boolean(m.is_recurring),
     recurrence_interval_months: m.recurrence_interval_months || 12,
     recurrence_end_date: m.recurrence_end_date ? new Date(m.recurrence_end_date).toISOString().substring(0, 10) : '',
+    amortization_mode: m.amortization_mode || 'NONE',
+    coverage_km: m.coverage_km ? Number(m.coverage_km) : 50000,
+    coverage_months: m.coverage_months ? Number(m.coverage_months) : 24,
+    closes_maintenance_id: m.closes_maintenance_id || null,
     description: m.description || '',
   }
   showAddMaintModal.value = true
@@ -351,11 +411,25 @@ async function handleDeleteMaint(m: any) {
 async function handleCreateMaint() {
   if (!vehicleStore.activeVehicle) return
   try {
+    let closesId: string | null = null
+    if (shouldClosePrevious.value && closeCandidateMaintenance.value) {
+      closesId = closeCandidateMaintenance.value.id
+    }
+
     const payload = {
       ...maintForm.value,
       ...currencyPayload(maintForm.value),
       amount: Number(maintForm.value.amount),
       odometer: maintForm.value.odometer ? Number(maintForm.value.odometer) : null,
+      coverage_km:
+        maintForm.value.amortization_mode === 'DISTANCE' || maintForm.value.amortization_mode === 'HYBRID'
+          ? Number(maintForm.value.coverage_km || 50000)
+          : null,
+      coverage_months:
+        maintForm.value.amortization_mode === 'DURATION' || maintForm.value.amortization_mode === 'HYBRID'
+          ? Number(maintForm.value.coverage_months || 24)
+          : null,
+      closes_maintenance_id: closesId,
       date: new Date(maintForm.value.date).toISOString(),
       recurrence_end_date:
         maintForm.value.is_recurring && maintForm.value.recurrence_end_date
@@ -636,6 +710,18 @@ function formatDriveTime(dateStr: string) {
               <span v-if="m.is_recurring" class="text-xs text-slate-400 flex items-center gap-1">
                 <Repeat class="w-3 h-3 text-pink-400" /> tous les {{ m.recurrence_interval_months }} mois
                 <template v-if="m.recurrence_end_date">jusqu'au {{ formatDate(m.recurrence_end_date) }}</template>
+              </span>
+              <span v-else-if="m.amortization_mode === 'DISTANCE'" class="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                Lissé sur {{ m.coverage_km ? Math.round(m.coverage_km).toLocaleString('fr-FR') : '50 000' }} km
+              </span>
+              <span v-else-if="m.amortization_mode === 'DURATION'" class="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                Lissé sur {{ m.coverage_months || 24 }} mois
+              </span>
+              <span v-else-if="m.amortization_mode === 'HYBRID'" class="text-xs px-2 py-0.5 rounded-full font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
+                Lissé mixte ({{ m.coverage_km ? Math.round(m.coverage_km).toLocaleString('fr-FR') : '50 000' }} km / {{ m.coverage_months || 24 }} mois)
+              </span>
+              <span v-if="m.closes_maintenance_id" class="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                Clôture la révision précédente
               </span>
             </div>
             <p class="text-sm font-semibold text-slate-200">{{ m.description }}</p>
@@ -996,8 +1082,113 @@ function formatDriveTime(dateStr: string) {
           </div>
 
           <div>
-            <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
+            <div class="flex items-center justify-between mb-1">
+              <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300">Odomètre (km)</label>
+              <span v-if="detectingOdometer" class="text-[11px] text-slate-400">Détection TeslaMate...</span>
+            </div>
             <input id="expense-maint-odometer" v-model.number="maintForm.odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <div v-if="detectedOdometer !== null && detectedOdometer > 0" class="flex items-center justify-between text-[11px] text-emerald-400 mt-1">
+              <span>✓ Détecté via TeslaMate : {{ Math.round(detectedOdometer) }} km</span>
+              <button
+                type="button"
+                v-if="maintForm.odometer !== Math.round(detectedOdometer)"
+                @click="maintForm.odometer = Math.round(detectedOdometer)"
+                class="underline hover:text-emerald-300 transition-colors ml-2"
+              >
+                Appliquer
+              </button>
+            </div>
+          </div>
+
+          <!-- Lissage du coût pour dépenses non-récurrentes -->
+          <div v-if="!maintForm.is_recurring" class="space-y-2.5 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60">
+            <label class="block text-xs font-semibold text-slate-200">
+              Lissage du coût de revient au km
+            </label>
+            <p class="text-[11px] text-slate-400">
+              Évite les pics artificiels sur la courbe mensuelle (€/km).
+            </p>
+
+            <div class="grid grid-cols-4 gap-1.5 pt-1">
+              <button
+                type="button"
+                @click="maintForm.amortization_mode = 'NONE'"
+                class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
+                :class="maintForm.amortization_mode === 'NONE' ? 'bg-pink-500/20 text-pink-300 border-pink-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+              >
+                Immédiat
+              </button>
+              <button
+                type="button"
+                @click="maintForm.amortization_mode = 'DISTANCE'"
+                class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
+                :class="maintForm.amortization_mode === 'DISTANCE' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+              >
+                Au km
+              </button>
+              <button
+                type="button"
+                @click="maintForm.amortization_mode = 'DURATION'"
+                class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
+                :class="maintForm.amortization_mode === 'DURATION' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+              >
+                À la durée
+              </button>
+              <button
+                type="button"
+                @click="maintForm.amortization_mode = 'HYBRID'"
+                class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
+                :class="maintForm.amortization_mode === 'HYBRID' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
+              >
+                Mixte
+              </button>
+            </div>
+
+            <!-- Distance parameter -->
+            <div v-if="maintForm.amortization_mode === 'DISTANCE' || maintForm.amortization_mode === 'HYBRID'" class="pt-1">
+              <label for="maint-coverage-km" class="block text-xs text-slate-300 mb-1">Kilométrage couvert (km)</label>
+              <input
+                id="maint-coverage-km"
+                v-model.number="maintForm.coverage_km"
+                type="number"
+                min="1000"
+                step="1000"
+                placeholder="50000"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+              />
+            </div>
+
+            <!-- Duration parameter -->
+            <div v-if="maintForm.amortization_mode === 'DURATION' || maintForm.amortization_mode === 'HYBRID'" class="pt-1">
+              <label for="maint-coverage-months" class="block text-xs text-slate-300 mb-1">Durée couverte (mois)</label>
+              <input
+                id="maint-coverage-months"
+                v-model.number="maintForm.coverage_months"
+                type="number"
+                min="1"
+                max="120"
+                placeholder="24"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+              />
+            </div>
+
+            <!-- Clôture de la maintenance précédente -->
+            <div v-if="closeCandidateMaintenance && maintForm.amortization_mode !== 'NONE'" class="pt-2 border-t border-slate-700/60">
+              <div class="flex items-start gap-2">
+                <input
+                  id="close-candidate"
+                  v-model="shouldClosePrevious"
+                  type="checkbox"
+                  class="mt-0.5 rounded border-slate-700 bg-slate-800 text-rose-600 focus:ring-rose-500"
+                />
+                <label for="close-candidate" class="text-xs text-slate-300 leading-snug cursor-pointer">
+                  Clôturer la révision précédente en cours
+                  <span class="block text-[11px] text-amber-400 font-normal">
+                    {{ closeCandidateMaintenance.description }} ({{ formatDate(closeCandidateMaintenance.date) }} — {{ Number(closeCandidateMaintenance.amount).toFixed(2) }} €)
+                  </span>
+                </label>
+              </div>
+            </div>
           </div>
 
           <div class="space-y-2 pt-1">
