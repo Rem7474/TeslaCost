@@ -898,9 +898,9 @@ function formatDriveTime(dateStr: string) {
 
           <!-- Association à un/des trajets TeslaMate -->
           <div class="space-y-2 bg-slate-800/50 p-3.5 rounded-xl border border-slate-700/60">
-            <label class="block text-xs font-semibold text-slate-200">
+            <span class="block text-xs font-semibold text-slate-200">
               Associer à un trajet TeslaMate
-            </label>
+            </span>
             <p class="text-[11px] text-slate-400">
               Permet de récupérer automatiquement ce montant pour le covoiturage (BlaBlaCar) et le coût du trajet.
             </p>
@@ -950,7 +950,7 @@ function formatDriveTime(dateStr: string) {
             <!-- Multi drives selection -->
             <div v-if="associationMode === 'MULTI'" class="pt-2 space-y-1.5">
               <div class="flex items-center justify-between">
-                <label class="text-xs text-slate-400">Cocher les étapes composant le voyage :</label>
+                <span class="text-xs text-slate-400">Cocher les étapes composant le voyage :</span>
                 <span class="text-[11px] text-amber-400 font-semibold">
                   {{ selectedDriveIds.length }} étape(s)<template v-if="selectedDrivesNotListed"> dont {{ selectedDrivesNotListed }} plus ancienne(s) que les 200 derniers trajets</template>
                 </span>
@@ -1102,9 +1102,9 @@ function formatDriveTime(dateStr: string) {
 
           <!-- Lissage du coût pour dépenses non-récurrentes -->
           <div v-if="!maintForm.is_recurring" class="space-y-2.5 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60">
-            <label class="block text-xs font-semibold text-slate-200">
+            <span class="block text-xs font-semibold text-slate-200">
               Lissage du coût de revient au km
-            </label>
+            </span>
             <p class="text-[11px] text-slate-400">
               Évite les pics artificiels sur la courbe mensuelle (€/km).
             </p>
