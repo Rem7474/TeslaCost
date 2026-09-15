@@ -627,26 +627,30 @@ func (r *Repository) SaveDriveExpense(ctx context.Context, exp *models.DriveExpe
 
 	if exp.ID == "" {
 		err = tx.QueryRow(ctx, `
-			INSERT INTO drive_expenses (vehicle_id, trip_group_id, drive_id, type, amount, currency, fx_rate, date, notes)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			INSERT INTO drive_expenses (vehicle_id, trip_group_id, drive_id, type, amount, currency, fx_rate, date, notes, document_id)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 			RETURNING id, created_at;
 		`, exp.VehicleID, exp.TripGroupID, exp.DriveID, exp.Type,
-			exp.Amount, exp.Currency, exp.FxRate, exp.Date, exp.Notes,
+			exp.Amount, exp.Currency, exp.FxRate, exp.Date, exp.Notes, exp.DocumentID,
 		).Scan(&exp.ID, &exp.CreatedAt)
 	} else {
 		err = tx.QueryRow(ctx, `
 			UPDATE drive_expenses
 			SET trip_group_id = $1, drive_id = $2, type = $3, amount = $4,
-			    currency = $5, fx_rate = $6, date = $7, notes = $8
-			WHERE id::text = $9 AND vehicle_id = $10
+			    currency = $5, fx_rate = $6, date = $7, notes = $8, document_id = $9
+			WHERE id::text = $10 AND vehicle_id = $11
 			RETURNING created_at;
 		`, exp.TripGroupID, exp.DriveID, exp.Type, exp.Amount,
-			exp.Currency, exp.FxRate, exp.Date, exp.Notes,
+			exp.Currency, exp.FxRate, exp.Date, exp.Notes, exp.DocumentID,
 			exp.ID, exp.VehicleID,
 		).Scan(&exp.CreatedAt)
 	}
 	if err != nil {
 		return err
+	}
+
+	if exp.DocumentID != nil {
+		_ = tx.QueryRow(ctx, `SELECT filename FROM expense_documents WHERE id = $1;`, *exp.DocumentID).Scan(&exp.DocumentFilename)
 	}
 
 	return tx.Commit(ctx)
@@ -681,10 +685,13 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
 				ELSE NULL
 			END,
-			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes, e.created_at
+			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes,
+			e.document_id, doc.filename,
+			e.created_at
 		FROM drive_expenses e
 		LEFT JOIN drives d ON e.drive_id = d.id AND d.vehicle_id = e.vehicle_id
 		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id AND tg.vehicle_id = e.vehicle_id
+		LEFT JOIN expense_documents doc ON e.document_id = doc.id
 		WHERE e.vehicle_id = $1
 		ORDER BY e.date DESC;
 	`
@@ -700,7 +707,9 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 		if err := rows.Scan(
 			&e.ID, &e.VehicleID, &e.TripGroupID, &e.TripGroupName, &e.TripGroupDriveIDs,
 			&e.DriveID, &e.DriveTitle, &e.Type,
-			&e.Amount, &e.Currency, &e.FxRate, &e.Date, &e.Notes, &e.CreatedAt,
+			&e.Amount, &e.Currency, &e.FxRate, &e.Date, &e.Notes,
+			&e.DocumentID, &e.DocumentFilename,
+			&e.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1564,26 +1573,37 @@ func (r *Repository) CreateMaintenanceExpense(ctx context.Context, m *models.Mai
 		INSERT INTO maintenance_expenses (
 			vehicle_id, category, amount, currency, fx_rate, date,
 			odometer, is_recurring, recurrence_interval_months, recurrence_end_date, description,
-			amortization_mode, coverage_km, coverage_months, closes_maintenance_id
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			amortization_mode, coverage_km, coverage_months, closes_maintenance_id, document_id
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING id, created_at, updated_at;
 	`
-	return r.pool.QueryRow(ctx, query,
+	err := r.pool.QueryRow(ctx, query,
 		m.VehicleID, m.Category, m.Amount, m.Currency, m.FxRate, m.Date,
 		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.RecurrenceEndDate, m.Description,
-		m.AmortizationMode, m.CoverageKm, m.CoverageMonths, m.ClosesMaintenanceID,
+		m.AmortizationMode, m.CoverageKm, m.CoverageMonths, m.ClosesMaintenanceID, m.DocumentID,
 	).Scan(&m.ID, &m.CreatedAt, &m.UpdatedAt)
+	if err != nil {
+		return err
+	}
+
+	if m.DocumentID != nil {
+		_ = r.pool.QueryRow(ctx, `SELECT filename FROM expense_documents WHERE id = $1;`, *m.DocumentID).Scan(&m.DocumentFilename)
+	}
+
+	return nil
 }
 
 func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID string) ([]models.MaintenanceExpense, error) {
 	query := `
-		SELECT id, vehicle_id, category, amount, currency, fx_rate, date,
-		       odometer, is_recurring, recurrence_interval_months, recurrence_end_date, description,
-		       amortization_mode, coverage_km, coverage_months, closes_maintenance_id,
-		       created_at, updated_at
-		FROM maintenance_expenses
-		WHERE vehicle_id = $1
-		ORDER BY date DESC;
+		SELECT m.id, m.vehicle_id, m.category, m.amount, m.currency, m.fx_rate, m.date,
+		       m.odometer, m.is_recurring, m.recurrence_interval_months, m.recurrence_end_date, m.description,
+		       m.amortization_mode, m.coverage_km, m.coverage_months, m.closes_maintenance_id,
+		       m.document_id, doc.filename,
+		       m.created_at, m.updated_at
+		FROM maintenance_expenses m
+		LEFT JOIN expense_documents doc ON m.document_id = doc.id
+		WHERE m.vehicle_id = $1
+		ORDER BY m.date DESC;
 	`
 	rows, err := r.pool.Query(ctx, query, vehicleID)
 	if err != nil {
@@ -1598,6 +1618,7 @@ func (r *Repository) ListMaintenanceExpenses(ctx context.Context, vehicleID stri
 			&m.ID, &m.VehicleID, &m.Category, &m.Amount, &m.Currency, &m.FxRate, &m.Date,
 			&m.Odometer, &m.IsRecurring, &m.RecurrenceIntervalMonths, &m.RecurrenceEndDate, &m.Description,
 			&m.AmortizationMode, &m.CoverageKm, &m.CoverageMonths, &m.ClosesMaintenanceID,
+			&m.DocumentID, &m.DocumentFilename,
 			&m.CreatedAt, &m.UpdatedAt,
 		); err != nil {
 			return nil, err
@@ -1630,20 +1651,29 @@ func (r *Repository) UpdateMaintenanceExpense(ctx context.Context, m *models.Mai
 		    coverage_km = $12,
 		    coverage_months = $13,
 		    closes_maintenance_id = $14,
+		    document_id = $15,
 		    updated_at = NOW()
-		WHERE id::text = $15 AND vehicle_id = $16
+		WHERE id::text = $16 AND vehicle_id = $17
 		RETURNING created_at, updated_at;
 	`
 	err := r.pool.QueryRow(ctx, query,
 		m.Category, m.Amount, m.Currency, m.FxRate, m.Date,
 		m.Odometer, m.IsRecurring, m.RecurrenceIntervalMonths, m.RecurrenceEndDate, m.Description,
-		m.AmortizationMode, m.CoverageKm, m.CoverageMonths, m.ClosesMaintenanceID,
+		m.AmortizationMode, m.CoverageKm, m.CoverageMonths, m.ClosesMaintenanceID, m.DocumentID,
 		m.ID, m.VehicleID,
 	).Scan(&m.CreatedAt, &m.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
-	return err
+	if err != nil {
+		return err
+	}
+
+	if m.DocumentID != nil {
+		_ = r.pool.QueryRow(ctx, `SELECT filename FROM expense_documents WHERE id = $1;`, *m.DocumentID).Scan(&m.DocumentFilename)
+	}
+
+	return nil
 }
 
 func (r *Repository) DeleteMaintenanceExpense(ctx context.Context, vehicleID, maintenanceID string) error {
@@ -1732,32 +1762,37 @@ func (r *Repository) GetLatestTeslaMateChargeDate(ctx context.Context, vehicleID
 	return &t, nil
 }
 
-const chargeColumns = `
-	id, vehicle_id, teslamate_charge_id, date, end_date,
-	address, kwh_added, kwh_used, cost, cost_source, currency, fx_rate, odometer, is_manual, notes, created_at
+const chargeSelectColumns = `
+	c.id, c.vehicle_id, c.teslamate_charge_id, c.date, c.end_date,
+	c.address, c.kwh_added, c.kwh_used, c.cost, c.cost_source, c.currency, c.fx_rate, c.odometer, c.is_manual, c.notes,
+	c.document_id, doc.filename, c.created_at
 `
 
 func scanCharge(row pgx.Row, c *models.ChargeLog) error {
 	return row.Scan(
 		&c.ID, &c.VehicleID, &c.TeslaMateChargeID, &c.Date, &c.EndDate,
 		&c.Address, &c.KwhAdded, &c.KwhUsed, &c.Cost, &c.CostSource, &c.Currency, &c.FxRate, &c.Odometer,
-		&c.IsManual, &c.Notes, &c.CreatedAt,
+		&c.IsManual, &c.Notes,
+		&c.DocumentID, &c.DocumentFilename,
+		&c.CreatedAt,
 	)
 }
 
 // ListCharges lists charges; missingCostOnly restricts to charges whose cost is still unknown.
 func (r *Repository) ListCharges(ctx context.Context, vehicleID string, missingCostOnly bool, limit, offset int) ([]models.ChargeLog, int, error) {
-	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND (NOT $2 OR cost IS NULL)`
+	whereCount := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND (NOT $2 OR cost IS NULL)`
 	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE `+where, vehicleID, missingCostOnly).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM charge_logs WHERE `+whereCount, vehicleID, missingCostOnly).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
+	whereSelect := `c.vehicle_id = $1 AND c.deleted_upstream_at IS NULL AND (NOT $2 OR c.cost IS NULL)`
 	rows, err := r.pool.Query(ctx, `
-		SELECT `+chargeColumns+`
-		FROM charge_logs
-		WHERE `+where+`
-		ORDER BY date DESC
+		SELECT `+chargeSelectColumns+`
+		FROM charge_logs c
+		LEFT JOIN expense_documents doc ON c.document_id = doc.id
+		WHERE `+whereSelect+`
+		ORDER BY c.date DESC
 		LIMIT $3 OFFSET $4;
 	`, vehicleID, missingCostOnly, limit, offset)
 	if err != nil {
@@ -1787,16 +1822,25 @@ func (r *Repository) CountChargesWithoutCost(ctx context.Context, vehicleID stri
 func (r *Repository) CreateManualCharge(ctx context.Context, c *models.ChargeLog) error {
 	c.IsManual = true
 	c.CostSource = "MANUAL"
-	return r.pool.QueryRow(ctx, `
+	err := r.pool.QueryRow(ctx, `
 		INSERT INTO charge_logs (
 			vehicle_id, date, end_date, address, kwh_added, cost, cost_source,
-			currency, fx_rate, odometer, is_manual, notes
-		) VALUES ($1, $2, $3, $4, $5, $6, 'MANUAL', $7, $8, $9, TRUE, $10)
+			currency, fx_rate, odometer, is_manual, notes, document_id
+		) VALUES ($1, $2, $3, $4, $5, $6, 'MANUAL', $7, $8, $9, TRUE, $10, $11)
 		RETURNING id, created_at;
 	`,
 		c.VehicleID, c.Date, c.EndDate, c.Address, c.KwhAdded, c.Cost,
-		c.Currency, c.FxRate, c.Odometer, c.Notes,
+		c.Currency, c.FxRate, c.Odometer, c.Notes, c.DocumentID,
 	).Scan(&c.ID, &c.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	if c.DocumentID != nil {
+		_ = r.pool.QueryRow(ctx, `SELECT filename FROM expense_documents WHERE id = $1;`, *c.DocumentID).Scan(&c.DocumentFilename)
+	}
+
+	return nil
 }
 
 // UpdateCharge updates a charge. TeslaMate charges only accept cost corrections (protected from resyncs);
@@ -1804,7 +1848,10 @@ func (r *Repository) CreateManualCharge(ctx context.Context, c *models.ChargeLog
 func (r *Repository) UpdateCharge(ctx context.Context, c *models.ChargeLog) error {
 	var existing models.ChargeLog
 	err := scanCharge(r.pool.QueryRow(ctx, `
-		SELECT `+chargeColumns+` FROM charge_logs WHERE id::text = $1 AND vehicle_id = $2;
+		SELECT `+chargeSelectColumns+`
+		FROM charge_logs c
+		LEFT JOIN expense_documents doc ON c.document_id = doc.id
+		WHERE c.id::text = $1 AND c.vehicle_id = $2;
 	`, c.ID, c.VehicleID), &existing)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1818,17 +1865,30 @@ func (r *Repository) UpdateCharge(ctx context.Context, c *models.ChargeLog) erro
 		c.KwhAdded, c.Odometer = existing.KwhAdded, existing.Odometer
 	}
 
-	return scanCharge(r.pool.QueryRow(ctx, `
+	cmdTag, err := r.pool.Exec(ctx, `
 		UPDATE charge_logs
 		SET date = $1, end_date = $2, address = $3, kwh_added = $4, odometer = $5,
-		    cost = $6, cost_source = 'MANUAL', currency = $7, fx_rate = $8, notes = $9
-		WHERE id::text = $10 AND vehicle_id = $11
-		RETURNING `+chargeColumns+`;
+		    cost = $6, cost_source = 'MANUAL', currency = $7, fx_rate = $8, notes = $9,
+		    document_id = $10
+		WHERE id::text = $11 AND vehicle_id = $12;
 	`,
 		c.Date, c.EndDate, c.Address, c.KwhAdded, c.Odometer,
-		c.Cost, c.Currency, c.FxRate, c.Notes,
+		c.Cost, c.Currency, c.FxRate, c.Notes, c.DocumentID,
 		c.ID, c.VehicleID,
-	), c)
+	)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return scanCharge(r.pool.QueryRow(ctx, `
+		SELECT `+chargeSelectColumns+`
+		FROM charge_logs c
+		LEFT JOIN expense_documents doc ON c.document_id = doc.id
+		WHERE c.id::text = $1 AND c.vehicle_id = $2;
+	`, c.ID, c.VehicleID), c)
 }
 
 // DeleteManualCharge deletes a manually entered charge (TeslaMate charges would come back on next sync).
@@ -2355,12 +2415,15 @@ func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, d
 				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
 				ELSE NULL
 			END,
-			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes, e.created_at,
+			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes,
+			e.document_id, doc.filename,
+			e.created_at,
 			a.allocated
 		FROM allocations a
 		JOIN drive_expenses e ON e.id = a.expense_id
 		LEFT JOIN drives d ON e.drive_id = d.id
 		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id
+		LEFT JOIN expense_documents doc ON e.document_id = doc.id
 		WHERE a.drive_id::text = $2
 		ORDER BY e.date ASC;
 	`, vehicleID, driveID)
@@ -2375,7 +2438,9 @@ func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, d
 		if err := rows.Scan(
 			&de.ID, &de.VehicleID, &de.TripGroupID, &de.TripGroupName,
 			&de.DriveID, &de.DriveTitle, &de.Type,
-			&de.Amount, &de.Currency, &de.FxRate, &de.Date, &de.Notes, &de.CreatedAt,
+			&de.Amount, &de.Currency, &de.FxRate, &de.Date, &de.Notes,
+			&de.DocumentID, &de.DocumentFilename,
+			&de.CreatedAt,
 			&de.AllocatedAmount,
 		); err != nil {
 			return nil, err
@@ -2749,6 +2814,97 @@ func (r *Repository) DeleteOdometerCheckpoint(ctx context.Context, vehicleID, ch
 		return err
 	}
 	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ============================================================================
+// Expense Documents & Invoices
+// ============================================================================
+
+// SaveExpenseDocument stores a new uploaded document in PostgreSQL.
+func (r *Repository) SaveExpenseDocument(ctx context.Context, doc *models.ExpenseDocument) error {
+	query := `
+		INSERT INTO expense_documents (
+			user_id, vehicle_id, filename, mime_type, file_size, data, description
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)
+		RETURNING id, created_at, updated_at;
+	`
+	return r.pool.QueryRow(ctx, query,
+		doc.UserID, doc.VehicleID, doc.Filename, doc.MimeType, doc.FileSize, doc.Data, doc.Description,
+	).Scan(&doc.ID, &doc.CreatedAt, &doc.UpdatedAt)
+}
+
+// GetExpenseDocumentByID retrieves an expense document including its binary data.
+func (r *Repository) GetExpenseDocumentByID(ctx context.Context, id, vehicleID, userID string) (*models.ExpenseDocument, error) {
+	query := `
+		SELECT d.id, d.user_id, d.vehicle_id, d.filename, d.mime_type, d.file_size, d.data, d.description, d.created_at, d.updated_at
+		FROM expense_documents d
+		JOIN vehicles v ON v.id = d.vehicle_id
+		WHERE d.id::text = $1 AND d.vehicle_id = $2 AND v.user_id = $3;
+	`
+	var doc models.ExpenseDocument
+	err := r.pool.QueryRow(ctx, query, id, vehicleID, userID).Scan(
+		&doc.ID, &doc.UserID, &doc.VehicleID, &doc.Filename, &doc.MimeType, &doc.FileSize, &doc.Data, &doc.Description, &doc.CreatedAt, &doc.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// ListExpenseDocuments lists document headers for a vehicle, including how many expenses link to each document.
+func (r *Repository) ListExpenseDocuments(ctx context.Context, vehicleID, userID string) ([]models.ExpenseDocumentHeader, error) {
+	query := `
+		SELECT
+			d.id, d.vehicle_id, d.filename, d.mime_type, d.file_size, d.description,
+			(
+				(SELECT COUNT(*) FROM drive_expenses de WHERE de.document_id = d.id) +
+				(SELECT COUNT(*) FROM maintenance_expenses me WHERE me.document_id = d.id) +
+				(SELECT COUNT(*) FROM charge_logs cl WHERE cl.document_id = d.id)
+			) AS linked_expenses_count,
+			d.created_at
+		FROM expense_documents d
+		JOIN vehicles v ON v.id = d.vehicle_id
+		WHERE d.vehicle_id = $1 AND v.user_id = $2
+		ORDER BY d.created_at DESC;
+	`
+	rows, err := r.pool.Query(ctx, query, vehicleID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.ExpenseDocumentHeader
+	for rows.Next() {
+		var h models.ExpenseDocumentHeader
+		if err := rows.Scan(
+			&h.ID, &h.VehicleID, &h.Filename, &h.MimeType, &h.FileSize, &h.Description,
+			&h.LinkedExpensesCount, &h.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, h)
+	}
+	return list, rows.Err()
+}
+
+// DeleteExpenseDocument deletes an expense document. Linked expenses have their document_id set to NULL automatically.
+func (r *Repository) DeleteExpenseDocument(ctx context.Context, id, vehicleID, userID string) error {
+	query := `
+		DELETE FROM expense_documents d
+		USING vehicles v
+		WHERE d.vehicle_id = v.id AND d.id::text = $1 AND d.vehicle_id = $2 AND v.user_id = $3;
+	`
+	cmdTag, err := r.pool.Exec(ctx, query, id, vehicleID, userID)
+	if err != nil {
+		return err
+	}
+	if cmdTag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
 	return nil

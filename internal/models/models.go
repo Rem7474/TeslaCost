@@ -136,6 +136,8 @@ type DriveExpense struct {
 	AllocatedAmount   *money.Cents `json:"allocated_amount,omitempty"` // Share allocated to a given drive (EUR)
 	Date              time.Time    `json:"date"`
 	Notes             *string      `json:"notes,omitempty"`
+	DocumentID        *string      `json:"document_id,omitempty"`
+	DocumentFilename  *string      `json:"document_filename,omitempty"`
 	CreatedAt         time.Time    `json:"created_at"`
 }
 
@@ -218,6 +220,8 @@ type MaintenanceExpense struct {
 	CoverageMonths           *int        `json:"coverage_months,omitempty"`
 	ClosesMaintenanceID     *string     `json:"closes_maintenance_id,omitempty"`
 	Description              string      `json:"description"`
+	DocumentID               *string     `json:"document_id,omitempty"`
+	DocumentFilename         *string     `json:"document_filename,omitempty"`
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
 }
@@ -239,7 +243,35 @@ type ChargeLog struct {
 	Odometer          *float64     `json:"odometer,omitempty"`
 	IsManual          bool         `json:"is_manual"`
 	Notes             *string      `json:"notes,omitempty"`
+	DocumentID        *string      `json:"document_id,omitempty"`
+	DocumentFilename  *string      `json:"document_filename,omitempty"`
 	CreatedAt         time.Time    `json:"created_at"`
+}
+
+// ExpenseDocument represents a file attachment or invoice stored in PostgreSQL.
+type ExpenseDocument struct {
+	ID          string    `json:"id"`
+	UserID      string    `json:"user_id"`
+	VehicleID   string    `json:"vehicle_id"`
+	Filename    string    `json:"filename"`
+	MimeType    string    `json:"mime_type"`
+	FileSize    int64     `json:"file_size"`
+	Data        []byte    `json:"-"` // Binary payload excluded from standard JSON
+	Description *string   `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// ExpenseDocumentHeader represents document metadata without binary payload.
+type ExpenseDocumentHeader struct {
+	ID                  string    `json:"id"`
+	VehicleID           string    `json:"vehicle_id"`
+	Filename            string    `json:"filename"`
+	MimeType            string    `json:"mime_type"`
+	FileSize            int64     `json:"file_size"`
+	Description         *string   `json:"description,omitempty"`
+	LinkedExpensesCount int       `json:"linked_expenses_count"`
+	CreatedAt           time.Time `json:"created_at"`
 }
 
 // CarpoolTrip represents a shared trip (e.g. BlaBlaCar) with detailed real cost breakdown and passenger revenues.
