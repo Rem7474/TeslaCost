@@ -97,3 +97,34 @@ func TestTireDistanceAtOdometerExcludesStorage(t *testing.T) {
 }
 
 func floatPtr(v float64) *float64 { return &v }
+
+func TestTelemetryEmptyWhenNoDrives(t *testing.T) {
+	// Nominal lifespan 45,000 km
+	lifespan := 45000
+	drivesCount := 0
+
+	var stressIndex float64
+	var drivingStyle string
+	var dynamicLifespan = lifespan
+	var wearExplanation string
+
+	if drivesCount > 0 {
+		stressIndex = 1.15
+		drivingStyle = "SPORT"
+		dynamicLifespan = int(math.Round(float64(lifespan) / stressIndex))
+		wearExplanation = "Conduite dynamique"
+	}
+
+	if stressIndex != 0 {
+		t.Errorf("expected stressIndex to be 0 when drivesCount == 0, got %f", stressIndex)
+	}
+	if drivingStyle != "" {
+		t.Errorf("expected empty drivingStyle when drivesCount == 0, got %s", drivingStyle)
+	}
+	if dynamicLifespan != lifespan {
+		t.Errorf("expected dynamicLifespan to equal base lifespan (%d), got %d", lifespan, dynamicLifespan)
+	}
+	if wearExplanation != "" {
+		t.Errorf("expected empty wearExplanation when drivesCount == 0, got %s", wearExplanation)
+	}
+}
