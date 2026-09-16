@@ -33,6 +33,9 @@ import {
   Trash2,
   Save,
   List,
+  Search,
+  Calendar,
+  RotateCcw,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -41,19 +44,157 @@ const { showConfirm, showAlert } = useConfirm()
 const drives = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
-const limit = ref(20)
+
+// Page limit with persistent storage
+const savedLimit = Number(localStorage.getItem('drives_limit'))
+const limit = ref(savedLimit === 20 || savedLimit === 50 || savedLimit === 100 ? savedLimit : 20)
 const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
 const selectedTag = ref('')
 const unqualifiedOnly = ref(false)
 const unqualifiedCount = ref(0)
 const loading = ref(true)
 
+// Period / Month navigation (Mix A + C)
+function getCurrentYearMonth() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+const periodMode = ref<'ALL' | 'MONTH' | 'CUSTOM'>('ALL')
+const selectedMonth = ref(getCurrentYearMonth())
+const customFrom = ref('')
+const customTo = ref('')
+
+// Text search on start/end address
+const searchQuery = ref('')
+let searchDebounceTimeout: any = null
+
+function onSearchInput() {
+  if (searchDebounceTimeout) clearTimeout(searchDebounceTimeout)
+  searchDebounceTimeout = setTimeout(() => {
+    page.value = 1
+    loadDrives()
+  }, 300)
+}
+
+function clearSearch() {
+  searchQuery.value = ''
+  page.value = 1
+  loadDrives()
+}
+
+// Month navigation helpers
+const formattedSelectedMonth = computed(() => {
+  if (!selectedMonth.value) return ''
+  const [y, m] = selectedMonth.value.split('-').map(Number)
+  const d = new Date(y, m - 1, 1)
+  const str = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return str.charAt(0).toUpperCase() + str.slice(1)
+})
+
+const isCurrentMonth = computed(() => selectedMonth.value === getCurrentYearMonth())
+
+function prevMonth() {
+  const [y, m] = selectedMonth.value.split('-').map(Number)
+  const d = new Date(y, m - 2, 1)
+  selectedMonth.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  page.value = 1
+  loadDrives()
+}
+
+function nextMonth() {
+  const [y, m] = selectedMonth.value.split('-').map(Number)
+  const d = new Date(y, m, 1)
+  selectedMonth.value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+  page.value = 1
+  loadDrives()
+}
+
+function resetToCurrentMonth() {
+  selectedMonth.value = getCurrentYearMonth()
+  page.value = 1
+  loadDrives()
+}
+
+function setPeriodMode(mode: 'ALL' | 'MONTH' | 'CUSTOM') {
+  periodMode.value = mode
+  page.value = 1
+  loadDrives()
+}
+
+function onMonthChange() {
+  page.value = 1
+  loadDrives()
+}
+
+function onCustomDateChange() {
+  page.value = 1
+  loadDrives()
+}
+
+// Page sizing & navigation
+function setLimit(newLimit: number) {
+  limit.value = newLimit
+  localStorage.setItem('drives_limit', newLimit.toString())
+  page.value = 1
+  loadDrives()
+}
+
 function goToPage(targetPage: number) {
   const p = Math.max(1, Math.min(totalPages.value, targetPage))
   if (p !== page.value) {
     page.value = p
     loadDrives()
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+}
+
+const jumpInput = ref<number | ''>('')
+function applyJump() {
+  if (jumpInput.value !== '') {
+    goToPage(Number(jumpInput.value))
+    jumpInput.value = ''
+  }
+}
+
+const itemRangeStart = computed(() => {
+  if (total.value === 0) return 0
+  return (page.value - 1) * limit.value + 1
+})
+
+const itemRangeEnd = computed(() => {
+  return Math.min(page.value * limit.value, total.value)
+})
+
+const paginationPages = computed(() => {
+  const totalP = totalPages.value
+  const current = page.value
+  if (totalP <= 7) {
+    return Array.from({ length: totalP }, (_, i) => i + 1)
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', totalP]
+  }
+  if (current >= totalP - 3) {
+    return [1, '...', totalP - 4, totalP - 3, totalP - 2, totalP - 1, totalP]
+  }
+  return [1, '...', current - 1, current, current + 1, '...', totalP]
+})
+
+// Summary metrics of current page drives
+const pageDistance = computed(() => drives.value.reduce((acc, d) => acc + (d.distance_km || 0), 0))
+const pageEnergy = computed(() => drives.value.reduce((acc, d) => acc + (d.energy_consumed_kwh || 0), 0))
+const pageCost = computed(() => drives.value.reduce((acc, d) => acc + (d.costs?.total_cost || 0), 0) / 100)
+
+function resetAllFilters() {
+  searchQuery.value = ''
+  selectedTag.value = ''
+  unqualifiedOnly.value = false
+  periodMode.value = 'ALL'
+  customFrom.value = ''
+  customTo.value = ''
+  page.value = 1
+  loadDrives()
 }
 
 // Multi-selection for trip grouping & tolls & carpooling. Drives are kept by id so that the selection
@@ -107,11 +248,27 @@ async function loadDrives() {
   }
   loading.value = true
   try {
+    let fromStr: string | undefined
+    let toStr: string | undefined
+
+    if (periodMode.value === 'MONTH' && selectedMonth.value) {
+      const [y, m] = selectedMonth.value.split('-').map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      fromStr = `${y}-${String(m).padStart(2, '0')}-01`
+      toStr = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`
+    } else if (periodMode.value === 'CUSTOM') {
+      if (customFrom.value) fromStr = customFrom.value
+      if (customTo.value) toStr = customTo.value
+    }
+
     const res = await api.getDrives(vehicleStore.activeVehicle.id, {
       tag: selectedTag.value,
       page: page.value,
       limit: limit.value,
       unqualified: unqualifiedOnly.value,
+      from: fromStr,
+      to: toStr,
+      q: searchQuery.value.trim() || undefined,
     })
     drives.value = res.drives
     total.value = res.total
@@ -571,6 +728,124 @@ function formatDate(dateStr: string) {
       </div>
     </div>
 
+    <!-- Filters & Navigation Toolbar (Drives Mode) -->
+    <div v-if="viewMode === 'DRIVES'" class="space-y-3">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-slate-900 border border-slate-800 p-3 rounded-2xl">
+        <!-- Period Mode & Navigation (Mix A + C) -->
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- Period mode selector -->
+          <div class="flex items-center bg-slate-950 p-1 rounded-xl border border-slate-800/80">
+            <button
+              @click="setPeriodMode('ALL')"
+              class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors"
+              :class="periodMode === 'ALL' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+            >
+              Tous
+            </button>
+            <button
+              @click="setPeriodMode('MONTH')"
+              class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1"
+              :class="periodMode === 'MONTH' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+            >
+              <Calendar class="w-3.5 h-3.5" />
+              Par mois
+            </button>
+            <button
+              @click="setPeriodMode('CUSTOM')"
+              class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors"
+              :class="periodMode === 'CUSTOM' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+            >
+              Période
+            </button>
+          </div>
+
+          <!-- Month Selector with Prev/Next buttons (when periodMode === 'MONTH') -->
+          <div v-if="periodMode === 'MONTH'" class="flex items-center gap-1.5 bg-slate-950 px-2 py-1 rounded-xl border border-slate-800/80">
+            <button
+              @click="prevMonth"
+              class="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              title="Mois précédent"
+            >
+              <ChevronLeft class="w-4 h-4" />
+            </button>
+            <input
+              type="month"
+              v-model="selectedMonth"
+              @change="onMonthChange"
+              class="bg-transparent text-xs font-semibold text-white px-1.5 py-0.5 rounded outline-none cursor-pointer border border-transparent hover:border-slate-700"
+            />
+            <button
+              @click="nextMonth"
+              class="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+              title="Mois suivant"
+            >
+              <ChevronRight class="w-4 h-4" />
+            </button>
+            <button
+              v-if="!isCurrentMonth"
+              @click="resetToCurrentMonth"
+              class="text-[11px] text-rose-400 hover:text-rose-300 font-medium ml-1 px-1.5 py-0.5 bg-rose-500/10 rounded-md border border-rose-500/20"
+              title="Revenir au mois en cours"
+            >
+              Ce mois
+            </button>
+          </div>
+
+          <!-- Custom Date Range (when periodMode === 'CUSTOM') -->
+          <div v-if="periodMode === 'CUSTOM'" class="flex items-center gap-2 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800/80 text-xs">
+            <span class="text-slate-400">Du</span>
+            <input
+              type="date"
+              v-model="customFrom"
+              @change="onCustomDateChange"
+              class="bg-slate-900 text-white text-xs px-2 py-1 rounded-lg border border-slate-800 outline-none focus:border-rose-500"
+            />
+            <span class="text-slate-400">Au</span>
+            <input
+              type="date"
+              v-model="customTo"
+              @change="onCustomDateChange"
+              class="bg-slate-900 text-white text-xs px-2 py-1 rounded-lg border border-slate-800 outline-none focus:border-rose-500"
+            />
+          </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative min-w-[240px] max-w-sm flex-1">
+          <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            v-model="searchQuery"
+            @input="onSearchInput"
+            placeholder="Rechercher une ville, adresse..."
+            class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
+          />
+          <button
+            v-if="searchQuery"
+            @click="clearSearch"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
+            title="Effacer la recherche"
+          >
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Metrics Summary for Current Selection -->
+      <div v-if="total > 0 && !loading" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
+        <span class="font-medium text-slate-300">
+          <strong class="text-white">{{ total }}</strong> trajet(s) trouvé(s)
+          <span v-if="periodMode === 'MONTH'">en <span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></span>
+        </span>
+        <span class="text-slate-600">•</span>
+        <span>Distance page : <strong class="text-white">{{ Math.round(pageDistance).toLocaleString('fr-FR') }} km</strong></span>
+        <span class="text-slate-600">•</span>
+        <span>Énergie page : <strong class="text-white">{{ Math.round(pageEnergy).toLocaleString('fr-FR') }} kWh</strong></span>
+        <span class="text-slate-600">•</span>
+        <span>Coût page : <strong class="text-white">{{ pageCost.toFixed(2) }} €</strong></span>
+      </div>
+    </div>
+
     <!-- Multi-selection Action Bar -->
     <div
       v-if="selectedDriveIds.length"
@@ -645,8 +920,16 @@ function formatDate(dateStr: string) {
     </div>
 
     <!-- EMPTY STATE -->
-    <div v-else-if="!drives.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-      Aucun trajet trouvé pour cette sélection.
+    <div v-else-if="!drives.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 space-y-3">
+      <p>Aucun trajet trouvé pour cette sélection ou période.</p>
+      <button
+        v-if="searchQuery || periodMode !== 'ALL' || selectedTag || unqualifiedOnly"
+        @click="resetAllFilters"
+        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl border border-slate-700 transition-colors"
+      >
+        <RotateCcw class="w-3.5 h-3.5" />
+        Réinitialiser les filtres
+      </button>
     </div>
 
     <!-- REAL DRIVES LIST -->
@@ -775,45 +1058,101 @@ function formatDate(dateStr: string) {
         </div>
       </div>
 
-      <!-- Pagination Controls -->
-      <div class="flex items-center justify-center gap-2 pt-4">
-        <button
-          @click="goToPage(1)"
-          :disabled="page <= 1"
-          title="Première page"
-          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronsLeft class="w-5 h-5" />
-        </button>
-        <button
-          @click="goToPage(page - 1)"
-          :disabled="page <= 1"
-          title="Page précédente"
-          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronLeft class="w-5 h-5" />
-        </button>
+      <!-- Modern Pagination Controls -->
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-800/80">
+        <!-- Left: Range display & Page size buttons -->
+        <div class="flex flex-wrap items-center gap-3 text-xs text-slate-400">
+          <span>
+            Affichage <strong class="text-white">{{ itemRangeStart }}</strong>–<strong class="text-white">{{ itemRangeEnd }}</strong> sur <strong class="text-white">{{ total }}</strong> trajets
+          </span>
+          <div class="flex items-center gap-1.5 border-l border-slate-800 pl-3">
+            <span class="text-slate-500">Par page :</span>
+            <button
+              v-for="s in [20, 50, 100]"
+              :key="s"
+              @click="setLimit(s)"
+              class="px-2 py-0.5 rounded-lg text-xs font-semibold transition-colors"
+              :class="limit === s ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white bg-slate-800/60'"
+            >
+              {{ s }}
+            </button>
+          </div>
+        </div>
 
-        <span class="px-3 text-xs text-slate-400 font-semibold select-none">
-          Page <strong class="text-white">{{ page }}</strong> sur <strong class="text-white">{{ totalPages }}</strong>
-        </span>
+        <!-- Center / Right: Numbered buttons + quick jump -->
+        <div class="flex items-center gap-1.5 flex-wrap justify-center">
+          <!-- First page -->
+          <button
+            @click="goToPage(1)"
+            :disabled="page <= 1"
+            title="Première page"
+            class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronsLeft class="w-4 h-4" />
+          </button>
+          <!-- Prev page -->
+          <button
+            @click="goToPage(page - 1)"
+            :disabled="page <= 1"
+            title="Page précédente"
+            class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronLeft class="w-4 h-4" />
+          </button>
 
-        <button
-          @click="goToPage(page + 1)"
-          :disabled="page >= totalPages"
-          title="Page suivante"
-          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronRight class="w-5 h-5" />
-        </button>
-        <button
-          @click="goToPage(totalPages)"
-          :disabled="page >= totalPages"
-          title="Dernière page"
-          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <ChevronsRight class="w-5 h-5" />
-        </button>
+          <!-- Numbered pages with ellipses -->
+          <template v-for="(p, idx) in paginationPages" :key="idx">
+            <span v-if="p === '...'" class="px-1 text-xs text-slate-500 font-bold">...</span>
+            <button
+              v-else
+              @click="goToPage(p as number)"
+              class="min-w-[32px] h-8 px-2 rounded-xl text-xs font-semibold transition-all"
+              :class="page === p ? 'bg-rose-600 text-white font-bold shadow-md shadow-rose-600/30' : 'bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700'"
+            >
+              {{ p }}
+            </button>
+          </template>
+
+          <!-- Next page -->
+          <button
+            @click="goToPage(page + 1)"
+            :disabled="page >= totalPages"
+            title="Page suivante"
+            class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronRight class="w-4 h-4" />
+          </button>
+          <!-- Last page -->
+          <button
+            @click="goToPage(totalPages)"
+            :disabled="page >= totalPages"
+            title="Dernière page"
+            class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <ChevronsRight class="w-4 h-4" />
+          </button>
+
+          <!-- Direct jump input -->
+          <div v-if="totalPages > 1" class="flex items-center gap-1 ml-2 border-l border-slate-800 pl-2">
+            <span class="text-xs text-slate-500">Page</span>
+            <input
+              type="number"
+              min="1"
+              :max="totalPages"
+              v-model="jumpInput"
+              @keydown.enter="applyJump"
+              placeholder="N°"
+              class="w-12 px-1.5 py-1 text-xs bg-slate-950 border border-slate-800 rounded-lg text-white text-center focus:border-rose-500 outline-none"
+            />
+            <button
+              @click="applyJump"
+              :disabled="!jumpInput"
+              class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
+            >
+              Aller
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     </template>

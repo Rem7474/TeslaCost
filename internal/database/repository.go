@@ -311,6 +311,9 @@ type DriveFilter struct {
 	Tag             string
 	UnqualifiedOnly bool
 	TripGroupID     string
+	From            *time.Time
+	To              *time.Time
+	Query           string
 }
 
 // HighwayDrivePredicate matches drives likely to have used toll roads:
@@ -330,12 +333,56 @@ const UnqualifiedDrivePredicate = HighwayDrivePredicate + `
 `
 
 func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter DriveFilter, limit, offset int) ([]models.Drive, int, error) {
-	where := `vehicle_id = $1 AND deleted_upstream_at IS NULL AND ($2 = '' OR $2 = ANY(tags)) AND (NOT $3 OR (` + UnqualifiedDrivePredicate + `))
-		AND ($6::text = '' OR id IN (SELECT drive_id FROM trip_group_drives WHERE trip_group_id::text = $6::text))`
+	var conditions []string
+	var args []any
+	argIdx := 1
+
+	conditions = append(conditions, fmt.Sprintf("vehicle_id = $%d", argIdx))
+	args = append(args, vehicleID)
+	argIdx++
+
+	conditions = append(conditions, "deleted_upstream_at IS NULL")
+
+	if filter.Tag != "" {
+		conditions = append(conditions, fmt.Sprintf("$%d = ANY(tags)", argIdx))
+		args = append(args, filter.Tag)
+		argIdx++
+	}
+
+	if filter.UnqualifiedOnly {
+		conditions = append(conditions, "("+UnqualifiedDrivePredicate+")")
+	}
+
+	if filter.TripGroupID != "" {
+		conditions = append(conditions, fmt.Sprintf("id IN (SELECT drive_id FROM trip_group_drives WHERE trip_group_id::text = $%d::text)", argIdx))
+		args = append(args, filter.TripGroupID)
+		argIdx++
+	}
+
+	if filter.From != nil {
+		conditions = append(conditions, fmt.Sprintf("start_time >= $%d", argIdx))
+		args = append(args, *filter.From)
+		argIdx++
+	}
+
+	if filter.To != nil {
+		conditions = append(conditions, fmt.Sprintf("start_time <= $%d", argIdx))
+		args = append(args, *filter.To)
+		argIdx++
+	}
+
+	if strings.TrimSpace(filter.Query) != "" {
+		pattern := "%" + strings.TrimSpace(filter.Query) + "%"
+		conditions = append(conditions, fmt.Sprintf("(start_address ILIKE $%d OR end_address ILIKE $%d)", argIdx, argIdx))
+		args = append(args, pattern)
+		argIdx++
+	}
+
+	whereClause := strings.Join(conditions, " AND ")
 
 	var total int
-	countWhere := strings.ReplaceAll(where, "$6", "$4")
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM drives WHERE `+countWhere, vehicleID, filter.Tag, filter.UnqualifiedOnly, filter.TripGroupID).Scan(&total); err != nil {
+	countQuery := "SELECT COUNT(*) FROM drives WHERE " + whereClause
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
@@ -345,11 +392,10 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter Dr
 		       speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
 		       consumption_kwh_100km, tags, is_manual, toll_reviewed_at, created_at, updated_at
 		FROM drives
-		WHERE ` + where + `
-		ORDER BY start_time DESC
-		LIMIT $4 OFFSET $5;
-	`
-	rows, err := r.pool.Query(ctx, query, vehicleID, filter.Tag, filter.UnqualifiedOnly, limit, offset, filter.TripGroupID)
+		WHERE ` + whereClause + fmt.Sprintf(" ORDER BY start_time DESC LIMIT $%d OFFSET $%d;", argIdx, argIdx+1)
+
+	queryArgs := append(args, limit, offset)
+	rows, err := r.pool.Query(ctx, query, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
