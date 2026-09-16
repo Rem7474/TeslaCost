@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
-import { Zap, Lock, Mail, AlertCircle } from 'lucide-vue-next'
+import { Zap, Lock, Mail, AlertCircle, Shield } from 'lucide-vue-next'
 import { APP_VERSION } from '@/version'
 
 const router = useRouter()
@@ -14,6 +14,8 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const registrationEnabled = ref(true)
+const oidcEnabled = ref(false)
+const oidcProviderName = ref('SSO')
 
 onMounted(async () => {
   try {
@@ -21,9 +23,17 @@ onMounted(async () => {
     if (res.ok) {
       const data = await res.json()
       registrationEnabled.value = data.registration_enabled
+      oidcEnabled.value = !!data.oidc_enabled
+      oidcProviderName.value = data.oidc_provider_name || 'SSO'
     }
   } catch {
-    // default true
+    // defaults
+  }
+
+  // Show OIDC error if redirected back after a failure
+  const params = new URLSearchParams(window.location.search)
+  if (params.get('error') === 'oidc_failed') {
+    error.value = 'Échec de la connexion SSO. Veuillez réessayer ou utiliser votre mot de passe local.'
   }
 })
 
@@ -57,6 +67,23 @@ async function handleSubmit() {
       <div v-if="error" class="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-sm text-rose-400">
         <AlertCircle class="w-4 h-4 shrink-0" />
         <span>{{ error }}</span>
+      </div>
+
+      <!-- OIDC / SSO login button (shown only when OIDC is configured server-side) -->
+      <a
+        v-if="oidcEnabled"
+        href="/api/auth/oidc/login"
+        class="w-full flex items-center justify-center gap-2 py-3 px-4 border border-slate-600 rounded-xl text-white hover:bg-slate-800 transition-all font-medium text-sm mb-4"
+      >
+        <Shield class="w-4 h-4 text-rose-400" />
+        Se connecter avec {{ oidcProviderName }}
+      </a>
+
+      <!-- Separator: shown only when OIDC is enabled AND local form is still visible -->
+      <div v-if="oidcEnabled" class="relative my-4 flex items-center">
+        <div class="flex-grow border-t border-slate-700" />
+        <span class="mx-3 text-xs text-slate-500">ou</span>
+        <div class="flex-grow border-t border-slate-700" />
       </div>
 
       <form @submit.prevent="handleSubmit" class="space-y-4">

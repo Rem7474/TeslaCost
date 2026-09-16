@@ -133,7 +133,20 @@ func main() {
 
 	// API Routes
 	if repo != nil {
-		authHandler := handlers.NewAuthHandler(repo, cfg.JWTSecret, cfg.JWTExpirationHours, cfg.DisableRegistration)
+		// Initialize OIDC service if configured.
+		var oidcService *auth.OIDCService
+		if cfg.OIDCEnabled {
+			svc, oidcErr := auth.NewOIDCService(context.Background(), cfg)
+			if oidcErr != nil {
+				log.Fatalf("OIDC initialization failed: %v", oidcErr)
+			}
+			oidcService = svc
+			log.Printf("[auth] OIDC SSO enabled — issuer: %s, provider: %s", cfg.OIDCIssuerURL, cfg.OIDCProviderName)
+		} else {
+			log.Println("[auth] OIDC not configured — using local JWT auth only")
+		}
+
+		authHandler := handlers.NewAuthHandler(repo, cfg, oidcService)
 		vehicleHandler := handlers.NewVehicleHandler(repo, encryptor, syncService)
 		driveHandler := handlers.NewDriveHandler(repo, carpoolService)
 		tireHandler := handlers.NewTireHandler(repo, tireWearService)
@@ -153,6 +166,9 @@ func main() {
 			r.Get("/config", authHandler.GetConfig)
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
+			// OIDC Authorization Code Flow endpoints (public — no JWT required)
+			r.Get("/oidc/login", authHandler.OIDCLogin)
+			r.Get("/oidc/callback", authHandler.OIDCCallback)
 		})
 
 		// Protected Routes
