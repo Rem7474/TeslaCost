@@ -223,7 +223,7 @@ const preTeslaMatePreview = computed(() => {
   const kwh100 = Number(preTeslaMateForm.value.kwh_100km)
   const rate = Number(preTeslaMateForm.value.eur_per_kwh)
   if (!kwh100 || !rate || kwh100 <= 0 || rate <= 0) return null
-  const distance = checkpointsVehicleTco.value?.smoothed_distance_km || checkpointsVehicleTco.value?.completeness?.untracked_distance_km || 0
+  const distance = checkpointsVehicleTco.value?.pre_teslamate_distance_km ?? (checkpointsVehicleTco.value?.completeness?.untracked_distance_km || 0)
   if (distance <= 0) return null
   const kwh = (distance * kwh100) / 100
   const cost = kwh * rate
