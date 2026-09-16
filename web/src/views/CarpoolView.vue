@@ -765,15 +765,23 @@ onMounted(() => {
     </div>
 
     <!-- Create / Edit Modal -->
-    <div v-if="showModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-4xl w-full p-6 space-y-5 max-h-[92vh] overflow-y-auto shadow-2xl">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+    <div
+      v-if="showModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-4xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
             <Users class="w-5 h-5 text-rose-400" />
             {{ editingTripId ? 'Modifier le covoiturage' : 'Nouveau covoiturage' }}
           </h3>
-          <button @click="showModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg"><X class="w-5 h-5" /></button>
+          <button @click="showModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
         </div>
+
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-5">
 
         <!-- Source -->
         <div class="space-y-3">
@@ -1033,13 +1041,21 @@ onMounted(() => {
           <input id="carpool-notes" v-model="form.notes" class="w-full bg-slate-800 text-slate-100 text-sm rounded-xl px-3 py-2 border border-slate-700" />
         </div>
 
-        <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
-          <button type="button" @click="showModal = false" class="px-4 py-2 text-xs text-slate-400 hover:text-white">Annuler</button>
+        </div>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Annuler
+          </button>
           <button
             type="button"
             @click="handleSave"
             :disabled="modalSubmitting || estimating"
-            class="bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold px-5 py-2 rounded-xl"
+            class="bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold px-5 py-2 rounded-xl transition-colors"
           >
             {{ modalSubmitting ? 'Enregistrement…' : 'Enregistrer' }}
           </button>

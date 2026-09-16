@@ -1240,18 +1240,21 @@ function formatDate(d: string) {
     <!-- MODAL: AJOUTER DES PNEUS (BATCH / SINGLE) -->
     <div
       v-if="showAddTireModal"
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showAddTireModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto shadow-2xl">
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
             <Plus class="w-5 h-5 text-rose-500" />
             Ajouter des pneus
           </h3>
-          <button @click="showAddTireModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg">
+          <button @click="showAddTireModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
             <X class="w-5 h-5" />
           </button>
         </div>
+
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-5">
 
         <!-- Add Type Selection -->
         <div class="space-y-1.5">
@@ -1471,18 +1474,20 @@ function formatDate(d: string) {
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+        </div>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-3 shrink-0 bg-slate-900/95">
           <button
             type="button"
             @click="showAddTireModal = false"
-            class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold text-slate-300 transition-colors"
           >
             Annuler
           </button>
           <button
             type="button"
             @click="handleCreateTires"
-            class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-rose-600/20"
+            class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2 rounded-xl shadow-lg shadow-rose-600/20 transition-colors"
           >
             Créer les pneus
           </button>
@@ -1510,14 +1515,15 @@ function formatDate(d: string) {
     <!-- MODAL: HISTORIQUE COMPLET & TIMELINE D'UN PNEU -->
     <div
       v-if="showHistoryModal && selectedTire"
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showHistoryModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-2xl w-full p-6 space-y-6 max-h-[90vh] overflow-y-auto shadow-2xl">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
         <!-- Header -->
-        <div class="flex items-start justify-between pb-3 border-b border-slate-800">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-start justify-between shrink-0 bg-slate-900/95">
           <div>
             <div class="flex items-center gap-2">
-              <h3 class="text-lg font-bold text-white">{{ selectedTire.brand }} {{ selectedTire.model }}</h3>
+              <h3 class="text-base font-bold text-white">{{ selectedTire.brand }} {{ selectedTire.model }}</h3>
               <span class="text-xs font-mono bg-slate-800 px-2 py-0.5 rounded text-slate-300">
                 {{ selectedTire.dimension }}
               </span>
@@ -1527,25 +1533,28 @@ function formatDate(d: string) {
             </div>
           </div>
           <div class="flex items-center gap-1.5">
-            <button @click="openTireEdit([selectedTire.id])" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg" title="Modifier le pneu">
+            <button @click="openTireEdit([selectedTire.id])" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors" title="Modifier le pneu">
               <Pencil class="w-4 h-4" />
             </button>
             <button
               v-if="selectedTire.current_position !== 'DISPOSED'"
               @click="openDisposeModal"
-              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg"
+              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg transition-colors"
               title="Mettre au rebut (usé, crevé, vendu)"
             >
               <Archive class="w-4 h-4" />
             </button>
-            <button @click="handleDeleteTire(selectedTire)" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg" title="Supprimer (saisie erronée)">
+            <button @click="handleDeleteTire(selectedTire)" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg transition-colors" title="Supprimer (saisie erronée)">
               <Trash2 class="w-4 h-4" />
             </button>
-            <button @click="showHistoryModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg">
+            <button @click="showHistoryModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
               <X class="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        <!-- Body -->
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-6">
 
         <!-- Life KPI Card -->
         <div class="bg-slate-950/60 border border-slate-800 p-4 rounded-2xl space-y-3">
@@ -1744,25 +1753,38 @@ function formatDate(d: string) {
             </div>
           </div>
         </div>
+        </div>
+
+        <!-- Pinned Footer -->
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showHistoryModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Fermer
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- MODAL: AJOUTER / MODIFIER UNE SESSION DE MONTAGE -->
     <div
       v-if="showSessionModal"
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showSessionModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-          <h3 class="text-sm font-bold text-white">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white">
             {{ editingSessionId ? 'Modifier la session de montage' : 'Ajouter une session de montage passée' }}
           </h3>
-          <button @click="showSessionModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg">
-            <X class="w-4 h-4" />
+          <button @click="showSessionModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
           </button>
         </div>
 
-        <div class="space-y-3 text-xs">
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
           <div>
             <label for="tire-session-position" class="block text-slate-400 mb-1 font-semibold">Position occupée</label>
             <select id="tire-session-position"
@@ -1842,18 +1864,18 @@ function formatDate(d: string) {
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
           <button
             type="button"
             @click="showSessionModal = false"
-            class="px-3 py-1.5 text-xs text-slate-400 hover:text-white"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
           >
             Annuler
           </button>
           <button
             type="button"
             @click="handleSaveSession"
-            class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-xl"
+            class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
           >
             Enregistrer
           </button>
@@ -1864,20 +1886,21 @@ function formatDate(d: string) {
     <!-- MODAL: MESURE DE GOMME -->
     <div
       v-if="showLogModal"
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showLogModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
             <Ruler class="w-4 h-4 text-emerald-400" />
             {{ editingLogId ? 'Modifier le relevé' : 'Relevé de sculpture' }}
           </h3>
-          <button @click="showLogModal = false" class="text-slate-400 hover:text-white p-1">
+          <button @click="showLogModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
             <X class="w-4 h-4" />
           </button>
         </div>
 
-        <div class="space-y-3 text-xs">
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
           <div>
             <label for="tire-new-log-depth-mm" class="block text-slate-400 mb-1 font-semibold">Profondeur mesurée (mm)</label>
             <input id="tire-new-log-depth-mm"
@@ -1912,14 +1935,18 @@ function formatDate(d: string) {
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-          <button type="button" @click="showLogModal = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showLogModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
+          >
             Annuler
           </button>
           <button
             type="button"
             @click="handleAddLog"
-            class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl"
+            class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
           >
             Enregistrer le relevé
           </button>
@@ -1930,24 +1957,25 @@ function formatDate(d: string) {
     <!-- MODAL: CHANGEMENT DE PACK COMPLET (ÉTÉ ⇄ HIVER) -->
     <div
       v-if="showPackSwapModal"
-      class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showPackSwapModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
             <Snowflake class="w-4 h-4 text-sky-400" />
             Permutation saisonnière (Changement de pack complet)
           </h3>
-          <button @click="showPackSwapModal = false" class="text-slate-400 hover:text-white p-1">
+          <button @click="showPackSwapModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
             <X class="w-4 h-4" />
           </button>
         </div>
 
-        <p class="text-xs text-slate-400">
-          Les 4 pneus actuellement montés vont être envoyés au garage avec leur kilométrage figé. Sélectionnez les 4 pneus du garage à monter sur la Tesla :
-        </p>
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
+          <p class="text-xs text-slate-400">
+            Les 4 pneus actuellement montés vont être envoyés au garage avec leur kilométrage figé. Sélectionnez les 4 pneus du garage à monter sur la Tesla :
+          </p>
 
-        <div class="space-y-3 text-xs">
           <div>
             <label for="tire-pack-swap-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre de la permutation (km)</label>
             <input id="tire-pack-swap-odometer"
@@ -2012,14 +2040,18 @@ function formatDate(d: string) {
           </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-          <button type="button" @click="showPackSwapModal = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showPackSwapModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
+          >
             Annuler
           </button>
           <button
             type="button"
             @click="handlePackSwapSubmit"
-            class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-4 py-2 rounded-xl"
+            class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
           >
             Confirmer la permutation
           </button>
@@ -2028,123 +2060,156 @@ function formatDate(d: string) {
     </div>
 
     <!-- MODAL: MODIFIER UN OU PLUSIEURS PNEUS -->
-    <div v-if="showTireEditModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-      <form @submit.prevent="handleSaveTireEdit" class="bg-slate-900 border border-slate-800 rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl my-8">
-        <div class="flex items-center justify-between pb-2 border-b border-slate-800">
-          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+    <div
+      v-if="showTireEditModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showTireEditModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
             <Pencil class="w-4 h-4 text-rose-400" />
             {{ tireEditIds.length > 1 ? `Modifier ${tireEditIds.length} pneus` : 'Modifier le pneu' }}
           </h3>
-          <button type="button" @click="showTireEditModal = false" class="text-slate-400 hover:text-white p-1"><X class="w-4 h-4" /></button>
-        </div>
-        <p v-if="tireEditIds.length > 1" class="text-[11px] text-slate-400">
-          {{ editedTires.map((t) => `${t.tire.brand} ${t.tire.current_position}`).join(' • ') }} — les champs laissés vides ne sont pas modifiés.
-        </p>
-
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div>
-            <label for="tire-edit-brand" class="block text-[11px] text-slate-400 mb-1 font-semibold">Marque</label>
-            <input id="tire-edit-brand" v-model="tireEditForm.brand" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-model" class="block text-[11px] text-slate-400 mb-1 font-semibold">Modèle</label>
-            <input id="tire-edit-model" v-model="tireEditForm.model" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-dimension" class="block text-[11px] text-slate-400 mb-1 font-semibold">Dimension</label>
-            <input id="tire-edit-dimension" v-model="tireEditForm.dimension" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-season" class="block text-[11px] text-slate-400 mb-1 font-semibold">Saison</label>
-            <select id="tire-edit-season" v-model="tireEditForm.season" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
-              <option value="">{{ tireEditIds.length > 1 ? 'Inchangée' : '—' }}</option>
-              <option value="SUMMER">Été</option>
-              <option value="WINTER">Hiver</option>
-              <option value="ALL_SEASON">4 saisons</option>
-            </select>
-          </div>
-          <div>
-            <label for="tire-edit-purchase-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date d'achat</label>
-            <input id="tire-edit-purchase-date" v-model="tireEditForm.purchase_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-dot" class="block text-[11px] text-slate-400 mb-1 font-semibold">Code DOT</label>
-            <input id="tire-edit-dot" v-model="tireEditForm.dot_code" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
+          <button type="button" @click="showTireEditModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-4 h-4" />
+          </button>
         </div>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-          <div>
-            <label for="tire-edit-price-mode" class="block text-[11px] text-slate-400 mb-1 font-semibold">Saisie du prix</label>
-            <select id="tire-edit-price-mode" v-model="tireEditPriceMode" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
-              <option value="UNIT">Prix unitaire</option>
-              <option value="TOTAL" :disabled="tireEditIds.length < 2">Prix total réparti</option>
-            </select>
-          </div>
-          <div>
-            <label for="tire-edit-price" class="block text-[11px] text-slate-400 mb-1 font-semibold">Prix (€)</label>
-            <input id="tire-edit-price" v-model.number="tireEditForm.price" type="number" step="0.01" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-lifespan" class="block text-[11px] text-slate-400 mb-1 font-semibold">Durée de vie estimée (km)</label>
-            <input id="tire-edit-lifespan" v-model.number="tireEditForm.estimated_lifespan_km" type="number" min="1" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-initial-depth" class="block text-[11px] text-slate-400 mb-1 font-semibold">Profondeur neuve (mm)</label>
-            <input id="tire-edit-initial-depth" v-model.number="tireEditForm.initial_depth_mm" type="number" step="0.1" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-min-depth" class="block text-[11px] text-slate-400 mb-1 font-semibold">Profondeur minimale (mm)</label>
-            <input id="tire-edit-min-depth" v-model.number="tireEditForm.min_legal_depth_mm" type="number" step="0.1" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          <div>
-            <label for="tire-edit-initial-distance" class="block text-[11px] text-slate-400 mb-1 font-semibold">Km avant TeslaCost (occasion)</label>
-            <input id="tire-edit-initial-distance" v-model.number="tireEditForm.initial_distance_km" type="number" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-        </div>
+        <form id="tire-edit-modal-form" @submit.prevent="handleSaveTireEdit" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <p v-if="tireEditIds.length > 1" class="text-[11px] text-slate-400">
+            {{ editedTires.map((t) => `${t.tire.brand} ${t.tire.current_position}`).join(' • ') }} — les champs laissés vides ne sont pas modifiés.
+          </p>
 
-        <div v-if="editIncludesMounted" class="space-y-2 pt-3 border-t border-slate-800">
-          <h4 class="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Montage en cours</h4>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label for="tire-edit-mounted-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date de montage</label>
-            <input id="tire-edit-mounted-date" v-model="tireEditForm.mounted_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label for="tire-edit-brand" class="block text-[11px] text-slate-400 mb-1 font-semibold">Marque</label>
+              <input id="tire-edit-brand" v-model="tireEditForm.brand" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-model" class="block text-[11px] text-slate-400 mb-1 font-semibold">Modèle</label>
+              <input id="tire-edit-model" v-model="tireEditForm.model" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-dimension" class="block text-[11px] text-slate-400 mb-1 font-semibold">Dimension</label>
+              <input id="tire-edit-dimension" v-model="tireEditForm.dimension" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-season" class="block text-[11px] text-slate-400 mb-1 font-semibold">Saison</label>
+              <select id="tire-edit-season" v-model="tireEditForm.season" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
+                <option value="">{{ tireEditIds.length > 1 ? 'Inchangée' : '—' }}</option>
+                <option value="SUMMER">Été</option>
+                <option value="WINTER">Hiver</option>
+                <option value="ALL_SEASON">4 saisons</option>
+              </select>
+            </div>
+            <div>
+              <label for="tire-edit-purchase-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date d'achat</label>
+              <input id="tire-edit-purchase-date" v-model="tireEditForm.purchase_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-dot" class="block text-[11px] text-slate-400 mb-1 font-semibold">Code DOT</label>
+              <input id="tire-edit-dot" v-model="tireEditForm.dot_code" type="text"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
           </div>
-          <div>
-            <label for="tire-edit-mounted-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au montage (km)</label>
-            <input id="tire-edit-mounted-odometer" v-model.number="tireEditForm.mounted_odometer" type="number" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
-          </div>
-          </div>
-          <p class="text-[11px] text-slate-400">S'applique à la session de montage en cours des pneus montés sélectionnés (les pneus au garage ne sont pas concernés).</p>
-        </div>
 
-        <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
-          <button type="button" @click="showTireEditModal = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Annuler</button>
-          <button type="submit" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-xl">Enregistrer</button>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+            <div>
+              <label for="tire-edit-price-mode" class="block text-[11px] text-slate-400 mb-1 font-semibold">Saisie du prix</label>
+              <select id="tire-edit-price-mode" v-model="tireEditPriceMode" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500">
+                <option value="UNIT">Prix unitaire</option>
+                <option value="TOTAL" :disabled="tireEditIds.length < 2">Prix total réparti</option>
+              </select>
+            </div>
+            <div>
+              <label for="tire-edit-price" class="block text-[11px] text-slate-400 mb-1 font-semibold">Prix (€)</label>
+              <input id="tire-edit-price" v-model.number="tireEditForm.price" type="number" step="0.01" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-lifespan" class="block text-[11px] text-slate-400 mb-1 font-semibold">Durée de vie estimée (km)</label>
+              <input id="tire-edit-lifespan" v-model.number="tireEditForm.estimated_lifespan_km" type="number" min="1" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-initial-depth" class="block text-[11px] text-slate-400 mb-1 font-semibold">Profondeur neuve (mm)</label>
+              <input id="tire-edit-initial-depth" v-model.number="tireEditForm.initial_depth_mm" type="number" step="0.1" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-min-depth" class="block text-[11px] text-slate-400 mb-1 font-semibold">Profondeur minimale (mm)</label>
+              <input id="tire-edit-min-depth" v-model.number="tireEditForm.min_legal_depth_mm" type="number" step="0.1" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+            <div>
+              <label for="tire-edit-initial-distance" class="block text-[11px] text-slate-400 mb-1 font-semibold">Km avant TeslaCost (occasion)</label>
+              <input id="tire-edit-initial-distance" v-model.number="tireEditForm.initial_distance_km" type="number" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            </div>
+          </div>
+
+          <div v-if="editIncludesMounted" class="space-y-2 pt-3 border-t border-slate-800">
+            <h4 class="text-[11px] font-bold text-rose-400 uppercase tracking-wider">Montage en cours</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="tire-edit-mounted-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date de montage</label>
+                <input id="tire-edit-mounted-date" v-model="tireEditForm.mounted_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+              </div>
+              <div>
+                <label for="tire-edit-mounted-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au montage (km)</label>
+                <input id="tire-edit-mounted-odometer" v-model.number="tireEditForm.mounted_odometer" type="number" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+              </div>
+            </div>
+            <p class="text-[11px] text-slate-400">S'applique à la session de montage en cours des pneus montés sélectionnés (les pneus au garage ne sont pas concernés).</p>
+          </div>
+        </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button type="button" @click="showTireEditModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+            Annuler
+          </button>
+          <button type="submit" form="tire-edit-modal-form" class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors">
+            Enregistrer
+          </button>
         </div>
-      </form>
+      </div>
     </div>
 
     <!-- MODAL: METTRE AU REBUT -->
-    <div v-if="showDisposeModal && selectedTire" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <form @submit.prevent="handleDisposeTire" class="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-6 space-y-4 shadow-2xl">
-        <h3 class="text-sm font-bold text-white flex items-center gap-2"><Archive class="w-4 h-4 text-amber-400" /> Mettre au rebut</h3>
-        <p class="text-[11px] text-slate-400">
-          {{ selectedTire.brand }} {{ selectedTire.model }} : le montage en cours est clôturé, l'historique est conservé et le prix d'achat est compté comme entièrement consommé.
-        </p>
-        <div>
-          <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date</label>
-          <input id="tire-dispose-date" v-model="disposeForm.date" type="date" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+    <div
+      v-if="showDisposeModal && selectedTire"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showDisposeModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <Archive class="w-4 h-4 text-amber-400" />
+            Mettre au rebut
+          </h3>
+          <button type="button" @click="showDisposeModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-4 h-4" />
+          </button>
         </div>
-        <div v-if="['FL', 'FR', 'RL', 'RR'].includes(selectedTire.current_position)">
-          <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au démontage (km)</label>
-          <input id="tire-dispose-odometer" v-model.number="disposeForm.odometer" type="number" min="0" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+
+        <form id="tire-dispose-modal-form" @submit.prevent="handleDisposeTire" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <p class="text-[11px] text-slate-400">
+            {{ selectedTire.brand }} {{ selectedTire.model }} : le montage en cours est clôturé, l'historique est conservé et le prix d'achat est compté comme entièrement consommé.
+          </p>
+          <div>
+            <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date</label>
+            <input id="tire-dispose-date" v-model="disposeForm.date" type="date" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+          <div v-if="['FL', 'FR', 'RL', 'RR'].includes(selectedTire.current_position)">
+            <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au démontage (km)</label>
+            <input id="tire-dispose-odometer" v-model.number="disposeForm.odometer" type="number" min="0" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          </div>
+        </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button type="button" @click="showDisposeModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+            Annuler
+          </button>
+          <button type="submit" form="tire-dispose-modal-form" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors">
+            Mettre au rebut
+          </button>
         </div>
-        <div class="flex justify-end gap-2">
-          <button type="button" @click="showDisposeModal = false" class="px-3 py-1.5 text-xs text-slate-400 hover:text-white">Annuler</button>
-          <button type="submit" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-xl">Mettre au rebut</button>
-        </div>
-      </form>
+      </div>
     </div>
   </div>
 </template>

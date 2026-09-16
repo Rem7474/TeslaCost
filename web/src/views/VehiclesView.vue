@@ -635,17 +635,18 @@ function clearCardTestResult(id: string) {
     <!-- Modal : Add/Edit Vehicle -->
     <div
       v-if="showModal"
-      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl my-8">
-        <div class="flex items-center justify-between">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
           <h3 class="text-base font-bold text-white">{{ isEditing ? 'Modifier le véhicule' : 'Ajouter un véhicule' }}</h3>
-          <button @click="showModal = false" class="text-slate-400 hover:text-white">
+          <button @click="showModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <form @submit.prevent="handleSave" class="space-y-3">
+        <form id="vehicle-modal-form" @submit.prevent="handleSave" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-3.5">
           <div>
             <label for="vehicle-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du véhicule</label>
             <input id="vehicle-name" v-model="form.name" required placeholder="ex: Tesla Model Y LR" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
@@ -773,36 +774,37 @@ function clearCardTestResult(id: string) {
             L'acquisition (achat, crédit, LOA, LLD) se configure depuis la carte du véhicule, et l'assurance se saisit dans
             Dépenses → Entretien & coûts fixes (catégorie « Assurance », dépense récurrente).
           </p>
-
-          <div class="flex justify-end gap-2 pt-3">
-            <button type="button" @click="showModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
-              Annuler
-            </button>
-            <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">
-              Enregistrer
-            </button>
-          </div>
         </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button type="button" @click="showModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+            Annuler
+          </button>
+          <button type="submit" form="vehicle-modal-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
+            Enregistrer
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Modal: Ownership contract -->
     <div
       v-if="showOwnershipModal && ownershipVehicle"
-      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showOwnershipModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl my-8">
-        <div class="flex items-center justify-between">
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
-            <FileText class="w-5 h-5 text-indigo-400" />
-            Acquisition & financement — {{ ownershipVehicle.name }}
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2 truncate pr-2">
+            <FileText class="w-5 h-5 text-indigo-400 shrink-0" />
+            <span class="truncate">Acquisition & financement — {{ ownershipVehicle.name }}</span>
           </h3>
-          <button @click="showOwnershipModal = false" class="text-slate-400 hover:text-white">
+          <button @click="showOwnershipModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0">
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <form @submit.prevent="handleSaveOwnership" class="space-y-4">
+        <form id="ownership-modal-form" @submit.prevent="handleSaveOwnership" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label for="own-type" class="block text-xs font-semibold text-slate-300 mb-1">Mode d'acquisition</label>
@@ -978,37 +980,38 @@ function clearCardTestResult(id: string) {
             </p>
           </div>
 
-          <div class="flex justify-between gap-2 pt-3 border-t border-slate-800">
-            <button
-              v-if="ownerships[ownershipVehicle.id]"
-              type="button"
-              @click="handleDeleteOwnership"
-              class="px-4 py-2 bg-slate-800 hover:bg-rose-900/40 text-rose-400 text-xs font-semibold rounded-xl"
-            >
-              Supprimer le contrat
-            </button>
-            <div class="flex gap-2 ml-auto">
-              <button type="button" @click="showOwnershipModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
-                Annuler
-              </button>
-              <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">
-                Enregistrer
-              </button>
-            </div>
-          </div>
         </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-between items-center gap-2 shrink-0 bg-slate-900/95">
+          <button
+            v-if="ownerships[ownershipVehicle.id]"
+            type="button"
+            @click="handleDeleteOwnership"
+            class="px-4 py-2 bg-slate-800 hover:bg-rose-900/40 text-rose-400 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Supprimer le contrat
+          </button>
+          <div class="flex gap-2 ml-auto">
+            <button type="button" @click="showOwnershipModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+              Annuler
+            </button>
+            <button type="submit" form="ownership-modal-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
+              Enregistrer
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- Odometer Checkpoints & Smoothing Modal -->
     <div
       v-if="showCheckpointsModal && checkpointsVehicle"
-      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+      class="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-sm overflow-y-auto"
       @click.self="showCheckpointsModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
         <!-- Header -->
-        <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
           <div class="flex items-center gap-3">
             <div class="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl">
               <Gauge class="w-5 h-5" />
@@ -1018,12 +1021,14 @@ function clearCardTestResult(id: string) {
               <p class="text-xs text-slate-400">{{ checkpointsVehicle.name }}</p>
             </div>
           </div>
-          <button @click="showCheckpointsModal = false" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800">
+          <button @click="showCheckpointsModal = false" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <!-- Explanatory Banner -->
+        <!-- Body -->
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-6">
+          <!-- Explanatory Banner -->
         <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 text-xs text-slate-300 space-y-2">
           <div class="font-semibold text-white flex items-center gap-1.5">
             <span>ℹ️</span> Comment fonctionne le lissage kilométrique automatique ?
@@ -1262,12 +1267,14 @@ function clearCardTestResult(id: string) {
           </div>
         </div>
 
+        </div>
+
         <!-- Footer -->
-        <div class="flex justify-end pt-3 border-t border-slate-800">
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end shrink-0 bg-slate-900/95">
           <button
             type="button"
             @click="showCheckpointsModal = false"
-            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
           >
             Fermer
           </button>

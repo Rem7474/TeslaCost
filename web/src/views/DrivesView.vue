@@ -840,24 +840,28 @@ function formatDate(dateStr: string) {
     <!-- MODAL : DÉCOMPOSITION COMPLÈTE DU COÛT D'UN TRAJET -->
     <div
       v-if="showCostModal && selectedCostDrive"
-      class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showCostModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-6 space-y-5 shadow-2xl my-8">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
         <!-- Header -->
-        <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-          <div class="flex items-center gap-2.5">
-            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <div class="flex items-center gap-2.5 min-w-0 pr-2">
+            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl shrink-0">
               <Coins class="w-5 h-5" />
             </div>
-            <div>
-              <h3 class="text-base font-bold text-white">Coût Réel du Trajet</h3>
+            <div class="min-w-0 truncate">
+              <h3 class="text-base font-bold text-white truncate">Coût Réel du Trajet</h3>
               <p class="text-xs text-slate-400">{{ formatDate(selectedCostDrive.start_time) }}</p>
             </div>
           </div>
-          <button @click="showCostModal = false" class="p-1.5 text-slate-400 hover:text-white rounded-lg">
+          <button @click="showCostModal = false" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0">
             <X class="w-5 h-5" />
           </button>
         </div>
+
+        <!-- Body -->
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
 
         <!-- Trip Summary Route -->
         <div class="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-2xl space-y-2">
@@ -1128,11 +1132,13 @@ function formatDate(dateStr: string) {
           </div>
         </div>
 
+        </div>
+
         <!-- Footer Actions -->
-        <div class="flex items-center justify-between pt-2">
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
           <button
             @click="showCostModal = false"
-            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
           >
             Fermer
           </button>
@@ -1150,67 +1156,72 @@ function formatDate(dateStr: string) {
     <!-- MODAL : FUSIONNER EN VOYAGE & ASSIGNER PÉAGE -->
     <div
       v-if="showGroupModal"
-      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showGroupModal = false"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-        <div class="flex items-center justify-between">
-          <h3 class="text-lg font-bold text-white flex items-center gap-2">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
             <Layers class="w-5 h-5 text-rose-400" />
             Créer un Voyage / Fusion
           </h3>
-          <button @click="showGroupModal = false" class="text-slate-400 hover:text-white">
+          <button @click="showGroupModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
             <X class="w-5 h-5" />
           </button>
         </div>
 
-        <p class="text-xs text-slate-400">
-          Vous allez fusionner <strong>{{ selectedDriveIds.length }} trajets</strong> consécutifs (ex: trajet segmenté par des arrêts recharge/déjeuner) et lui assigner un péage ou parking global, réparti entre les étapes au prorata des kilomètres.
-        </p>
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <p class="text-xs text-slate-400">
+            Vous allez fusionner <strong>{{ selectedDriveIds.length }} trajets</strong> consécutifs (ex: trajet segmenté par des arrêts recharge/déjeuner) et lui assigner un péage ou parking global, réparti entre les étapes au prorata des kilomètres.
+          </p>
 
-        <div>
-          <label for="drive-group-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du voyage / groupe</label>
-          <input id="drive-group-name"
-            v-model="groupName"
-            type="text"
-            placeholder="ex: Vacances Bretagne - Aller"
-            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
-          />
-        </div>
-
-        <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="drive-expense-type" class="block text-xs font-semibold text-slate-300 mb-1">Type de frais</label>
-            <select id="drive-expense-type"
-              v-model="expenseType"
-              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
-            >
-              <option value="TOLL">Péage</option>
-              <option value="PARKING">Parking</option>
-              <option value="FERRY">Ferry</option>
-            </select>
-          </div>
-          <div>
-            <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
-            <input id="drive-toll-amount"
-              v-model="tollAmount"
-              type="number"
-              step="0.01"
-              placeholder="0.00"
+            <label for="drive-group-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du voyage / groupe</label>
+            <input id="drive-group-name"
+              v-model="groupName"
+              type="text"
+              placeholder="ex: Vacances Bretagne - Aller"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
             />
           </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="drive-expense-type" class="block text-xs font-semibold text-slate-300 mb-1">Type de frais</label>
+              <select id="drive-expense-type"
+                v-model="expenseType"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+              >
+                <option value="TOLL">Péage</option>
+                <option value="PARKING">Parking</option>
+                <option value="FERRY">Ferry</option>
+              </select>
+            </div>
+            <div>
+              <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
+              <input id="drive-toll-amount"
+                v-model="tollAmount"
+                type="number"
+                step="0.01"
+                placeholder="0.00"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+              />
+            </div>
+          </div>
         </div>
 
-        <div class="flex items-center justify-end gap-2 pt-2">
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
           <button
+            type="button"
             @click="showGroupModal = false"
-            class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
           >
             Annuler
           </button>
           <button
+            type="button"
             @click="handleCreateGroupAndExpense"
-            class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/20"
+            class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/20 transition-colors"
           >
             Enregistrer le groupe
           </button>
@@ -1219,41 +1230,81 @@ function formatDate(dateStr: string) {
     </div>
 
     <!-- MODAL : RENOMMER UN VOYAGE -->
-    <div v-if="showTripEditModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <form @submit.prevent="handleSaveTripEdit" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-        <h3 class="text-base font-bold text-white flex items-center gap-2"><Layers class="w-5 h-5 text-indigo-400" /> Modifier le voyage</h3>
-        <div>
-          <label for="trip-edit-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom</label>
-          <input id="trip-edit-name" v-model="tripEditForm.name" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
+    <div
+      v-if="showTripEditModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showTripEditModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <Layers class="w-5 h-5 text-indigo-400" />
+            Modifier le voyage
+          </h3>
+          <button @click="showTripEditModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
         </div>
-        <div>
-          <label for="trip-edit-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes</label>
-          <input id="trip-edit-notes" v-model="tripEditForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
+
+        <form id="trip-edit-form" @submit.prevent="handleSaveTripEdit" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <div>
+            <label for="trip-edit-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom</label>
+            <input id="trip-edit-name" v-model="tripEditForm.name" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
+          </div>
+          <div>
+            <label for="trip-edit-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes</label>
+            <input id="trip-edit-notes" v-model="tripEditForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
+          </div>
+        </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button type="button" @click="showTripEditModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+            Annuler
+          </button>
+          <button type="submit" form="trip-edit-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
+            Enregistrer
+          </button>
         </div>
-        <div class="flex justify-end gap-2">
-          <button type="button" @click="showTripEditModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">Annuler</button>
-          <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl">Enregistrer</button>
-        </div>
-      </form>
+      </div>
     </div>
 
     <!-- MODAL : AJOUTER LA SÉLECTION À UN VOYAGE -->
-    <div v-if="showAddToTripModal" class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-      <form @submit.prevent="handleAddToTrip" class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
-        <h3 class="text-base font-bold text-white flex items-center gap-2"><Plus class="w-5 h-5 text-indigo-400" /> Ajouter {{ selectedDriveIds.length }} trajet(s) à un voyage</h3>
-        <p v-if="!tripGroups.length" class="text-xs text-slate-400">Aucun voyage existant : utilisez « Fusionner & Péage » pour en créer un.</p>
-        <div v-else>
-          <label for="add-to-trip" class="block text-xs font-semibold text-slate-300 mb-1">Voyage</label>
-          <select id="add-to-trip" v-model="addToTripId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500">
-            <option v-for="tg in tripGroups" :key="tg.id" :value="tg.id">{{ tg.name }} ({{ tg.drive_ids.length }} trajets)</option>
-          </select>
-          <p class="text-[11px] text-slate-400 mt-1">Les frais du voyage seront répartis sur l'ensemble de ses trajets au prorata des km.</p>
+    <div
+      v-if="showAddToTripModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showAddToTripModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2 truncate pr-2">
+            <Plus class="w-5 h-5 text-indigo-400 shrink-0" />
+            <span class="truncate">Ajouter {{ selectedDriveIds.length }} trajet(s) à un voyage</span>
+          </h3>
+          <button @click="showAddToTripModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0">
+            <X class="w-5 h-5" />
+          </button>
         </div>
-        <div class="flex justify-end gap-2">
-          <button type="button" @click="showAddToTripModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">Annuler</button>
-          <button type="submit" :disabled="!tripGroups.length" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl">Ajouter</button>
+
+        <form id="add-to-trip-form" @submit.prevent="handleAddToTrip" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <p v-if="!tripGroups.length" class="text-xs text-slate-400">Aucun voyage existant : utilisez « Fusionner & Péage » pour en créer un.</p>
+          <div v-else>
+            <label for="add-to-trip" class="block text-xs font-semibold text-slate-300 mb-1">Voyage</label>
+            <select id="add-to-trip" v-model="addToTripId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500">
+              <option v-for="tg in tripGroups" :key="tg.id" :value="tg.id">{{ tg.name }} ({{ tg.drive_ids.length }} trajets)</option>
+            </select>
+            <p class="text-[11px] text-slate-400 mt-1">Les frais du voyage seront répartis sur l'ensemble de ses trajets au prorata des km.</p>
+          </div>
+        </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button type="button" @click="showAddToTripModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+            Annuler
+          </button>
+          <button type="submit" form="add-to-trip-form" :disabled="!tripGroups.length" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-colors">
+            Ajouter
+          </button>
         </div>
-      </form>
+      </div>
     </div>
   </div>
 </template>
