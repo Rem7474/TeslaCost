@@ -29,6 +29,7 @@ func NewCarpoolService(pool *pgxpool.Pool, repo *database.Repository) *CarpoolSe
 
 // Rate sources exposed to the UI so that estimates are never mistaken for measured costs.
 const (
+	RateSourceRecentCharges = "RECENT_CHARGES"
 	RateSourceHistory       = "HISTORY"
 	RateSourceMountedTires  = "MOUNTED_TIRES"
 	RateSourceDefault       = "DEFAULT"
@@ -92,6 +93,13 @@ func DriveEnergyKwh(distanceKm float64, energyKwh, consumptionKwh100km *float64)
 // GetVehicleUnitRates calculates real cost rates based on vehicle history, with flagged fallbacks.
 // Insurance follows the same source priority as the TCO: recorded expenses first, then vehicle settings.
 func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID string) (*UnitRates, error) {
+	return s.GetVehicleUnitRatesAt(ctx, vehicleID, nil)
+}
+
+// GetVehicleUnitRatesAt calculates real cost rates referencing a specific point in time (e.g. trip date).
+// Electricity is estimated using the weighted average of the last 2 charges prior to ref if spaced by <= 5 days (or the single last charge),
+// falling back to the vehicle's historical average if no recent charges exist.
+func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID string, refTime *time.Time) (*UnitRates, error) {
 	rates := DefaultUnitRates()
 
 	var totalDistance, lastYearDistance float64
@@ -104,20 +112,74 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		return nil, err
 	}
 
-	// Electricity rate (€/kWh), only over charges whose cost is known
-	var pricedCost money.Cents
-	var pricedKwh float64
-	if err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0),
-		       COALESCE(SUM(kwh_added), 0)
-		FROM charge_logs
-		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL);
-	`, vehicleID).Scan(&pricedCost, &pricedKwh); err != nil {
-		return nil, err
+	ref := time.Now()
+	if refTime != nil && !refTime.IsZero() {
+		ref = *refTime
 	}
-	if pricedKwh > 0 && pricedCost > 0 {
-		rates.ElectricityPerKwh = pricedCost.Float() / pricedKwh
-		rates.ElectricitySource = RateSourceHistory
+
+	// 1. Electricity rate (€/kWh): try the last 2 priced charges prior to or at ref
+	rows, err := s.pool.Query(ctx, `
+		SELECT date, kwh_added,
+		       COALESCE(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END, 0)
+		FROM charge_logs
+		WHERE vehicle_id = $1
+		  AND deleted_upstream_at IS NULL
+		  AND cost IS NOT NULL
+		  AND cost > 0
+		  AND (currency = 'EUR' OR fx_rate IS NOT NULL)
+		  AND date <= $2
+		ORDER BY date DESC
+		LIMIT 2;
+	`, vehicleID, ref)
+	if err == nil {
+		type chargeSample struct {
+			date time.Time
+			kwh  float64
+			cost money.Cents
+		}
+		var recent []chargeSample
+		for rows.Next() {
+			var cs chargeSample
+			if err := rows.Scan(&cs.date, &cs.kwh, &cs.cost); err == nil && cs.kwh > 0 && cs.cost > 0 {
+				recent = append(recent, cs)
+			}
+		}
+		rows.Close()
+
+		const maxChargeAge = 30 * 24 * time.Hour
+		const maxChargeInterval = 5 * 24 * time.Hour
+
+		if len(recent) > 0 && ref.Sub(recent[0].date) <= maxChargeAge {
+			if len(recent) >= 2 && recent[0].date.Sub(recent[1].date) <= maxChargeInterval {
+				totalCost := recent[0].cost + recent[1].cost
+				totalKwh := recent[0].kwh + recent[1].kwh
+				if totalKwh > 0 {
+					rates.ElectricityPerKwh = totalCost.Float() / totalKwh
+					rates.ElectricitySource = RateSourceRecentCharges
+				}
+			} else {
+				rates.ElectricityPerKwh = recent[0].cost.Float() / recent[0].kwh
+				rates.ElectricitySource = RateSourceRecentCharges
+			}
+		}
+	}
+
+	// 2. Fallback to all priced charges history if no recent charge was found
+	if rates.ElectricitySource == RateSourceDefault {
+		var pricedCost money.Cents
+		var pricedKwh float64
+		if err := s.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0),
+			       COALESCE(SUM(kwh_added), 0)
+			FROM charge_logs
+			WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL);
+		`, vehicleID).Scan(&pricedCost, &pricedKwh); err != nil {
+			return nil, err
+		}
+		if pricedKwh > 0 && pricedCost > 0 {
+			rates.ElectricityPerKwh = pricedCost.Float() / pricedKwh
+			rates.ElectricitySource = RateSourceHistory
+		}
 	}
 
 	// Tires rate (€/km): mounted tires purchase price over their remaining expected life
@@ -212,12 +274,8 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 
 // EstimateCosts calculates suggested cost components for a trip.
 func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, driveID, tripGroupID *string, driveIDs []string, manualDistanceKm float64) (*models.CarpoolCostEstimate, error) {
-	rates, err := s.GetVehicleUnitRates(ctx, vehicleID)
-	if err != nil {
-		return nil, err
-	}
-
 	var drives []models.Drive
+	var err error
 	switch {
 	case driveID != nil && *driveID != "":
 		d, err := s.repo.GetDriveByID(ctx, *driveID, vehicleID)
@@ -244,6 +302,20 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 
 	// One leg per drive, in chronological order
 	sort.Slice(drives, func(i, j int) bool { return drives[i].StartTime.Before(drives[j].StartTime) })
+
+	var refTime *time.Time
+	if len(drives) > 0 {
+		t := drives[len(drives)-1].StartTime
+		if !drives[len(drives)-1].EndTime.IsZero() {
+			t = drives[len(drives)-1].EndTime
+		}
+		refTime = &t
+	}
+
+	rates, err := s.GetVehicleUnitRatesAt(ctx, vehicleID, refTime)
+	if err != nil {
+		return nil, err
+	}
 	legs := make([]models.CarpoolLeg, 0, len(drives))
 	energySource := EnergySourceMeasured
 	costLeg := func(distance, kwh float64) models.CarpoolLeg {

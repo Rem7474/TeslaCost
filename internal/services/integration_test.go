@@ -822,6 +822,69 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 	}
 }
 
+func TestCarpoolElectricityRecentCharges5Days(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "elec_test@example.com")
+	svc := NewCarpoolService(db.Pool, repo)
+
+	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	cost1 := money.Cents(1000) // 10 EUR
+	cost2 := money.Cents(2000) // 20 EUR
+
+	// Charge 1: 1 day before 'now', 50 kWh, 10 EUR (0.20 €/kWh)
+	c1 := &models.ChargeLog{
+		VehicleID: v.ID,
+		Date:      now.Add(-24 * time.Hour),
+		KwhAdded:  50,
+		Cost:      &cost1,
+		Currency:  "EUR",
+	}
+	if err := repo.CreateManualCharge(ctx, c1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Charge 2: 3 days before Charge 1 (within 5-day window), 50 kWh, 20 EUR (0.40 €/kWh)
+	c2 := &models.ChargeLog{
+		VehicleID: v.ID,
+		Date:      c1.Date.Add(-3 * 24 * time.Hour),
+		KwhAdded:  50,
+		Cost:      &cost2,
+		Currency:  "EUR",
+	}
+	if err := repo.CreateManualCharge(ctx, c2); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Both charges are within 5 days of each other: weighted average (10 + 20) / (50 + 50) = 0.30 €/kWh
+	rates, err := svc.GetVehicleUnitRatesAt(ctx, v.ID, &now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rates.ElectricitySource != RateSourceRecentCharges {
+		t.Fatalf("expected RECENT_CHARGES, got %s", rates.ElectricitySource)
+	}
+	if rates.ElectricityPerKwh != 0.30 {
+		t.Fatalf("expected 0.30 €/kWh weighted average, got %f", rates.ElectricityPerKwh)
+	}
+
+	// 2. Now move Charge 2 to 7 days before Charge 1 (> 5 days apart)
+	if _, err := db.Pool.Exec(ctx, `UPDATE charge_logs SET date = $1 WHERE id = $2`, c1.Date.Add(-7*24*time.Hour), c2.ID); err != nil {
+		t.Fatal(err)
+	}
+	rates2, err := svc.GetVehicleUnitRatesAt(ctx, v.ID, &now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rates2.ElectricitySource != RateSourceRecentCharges {
+		t.Fatalf("expected RECENT_CHARGES, got %s", rates2.ElectricitySource)
+	}
+	// Only Charge 1 should be used: 10 EUR / 50 kWh = 0.20 €/kWh
+	if rates2.ElectricityPerKwh != 0.20 {
+		t.Fatalf("expected 0.20 €/kWh (only latest charge), got %f", rates2.ElectricityPerKwh)
+	}
+}
+
 func TestIntegrationMaintenanceAmortizationAndOdometer(t *testing.T) {
 	db, repo := setupIntegrationDB(t, false)
 	ctx := context.Background()
