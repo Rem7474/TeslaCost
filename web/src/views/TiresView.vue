@@ -824,7 +824,7 @@ function formatDate(d: string) {
                 {{ mountedTires.FL.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.FL.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.FL.driving_stress_index }})
               </span>
             </div>
-            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
               <div>Accél : <strong class="text-white">+{{ mountedTires.FL.avg_power_max_kw }} kW</strong></div>
               <div>Regen : <strong class="text-emerald-400">{{ mountedTires.FL.avg_power_min_kw }} kW</strong></div>
               <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.FL.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
@@ -926,7 +926,7 @@ function formatDate(d: string) {
                 {{ mountedTires.FR.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.FR.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.FR.driving_stress_index }})
               </span>
             </div>
-            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
               <div>Accél : <strong class="text-white">+{{ mountedTires.FR.avg_power_max_kw }} kW</strong></div>
               <div>Regen : <strong class="text-emerald-400">{{ mountedTires.FR.avg_power_min_kw }} kW</strong></div>
               <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.FR.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
@@ -1026,7 +1026,7 @@ function formatDate(d: string) {
                 {{ mountedTires.RL.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.RL.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.RL.driving_stress_index }})
               </span>
             </div>
-            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
               <div>Accél : <strong class="text-white">+{{ mountedTires.RL.avg_power_max_kw }} kW</strong></div>
               <div>Regen : <strong class="text-emerald-400">{{ mountedTires.RL.avg_power_min_kw }} kW</strong></div>
               <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.RL.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
@@ -1126,7 +1126,7 @@ function formatDate(d: string) {
                 {{ mountedTires.RR.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.RR.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.RR.driving_stress_index }})
               </span>
             </div>
-            <div class="grid grid-cols-3 gap-1 text-[11px] text-slate-400">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
               <div>Accél : <strong class="text-white">+{{ mountedTires.RR.avg_power_max_kw }} kW</strong></div>
               <div>Regen : <strong class="text-emerald-400">{{ mountedTires.RR.avg_power_min_kw }} kW</strong></div>
               <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.RR.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>

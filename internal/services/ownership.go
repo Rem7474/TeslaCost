@@ -105,13 +105,16 @@ func depreciation(base money.Cents, from time.Time, o *models.VehicleOwnership, 
 }
 
 func computeLease(c *OwnershipCosts, o *models.VehicleOwnership, now time.Time, kmSinceStart float64) {
+	if o.LeaseDurationMonths != nil && *o.LeaseDurationMonths > 0 {
+		contractEnd := o.StartDate.AddDate(0, *o.LeaseDurationMonths, 0)
+		c.ContractEndDate = &contractEnd
+	}
 	if o.LeaseMonthlyRent == nil || *o.LeaseMonthlyRent <= 0 || o.LeaseDurationMonths == nil || *o.LeaseDurationMonths <= 0 {
 		c.Missing = append(c.Missing, "Contrat de location incomplet (loyer mensuel ou durée) : loyers non comptés")
 		return
 	}
 	duration := *o.LeaseDurationMonths
-	contractEnd := o.StartDate.AddDate(0, duration, 0)
-	c.ContractEndDate = &contractEnd
+	contractEnd := *c.ContractEndDate
 
 	// The lease phase ends at the contract term, at an early return, or when the purchase option is exercised.
 	phaseEnd := contractEnd
