@@ -143,7 +143,10 @@ onMounted(() => {
 
 // Highway-like drive with no toll attached and not reviewed yet (same rule as the backend queue)
 function needsTollQualification(d: any) {
-  return !d.toll_reviewed_at && d.distance_km >= 40 && (d.speed_avg || 0) >= 70 && !(d.costs?.tolls_cost > 0)
+  const isHighway =
+    (d.distance_km >= 40 && (d.speed_avg || 0) >= 70) ||
+    (d.distance_km >= 20 && (d.speed_max || 0) > 125)
+  return !d.toll_reviewed_at && isHighway && !(d.costs?.tolls_cost > 0)
 }
 
 async function markNoToll(d: any) {
@@ -908,6 +911,7 @@ function formatDate(dateStr: string) {
             <span class="font-bold text-rose-400">{{ selectedCostDrive.distance_km }} km</span>
             <span v-if="selectedCostDrive.duration_min" class="text-slate-400">• {{ selectedCostDrive.duration_min }} min</span>
             <span v-if="selectedCostDrive.speed_avg" class="text-slate-400">• {{ Math.round(selectedCostDrive.speed_avg) }} km/h moy</span>
+            <span v-if="selectedCostDrive.speed_max" class="text-slate-400">• {{ selectedCostDrive.speed_max }} km/h max</span>
             <span v-if="selectedCostDrive.costs?.electricity_kwh" class="text-sky-400 font-mono">• {{ selectedCostDrive.costs.electricity_kwh }} kWh</span>
           </div>
         </div>
