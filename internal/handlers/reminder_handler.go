@@ -1,7 +1,8 @@
-﻿package handlers
+package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -60,91 +61,10 @@ func (h *ReminderHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, reminders)
 }
 
-func (h *ReminderHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	vehicleID := chi.URLParam(r, "vehicleId")
-
-	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
-		return
-	}
-
-	var req ReminderPayload
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
+func (h *ReminderHandler) buildReminder(req ReminderPayload, vehicleID, reminderID string) (*models.MaintenanceReminder, error) {
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
-		writeError(w, http.StatusBadRequest, "Title is required")
-		return
-	}
-
-	leadKm := req.LeadKm
-	if leadKm <= 0 {
-		leadKm = 1000
-	}
-	leadDays := req.LeadDays
-	if leadDays <= 0 {
-		leadDays = 30
-	}
-	cat := strings.TrimSpace(req.Category)
-	if cat == "" {
-		cat = "MAINTENANCE"
-	}
-
-	rem := &models.MaintenanceReminder{
-		VehicleID:           vehicleID,
-		Title:               title,
-		Category:            cat,
-		IntervalKm:          req.IntervalKm,
-		IntervalMonths:      req.IntervalMonths,
-		LastServiceOdometer: req.LastServiceOdometer,
-		LeadKm:              leadKm,
-		LeadDays:            leadDays,
-		WebhookEnabled:      req.WebhookEnabled,
-	}
-
-	if req.LastServiceDate != nil && *req.LastServiceDate != "" {
-		if t, err := time.Parse("2006-01-02", *req.LastServiceDate); err == nil {
-			rem.LastServiceDate = &t
-		} else if t, err := time.Parse(time.RFC3339, *req.LastServiceDate); err == nil {
-			rem.LastServiceDate = &t
-		}
-	}
-
-	if err := h.repo.CreateMaintenanceReminder(r.Context(), rem); err != nil {
-		writeRepoError(w, err, "Failed to create maintenance reminder")
-		return
-	}
-
-	rem.ComputeStatus(veh.CurrentOdometer, time.Now())
-	writeJSON(w, http.StatusCreated, rem)
-}
-
-func (h *ReminderHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	vehicleID := chi.URLParam(r, "vehicleId")
-	reminderID := chi.URLParam(r, "reminderId")
-
-	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
-		return
-	}
-
-	var req ReminderPayload
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	title := strings.TrimSpace(req.Title)
-	if title == "" {
-		writeError(w, http.StatusBadRequest, "Title is required")
-		return
+		return nil, errors.New("Title is required")
 	}
 
 	leadKm := req.LeadKm
@@ -179,6 +99,63 @@ func (h *ReminderHandler) Update(w http.ResponseWriter, r *http.Request) {
 		} else if t, err := time.Parse(time.RFC3339, *req.LastServiceDate); err == nil {
 			rem.LastServiceDate = &t
 		}
+	}
+
+	return rem, nil
+}
+
+func (h *ReminderHandler) Create(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	var req ReminderPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	rem, err := h.buildReminder(req, vehicleID, "")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := h.repo.CreateMaintenanceReminder(r.Context(), rem); err != nil {
+		writeRepoError(w, err, "Failed to create maintenance reminder")
+		return
+	}
+
+	rem.ComputeStatus(veh.CurrentOdometer, time.Now())
+	writeJSON(w, http.StatusCreated, rem)
+}
+
+func (h *ReminderHandler) Update(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	reminderID := chi.URLParam(r, "reminderId")
+
+	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	var req ReminderPayload
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	rem, err := h.buildReminder(req, vehicleID, reminderID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
 	}
 
 	if err := h.repo.UpdateMaintenanceReminder(r.Context(), rem); err != nil {
