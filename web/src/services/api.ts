@@ -243,6 +243,11 @@ export const api = {
     request<any>(`/vehicles/${vehicleId}/carpools/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteCarpool: (vehicleId: string, id: string) =>
     request<any>(`/vehicles/${vehicleId}/carpools/${id}`, { method: 'DELETE' }),
+  recalculateCarpools: (vehicleId: string, tripIds?: string[]) =>
+    request<{ updated_count: number; trips: any[] }>(`/vehicles/${vehicleId}/carpools/recalculate`, {
+      method: 'POST',
+      body: JSON.stringify(tripIds && tripIds.length > 0 ? { trip_ids: tripIds } : {}),
+    }),
   estimateCarpoolCosts: (vehicleId: string, params: { drive_id?: string; trip_group_id?: string; drive_ids?: string[]; distance_km?: number }) => {
     const q = new URLSearchParams()
     if (params.drive_id) q.set('drive_id', params.drive_id)

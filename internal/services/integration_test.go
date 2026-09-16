@@ -755,6 +755,9 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 	if len(est.Legs) != 3 || *est.Legs[0].StartLabel != "Annecy" || *est.Legs[2].EndLabel != "Valence" {
 		t.Fatalf("expected 3 chronological legs with place labels, got %+v", est.Legs)
 	}
+	if est.StartDate == nil || !est.StartDate.Equal(base) {
+		t.Fatalf("expected est.StartDate %v, got %v", base, est.StartDate)
+	}
 	if est.Legs[0].TollsCost != 1000 || est.Legs[1].TollsCost != 1200 || est.Legs[2].TollsCost != 1800 || est.TollsCost != 4000 {
 		t.Fatalf("expected the group toll split 10/12/18 € across legs, got %d %d %d", est.Legs[0].TollsCost, est.Legs[1].TollsCost, est.Legs[2].TollsCost)
 	}
@@ -788,6 +791,23 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 	}
 	if loaded.Legs[0].PassengerSeats != 1 || loaded.Legs[2].PassengerSeats != 2 {
 		t.Fatalf("unexpected occupancy: %d / %d", loaded.Legs[0].PassengerSeats, loaded.Legs[2].PassengerSeats)
+	}
+
+	// Recalculate carpool trips: add an extra toll and recalculate
+	extraToll := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 2000, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, extraToll, []string{drives[0].ID}, "Tunnel"); err != nil {
+		t.Fatal(err)
+	}
+	recalculated, err := svc.RecalculateTrip(ctx, v.ID, loaded.ID)
+	if err != nil {
+		t.Fatalf("failed to recalculate trip: %v", err)
+	}
+	// Initial total toll was 4000, now 4000 + 2000 = 6000
+	if recalculated.TollsCost != 6000 {
+		t.Fatalf("expected recalculated tolls cost to be 6000, got %d", recalculated.TollsCost)
+	}
+	if recalculated.TotalRevenue != 3500 {
+		t.Fatalf("passenger revenue must remain untouched, got %d", recalculated.TotalRevenue)
 	}
 
 	// Invalid stops and foreign drives are rejected

@@ -373,6 +373,7 @@ type CarpoolTripWithPassengers struct {
 
 // CarpoolCostEstimate provides suggested real cost breakdown based on vehicle TCO metrics.
 type CarpoolCostEstimate struct {
+	StartDate             *time.Time  `json:"start_date,omitempty"`
 	DistanceKm            float64     `json:"distance_km"`
 	ElectricityCost       money.Cents `json:"electricity_cost"`
 	TollsCost             money.Cents `json:"tolls_cost"`

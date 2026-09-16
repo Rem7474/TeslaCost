@@ -25,6 +25,8 @@ import {
   Square,
   Navigation,
   Calculator,
+  Lock,
+  RotateCw,
 } from 'lucide-vue-next'
 
 interface LegForm {
@@ -88,9 +90,50 @@ const selectedDriveIds = ref<string[]>([])
 const titleTouched = ref(false)
 const currentRates = ref<any>(null)
 
+// Batch selection state
+const selectedTripIds = ref<string[]>([])
+const recalculating = ref(false)
+
+const isAllSelected = computed(() => {
+  return trips.value.length > 0 && selectedTripIds.value.length === trips.value.length
+})
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedTripIds.value = []
+  } else {
+    selectedTripIds.value = trips.value.map((t) => t.id)
+  }
+}
+
+function toggleTripSelection(tripId: string) {
+  const idx = selectedTripIds.value.indexOf(tripId)
+  if (idx > -1) {
+    selectedTripIds.value.splice(idx, 1)
+  } else {
+    selectedTripIds.value.push(tripId)
+  }
+}
+
+function clearTripSelection() {
+  selectedTripIds.value = []
+}
+
+function toDateInputString(dateVal: string | Date | null | undefined): string {
+  if (!dateVal) return ''
+  const d = new Date(dateVal)
+  if (isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const isDateDisabled = computed(() => sourceMode.value === 'DRIVES')
+
 const form = ref({
   title: '',
-  date: new Date().toISOString().substring(0, 10),
+  date: toDateInputString(new Date()),
   trip_group_id: null as string | null,
   notes: '',
   legs: [] as LegForm[],
@@ -242,6 +285,9 @@ function applyEstimate(est: any) {
     })
   }
   clampPassengerStops(previousLegCount === 0 ? 0 : -1)
+  if (est.start_date) {
+    form.value.date = toDateInputString(est.start_date)
+  }
   if (!titleTouched.value && form.value.legs.length) {
     const names = stops.value
     form.value.title = `${names[0]} → ${names[names.length - 1]}${form.value.legs.length > 1 ? ` (${form.value.legs.length} étapes)` : ''}`
@@ -264,16 +310,21 @@ async function estimateFromDrives() {
   if (!vehicleStore.activeVehicle) return
   if (!selectedDriveIds.value.length) {
     form.value.legs = []
+    form.value.date = toDateInputString(new Date())
     return
   }
   estimating.value = true
   try {
     const est = await api.estimateCarpoolCosts(vehicleStore.activeVehicle.id, { drive_ids: selectedDriveIds.value })
     applyEstimate(est)
-    const first = recentDrives.value
-      .filter((d) => selectedDriveIds.value.includes(d.id))
-      .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0]
-    if (first) form.value.date = new Date(first.start_time).toISOString().substring(0, 10)
+    if (est.start_date) {
+      form.value.date = toDateInputString(est.start_date)
+    } else {
+      const first = recentDrives.value
+        .filter((d) => selectedDriveIds.value.includes(d.id))
+        .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0]
+      if (first) form.value.date = toDateInputString(first.start_time)
+    }
   } catch (err: any) {
     alert(`Erreur d'estimation : ${err.message}`)
   } finally {
@@ -344,7 +395,7 @@ function resetForm() {
   sourceMode.value = 'DRIVES'
   form.value = {
     title: '',
-    date: new Date().toISOString().substring(0, 10),
+    date: toDateInputString(new Date()),
     trip_group_id: null,
     notes: '',
     legs: [],
@@ -372,7 +423,11 @@ async function openCreateModal(options: { driveIds?: string[]; tripGroupId?: str
         form.value.title = group.name
         titleTouched.value = true
       }
-      if (group?.start_time) form.value.date = new Date(group.start_time).toISOString().substring(0, 10)
+      if (est.start_date) {
+        form.value.date = toDateInputString(est.start_date)
+      } else if (group?.start_time) {
+        form.value.date = toDateInputString(group.start_time)
+      }
     } catch (err: any) {
       alert(`Erreur d'estimation : ${err.message}`)
     } finally {
@@ -404,7 +459,7 @@ function openEditModal(trip: any) {
   selectedDriveIds.value = legs.map((l) => l.drive_id).filter((id): id is string => !!id)
   form.value = {
     title: trip.title,
-    date: new Date(trip.date).toISOString().substring(0, 10),
+    date: toDateInputString(trip.date),
     trip_group_id: trip.trip_group_id || null,
     notes: trip.notes || '',
     legs,
@@ -499,6 +554,66 @@ async function handleDelete(trip: any) {
   }
 }
 
+async function handleModalRecalculate() {
+  if (!vehicleStore.activeVehicle) return
+  if (sourceMode.value === 'DRIVES') {
+    await estimateFromDrives()
+  } else {
+    for (let i = 0; i < form.value.legs.length; i++) {
+      if (Number(form.value.legs[i].distance_km) > 0) {
+        await estimateManualLeg(i)
+      }
+    }
+  }
+  showAlert('Les coûts ont été recalculés selon les taux et péages actuels.', 'Coûts réestimés', 'info')
+}
+
+async function handleRecalculateSingle(trip: any) {
+  if (!vehicleStore.activeVehicle) return
+  const ok = await showConfirm({
+    title: 'Recalculer le covoiturage',
+    message: `Voulez-vous recalculer les coûts réels de "${trip.title}" selon les tarifs et péages actuels ?\n(Les montants perçus des passagers restent inchangés)`,
+    confirmText: 'Recalculer',
+    type: 'primary',
+  })
+  if (!ok) return
+
+  recalculating.value = true
+  try {
+    await api.recalculateCarpools(vehicleStore.activeVehicle.id, [trip.id])
+    showAlert(`Le covoiturage "${trip.title}" a été recalculé avec succès.`, 'Recalcul terminé', 'success')
+    await loadData()
+  } catch (err: any) {
+    showAlert(`Erreur lors du recalcul : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    recalculating.value = false
+  }
+}
+
+async function handleBatchRecalculate() {
+  if (!vehicleStore.activeVehicle || !selectedTripIds.value.length) return
+  const count = selectedTripIds.value.length
+  const ok = await showConfirm({
+    title: 'Recalculer les covoiturages sélectionnés',
+    message: `Voulez-vous recalculer les coûts réels de ${count} covoiturage(s) selon les tarifs d'électricité, péages, pneus et entretien actuels ?\n(Les montants perçus des passagers restent inchangés)`,
+    confirmText: 'Recalculer',
+    type: 'primary',
+  })
+  if (!ok) return
+
+  recalculating.value = true
+  try {
+    const res = await api.recalculateCarpools(vehicleStore.activeVehicle.id, selectedTripIds.value)
+    showAlert(`${res.updated_count || count} covoiturage(s) recalculé(s) avec succès.`, 'Recalcul terminé', 'success')
+    clearTripSelection()
+    await loadData()
+  } catch (err: any) {
+    showAlert(`Erreur lors du recalcul : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    recalculating.value = false
+  }
+}
+
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
 }
@@ -512,14 +627,23 @@ watch(
   () => loadData()
 )
 
-onMounted(() => {
-  loadData()
+function checkRouteQueryForCarpool() {
   const driveIds = [route.query.new_drive_id, ...String(route.query.new_drive_ids || '').split(',')]
     .map((v) => String(v || '').trim())
     .filter(Boolean)
   const tripGroupId = route.query.new_trip_group_id as string
   if (tripGroupId) openCreateModal({ tripGroupId })
   else if (driveIds.length) openCreateModal({ driveIds })
+}
+
+watch(
+  () => [route.query.new_drive_id, route.query.new_drive_ids, route.query.new_trip_group_id],
+  () => checkRouteQueryForCarpool()
+)
+
+onMounted(() => {
+  loadData()
+  checkRouteQueryForCarpool()
 })
 </script>
 
@@ -631,31 +755,99 @@ onMounted(() => {
 
     <!-- Trips List -->
     <div v-else class="space-y-4">
-      <div v-for="trip in trips" :key="trip.id" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-all shadow-sm space-y-4">
+      <!-- Batch Selection & Actions Toolbar -->
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 px-4 py-3 rounded-2xl shadow-sm">
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            @click="toggleSelectAll"
+            class="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+          >
+            <component :is="isAllSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400 shrink-0" />
+            <span>{{ isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }} ({{ trips.length }})</span>
+          </button>
+          <span v-if="selectedTripIds.length > 0" class="text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 rounded-lg">
+            {{ selectedTripIds.length }} sélectionné{{ selectedTripIds.length > 1 ? 's' : '' }}
+          </span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            v-if="selectedTripIds.length > 0"
+            type="button"
+            @click="handleBatchRecalculate"
+            :disabled="recalculating"
+            class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-md shadow-rose-600/20 disabled:opacity-50 transition-all"
+            title="Recalculer les coûts réels des covoiturages sélectionnés"
+          >
+            <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': recalculating }" />
+            <span>Recalculer les coûts réels ({{ selectedTripIds.length }})</span>
+          </button>
+          <button
+            v-if="selectedTripIds.length > 0"
+            type="button"
+            @click="clearTripSelection"
+            class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-medium rounded-xl transition-colors"
+          >
+            Annuler
+          </button>
+        </div>
+      </div>
+
+      <div
+        v-for="trip in trips"
+        :key="trip.id"
+        class="bg-slate-900 border rounded-2xl p-5 transition-all shadow-sm space-y-4"
+        :class="selectedTripIds.includes(trip.id) ? 'border-rose-500/50 bg-rose-500/[0.02]' : 'border-slate-800 hover:border-slate-700'"
+      >
         <!-- Trip Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
-          <div class="space-y-1 min-w-0 flex-1">
-            <div class="flex items-center gap-2.5 flex-wrap min-w-0">
-              <h3 class="text-base font-bold text-white truncate max-w-sm sm:max-w-md" :title="trip.title">{{ trip.title }}</h3>
-              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium shrink-0">{{ trip.distance_km }} km</span>
-              <span
-                class="text-xs px-2.5 py-0.5 rounded-full font-semibold border shrink-0"
-                :class="trip.net_cost <= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'"
-              >
-                {{ trip.net_cost <= 0 ? 'Trajet 100% rentabilisé !' : `Amorti à ${trip.total_cost > 0 ? Math.min(100, Math.round((trip.total_revenue / trip.total_cost) * 100)) : 0}%` }}
-              </span>
-            </div>
-            <div class="flex items-center gap-2 text-xs text-slate-400 min-w-0">
-              <Calendar class="w-3.5 h-3.5 shrink-0" />
-              <span class="shrink-0">{{ formatDate(trip.date) }}</span>
-              <span v-if="trip.notes" class="text-slate-500 truncate">• {{ trip.notes }}</span>
+          <div class="flex items-start gap-3 min-w-0 flex-1">
+            <!-- Select Checkbox -->
+            <button
+              type="button"
+              @click="toggleTripSelection(trip.id)"
+              class="mt-1 text-slate-400 hover:text-rose-400 transition-colors shrink-0"
+              :title="selectedTripIds.includes(trip.id) ? 'Désélectionner ce covoiturage' : 'Sélectionner ce covoiturage'"
+            >
+              <component
+                :is="selectedTripIds.includes(trip.id) ? CheckSquare : Square"
+                class="w-4 h-4"
+                :class="selectedTripIds.includes(trip.id) ? 'text-rose-400' : 'text-slate-500'"
+              />
+            </button>
+
+            <div class="space-y-1 min-w-0 flex-1">
+              <div class="flex items-center gap-2.5 flex-wrap min-w-0">
+                <h3 class="text-base font-bold text-white truncate max-w-sm sm:max-w-md" :title="trip.title">{{ trip.title }}</h3>
+                <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium shrink-0">{{ trip.distance_km }} km</span>
+                <span
+                  class="text-xs px-2.5 py-0.5 rounded-full font-semibold border shrink-0"
+                  :class="trip.net_cost <= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'"
+                >
+                  {{ trip.net_cost <= 0 ? 'Trajet 100% rentabilisé !' : `Amorti à ${trip.total_cost > 0 ? Math.min(100, Math.round((trip.total_revenue / trip.total_cost) * 100)) : 0}%` }}
+                </span>
+              </div>
+              <div class="flex items-center gap-2 text-xs text-slate-400 min-w-0">
+                <Calendar class="w-3.5 h-3.5 shrink-0" />
+                <span class="shrink-0">{{ formatDate(trip.date) }}</span>
+                <span v-if="trip.notes" class="text-slate-500 truncate">• {{ trip.notes }}</span>
+              </div>
             </div>
           </div>
-          <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-            <button @click="openEditModal(trip)" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg" title="Modifier">
+          <div class="flex items-center gap-1 sm:gap-2 shrink-0 self-end sm:self-auto">
+            <button
+              @click="handleRecalculateSingle(trip)"
+              :disabled="recalculating"
+              class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
+              title="Recalculer les coûts réels de ce covoiturage"
+            >
+              <RotateCw class="w-4 h-4" />
+            </button>
+            <button @click="openEditModal(trip)" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors" title="Modifier">
               <Edit2 class="w-4 h-4" />
             </button>
-            <button @click="handleDelete(trip)" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg" title="Supprimer">
+            <button @click="handleDelete(trip)" class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors" title="Supprimer">
               <Trash2 class="w-4 h-4" />
             </button>
           </div>
@@ -839,26 +1031,57 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label for="carpool-date" class="block text-xs font-semibold text-slate-400 mb-1">Date</label>
-            <input id="carpool-date" v-model="form.date" type="date" class="w-full bg-slate-800 text-slate-100 text-sm rounded-xl px-3 py-2 border border-slate-700" />
+            <div class="flex items-center justify-between mb-1">
+              <label for="carpool-date" class="block text-xs font-semibold text-slate-400">Date</label>
+              <span v-if="isDateDisabled" class="text-[10px] text-slate-400 flex items-center gap-1 font-normal" title="La date est automatiquement liée au(x) trajet(s) TeslaMate">
+                <Lock class="w-3 h-3 text-slate-400" />
+                Date du trajet
+              </span>
+            </div>
+            <input
+              id="carpool-date"
+              v-model="form.date"
+              type="date"
+              :disabled="isDateDisabled"
+              :title="isDateDisabled ? 'La date est automatiquement fixée selon le(s) trajet(s) sélectionné(s)' : ''"
+              class="w-full text-sm rounded-xl px-3 py-2 border transition-colors"
+              :class="
+                isDateDisabled
+                  ? 'bg-slate-900/90 border-slate-800 text-slate-400 cursor-not-allowed select-none opacity-80'
+                  : 'bg-slate-800 text-slate-100 border-slate-700 focus:outline-none focus:border-rose-500'
+              "
+            />
           </div>
         </div>
 
         <!-- Legs -->
         <div class="space-y-2">
-          <div class="flex items-center justify-between">
+          <div class="flex items-center justify-between gap-2 flex-wrap">
             <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
               <Navigation class="w-4 h-4 text-indigo-400" />
               Étapes et coûts réels ({{ liveDistance.toFixed(1) }} km • {{ fmt(euros(live.total)) }} €)
             </h4>
-            <button
-              v-if="sourceMode === 'MANUAL'"
-              type="button"
-              @click="addManualLeg"
-              class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
-            >
-              <Plus class="w-3.5 h-3.5" /> Ajouter une étape
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="editingTripId && form.legs.length > 0"
+                type="button"
+                @click="handleModalRecalculate"
+                :disabled="estimating"
+                class="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1.5 px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg transition-colors disabled:opacity-50"
+                title="Mettre à jour les coûts réels selon les taux actuels et péages rattachés"
+              >
+                <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': estimating }" />
+                <span>Recalculer les coûts</span>
+              </button>
+              <button
+                v-if="sourceMode === 'MANUAL'"
+                type="button"
+                @click="addManualLeg"
+                class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+              >
+                <Plus class="w-3.5 h-3.5" /> Ajouter une étape
+              </button>
+            </div>
           </div>
           <p v-if="!form.legs.length" class="text-xs text-slate-500">Sélectionnez au moins un trajet.</p>
 

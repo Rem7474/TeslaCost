@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -298,6 +299,9 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		MaintenanceRateSource: rates.MaintenanceSource,
 		Legs:                  legs,
 	}
+	if len(drives) > 0 {
+		est.StartDate = &drives[0].StartTime
+	}
 	for i := range legs {
 		legs[i].OrderIndex = i
 		legs[i].TotalCost = legs[i].Total()
@@ -326,4 +330,94 @@ func placeLabel(address *string) *string {
 		label = string(r[:150])
 	}
 	return &label
+}
+
+// RecalculateTrip recalculates the costs of a carpool trip using latest vehicle unit rates and recorded tolls.
+func (s *CarpoolService) RecalculateTrip(ctx context.Context, vehicleID string, tripID string) (*models.CarpoolTripWithPassengers, error) {
+	trip, err := s.repo.GetCarpoolTrip(ctx, tripID, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+
+	var driveIDs []string
+	for _, l := range trip.Legs {
+		if l.DriveID != nil && *l.DriveID != "" {
+			driveIDs = append(driveIDs, *l.DriveID)
+		}
+	}
+
+	var est *models.CarpoolCostEstimate
+	if len(driveIDs) > 0 {
+		est, err = s.EstimateCosts(ctx, vehicleID, trip.DriveID, trip.TripGroupID, driveIDs, 0)
+		if err != nil {
+			return nil, err
+		}
+	} else if trip.DistanceKm > 0 {
+		est, err = s.EstimateCosts(ctx, vehicleID, nil, nil, nil, trip.DistanceKm)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if est != nil {
+		if len(driveIDs) > 0 {
+			estByDriveID := make(map[string]models.CarpoolLeg, len(est.Legs))
+			for _, el := range est.Legs {
+				if el.DriveID != nil {
+					estByDriveID[*el.DriveID] = el
+				}
+			}
+			for i := range trip.Legs {
+				if trip.Legs[i].DriveID != nil {
+					if el, ok := estByDriveID[*trip.Legs[i].DriveID]; ok {
+						trip.Legs[i].ElectricityCost = el.ElectricityCost
+						trip.Legs[i].TollsCost = el.TollsCost
+						trip.Legs[i].TiresCost = el.TiresCost
+						trip.Legs[i].MaintenanceCost = el.MaintenanceCost
+						trip.Legs[i].InsuranceCost = el.InsuranceCost
+					}
+				}
+			}
+		} else if len(est.Legs) == 1 && len(trip.Legs) == 1 {
+			trip.Legs[0].ElectricityCost = est.Legs[0].ElectricityCost
+			trip.Legs[0].TiresCost = est.Legs[0].TiresCost
+			trip.Legs[0].MaintenanceCost = est.Legs[0].MaintenanceCost
+			trip.Legs[0].InsuranceCost = est.Legs[0].InsuranceCost
+		}
+
+		if est.StartDate != nil {
+			trip.Date = *est.StartDate
+		}
+	}
+
+	if err := s.repo.UpdateCarpoolTrip(ctx, &trip.CarpoolTrip, trip.Legs, trip.Passengers); err != nil {
+		return nil, err
+	}
+
+	trip.DriverCostShare, trip.PassengersCostShare = AllocateCarpoolCosts(trip.Legs, trip.Passengers)
+	return trip, nil
+}
+
+// RecalculateTrips recalculates multiple carpool trips for a vehicle. If tripIDs is empty, all trips are recalculated.
+func (s *CarpoolService) RecalculateTrips(ctx context.Context, vehicleID string, tripIDs []string) ([]models.CarpoolTripWithPassengers, error) {
+	if len(tripIDs) == 0 {
+		allTrips, err := s.repo.ListCarpoolTrips(ctx, vehicleID)
+		if err != nil {
+			return nil, err
+		}
+		tripIDs = make([]string, len(allTrips))
+		for i, t := range allTrips {
+			tripIDs[i] = t.ID
+		}
+	}
+
+	results := make([]models.CarpoolTripWithPassengers, 0, len(tripIDs))
+	for _, id := range tripIDs {
+		t, err := s.RecalculateTrip(ctx, vehicleID, id)
+		if err != nil {
+			return nil, fmt.Errorf("trip %s: %w", id, err)
+		}
+		results = append(results, *t)
+	}
+	return results, nil
 }
