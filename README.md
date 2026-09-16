@@ -23,7 +23,7 @@
    - Affectation granulaire des dépenses de voyage (péages d'autoroutes, parkings, ferries) ; une dépense de groupe est répartie entre les étapes au prorata des kilomètres.
    - Sélection de trajets conservée d'une page à l'autre ; frais d'un trajet ou d'un voyage modifiables et supprimables depuis la fenêtre de coût du trajet.
    - Onglet « Voyages » : renommer, retirer ou ajouter des trajets, supprimer un voyage en conservant ou non ses frais.
-   - File « À qualifier » : trajets de type autoroutier (≥ 40 km, ≥ 70 km/h de moyenne) sans péage renseigné, à compléter ou marquer « sans péage ».
+   - File « À qualifier » : trajets de type autoroutier (≥ 40 km et ≥ 70 km/h de moyenne, ou ≥ 20 km et Vmax > 125 km/h) sans péage renseigné, à compléter ou marquer « sans péage ».
    - Dépenses en devise étrangère avec taux de conversion vers l'euro saisi à la dépense.
 4. **Gestion du Cycle de Vie des Pneus :**
    - Fiche produit (marque, modèle, dimensions, saison, prix, dot code).
