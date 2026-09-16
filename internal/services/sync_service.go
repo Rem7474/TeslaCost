@@ -70,9 +70,10 @@ type syncStore interface {
 
 // SyncService orchestrates synchronization from TeslaMate to TeslaCost.
 type SyncService struct {
-	repo      syncStore
-	encryptor *crypto.Encryptor
-	jobs      syncJobs
+	repo          syncStore
+	encryptor     *crypto.Encryptor
+	jobs          syncJobs
+	notifications *NotificationService
 }
 
 // NewSyncService creates a new SyncService.
@@ -82,6 +83,11 @@ func NewSyncService(repo *database.Repository, encryptor *crypto.Encryptor) *Syn
 		s.repo = repo
 	}
 	return s
+}
+
+// SetNotificationService attaches a NotificationService to dispatch alerts on odometer updates.
+func (s *SyncService) SetNotificationService(notifications *NotificationService) {
+	s.notifications = notifications
 }
 
 // TestConnection verifies if connection to TeslaMate works for a given vehicle config.
@@ -182,6 +188,11 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				}
 			}
 			v.CurrentOdometer = odometer
+			if s.notifications != nil {
+				go func(veh models.Vehicle, odo float64) {
+					_ = s.notifications.CheckAndNotify(context.Background(), &veh, odo)
+				}(*v, odometer)
+			}
 		} else if odometer > 0 && odometer+1 < v.CurrentOdometer {
 			syncWarnings = append(syncWarnings, fmt.Sprintf(
 				"Odomètre TeslaMate (%.0f km) inférieur à l'odomètre enregistré (%.0f km) : vérifiez la saisie manuelle du véhicule",

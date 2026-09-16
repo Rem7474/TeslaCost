@@ -1,0 +1,119 @@
+﻿package services
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/teslacost/teslacost/internal/models"
+)
+
+func TestFormatPayloadDiscord(t *testing.T) {
+	remKm := 450.0
+	rem := &models.MaintenanceReminder{
+		Title:       "Permutation des pneus",
+		Status:      "DUE_SOON",
+		RemainingKm: &remKm,
+	}
+
+	payload, err := formatPayload("DISCORD", "Model 3", rem, 42000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	m, ok := payload.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map[string]any, got %T", payload)
+	}
+	embeds, ok := m["embeds"].([]map[string]any)
+	if !ok || len(embeds) == 0 {
+		t.Fatalf("expected embeds array")
+	}
+	if embeds[0]["color"] != 16753920 { // Amber for DUE_SOON
+		t.Errorf("expected amber color, got %v", embeds[0]["color"])
+	}
+}
+
+func TestFormatPayloadTelegramAndGotify(t *testing.T) {
+	remKm := -120.0
+	rem := &models.MaintenanceReminder{
+		Title:       "Filtre habitacle",
+		Status:      "OVERDUE",
+		RemainingKm: &remKm,
+	}
+
+	// Telegram
+	tgPayload, err := formatPayload("TELEGRAM", "Model Y", rem, 55000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	tgMap := tgPayload.(map[string]any)
+	if tgMap["parse_mode"] != "Markdown" {
+		t.Errorf("expected Markdown parse mode")
+	}
+
+	// Gotify
+	gotifyPayload, err := formatPayload("GOTIFY", "Model Y", rem, 55000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	gotifyMap := gotifyPayload.(map[string]any)
+	if gotifyMap["priority"] != 8 {
+		t.Errorf("expected priority 8 for OVERDUE, got %v", gotifyMap["priority"])
+	}
+}
+
+func TestSendReminderWebhook(t *testing.T) {
+	serverCalled := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serverCalled = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	svc := NewNotificationService(nil)
+	webhook := &models.VehicleWebhook{
+		URL:     server.URL,
+		Type:    "DISCORD",
+		Enabled: true,
+	}
+
+	err := svc.TestWebhook(context.Background(), webhook, "Tesla Test")
+	if err != nil {
+		t.Fatalf("unexpected test webhook error: %v", err)
+	}
+	if !serverCalled {
+		t.Errorf("expected webhook endpoint to be called")
+	}
+}
+
+func TestComputeStatus(t *testing.T) {
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	intKm := 10000
+	lastOdo := 30000.0
+	rem := &models.MaintenanceReminder{
+		IntervalKm:          &intKm,
+		LastServiceOdometer: &lastOdo,
+		LeadKm:              1000,
+	}
+
+	// 1. Odo = 35000 -> OK (5000 km left)
+	rem.ComputeStatus(35000, now)
+	if rem.Status != "OK" || *rem.RemainingKm != 5000 {
+		t.Errorf("expected OK with 5000 km left, got %s, %v", rem.Status, rem.RemainingKm)
+	}
+
+	// 2. Odo = 39200 -> DUE_SOON (800 km left <= 1000 leadKm)
+	rem.ComputeStatus(39200, now)
+	if rem.Status != "DUE_SOON" || *rem.RemainingKm != 800 {
+		t.Errorf("expected DUE_SOON with 800 km left, got %s, %v", rem.Status, rem.RemainingKm)
+	}
+
+	// 3. Odo = 40100 -> OVERDUE (-100 km)
+	rem.ComputeStatus(40100, now)
+	if rem.Status != "OVERDUE" || *rem.RemainingKm != -100 {
+		t.Errorf("expected OVERDUE with -100 km left, got %s, %v", rem.Status, rem.RemainingKm)
+	}
+}

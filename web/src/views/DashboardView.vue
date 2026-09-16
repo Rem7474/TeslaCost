@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
-import { api } from '@/services/api'
+import { api, type MaintenanceReminder } from '@/services/api'
 import {
   Coins,
   Gauge,
@@ -24,6 +24,8 @@ import {
   Info,
   FileText,
   CheckCircle2,
+  Clock,
+  Bell,
 } from 'lucide-vue-next'
 import { Chart, registerables } from 'chart.js'
 
@@ -32,6 +34,26 @@ Chart.register(...registerables)
 const vehicleStore = useVehicleStore()
 const tco = ref<any | null>(null)
 const loading = ref(true)
+const dashboardReminders = ref<MaintenanceReminder[]>([])
+
+const urgentReminders = computed(() => {
+  return dashboardReminders.value.filter(
+    (r) => r.status === 'OVERDUE' || r.status === 'DUE_SOON'
+  )
+})
+
+const hasOverdueReminders = computed(() => {
+  return dashboardReminders.value.some((r) => r.status === 'OVERDUE')
+})
+
+const urgentRemindersSummary = computed(() => {
+  if (!urgentReminders.value.length) return ''
+  const titles = urgentReminders.value.map((r) => r.title)
+  if (titles.length <= 2) {
+    return titles.join(', ')
+  }
+  return `${titles.slice(0, 2).join(', ')} et ${titles.length - 2} autre(s)`
+})
 
 const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
 const mileageChartRef = ref<HTMLCanvasElement | null>(null)
@@ -513,9 +535,14 @@ async function loadTCO() {
   }
   loading.value = true
   try {
-    tco.value = await api.getTCO(vehicleStore.activeVehicle.id)
+    const [tcoData, remindersData] = await Promise.all([
+      api.getTCO(vehicleStore.activeVehicle.id),
+      api.getReminders(vehicleStore.activeVehicle.id).catch(() => []),
+    ])
+    tco.value = tcoData
+    dashboardReminders.value = remindersData
   } catch (err) {
-    console.error('Failed to load TCO', err)
+    console.error('Failed to load TCO or reminders', err)
   } finally {
     loading.value = false
     await nextTick()
@@ -884,6 +911,45 @@ function renderCharts() {
 
     <!-- REAL CONTENT WHEN LOADED -->
     <div v-else class="space-y-6">
+      <!-- Maintenance Reminders Urgent Alert Banner -->
+      <div
+        v-if="urgentReminders.length > 0"
+        class="p-4 rounded-2xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors"
+        :class="hasOverdueReminders ? 'bg-rose-500/10 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/30'"
+      >
+        <div class="flex items-center gap-3">
+          <div
+            class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            :class="hasOverdueReminders ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'"
+          >
+            <AlertTriangle v-if="hasOverdueReminders" class="w-5 h-5" />
+            <Clock v-else class="w-5 h-5" />
+          </div>
+          <div>
+            <div class="text-sm font-bold text-white flex items-center gap-2">
+              <span>{{ hasOverdueReminders ? 'Entretien(s) en retard' : 'Entretien(s) à prévoir prochainement' }}</span>
+              <span
+                class="px-2 py-0.5 text-xs rounded-full font-bold"
+                :class="hasOverdueReminders ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'"
+              >
+                {{ urgentReminders.length }}
+              </span>
+            </div>
+            <p class="text-xs text-slate-300 mt-0.5">
+              {{ urgentRemindersSummary }}
+            </p>
+          </div>
+        </div>
+        <router-link
+          to="/expenses?tab=REMINDERS"
+          class="px-3.5 py-1.5 text-xs font-semibold rounded-xl shrink-0 transition-colors inline-flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
+          :class="hasOverdueReminders ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-amber-600 hover:bg-amber-500 text-white'"
+        >
+          Consulter les rappels
+          <ArrowRight class="w-3.5 h-3.5" />
+        </router-link>
+      </div>
+
       <!-- Data completeness -->
       <div
         v-if="tco?.completeness"

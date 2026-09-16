@@ -912,7 +912,7 @@ func TestExpenseDocumentsIntegration(t *testing.T) {
 	_ = db
 	v := mustVehicle(t, repo, "user_doc@example.com")
 
-	// 1. Create a document
+	// 1. Create a document (metadata only; binary stored on volume)
 	pdfData := []byte("%PDF-1.4 test document content for invoice")
 	desc := "Facture Révision Tesla Chambourcy"
 	doc := &models.ExpenseDocument{
@@ -921,7 +921,6 @@ func TestExpenseDocumentsIntegration(t *testing.T) {
 		Filename:    "facture_chambourcy.pdf",
 		MimeType:    "application/pdf",
 		FileSize:    int64(len(pdfData)),
-		Data:        pdfData,
 		Description: &desc,
 	}
 	if err := repo.SaveExpenseDocument(ctx, doc); err != nil {
@@ -931,13 +930,22 @@ func TestExpenseDocumentsIntegration(t *testing.T) {
 		t.Fatal("expected generated doc ID")
 	}
 
-	// 2. Fetch document by ID
+	// Simulate writing to volume and persisting the storage path.
+	fakeStoragePath := v.ID + "/" + doc.ID
+	if err := repo.UpdateDocumentStoragePath(ctx, doc.ID, fakeStoragePath); err != nil {
+		t.Fatalf("UpdateDocumentStoragePath failed: %v", err)
+	}
+
+	// 2. Fetch document by ID — verify metadata and storage path
 	fetched, err := repo.GetExpenseDocumentByID(ctx, doc.ID, v.ID, v.UserID)
 	if err != nil {
 		t.Fatalf("GetExpenseDocumentByID failed: %v", err)
 	}
-	if fetched.Filename != "facture_chambourcy.pdf" || string(fetched.Data) != string(pdfData) {
-		t.Fatalf("fetched doc mismatch: %+v", fetched)
+	if fetched.Filename != "facture_chambourcy.pdf" {
+		t.Fatalf("fetched doc filename mismatch: %s", fetched.Filename)
+	}
+	if fetched.StoragePath == nil || *fetched.StoragePath != fakeStoragePath {
+		t.Fatalf("fetched doc StoragePath mismatch: %v", fetched.StoragePath)
 	}
 
 	// 3. Link document to 2 drive expenses (many-to-one)

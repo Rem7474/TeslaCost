@@ -17,14 +17,16 @@ import (
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
+	"github.com/teslacost/teslacost/internal/storage"
 )
 
 type ExpenseHandler struct {
-	repo *database.Repository
+	repo           *database.Repository
+	storageService *storage.FileStorageService
 }
 
-func NewExpenseHandler(repo *database.Repository) *ExpenseHandler {
-	return &ExpenseHandler{repo: repo}
+func NewExpenseHandler(repo *database.Repository, storageService *storage.FileStorageService) *ExpenseHandler {
+	return &ExpenseHandler{repo: repo, storageService: storageService}
 }
 
 type CreateDriveExpenseRequest struct {
@@ -592,6 +594,7 @@ func (h *ExpenseHandler) DeleteManualCharge(w http.ResponseWriter, r *http.Reque
 // ============================================================================
 
 // UploadDocument uploads a new invoice or document (PDF or image) for a vehicle.
+// The binary is written to the filesystem volume; only metadata and the storage path are persisted in PostgreSQL.
 func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
@@ -660,13 +663,13 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 		descPtr = &desc
 	}
 
+	// Save metadata first to obtain the DB-generated UUID (used as the filename on disk).
 	doc := &models.ExpenseDocument{
 		UserID:      userID,
 		VehicleID:   vehicleID,
 		Filename:    filename,
 		MimeType:    mimeType,
 		FileSize:    int64(len(data)),
-		Data:        data,
 		Description: descPtr,
 	}
 
@@ -674,6 +677,24 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 		writeRepoError(w, err, "Failed to save document")
 		return
 	}
+
+	// Write file to volume using vehicleID/docID as path (no user-controlled components).
+	storagePath, err := h.storageService.Save(vehicleID, doc.ID, data)
+	if err != nil {
+		// Roll back DB record on storage failure.
+		_ = h.repo.DeleteExpenseDocument(r.Context(), doc.ID, vehicleID, userID)
+		writeError(w, http.StatusInternalServerError, "Erreur lors de l'écriture du fichier sur le volume")
+		return
+	}
+
+	// Persist storage path (second update via raw query is expensive; we do a lightweight PATCH).
+	if err := h.repo.UpdateDocumentStoragePath(r.Context(), doc.ID, storagePath); err != nil {
+		_ = h.storageService.Delete(storagePath)
+		_ = h.repo.DeleteExpenseDocument(r.Context(), doc.ID, vehicleID, userID)
+		writeError(w, http.StatusInternalServerError, "Erreur lors de la mise à jour du chemin de stockage")
+		return
+	}
+	doc.StoragePath = &storagePath
 
 	headerResp := models.ExpenseDocumentHeader{
 		ID:                  doc.ID,
@@ -688,6 +709,7 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 
 	writeJSON(w, http.StatusCreated, headerResp)
 }
+
 
 // ListDocuments lists all documents/invoices for a vehicle without returning large binary bodies.
 func (h *ExpenseHandler) ListDocuments(w http.ResponseWriter, r *http.Request) {
@@ -712,6 +734,7 @@ func (h *ExpenseHandler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 }
 
 // DownloadDocument streams the document binary to the client for display or download.
+// The file is read from the filesystem volume; access is gated by DB ownership check.
 func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
@@ -723,22 +746,47 @@ func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	if doc.StoragePath == nil || *doc.StoragePath == "" {
+		writeError(w, http.StatusNotFound, "Fichier introuvable sur le volume de stockage")
+		return
+	}
+
+	fileData, err := h.storageService.Read(*doc.StoragePath)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
+		return
+	}
+
 	w.Header().Set("Content-Type", doc.MimeType)
-	w.Header().Set("Content-Length", strconv.FormatInt(doc.FileSize, 10))
+	w.Header().Set("Content-Length", strconv.FormatInt(int64(len(fileData)), 10))
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", doc.Filename))
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(doc.Data)
+	_, _ = w.Write(fileData)
 }
 
+
 // DeleteDocument deletes a document. Linked expenses automatically have document_id set to NULL.
+// After the DB record is removed the corresponding file on the volume is also deleted.
 func (h *ExpenseHandler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	docID := chi.URLParam(r, "docId")
 
+	// Fetch first to get the storage path before deletion.
+	doc, err := h.repo.GetExpenseDocumentByID(r.Context(), docID, vehicleID, userID)
+	if err != nil {
+		writeRepoError(w, err, "Document not found")
+		return
+	}
+
 	if err := h.repo.DeleteExpenseDocument(r.Context(), docID, vehicleID, userID); err != nil {
 		writeRepoError(w, err, "Failed to delete document")
 		return
+	}
+
+	// Best-effort: delete file from volume (non-fatal if file is missing).
+	if doc.StoragePath != nil && *doc.StoragePath != "" {
+		_ = h.storageService.Delete(*doc.StoragePath)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Document deleted successfully"})

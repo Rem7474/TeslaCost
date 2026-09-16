@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
-import { api, type ExpenseDocumentHeader } from '@/services/api'
+import { api, type ExpenseDocumentHeader, type MaintenanceReminder, type VehicleWebhook } from '@/services/api'
 import {
   Receipt,
   Plus,
@@ -30,12 +30,19 @@ import {
   ExternalLink,
   Image as ImageIcon,
   Loader2,
+  Bell,
+  Clock,
+  CheckCircle2,
+  Radio,
+  Sparkles,
+  Check,
 } from 'lucide-vue-next'
 
 const router = useRouter()
+const route = useRoute()
 const vehicleStore = useVehicleStore()
 const { showConfirm, showAlert } = useConfirm()
-const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'CHARGES' | 'DOCUMENTS'>('TOLLS')
+const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'REMINDERS' | 'CHARGES' | 'DOCUMENTS'>('TOLLS')
 
 const driveExpenses = ref<any[]>([])
 const maintenanceExpenses = ref<any[]>([])
@@ -210,6 +217,8 @@ async function loadData() {
       driveExpenses.value = await api.getDriveExpenses(vehicleStore.activeVehicle.id)
     } else if (activeTab.value === 'MAINTENANCE') {
       maintenanceExpenses.value = await api.getMaintenance(vehicleStore.activeVehicle.id)
+    } else if (activeTab.value === 'REMINDERS') {
+      await loadReminders()
     } else if (activeTab.value === 'CHARGES') {
       chargesPage.value = 1
       const res = await api.getCharges(vehicleStore.activeVehicle.id, { missingCost: missingCostOnly.value })
@@ -220,6 +229,9 @@ async function loadData() {
       documents.value = await api.getDocuments(vehicleStore.activeVehicle.id)
     }
     ensureDocumentsLoaded()
+    if (activeTab.value !== 'REMINDERS') {
+      loadReminders()
+    }
   } catch (err) {
     console.error('Failed to load expenses', err)
   } finally {
@@ -340,6 +352,15 @@ function toggleMultiDrive(id: string) {
 }
 
 watch(
+  () => route.query.tab,
+  (tab) => {
+    if (tab && ['TOLLS', 'MAINTENANCE', 'REMINDERS', 'CHARGES', 'DOCUMENTS'].includes(String(tab))) {
+      activeTab.value = tab as any
+    }
+  }
+)
+
+watch(
   () => [vehicleStore.activeVehicle?.id, activeTab.value, vehicleStore.lastSyncTimestamp],
   () => {
     loadData()
@@ -347,7 +368,11 @@ watch(
 )
 
 onMounted(() => {
+  if (route.query.tab && ['TOLLS', 'MAINTENANCE', 'REMINDERS', 'CHARGES', 'DOCUMENTS'].includes(String(route.query.tab))) {
+    activeTab.value = route.query.tab as any
+  }
   loadData()
+  loadReminders()
 })
 
 async function handleCreateToll() {
@@ -789,6 +814,354 @@ function formatDriveTime(dateStr: string) {
     minute: '2-digit',
   })
 }
+// --- RAPPELS D'ENTRETIEN & WEBHOOKS ---
+const reminders = ref<MaintenanceReminder[]>([])
+const loadingReminders = ref(false)
+const showReminderModal = ref(false)
+const editingReminderId = ref<string | null>(null)
+const reminderForm = ref({
+  title: '',
+  category: 'MAINTENANCE',
+  interval_km: '' as number | '',
+  interval_months: '' as number | '',
+  last_service_odometer: '' as number | '',
+  last_service_date: new Date().toISOString().substring(0, 10),
+  lead_km: 1000,
+  lead_days: 15,
+  webhook_enabled: true,
+})
+
+const showCompleteReminderModal = ref(false)
+const completingReminder = ref<MaintenanceReminder | null>(null)
+const completeForm = ref({
+  service_date: new Date().toISOString().substring(0, 10),
+  service_odometer: '' as number | '',
+  log_expense: false,
+  expense_amount: '',
+  expense_description: '',
+})
+
+const showWebhookModal = ref(false)
+const vehicleWebhook = ref<VehicleWebhook | null>(null)
+const webhookForm = ref({
+  url: '',
+  type: 'DISCORD',
+  enabled: true,
+})
+const isTestingWebhook = ref(false)
+const isSavingWebhook = ref(false)
+const webhookTestResult = ref<{ success: boolean; message: string } | null>(null)
+
+interface ReminderPreset {
+  title: string
+  category: string
+  interval_km: number | ''
+  interval_months: number | ''
+  lead_km: number
+  lead_days: number
+}
+
+const REMINDER_PRESETS: ReminderPreset[] = [
+  {
+    title: 'Permutation des pneus',
+    category: 'TIRES',
+    interval_km: 10000,
+    interval_months: 12,
+    lead_km: 1000,
+    lead_days: 15,
+  },
+  {
+    title: 'Filtre d\'habitacle',
+    category: 'MAINTENANCE',
+    interval_km: 40000,
+    interval_months: 24,
+    lead_km: 2000,
+    lead_days: 30,
+  },
+  {
+    title: 'Contrôle liquide de frein',
+    category: 'MAINTENANCE',
+    interval_km: '',
+    interval_months: 24,
+    lead_km: 0,
+    lead_days: 30,
+  },
+  {
+    title: 'Contrôle technique',
+    category: 'MAINTENANCE',
+    interval_km: '',
+    interval_months: 24,
+    lead_km: 0,
+    lead_days: 30,
+  },
+  {
+    title: 'Balais d\'essuie-glace',
+    category: 'MAINTENANCE',
+    interval_km: '',
+    interval_months: 12,
+    lead_km: 0,
+    lead_days: 15,
+  },
+  {
+    title: 'Nettoyage & graissage des étriers',
+    category: 'MAINTENANCE',
+    interval_km: 20000,
+    interval_months: 12,
+    lead_km: 1000,
+    lead_days: 15,
+  },
+]
+
+function applyReminderPreset(preset: ReminderPreset) {
+  reminderForm.value.title = preset.title
+  reminderForm.value.category = preset.category
+  reminderForm.value.interval_km = preset.interval_km
+  reminderForm.value.interval_months = preset.interval_months
+  reminderForm.value.lead_km = preset.lead_km
+  reminderForm.value.lead_days = preset.lead_days
+}
+
+const overdueReminders = computed(() => reminders.value.filter((r) => r.status === 'OVERDUE'))
+const dueSoonReminders = computed(() => reminders.value.filter((r) => r.status === 'DUE_SOON'))
+const urgentRemindersCount = computed(() => overdueReminders.value.length + dueSoonReminders.value.length)
+
+async function loadReminders() {
+  if (!vehicleStore.activeVehicle) return
+  loadingReminders.value = true
+  try {
+    reminders.value = await api.getReminders(vehicleStore.activeVehicle.id)
+  } catch (err: any) {
+    console.error('Failed to load reminders', err)
+  } finally {
+    loadingReminders.value = false
+  }
+}
+
+function openAddReminderModal() {
+  editingReminderId.value = null
+  const currentOdo = vehicleStore.activeVehicle?.current_odometer
+    ? Math.round(vehicleStore.activeVehicle.current_odometer)
+    : ''
+  reminderForm.value = {
+    title: '',
+    category: 'MAINTENANCE',
+    interval_km: 10000,
+    interval_months: 12,
+    last_service_odometer: currentOdo,
+    last_service_date: new Date().toISOString().substring(0, 10),
+    lead_km: 1000,
+    lead_days: 15,
+    webhook_enabled: true,
+  }
+  showReminderModal.value = true
+}
+
+function openEditReminderModal(r: MaintenanceReminder) {
+  editingReminderId.value = r.id
+  reminderForm.value = {
+    title: r.title,
+    category: r.category,
+    interval_km: r.interval_km ?? '',
+    interval_months: r.interval_months ?? '',
+    last_service_odometer: r.last_service_odometer !== null && r.last_service_odometer !== undefined ? Math.round(r.last_service_odometer) : '',
+    last_service_date: r.last_service_date ? r.last_service_date.substring(0, 10) : new Date().toISOString().substring(0, 10),
+    lead_km: r.lead_km,
+    lead_days: r.lead_days,
+    webhook_enabled: r.webhook_enabled,
+  }
+  showReminderModal.value = true
+}
+
+async function handleSaveReminder() {
+  if (!vehicleStore.activeVehicle) return
+  if (!reminderForm.value.title.trim()) {
+    showAlert('Le titre du rappel est requis', 'Champ requis', 'warning')
+    return
+  }
+  if (!reminderForm.value.interval_km && !reminderForm.value.interval_months) {
+    showAlert('Spécifiez au moins un intervalle en km ou en mois', 'Champ requis', 'warning')
+    return
+  }
+  try {
+    const payload = {
+      title: reminderForm.value.title.trim(),
+      category: reminderForm.value.category,
+      interval_km: reminderForm.value.interval_km !== '' ? Number(reminderForm.value.interval_km) : null,
+      interval_months: reminderForm.value.interval_months !== '' ? Number(reminderForm.value.interval_months) : null,
+      last_service_odometer: reminderForm.value.last_service_odometer !== '' ? Number(reminderForm.value.last_service_odometer) : null,
+      last_service_date: reminderForm.value.last_service_date ? new Date(reminderForm.value.last_service_date).toISOString() : null,
+      lead_km: Number(reminderForm.value.lead_km || 0),
+      lead_days: Number(reminderForm.value.lead_days || 0),
+      webhook_enabled: reminderForm.value.webhook_enabled,
+    }
+    if (editingReminderId.value) {
+      await api.updateReminder(vehicleStore.activeVehicle.id, editingReminderId.value, payload)
+      showAlert('Rappel mis à jour', 'Succès', 'success')
+    } else {
+      await api.createReminder(vehicleStore.activeVehicle.id, payload)
+      showAlert('Rappel créé avec succès', 'Succès', 'success')
+    }
+    showReminderModal.value = false
+    await loadReminders()
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+async function handleDeleteReminder(r: MaintenanceReminder) {
+  if (!vehicleStore.activeVehicle) return
+  const ok = await showConfirm({
+    title: 'Supprimer le rappel',
+    message: `Êtes-vous sûr de vouloir supprimer le rappel d'entretien « ${r.title} » ?`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
+  try {
+    await api.deleteReminder(vehicleStore.activeVehicle.id, r.id)
+    showAlert('Rappel supprimé', 'Succès', 'success')
+    await loadReminders()
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+function openCompleteReminder(r: MaintenanceReminder) {
+  completingReminder.value = r
+  const currentOdo = vehicleStore.activeVehicle?.current_odometer
+    ? Math.round(vehicleStore.activeVehicle.current_odometer)
+    : ''
+  completeForm.value = {
+    service_date: new Date().toISOString().substring(0, 10),
+    service_odometer: currentOdo,
+    log_expense: false,
+    expense_amount: '',
+    expense_description: `Entretien effectué : ${r.title}`,
+  }
+  showCompleteReminderModal.value = true
+}
+
+async function handleCompleteReminder() {
+  if (!vehicleStore.activeVehicle || !completingReminder.value) return
+  try {
+    const payload = {
+      service_date: new Date(completeForm.value.service_date).toISOString(),
+      service_odometer: completeForm.value.service_odometer !== '' ? Number(completeForm.value.service_odometer) : null,
+    }
+    await api.completeReminder(vehicleStore.activeVehicle.id, completingReminder.value.id, payload)
+
+    if (completeForm.value.log_expense && Number(completeForm.value.expense_amount) > 0) {
+      await api.createMaintenance(vehicleStore.activeVehicle.id, {
+        category: completingReminder.value.category === 'TIRES' ? 'TIRES' : 'MAINTENANCE',
+        amount: Number(completeForm.value.expense_amount),
+        currency: 'EUR',
+        fx_rate: null,
+        date: new Date(completeForm.value.service_date).toISOString(),
+        description: completeForm.value.expense_description || completingReminder.value.title,
+        odometer: completeForm.value.service_odometer ? Number(completeForm.value.service_odometer) : null,
+        is_recurring: false,
+      })
+    }
+
+    showAlert('Entretien marqué comme fait et intervalle réinitialisé !', 'Succès', 'success')
+    showCompleteReminderModal.value = false
+    await loadReminders()
+    if (completeForm.value.log_expense) {
+      maintenanceExpenses.value = await api.getMaintenance(vehicleStore.activeVehicle.id)
+    }
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+async function openWebhookModal() {
+  if (!vehicleStore.activeVehicle) return
+  webhookTestResult.value = null
+  try {
+    const wh = await api.getVehicleWebhook(vehicleStore.activeVehicle.id)
+    vehicleWebhook.value = wh
+    if (wh) {
+      webhookForm.value = {
+        url: wh.url,
+        type: wh.type,
+        enabled: wh.enabled,
+      }
+    } else {
+      webhookForm.value = {
+        url: '',
+        type: 'DISCORD',
+        enabled: true,
+      }
+    }
+  } catch (err: any) {
+    console.error('Failed to load webhook', err)
+  }
+  showWebhookModal.value = true
+}
+
+async function handleSaveWebhook() {
+  if (!vehicleStore.activeVehicle) return
+  if (!webhookForm.value.url.trim()) {
+    showAlert('Veuillez saisir une URL de webhook valide', 'Champ requis', 'warning')
+    return
+  }
+  isSavingWebhook.value = true
+  try {
+    const saved = await api.saveVehicleWebhook(vehicleStore.activeVehicle.id, {
+      url: webhookForm.value.url.trim(),
+      type: webhookForm.value.type,
+      enabled: webhookForm.value.enabled,
+    })
+    vehicleWebhook.value = saved
+    showAlert('Configuration du webhook enregistrée avec succès', 'Succès', 'success')
+    showWebhookModal.value = false
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    isSavingWebhook.value = false
+  }
+}
+
+async function handleTestWebhook() {
+  if (!vehicleStore.activeVehicle) return
+  if (!webhookForm.value.url.trim()) {
+    showAlert('Saisissez d\'abord une URL de webhook', 'Champ requis', 'warning')
+    return
+  }
+  isTestingWebhook.value = true
+  webhookTestResult.value = null
+  try {
+    const res = await api.testVehicleWebhook(vehicleStore.activeVehicle.id, {
+      url: webhookForm.value.url.trim(),
+      type: webhookForm.value.type,
+    })
+    webhookTestResult.value = res
+  } catch (err: any) {
+    webhookTestResult.value = { success: false, message: err.message || 'Erreur inattendue' }
+  } finally {
+    isTestingWebhook.value = false
+  }
+}
+
+async function handleDeleteWebhook() {
+  if (!vehicleStore.activeVehicle) return
+  const ok = await showConfirm({
+    title: 'Supprimer le webhook',
+    message: 'Êtes-vous sûr de vouloir supprimer l\'intégration webhook pour ce véhicule ?',
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
+  try {
+    await api.deleteVehicleWebhook(vehicleStore.activeVehicle.id)
+    vehicleWebhook.value = null
+    webhookForm.value = { url: '', type: 'DISCORD', enabled: true }
+    showAlert('Webhook supprimé', 'Succès', 'success')
+    showWebhookModal.value = false
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
 </script>
 
 <template>
@@ -816,6 +1189,24 @@ function formatDriveTime(dateStr: string) {
         >
           <Plus class="w-3.5 h-3.5" />
           Entretien / Fixe
+        </button>
+        <button
+          v-if="activeTab === 'REMINDERS'"
+          @click="openWebhookModal"
+          class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-2 border border-slate-700 transition-colors"
+          title="Configurer le webhook pour recevoir des notifications en temps réel"
+        >
+          <Radio class="w-3.5 h-3.5 text-violet-400" />
+          <span class="hidden sm:inline">Webhook Homelab</span>
+          <span class="sm:hidden">Webhook</span>
+        </button>
+        <button
+          v-if="activeTab === 'REMINDERS'"
+          @click="openAddReminderModal"
+          class="px-3.5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-violet-600/20"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          Nouveau rappel
         </button>
         <button
           v-if="activeTab === 'CHARGES'"
@@ -853,6 +1244,21 @@ function formatDriveTime(dateStr: string) {
       >
         <Wrench class="w-4 h-4" />
         Entretien & Coûts Fixes
+      </button>
+      <button
+        @click="activeTab = 'REMINDERS'"
+        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 relative"
+        :class="activeTab === 'REMINDERS' ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-slate-400 hover:text-white'"
+      >
+        <Bell class="w-4 h-4" />
+        Rappels d'Entretien
+        <span
+          v-if="urgentRemindersCount > 0"
+          class="px-1.5 py-0.2 text-[10px] font-bold rounded-full"
+          :class="overdueReminders.length > 0 ? 'bg-rose-500 text-white' : 'bg-amber-500 text-slate-950'"
+        >
+          {{ urgentRemindersCount }}
+        </span>
       </button>
       <button
         @click="activeTab = 'CHARGES'"
@@ -1005,6 +1411,238 @@ function formatDriveTime(dateStr: string) {
                 @click="handleDeleteMaint(m)"
                 class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
                 title="Supprimer cette dépense"
+              >
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content: Reminders -->
+    <div v-if="activeTab === 'REMINDERS'" class="space-y-4">
+      <!-- Webhook homelab info banner -->
+      <div class="p-4 bg-slate-900 border border-slate-800 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-3">
+          <div class="p-2 rounded-xl bg-violet-500/10 border border-violet-500/20 text-violet-400 shrink-0">
+            <Radio class="w-5 h-5" />
+          </div>
+          <div>
+            <div class="font-bold text-white flex items-center gap-2">
+              <span>Webhook Homelab</span>
+              <span
+                class="px-2 py-0.5 text-[10px] rounded-full font-bold border"
+                :class="vehicleWebhook?.enabled ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'"
+              >
+                {{ vehicleWebhook?.enabled ? `Actif (${vehicleWebhook.type})` : 'Non configuré' }}
+              </span>
+            </div>
+            <p class="text-slate-400 text-[11px] mt-0.5">
+              {{ vehicleWebhook?.enabled ? 'Les alertes sont automatiquement envoyées dès qu\'une synchronisation TeslaMate franchit le seuil.' : 'Recevez automatiquement des alertes sur Discord, Telegram ou Gotify dès qu\'une échéance approche.' }}
+            </p>
+          </div>
+        </div>
+        <button
+          @click="openWebhookModal"
+          class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 shrink-0 transition-colors self-start sm:self-auto"
+        >
+          {{ vehicleWebhook ? 'Modifier le webhook' : 'Configurer un webhook' }}
+        </button>
+      </div>
+
+      <!-- Quick summary stats -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+          <span class="text-xs text-slate-400">Total rappels</span>
+          <span class="text-xl font-bold text-white mt-1">{{ reminders.length }}</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+          <span class="text-xs text-emerald-400 flex items-center gap-1.5">
+            <CheckCircle2 class="w-3.5 h-3.5" />
+            À jour
+          </span>
+          <span class="text-xl font-bold text-emerald-400 mt-1">{{ okReminders.length }}</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+          <span class="text-xs text-amber-400 flex items-center gap-1.5">
+            <Clock class="w-3.5 h-3.5" />
+            À prévoir
+          </span>
+          <span class="text-xl font-bold text-amber-400 mt-1">{{ dueSoonReminders.length }}</span>
+        </div>
+        <div class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex flex-col justify-between">
+          <span class="text-xs text-rose-400 flex items-center gap-1.5">
+            <AlertTriangle class="w-3.5 h-3.5" />
+            En retard
+          </span>
+          <span class="text-xl font-bold text-rose-400 mt-1">{{ overdueReminders.length }}</span>
+        </div>
+      </div>
+
+      <div v-if="loadingReminders" class="text-center py-12 text-slate-400">Chargement des rappels...</div>
+
+      <!-- Empty state -->
+      <div v-else-if="!reminders.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 space-y-4">
+        <div class="p-3 bg-violet-500/10 border border-violet-500/20 text-violet-400 w-12 h-12 rounded-2xl mx-auto flex items-center justify-center">
+          <Bell class="w-6 h-6" />
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-white">Aucun rappel d'entretien configuré</h3>
+          <p class="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+            Suivez l'usure de vos pneumatiques, le remplacement du filtre habitacle, les révisions ou le contrôle technique avec des rappels par kilométrage et calendrier.
+          </p>
+        </div>
+
+        <div class="pt-2">
+          <p class="text-xs font-semibold text-slate-300 mb-3">Ajouter un rappel type en 1 clic :</p>
+          <div class="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+            <button
+              v-for="preset in REMINDER_PRESETS"
+              :key="preset.title"
+              type="button"
+              @click="openAddReminderModal(); applyReminderPreset(preset)"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5"
+            >
+              <Sparkles class="w-3 h-3 text-violet-400" />
+              {{ preset.title }}
+            </button>
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button
+            @click="openAddReminderModal"
+            class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-2 shadow-lg shadow-violet-600/20"
+          >
+            <Plus class="w-4 h-4" />
+            Créer un rappel personnalisé
+          </button>
+        </div>
+      </div>
+
+      <!-- Reminders List -->
+      <div v-else class="space-y-3">
+        <div
+          v-for="r in reminders"
+          :key="r.id"
+          class="bg-slate-900 border p-4 rounded-2xl flex flex-col justify-between gap-3 transition-colors"
+          :class="r.status === 'OVERDUE' ? 'border-rose-500/40 bg-rose-500/5' : r.status === 'DUE_SOON' ? 'border-amber-500/40 bg-amber-500/5' : 'border-slate-800'"
+        >
+          <!-- Card top -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5 flex-wrap">
+              <span
+                class="text-xs px-2.5 py-0.5 rounded-full font-bold border flex items-center gap-1"
+                :class="r.status === 'OVERDUE' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : r.status === 'DUE_SOON' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'"
+              >
+                <AlertTriangle v-if="r.status === 'OVERDUE'" class="w-3 h-3" />
+                <Clock v-else-if="r.status === 'DUE_SOON'" class="w-3 h-3" />
+                <CheckCircle2 v-else class="w-3 h-3" />
+                {{ r.status === 'OVERDUE' ? 'En retard' : r.status === 'DUE_SOON' ? 'À prévoir bientôt' : 'À jour' }}
+              </span>
+
+              <span class="text-xs px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">
+                {{ r.category === 'TIRES' ? 'Pneumatiques' : 'Entretien' }}
+              </span>
+
+              <h4 class="text-sm font-bold text-white">{{ r.title }}</h4>
+
+              <span
+                v-if="r.webhook_enabled"
+                class="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400 border border-violet-500/20 flex items-center gap-1"
+                title="Notification webhook activée pour ce rappel"
+              >
+                <Radio class="w-2.5 h-2.5" />
+                Webhook
+              </span>
+            </div>
+
+            <!-- Due Badges / Urgency pill -->
+            <div class="flex items-center gap-2 text-xs font-semibold">
+              <span
+                v-if="r.remaining_km !== null && r.remaining_km !== undefined"
+                class="px-2 py-0.5 rounded-lg"
+                :class="r.remaining_km <= 0 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : r.remaining_km <= r.lead_km ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-300 bg-slate-800 border border-slate-700'"
+              >
+                {{ r.remaining_km <= 0 ? `Dépassé de ${Math.abs(Math.round(r.remaining_km)).toLocaleString('fr-FR')} km` : `Reste ${Math.round(r.remaining_km).toLocaleString('fr-FR')} km` }}
+              </span>
+              <span
+                v-if="r.remaining_days !== null && r.remaining_days !== undefined"
+                class="px-2 py-0.5 rounded-lg"
+                :class="r.remaining_days <= 0 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : r.remaining_days <= r.lead_days ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-300 bg-slate-800 border border-slate-700'"
+              >
+                {{ r.remaining_days <= 0 ? `Dépassé de ${Math.abs(r.remaining_days)} j` : `Reste ${r.remaining_days} j` }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Card details grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1 text-xs text-slate-300">
+            <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
+              <span class="text-[11px] text-slate-400 block mb-0.5">Échéance kilométrique</span>
+              <span v-if="r.interval_km" class="font-medium text-white">
+                Tous les {{ r.interval_km.toLocaleString('fr-FR') }} km
+                <span v-if="r.due_odometer" class="text-slate-400 block text-[11px]">
+                  Échéance : {{ Math.round(r.due_odometer).toLocaleString('fr-FR') }} km
+                </span>
+              </span>
+              <span v-else class="text-slate-400 italic">Non applicable</span>
+            </div>
+
+            <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
+              <span class="text-[11px] text-slate-400 block mb-0.5">Échéance calendaire</span>
+              <span v-if="r.interval_months" class="font-medium text-white">
+                Tous les {{ r.interval_months }} mois
+                <span v-if="r.due_date" class="text-slate-400 block text-[11px]">
+                  Échéance : {{ formatDate(r.due_date) }}
+                </span>
+              </span>
+              <span v-else class="text-slate-400 italic">Non applicable</span>
+            </div>
+
+            <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
+              <span class="text-[11px] text-slate-400 block mb-0.5">Dernière réalisation</span>
+              <span class="font-medium text-white">
+                {{ r.last_service_date ? formatDate(r.last_service_date) : 'Non renseigné' }}
+                <span v-if="r.last_service_odometer" class="text-slate-400 block text-[11px]">
+                  à {{ Math.round(r.last_service_odometer).toLocaleString('fr-FR') }} km
+                </span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Card footer -->
+          <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+            <div class="text-[11px] text-slate-400">
+              <span v-if="r.last_notified_at">
+                Dernière alerte webhook : {{ formatDate(r.last_notified_at) }}
+              </span>
+              <span v-else>
+                Alerte anticipée : {{ r.lead_km.toLocaleString('fr-FR') }} km / {{ r.lead_days }} j avant
+              </span>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+              <button
+                @click="openCompleteReminder(r)"
+                class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-500/30 flex items-center gap-1.5 transition-colors"
+                title="Marquer cet entretien comme effectué et mettre à jour le rappel"
+              >
+                <CheckCircle2 class="w-3.5 h-3.5 text-emerald-400" />
+                <span>Marquer fait</span>
+              </button>
+              <button
+                @click="openEditReminderModal(r)"
+                class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-violet-400 rounded-xl transition-colors border border-slate-700/60"
+                title="Modifier ce rappel"
+              >
+                <Pencil class="w-3.5 h-3.5" />
+              </button>
+              <button
+                @click="handleDeleteReminder(r)"
+                class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
+                title="Supprimer ce rappel"
               >
                 <Trash2 class="w-3.5 h-3.5" />
               </button>
@@ -1917,6 +2555,395 @@ function formatDriveTime(dateStr: string) {
             <UploadCloud class="w-4 h-4" />
             <span>{{ isUploadingDocument ? 'Téléversement...' : 'Téléverser' }}</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Add / Edit Maintenance Reminder -->
+    <div
+      v-if="showReminderModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showReminderModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <Bell class="w-5 h-5 text-violet-400" />
+            {{ editingReminderId ? 'Modifier le rappel d\'entretien' : 'Nouveau rappel d\'entretien' }}
+          </h3>
+          <button @click="showReminderModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <form id="reminder-modal-form" @submit.prevent="handleSaveReminder" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <!-- Preset chips (only when adding new) -->
+          <div v-if="!editingReminderId" class="space-y-1.5">
+            <span class="block text-xs font-semibold text-slate-300">Modèles rapides</span>
+            <div class="flex flex-wrap gap-1.5">
+              <button
+                v-for="preset in REMINDER_PRESETS"
+                :key="preset.title"
+                type="button"
+                @click="applyReminderPreset(preset)"
+                class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-medium rounded-lg border border-slate-700 transition-colors flex items-center gap-1"
+              >
+                <Sparkles class="w-3 h-3 text-violet-400" />
+                {{ preset.title }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Title & Category -->
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="sm:col-span-2">
+              <label for="reminder-form-title" class="block text-xs font-semibold text-slate-300 mb-1">Titre de l'entretien</label>
+              <input
+                id="reminder-form-title"
+                v-model="reminderForm.title"
+                type="text"
+                required
+                placeholder="ex. Permutation des pneus"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              />
+            </div>
+            <div>
+              <label for="reminder-form-category" class="block text-xs font-semibold text-slate-300 mb-1">Catégorie</label>
+              <select
+                id="reminder-form-category"
+                v-model="reminderForm.category"
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              >
+                <option value="MAINTENANCE">Entretien</option>
+                <option value="TIRES">Pneumatiques</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Periodicities -->
+          <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-3">
+            <span class="block text-xs font-semibold text-slate-200">Périodicité (au moins l'un des deux)</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="reminder-form-interval-km" class="block text-xs font-semibold text-slate-300 mb-1">Intervalle en km</label>
+                <input
+                  id="reminder-form-interval-km"
+                  v-model="reminderForm.interval_km"
+                  type="number"
+                  min="500"
+                  step="500"
+                  placeholder="ex. 10000 (vide = ignoré)"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label for="reminder-form-interval-months" class="block text-xs font-semibold text-slate-300 mb-1">Intervalle en mois</label>
+                <input
+                  id="reminder-form-interval-months"
+                  v-model="reminderForm.interval_months"
+                  type="number"
+                  min="1"
+                  max="120"
+                  placeholder="ex. 12 (vide = ignoré)"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Last service date & odometer -->
+          <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-3">
+            <span class="block text-xs font-semibold text-slate-200">Point de départ (dernier entretien)</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="reminder-form-last-odo" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre dernier entretien (km)</label>
+                <input
+                  id="reminder-form-last-odo"
+                  v-model="reminderForm.last_service_odometer"
+                  type="number"
+                  min="0"
+                  placeholder="ex. 45000"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label for="reminder-form-last-date" class="block text-xs font-semibold text-slate-300 mb-1">Date dernier entretien</label>
+                <input
+                  id="reminder-form-last-date"
+                  v-model="reminderForm.last_service_date"
+                  type="date"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Alert lead thresholds -->
+          <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-3">
+            <span class="block text-xs font-semibold text-slate-200">Seuil d'anticipation de l'alerte</span>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label for="reminder-form-lead-km" class="block text-xs font-semibold text-slate-300 mb-1">Alerter avant (km)</label>
+                <input
+                  id="reminder-form-lead-km"
+                  v-model.number="reminderForm.lead_km"
+                  type="number"
+                  min="0"
+                  step="100"
+                  placeholder="1000"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label for="reminder-form-lead-days" class="block text-xs font-semibold text-slate-300 mb-1">Alerter avant (jours)</label>
+                <input
+                  id="reminder-form-lead-days"
+                  v-model.number="reminderForm.lead_days"
+                  type="number"
+                  min="0"
+                  placeholder="15"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Webhook notification toggle -->
+          <div class="flex items-center gap-2 pt-1">
+            <input
+              id="reminder-form-webhook-toggle"
+              v-model="reminderForm.webhook_enabled"
+              type="checkbox"
+              class="rounded border-slate-700 bg-slate-800 text-violet-600 focus:ring-violet-500"
+            />
+            <label for="reminder-form-webhook-toggle" class="text-xs text-slate-300 cursor-pointer">
+              Envoyer une notification webhook automatique (Discord / Telegram / Gotify) lors du franchissement du seuil
+            </label>
+          </div>
+        </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button type="button" @click="showReminderModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+            Annuler
+          </button>
+          <button type="submit" form="reminder-modal-form" class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl transition-colors">
+            {{ editingReminderId ? 'Mettre à jour' : 'Créer le rappel' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Mark Reminder Complete -->
+    <div
+      v-if="showCompleteReminderModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showCompleteReminderModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <CheckCircle2 class="w-5 h-5 text-emerald-400" />
+            Valider la réalisation : {{ completingReminder?.title }}
+          </h3>
+          <button @click="showCompleteReminderModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <form id="complete-reminder-form" @submit.prevent="handleCompleteReminder" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <p class="text-xs text-slate-400">
+            Valider cette intervention réinitialise le compteur d'intervalle et repart sur le nouvel odomètre et la date renseignés ci-dessous.
+          </p>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="complete-form-date" class="block text-xs font-semibold text-slate-300 mb-1">Date d'intervention</label>
+              <input
+                id="complete-form-date"
+                v-model="completeForm.service_date"
+                type="date"
+                required
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              />
+            </div>
+            <div>
+              <label for="complete-form-odo" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre de l'intervention (km)</label>
+              <input
+                id="complete-form-odo"
+                v-model="completeForm.service_odometer"
+                type="number"
+                min="0"
+                required
+                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+              />
+            </div>
+          </div>
+
+          <!-- Option to log an expense -->
+          <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-3">
+            <div class="flex items-center gap-2">
+              <input
+                id="complete-form-log-expense"
+                v-model="completeForm.log_expense"
+                type="checkbox"
+                class="rounded border-slate-700 bg-slate-800 text-emerald-600 focus:ring-emerald-500"
+              />
+              <label for="complete-form-log-expense" class="text-xs font-semibold text-slate-200 cursor-pointer">
+                Enregistrer simultanément une dépense d'entretien financière
+              </label>
+            </div>
+
+            <div v-if="completeForm.log_expense" class="space-y-3 pt-1">
+              <div>
+                <label for="complete-form-expense-amount" class="block text-xs font-semibold text-slate-300 mb-1">Coût de la facture (€)</label>
+                <input
+                  id="complete-form-expense-amount"
+                  v-model="completeForm.expense_amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00 si gratuit"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label for="complete-form-expense-desc" class="block text-xs font-semibold text-slate-300 mb-1">Libellé de la dépense</label>
+                <input
+                  id="complete-form-expense-desc"
+                  v-model="completeForm.expense_description"
+                  placeholder="ex. Révision atelier / Permutation pneus"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                />
+              </div>
+            </div>
+          </div>
+        </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button type="button" @click="showCompleteReminderModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+            Annuler
+          </button>
+          <button type="submit" form="complete-reminder-form" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-colors">
+            Confirmer l'entretien
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Homelab Webhook Configuration -->
+    <div
+      v-if="showWebhookModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showWebhookModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <Radio class="w-5 h-5 text-violet-400" />
+            Notifications Webhook Homelab
+          </h3>
+          <button @click="showWebhookModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <form id="webhook-modal-form" @submit.prevent="handleSaveWebhook" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+          <p class="text-xs text-slate-400">
+            Configurez un webhook sortant vers votre serveur domotique ou de messagerie (Discord, Telegram, Gotify). Dès que TeslaMate remonte un kilométrage franchissant le seuil d'alerte, une notification est automatiquement expédiée.
+          </p>
+
+          <div>
+            <label for="webhook-form-type" class="block text-xs font-semibold text-slate-300 mb-1">Plateforme / Connecteur</label>
+            <select
+              id="webhook-form-type"
+              v-model="webhookForm.type"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+            >
+              <option value="DISCORD">Discord (Webhook Embed)</option>
+              <option value="TELEGRAM">Telegram Bot (API sendMessage)</option>
+              <option value="GOTIFY">Gotify (Push notification)</option>
+              <option value="GENERIC">Générique (JSON standard)</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="webhook-form-url" class="block text-xs font-semibold text-slate-300 mb-1">URL cible du Webhook</label>
+            <input
+              id="webhook-form-url"
+              v-model="webhookForm.url"
+              type="url"
+              required
+              placeholder="https://discord.com/api/webhooks/... ou https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+            />
+            <p class="text-[11px] text-slate-400 mt-1">
+              Pour Telegram, l'URL doit contenir le token du bot et le chat_id en paramètre.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2 pt-1">
+            <input
+              id="webhook-form-enabled"
+              v-model="webhookForm.enabled"
+              type="checkbox"
+              class="rounded border-slate-700 bg-slate-800 text-violet-600 focus:ring-violet-500"
+            />
+            <label for="webhook-form-enabled" class="text-xs text-slate-300 cursor-pointer">
+              Activer les notifications automatiques en tâche de fond
+            </label>
+          </div>
+
+          <!-- Test result banner -->
+          <div
+            v-if="webhookTestResult"
+            class="p-3 rounded-xl border text-xs flex items-center gap-2"
+            :class="webhookTestResult.success ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-rose-500/10 border-rose-500/30 text-rose-300'"
+          >
+            <CheckCircle2 v-if="webhookTestResult.success" class="w-4 h-4 shrink-0 text-emerald-400" />
+            <AlertTriangle v-else class="w-4 h-4 shrink-0 text-rose-400" />
+            <span>{{ webhookTestResult.message }}</span>
+          </div>
+
+          <!-- Test button -->
+          <div class="pt-2">
+            <button
+              type="button"
+              @click="handleTestWebhook"
+              :disabled="isTestingWebhook || !webhookForm.url"
+              class="w-full px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Loader2 v-if="isTestingWebhook" class="w-4 h-4 animate-spin text-violet-400" />
+              <Radio v-else class="w-4 h-4 text-violet-400" />
+              <span>{{ isTestingWebhook ? 'Envoi du test en cours...' : 'Envoyer un message de test maintenant' }}</span>
+            </button>
+          </div>
+        </form>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <div>
+            <button
+              v-if="vehicleWebhook"
+              type="button"
+              @click="handleDeleteWebhook"
+              class="px-3 py-1.5 bg-rose-900/20 hover:bg-rose-900/40 text-rose-400 text-xs font-semibold rounded-xl border border-rose-800/40 transition-colors"
+            >
+              Supprimer le webhook
+            </button>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" @click="showWebhookModal = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+              Annuler
+            </button>
+            <button
+              type="submit"
+              form="webhook-modal-form"
+              :disabled="isSavingWebhook"
+              class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <Loader2 v-if="isSavingWebhook" class="w-3.5 h-3.5 animate-spin" />
+              <span>Enregistrer</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

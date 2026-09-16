@@ -24,6 +24,7 @@ import (
 	"github.com/teslacost/teslacost/internal/handlers"
 	appMiddleware "github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/services"
+	"github.com/teslacost/teslacost/internal/storage"
 	"github.com/teslacost/teslacost/web"
 )
 
@@ -52,6 +53,7 @@ func main() {
 	var tireWearService *services.TireWearService
 	var tcoService *services.TCOService
 	var carpoolService *services.CarpoolService
+	var notificationService *services.NotificationService
 
 	if err != nil {
 		log.Printf("[warning] Database connection failed: %v. Running in offline/unconnected mode for now.", err)
@@ -78,7 +80,9 @@ func main() {
 			}
 		}
 
+		notificationService = services.NewNotificationService(repo)
 		syncService = services.NewSyncService(repo, encryptor)
+		syncService.SetNotificationService(notificationService)
 		tireWearService = services.NewTireWearService(repo)
 		tcoService = services.NewTCOService(dbPool.Pool, cfg.ReportingTimezone)
 		carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
@@ -133,10 +137,16 @@ func main() {
 		vehicleHandler := handlers.NewVehicleHandler(repo, encryptor, syncService)
 		driveHandler := handlers.NewDriveHandler(repo, carpoolService)
 		tireHandler := handlers.NewTireHandler(repo, tireWearService)
-		expenseHandler := handlers.NewExpenseHandler(repo)
+
+		storageService, err := storage.NewFileStorageService(cfg.StorageDir)
+		if err != nil {
+			log.Fatalf("Failed to initialize file storage service: %v", err)
+		}
+		expenseHandler := handlers.NewExpenseHandler(repo, storageService)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
 		checkpointHandler := handlers.NewCheckpointHandler(repo)
+		reminderHandler := handlers.NewReminderHandler(repo, notificationService)
 
 		// Public Auth
 		r.Route("/api/auth", func(r chi.Router) {
@@ -231,6 +241,17 @@ func main() {
 				r.Post("/{vehicleId}/documents", expenseHandler.UploadDocument)
 				r.Get("/{vehicleId}/documents/{docId}", expenseHandler.DownloadDocument)
 				r.Delete("/{vehicleId}/documents/{docId}", expenseHandler.DeleteDocument)
+
+				// Maintenance Reminders & Webhooks
+				r.Get("/{vehicleId}/reminders", reminderHandler.List)
+				r.Post("/{vehicleId}/reminders", reminderHandler.Create)
+				r.Put("/{vehicleId}/reminders/{reminderId}", reminderHandler.Update)
+				r.Delete("/{vehicleId}/reminders/{reminderId}", reminderHandler.Delete)
+				r.Post("/{vehicleId}/reminders/{reminderId}/complete", reminderHandler.Complete)
+				r.Get("/{vehicleId}/webhook", reminderHandler.GetWebhook)
+				r.Put("/{vehicleId}/webhook", reminderHandler.SaveWebhook)
+				r.Delete("/{vehicleId}/webhook", reminderHandler.DeleteWebhook)
+				r.Post("/{vehicleId}/webhook/test", reminderHandler.TestWebhook)
 
 				// TCO Analytics
 				r.Get("/{vehicleId}/tco", tcoHandler.GetTCO)

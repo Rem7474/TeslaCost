@@ -263,7 +263,7 @@ type ChargeLog struct {
 	CreatedAt         time.Time    `json:"created_at"`
 }
 
-// ExpenseDocument represents a file attachment or invoice stored in PostgreSQL.
+// ExpenseDocument represents a file attachment or invoice stored on the filesystem volume.
 type ExpenseDocument struct {
 	ID          string    `json:"id"`
 	UserID      string    `json:"user_id"`
@@ -271,7 +271,7 @@ type ExpenseDocument struct {
 	Filename    string    `json:"filename"`
 	MimeType    string    `json:"mime_type"`
 	FileSize    int64     `json:"file_size"`
-	Data        []byte    `json:"-"` // Binary payload excluded from standard JSON
+	StoragePath *string   `json:"-"` // Relative path on the Docker volume (vehicleID/docID)
 	Description *string   `json:"description,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -488,4 +488,86 @@ func (o *VehicleOwnership) InLeasePhase(at time.Time) bool {
 		return false
 	}
 	return at.Before(o.StartDate.AddDate(0, *o.LeaseDurationMonths, 0))
+}
+
+// MaintenanceReminder represents a recurring or scheduled maintenance task.
+type MaintenanceReminder struct {
+	ID                   string     `json:"id"`
+	VehicleID            string     `json:"vehicle_id"`
+	Title                string     `json:"title"`
+	Category             string     `json:"category"` // MAINTENANCE, TIRES, INSPECTION, OTHER
+	IntervalKm           *int       `json:"interval_km,omitempty"`
+	IntervalMonths       *int       `json:"interval_months,omitempty"`
+	LastServiceOdometer  *float64   `json:"last_service_odometer,omitempty"`
+	LastServiceDate      *time.Time `json:"last_service_date,omitempty"`
+	LeadKm               int        `json:"lead_km"`
+	LeadDays             int        `json:"lead_days"`
+	WebhookEnabled       bool       `json:"webhook_enabled"`
+	LastNotifiedAt       *time.Time `json:"last_notified_at,omitempty"`
+	LastNotifiedOdometer *float64   `json:"last_notified_odometer,omitempty"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
+
+	// Computed dynamic status
+	Status        string     `json:"status"` // OK, DUE_SOON, OVERDUE
+	RemainingKm   *float64   `json:"remaining_km,omitempty"`
+	RemainingDays *int       `json:"remaining_days,omitempty"`
+	DueOdometer   *float64   `json:"due_odometer,omitempty"`
+	DueDate       *time.Time `json:"due_date,omitempty"`
+}
+
+// ComputeStatus calculates the status (OK, DUE_SOON, OVERDUE) and remaining km/days.
+func (r *MaintenanceReminder) ComputeStatus(currentOdometer float64, now time.Time) {
+	r.Status = "OK"
+
+	// 1. Kilométrage
+	if r.IntervalKm != nil && *r.IntervalKm > 0 {
+		baseOdo := 0.0
+		if r.LastServiceOdometer != nil {
+			baseOdo = *r.LastServiceOdometer
+		}
+		dueOdo := baseOdo + float64(*r.IntervalKm)
+		r.DueOdometer = &dueOdo
+
+		remKm := dueOdo - currentOdometer
+		r.RemainingKm = &remKm
+
+		if remKm <= 0 {
+			r.Status = "OVERDUE"
+		} else if remKm <= float64(r.LeadKm) {
+			r.Status = "DUE_SOON"
+		}
+	}
+
+	// 2. Date
+	if r.IntervalMonths != nil && *r.IntervalMonths > 0 {
+		baseDate := r.CreatedAt
+		if r.LastServiceDate != nil {
+			baseDate = *r.LastServiceDate
+		}
+		dueDate := baseDate.AddDate(0, *r.IntervalMonths, 0)
+		r.DueDate = &dueDate
+
+		remDays := int(dueDate.Sub(now).Hours() / 24)
+		r.RemainingDays = &remDays
+
+		if remDays <= 0 {
+			r.Status = "OVERDUE"
+		} else if remDays <= r.LeadDays {
+			if r.Status != "OVERDUE" {
+				r.Status = "DUE_SOON"
+			}
+		}
+	}
+}
+
+// VehicleWebhook holds outgoing homelab webhook settings for notifications.
+type VehicleWebhook struct {
+	ID        string    `json:"id"`
+	VehicleID string    `json:"vehicle_id"`
+	URL       string    `json:"url"`
+	Type      string    `json:"type"` // DISCORD | TELEGRAM | GOTIFY | GENERIC
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
