@@ -31,6 +31,7 @@ type TireWearStats struct {
 	Sessions             []models.TireMountSession `json:"sessions"`
 
 	// Dynamic TeslaMate driving telemetry analytics
+	DrivesCount            int     `json:"drives_count"`
 	DrivingStressIndex     float64 `json:"driving_stress_index"`
 	DrivingStyle           string  `json:"driving_style"` // "ECO", "BALANCED", "SPORT"
 	AvgPowerMaxKw          float64 `json:"avg_power_max_kw"`
@@ -164,11 +165,20 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		estimatedRemainingKm = (remainingDepth / 1.2) * 10000.0
 	}
 
-	// TeslaMate dynamic telemetry & power stress calculation
+	// TeslaMate dynamic telemetry & power stress calculation.
+	// Only drives performed while the tire was physically mounted are considered.
+	// Each mount session provides an odometer window [MountedOdometer, DismountedOdometer].
 	var avgPowerMax, avgPowerMin, avgConsumption float64
 	var drivesCount int
-	if tire.VehicleID != nil && *tire.VehicleID != "" {
-		avgPowerMax, avgPowerMin, avgConsumption, drivesCount, _ = s.repo.GetDrivingTelemetryStats(ctx, *tire.VehicleID, tire.MountedOdometer)
+	if tire.VehicleID != nil && *tire.VehicleID != "" && len(sessions) > 0 {
+		ranges := make([]database.OdometerRange, 0, len(sessions))
+		for _, sess := range sessions {
+			ranges = append(ranges, database.OdometerRange{
+				Min: sess.MountedOdometer,
+				Max: sess.DismountedOdometer,
+			})
+		}
+		avgPowerMax, avgPowerMin, avgConsumption, drivesCount, _ = s.repo.GetDrivingTelemetryStats(ctx, *tire.VehicleID, ranges)
 	}
 
 	accelFactor := 1.0
@@ -198,8 +208,12 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		positionWeight = 0.92 // Front axle takes steering and braking transfer
 	}
 
-	stressIndex := 1.0
-	drivingStyle := "BALANCED"
+	var stressIndex float64
+	var drivingStyle string
+	var dynamicLifespan = lifespan
+	var dynamicRemainingKm = estimatedRemainingKm
+	var wearExplanation string
+
 	if drivesCount > 0 {
 		stressIndex = (0.45*accelFactor + 0.30*regenFactor + 0.25*consumptionFactor) * positionWeight
 		stressIndex = math.Max(0.75, math.Min(1.60, stressIndex))
@@ -209,15 +223,16 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 			drivingStyle = "ECO"
 		} else if stressIndex >= 1.12 {
 			drivingStyle = "SPORT"
+		} else {
+			drivingStyle = "BALANCED"
 		}
-	}
 
-	dynamicLifespan := int(math.Round(float64(lifespan) / stressIndex))
-	dynamicWearRatePer10k := wearRatePer10k * stressIndex
-	dynamicRemainingKm := math.Max(0, (remainingDepth/dynamicWearRatePer10k)*10000.0)
+		dynamicLifespan = int(math.Round(float64(lifespan) / stressIndex))
+		dynamicWearRatePer10k := wearRatePer10k * stressIndex
+		if dynamicWearRatePer10k > 0 {
+			dynamicRemainingKm = math.Max(0, (remainingDepth/dynamicWearRatePer10k)*10000.0)
+		}
 
-	var wearExplanation string
-	if drivesCount > 0 {
 		var styleDesc string
 		switch drivingStyle {
 		case "ECO":
@@ -239,8 +254,6 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 			"%s%s : pointes de puissance moyennes de +%.0f kW et %.0f kW en régénération, consommation %.1f kWh/100km. Indice de contrainte : x%.2f (longévité estimée ajustée à ~%s km).",
 			styleDesc, posDesc, avgPowerMax, avgPowerMin, avgConsumption, stressIndex, formatNumber(dynamicLifespan),
 		)
-	} else {
-		wearExplanation = "Aucune télémétrie de trajet TeslaMate disponible pour l'instant. Estimation basée sur le profil théorique standard."
 	}
 
 	condition := "GOOD"
@@ -268,6 +281,7 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 		Condition:              condition,
 		LogsCount:              len(logs),
 		Sessions:               sessions,
+		DrivesCount:            drivesCount,
 		DrivingStressIndex:     stressIndex,
 		DrivingStyle:           drivingStyle,
 		AvgPowerMaxKw:          math.Round(avgPowerMax),

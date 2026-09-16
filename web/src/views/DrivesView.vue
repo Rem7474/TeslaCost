@@ -16,6 +16,8 @@ import {
   Zap,
   ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
   X,
   Users,
   Coins,
@@ -40,10 +42,19 @@ const drives = ref<any[]>([])
 const total = ref(0)
 const page = ref(1)
 const limit = ref(20)
+const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
 const selectedTag = ref('')
 const unqualifiedOnly = ref(false)
 const unqualifiedCount = ref(0)
 const loading = ref(true)
+
+function goToPage(targetPage: number) {
+  const p = Math.max(1, Math.min(totalPages.value, targetPage))
+  if (p !== page.value) {
+    page.value = p
+    loadDrives()
+  }
+}
 
 // Multi-selection for trip grouping & tolls & carpooling. Drives are kept by id so that the selection
 // survives pagination and filters.
@@ -646,7 +657,7 @@ function formatDate(dateStr: string) {
           <component :is="allPageSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
           <span>{{ allPageSelected ? 'Désélectionner la page' : 'Sélectionner la page' }}</span>
         </button>
-        <span>Page {{ page }} sur {{ Math.ceil(total / limit) || 1 }}</span>
+        <span>Page {{ page }} sur {{ totalPages }}</span>
       </div>
 
       <!-- Drive Card -->
@@ -765,21 +776,43 @@ function formatDate(dateStr: string) {
       </div>
 
       <!-- Pagination Controls -->
-      <div class="flex items-center justify-center gap-4 pt-4">
+      <div class="flex items-center justify-center gap-2 pt-4">
         <button
-          @click="page--; loadDrives()"
+          @click="goToPage(1)"
           :disabled="page <= 1"
-          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          title="Première page"
+          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronsLeft class="w-5 h-5" />
+        </button>
+        <button
+          @click="goToPage(page - 1)"
+          :disabled="page <= 1"
+          title="Page précédente"
+          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronLeft class="w-5 h-5" />
         </button>
-        <span class="text-xs text-slate-400 font-semibold">Page {{ page }}</span>
+
+        <span class="px-3 text-xs text-slate-400 font-semibold select-none">
+          Page <strong class="text-white">{{ page }}</strong> sur <strong class="text-white">{{ totalPages }}</strong>
+        </span>
+
         <button
-          @click="page++; loadDrives()"
-          :disabled="page * limit >= total"
-          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          @click="goToPage(page + 1)"
+          :disabled="page >= totalPages"
+          title="Page suivante"
+          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
         >
           <ChevronRight class="w-5 h-5" />
+        </button>
+        <button
+          @click="goToPage(totalPages)"
+          :disabled="page >= totalPages"
+          title="Dernière page"
+          class="p-2 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronsRight class="w-5 h-5" />
         </button>
       </div>
     </div>

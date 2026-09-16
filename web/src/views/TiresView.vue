@@ -32,6 +32,8 @@ import {
   Archive,
   CheckSquare,
   Square,
+  Copy,
+  ClipboardPaste,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
@@ -46,6 +48,8 @@ const activeTab = ref<'chassis' | 'storage' | 'disposed'>('chassis')
 const showAddTireModal = ref(false)
 const showHistoryModal = ref(false)
 const showSessionModal = ref(false)
+const showBatchSessionModal = ref(false)
+const showDuplicateSessionModal = ref(false)
 const showLogModal = ref(false)
 const showPackSwapModal = ref(false)
 
@@ -54,6 +58,25 @@ const selectedTire = ref<any | null>(null)
 const selectedTireStats = ref<any | null>(null)
 const tireSessions = ref<any[]>([])
 const tireLogs = ref<any[]>([])
+
+// Batch past session for garage tires (Feature A)
+const batchSessionTireIds = ref<string[]>([])
+const savingBatchSession = ref(false)
+const batchSessionForm = ref({
+  mounted_date: new Date().toISOString().substring(0, 10),
+  mounted_odometer: 0,
+  dismounted_date: new Date().toISOString().substring(0, 10),
+  dismounted_odometer: 0,
+  distance_km: 0,
+  notes: '',
+  position: 'STORAGE',
+})
+
+// Copy-paste / duplicate session across tires (Feature C)
+const copiedSession = ref<any | null>(null)
+const sessionToDuplicate = ref<any | null>(null)
+const duplicateTargetTireIds = ref<string[]>([])
+const duplicatingSession = ref(false)
 
 // Form: Add Tires (Batch / Single)
 const addType = ref<'SET_4' | 'SET_4_STORAGE' | 'SET_2_FRONT' | 'SET_2_REAR' | 'SET_2_STORAGE' | 'SINGLE'>('SET_4')
@@ -576,6 +599,186 @@ async function handleDeleteSession(session: any) {
   }
 }
 
+// Batch session for storage tires (Feature A)
+function openBatchSessionModal() {
+  if (storageTires.value.length === 0) return
+  const storageIds = storageTires.value.map((t) => t.tire.id)
+  const selectedStorage = selectedTireIds.value.filter((id) => storageIds.includes(id))
+  batchSessionTireIds.value = selectedStorage.length > 0 ? [...selectedStorage] : [...storageIds]
+
+  const curOdo = Math.round(vehicleStore.activeVehicle?.current_odometer || 0)
+  batchSessionForm.value = {
+    mounted_date: new Date().toISOString().substring(0, 10),
+    mounted_odometer: curOdo,
+    dismounted_date: new Date().toISOString().substring(0, 10),
+    dismounted_odometer: curOdo,
+    distance_km: 0,
+    notes: '',
+    position: 'STORAGE',
+  }
+  showBatchSessionModal.value = true
+}
+
+function toggleBatchSessionTire(id: string) {
+  if (batchSessionTireIds.value.includes(id)) {
+    batchSessionTireIds.value = batchSessionTireIds.value.filter((x) => x !== id)
+  } else {
+    batchSessionTireIds.value.push(id)
+  }
+}
+
+function selectAllBatchSessionTires() {
+  batchSessionTireIds.value = storageTires.value.map((t) => t.tire.id)
+}
+
+function deselectAllBatchSessionTires() {
+  batchSessionTireIds.value = []
+}
+
+function onBatchOdometerChange() {
+  const mount = Number(batchSessionForm.value.mounted_odometer) || 0
+  const dismount = Number(batchSessionForm.value.dismounted_odometer) || 0
+  if (dismount > mount) {
+    batchSessionForm.value.distance_km = dismount - mount
+  }
+}
+
+function onSessionOdometerChange() {
+  const mount = Number(sessionForm.value.mounted_odometer) || 0
+  const dismount = Number(sessionForm.value.dismounted_odometer) || 0
+  if (dismount > mount) {
+    sessionForm.value.distance_km = dismount - mount
+  }
+}
+
+async function handleSaveBatchSession() {
+  if (!vehicleStore.activeVehicle || batchSessionTireIds.value.length === 0) return
+  if (!batchSessionForm.value.mounted_date || !batchSessionForm.value.dismounted_date) {
+    showAlert('Veuillez renseigner les dates de montage et de démontage.', 'Dates requises', 'warning')
+    return
+  }
+
+  savingBatchSession.value = true
+  try {
+    const payload: any = {
+      position: 'STORAGE',
+      mounted_date: new Date(batchSessionForm.value.mounted_date).toISOString(),
+      mounted_odometer: Number(batchSessionForm.value.mounted_odometer) || 0,
+      dismounted_date: new Date(batchSessionForm.value.dismounted_date).toISOString(),
+      dismounted_odometer: Number(batchSessionForm.value.dismounted_odometer) || 0,
+      distance_km: Number(batchSessionForm.value.distance_km) || 0,
+      notes: batchSessionForm.value.notes ? batchSessionForm.value.notes : null,
+    }
+
+    if (payload.distance_km === 0 && payload.dismounted_odometer > payload.mounted_odometer) {
+      payload.distance_km = payload.dismounted_odometer - payload.mounted_odometer
+    }
+
+    for (const tireId of batchSessionTireIds.value) {
+      await api.createTireSession(vehicleStore.activeVehicle.id, tireId, payload)
+    }
+
+    showBatchSessionModal.value = false
+    await loadTires()
+    showAlert(`Session enregistrée avec succès pour ${batchSessionTireIds.value.length} pneu(s).`, 'Succès', 'success')
+  } catch (err: any) {
+    showAlert(`Erreur lors de l'enregistrement du lot : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    savingBatchSession.value = false
+  }
+}
+
+// Copy-paste / duplicate session across tires (Feature C)
+function copySession(s: any) {
+  copiedSession.value = {
+    position: s.position,
+    mounted_date: s.mounted_date ? new Date(s.mounted_date).toISOString().substring(0, 10) : '',
+    mounted_odometer: s.mounted_odometer || 0,
+    is_dismounted: !!s.dismounted_date,
+    dismounted_date: s.dismounted_date ? new Date(s.dismounted_date).toISOString().substring(0, 10) : '',
+    dismounted_odometer: s.dismounted_odometer || 0,
+    distance_km: s.distance_km || 0,
+    notes: s.notes || '',
+  }
+}
+
+function pasteSessionToCurrentTire() {
+  if (!copiedSession.value) return
+  editingSessionId.value = null
+  sessionForm.value = {
+    ...copiedSession.value,
+    position: (selectedTire.value && selectedTire.value.current_position !== 'STORAGE' && selectedTire.value.current_position !== 'DISPOSED')
+      ? selectedTire.value.current_position
+      : (copiedSession.value.position || 'FL'),
+  }
+  showSessionModal.value = true
+}
+
+function applyCopiedSessionToForm() {
+  if (!copiedSession.value) return
+  sessionForm.value = {
+    ...sessionForm.value,
+    ...copiedSession.value,
+    position: sessionForm.value.position || copiedSession.value.position,
+  }
+}
+
+function openDuplicateSessionModal(s: any) {
+  sessionToDuplicate.value = s
+  const otherTires = tires.value.filter((t) => t.tire.id !== selectedTire.value?.id)
+  const sameFamily = otherTires.filter(
+    (t) => t.tire.brand === selectedTire.value?.brand && t.tire.model === selectedTire.value?.model
+  )
+  duplicateTargetTireIds.value = sameFamily.length > 0 ? sameFamily.map((t) => t.tire.id) : otherTires.map((t) => t.tire.id)
+  showDuplicateSessionModal.value = true
+}
+
+function toggleDuplicateTargetTire(id: string) {
+  if (duplicateTargetTireIds.value.includes(id)) {
+    duplicateTargetTireIds.value = duplicateTargetTireIds.value.filter((x) => x !== id)
+  } else {
+    duplicateTargetTireIds.value.push(id)
+  }
+}
+
+async function handleDuplicateSessionSubmit() {
+  if (!vehicleStore.activeVehicle || !sessionToDuplicate.value || duplicateTargetTireIds.value.length === 0) return
+
+  duplicatingSession.value = true
+  try {
+    const s = sessionToDuplicate.value
+    const payload: any = {
+      position: s.position || 'STORAGE',
+      mounted_date: new Date(s.mounted_date).toISOString(),
+      mounted_odometer: Number(s.mounted_odometer) || 0,
+      distance_km: Number(s.distance_km) || 0,
+      notes: s.notes || null,
+    }
+    if (s.dismounted_date) {
+      payload.dismounted_date = new Date(s.dismounted_date).toISOString()
+      payload.dismounted_odometer = Number(s.dismounted_odometer) || 0
+      if (payload.distance_km === 0 && payload.dismounted_odometer > payload.mounted_odometer) {
+        payload.distance_km = payload.dismounted_odometer - payload.mounted_odometer
+      }
+    } else {
+      payload.dismounted_date = null
+      payload.dismounted_odometer = null
+    }
+
+    for (const targetId of duplicateTargetTireIds.value) {
+      await api.createTireSession(vehicleStore.activeVehicle.id, targetId, payload)
+    }
+
+    showDuplicateSessionModal.value = false
+    await loadTires()
+    showAlert(`Session dupliquée vers ${duplicateTargetTireIds.value.length} pneu(s).`, 'Succès', 'success')
+  } catch (err: any) {
+    showAlert(`Erreur lors de la duplication : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    duplicatingSession.value = false
+  }
+}
+
 // Open log modal (mesure de gomme)
 function openLogModal(t: any, log?: any) {
   selectedTire.value = t.tire
@@ -805,7 +1008,7 @@ function formatDate(d: string) {
           </div>
 
           <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.FL.avg_power_max_kw || mountedTires.FL.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+          <div v-if="mountedTires.FL.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
                 <Zap class="w-3 h-3 text-amber-400" />
@@ -907,7 +1110,7 @@ function formatDate(d: string) {
           </div>
 
           <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.FR.avg_power_max_kw || mountedTires.FR.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+          <div v-if="mountedTires.FR.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
                 <Zap class="w-3 h-3 text-amber-400" />
@@ -1007,7 +1210,7 @@ function formatDate(d: string) {
           </div>
 
           <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.RL.avg_power_max_kw || mountedTires.RL.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+          <div v-if="mountedTires.RL.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
                 <Zap class="w-3 h-3 text-amber-400" />
@@ -1107,7 +1310,7 @@ function formatDate(d: string) {
           </div>
 
           <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.RR.avg_power_max_kw || mountedTires.RR.driving_stress_index" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
+          <div v-if="mountedTires.RR.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
             <div class="flex items-center justify-between">
               <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
                 <Zap class="w-3 h-3 text-amber-400" />
@@ -1181,7 +1384,24 @@ function formatDate(d: string) {
         </p>
       </div>
 
-      <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div v-else class="space-y-4">
+        <!-- Garage batch actions bar -->
+        <div class="flex items-center justify-between flex-wrap gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-2xl">
+          <div class="flex items-center gap-2">
+            <Package class="w-4 h-4 text-slate-400" />
+            <span class="text-xs text-slate-300 font-semibold">{{ storageTires.length }} pneu(s) stocké(s) au garage</span>
+          </div>
+          <button
+            @click="openBatchSessionModal()"
+            class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors"
+            title="Enregistrer une session passée sur un lot de pneus du garage"
+          >
+            <History class="w-3.5 h-3.5 text-rose-400" />
+            <span>Ajouter une session passée sur un lot</span>
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="t in storageTires"
           :key="t.tire.id"
@@ -1234,6 +1454,7 @@ function formatDate(d: string) {
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
 
@@ -1424,24 +1645,14 @@ function formatDate(d: string) {
           </div>
         </div>
 
-        <!-- Odometers: Mounted Odo & Accumulated -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label for="tire-add-tire-mounted-odometer" class="block text-xs font-semibold text-slate-400 mb-1">Odomètre de montage (km)</label>
-            <input id="tire-add-tire-mounted-odometer"
-              v-model.number="addTireForm.mounted_odometer"
-              type="number"
-              class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
-            />
-          </div>
-          <div>
-            <label for="tire-add-tire-accumulated-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">Km déjà parcourus (si occasion)</label>
-            <input id="tire-add-tire-accumulated-distance-km"
-              v-model.number="addTireForm.accumulated_distance_km"
-              type="number"
-              class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
-            />
-          </div>
+        <!-- Km already driven (second-hand) -->
+        <div>
+          <label for="tire-add-tire-accumulated-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">Km déjà parcourus (si occasion)</label>
+          <input id="tire-add-tire-accumulated-distance-km"
+            v-model.number="addTireForm.accumulated_distance_km"
+            type="number"
+            class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
+          />
         </div>
 
         <!-- Date & Sculptures -->
@@ -1591,7 +1802,7 @@ function formatDate(d: string) {
         </div>
 
         <!-- TeslaMate Driving Telemetry & Stress Analysis Card -->
-        <div v-if="selectedTireStats?.avg_power_max_kw || selectedTireStats?.driving_stress_index" class="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+        <div v-if="selectedTireStats?.driving_stress_index > 0" class="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
           <div class="flex items-center justify-between">
             <div class="flex items-center gap-2">
               <Zap class="w-4 h-4 text-amber-400" />
@@ -1642,13 +1853,24 @@ function formatDate(d: string) {
               <History class="w-4 h-4 text-rose-500" />
               Historique des montages, démontages & permutations
             </h4>
-            <button
-              @click="openAddSessionModal()"
-              class="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 transition-colors"
-            >
-              <Plus class="w-3.5 h-3.5" />
-              Ajouter une session passée
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="copiedSession"
+                @click="pasteSessionToCurrentTire()"
+                class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition-colors bg-indigo-950/40 border border-indigo-800/60 px-2 py-1 rounded-lg"
+                :title="'Coller la session copiée (' + (copiedSession.mounted_date ? formatDate(copiedSession.mounted_date) : '') + ')'"
+              >
+                <ClipboardPaste class="w-3.5 h-3.5" />
+                <span>Coller</span>
+              </button>
+              <button
+                @click="openAddSessionModal()"
+                class="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 transition-colors"
+              >
+                <Plus class="w-3.5 h-3.5" />
+                Ajouter une session passée
+              </button>
+            </div>
           </div>
 
           <div v-if="tireSessions.length === 0" class="p-6 text-center bg-slate-950/40 rounded-2xl text-xs text-slate-500">
@@ -1673,6 +1895,21 @@ function formatDate(d: string) {
                 </div>
 
                 <div class="flex items-center gap-1.5">
+                  <button
+                    @click="copySession(s)"
+                    class="p-1 rounded transition-colors"
+                    :class="copiedSession?.mounted_date === (s.mounted_date ? new Date(s.mounted_date).toISOString().substring(0, 10) : '') && copiedSession?.mounted_odometer === s.mounted_odometer ? 'text-indigo-400 bg-indigo-950/60' : 'text-slate-400 hover:text-indigo-400'"
+                    title="Copier les données de cette session"
+                  >
+                    <Copy class="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    @click="openDuplicateSessionModal(s)"
+                    class="p-1 text-slate-400 hover:text-sky-400 rounded transition-colors"
+                    title="Dupliquer vers d'autres pneus..."
+                  >
+                    <Shuffle class="w-3.5 h-3.5" />
+                  </button>
                   <button
                     @click="openEditSessionModal(s)"
                     class="p-1 text-slate-400 hover:text-white rounded"
@@ -1785,6 +2022,17 @@ function formatDate(d: string) {
         </div>
 
         <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
+          <!-- Quick paste banner if session copied -->
+          <button
+            v-if="copiedSession && !editingSessionId"
+            type="button"
+            @click="applyCopiedSessionToForm()"
+            class="w-full px-3 py-2 bg-indigo-950/40 border border-indigo-800/60 rounded-xl text-indigo-300 hover:text-white text-xs flex items-center justify-center gap-2 transition-colors font-semibold"
+          >
+            <ClipboardPaste class="w-4 h-4 text-indigo-400" />
+            <span>Coller les données de la session copiée ({{ copiedSession.mounted_date ? formatDate(copiedSession.mounted_date) : '' }})</span>
+          </button>
+
           <div>
             <label for="tire-session-position" class="block text-slate-400 mb-1 font-semibold">Position occupée</label>
             <select id="tire-session-position"
@@ -1795,6 +2043,7 @@ function formatDate(d: string) {
               <option value="FR">Avant Droit (FR)</option>
               <option value="RL">Arrière Gauche (RL)</option>
               <option value="RR">Arrière Droit (RR)</option>
+              <option value="STORAGE">Au garage / Non spécifié</option>
             </select>
           </div>
 
@@ -1811,6 +2060,7 @@ function formatDate(d: string) {
               <label for="tire-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre montage (km)</label>
               <input id="tire-session-mounted-odometer"
                 v-model.number="sessionForm.mounted_odometer"
+                @input="onSessionOdometerChange"
                 type="number"
                 class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
               />
@@ -1837,6 +2087,7 @@ function formatDate(d: string) {
               <label for="tire-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre démontage (km)</label>
               <input id="tire-session-dismounted-odometer"
                 v-model.number="sessionForm.dismounted_odometer"
+                @input="onSessionOdometerChange"
                 type="number"
                 class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
               />
@@ -2202,6 +2453,243 @@ function formatDate(d: string) {
           </button>
           <button type="submit" form="tire-dispose-modal-form" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors">
             Mettre au rebut
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: AJOUTER UNE SESSION PASSÉE SUR UN LOT DE PNEUS DU GARAGE (FEATURE A) -->
+    <div
+      v-if="showBatchSessionModal"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showBatchSessionModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <div class="flex items-center gap-2">
+            <History class="w-5 h-5 text-rose-400" />
+            <h3 class="text-base font-bold text-white">
+              Ajouter une session passée sur un lot
+            </h3>
+          </div>
+          <button @click="showBatchSessionModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
+          <!-- Tire selection from storage -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="font-semibold text-slate-300">
+                Pneus du garage concernés ({{ batchSessionTireIds.length }}/{{ storageTires.length }})
+              </label>
+              <div class="flex items-center gap-2 text-[11px]">
+                <button type="button" @click="selectAllBatchSessionTires()" class="text-rose-400 hover:text-rose-300 font-semibold">
+                  Tout cocher
+                </button>
+                <span class="text-slate-600">|</span>
+                <button type="button" @click="deselectAllBatchSessionTires()" class="text-slate-400 hover:text-slate-200">
+                  Tout décocher
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-slate-950/60 rounded-xl border border-slate-800/80">
+              <label
+                v-for="t in storageTires"
+                :key="t.tire.id"
+                class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer text-slate-200"
+              >
+                <input
+                  type="checkbox"
+                  :checked="batchSessionTireIds.includes(t.tire.id)"
+                  @change="toggleBatchSessionTire(t.tire.id)"
+                  class="rounded accent-rose-500 w-4 h-4"
+                />
+                <div class="min-w-0 flex-1">
+                  <div class="font-bold truncate text-white">{{ t.tire.brand }} {{ t.tire.model }}</div>
+                  <div class="text-[10px] text-slate-400 truncate">{{ t.tire.dimension }}</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Dates & Odometers -->
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="batch-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">Date de montage</label>
+              <input
+                id="batch-session-mounted-date"
+                v-model="batchSessionForm.mounted_date"
+                type="date"
+                class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label for="batch-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre montage (km)</label>
+              <input
+                id="batch-session-mounted-odometer"
+                v-model.number="batchSessionForm.mounted_odometer"
+                @input="onBatchOdometerChange"
+                type="number"
+                class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="batch-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">Date démontage</label>
+              <input
+                id="batch-session-dismounted-date"
+                v-model="batchSessionForm.dismounted_date"
+                type="date"
+                class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label for="batch-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre démontage (km)</label>
+              <input
+                id="batch-session-dismounted-odometer"
+                v-model.number="batchSessionForm.dismounted_odometer"
+                @input="onBatchOdometerChange"
+                type="number"
+                class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label for="batch-session-distance-km" class="block text-slate-400 mb-1 font-semibold">Distance de la session (km)</label>
+            <input
+              id="batch-session-distance-km"
+              v-model.number="batchSessionForm.distance_km"
+              type="number"
+              placeholder="Auto-calculé par les odomètres ou manuel"
+              class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label for="batch-session-notes" class="block text-slate-400 mb-1 font-semibold">Commentaire / Notes</label>
+            <input
+              id="batch-session-notes"
+              v-model="batchSessionForm.notes"
+              type="text"
+              placeholder="Ex: Saison hiver 2023-2024"
+              class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showBatchSessionModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            @click="handleSaveBatchSession()"
+            :disabled="savingBatchSession || batchSessionTireIds.length === 0"
+            class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/20 transition-all flex items-center gap-1.5"
+          >
+            <Check class="w-4 h-4" />
+            <span>{{ savingBatchSession ? 'Enregistrement...' : `Appliquer à ${batchSessionTireIds.length} pneu(s)` }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: DUPLIQUER LA SESSION VERS D'AUTRES PNEUS (FEATURE C) -->
+    <div
+      v-if="showDuplicateSessionModal && sessionToDuplicate"
+      class="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showDuplicateSessionModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <div class="flex items-center gap-2">
+            <Copy class="w-5 h-5 text-indigo-400" />
+            <h3 class="text-base font-bold text-white">
+              Dupliquer la session vers d'autres pneus
+            </h3>
+          </div>
+          <button @click="showDuplicateSessionModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
+          <!-- Session recap -->
+          <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
+            <div class="text-slate-400">Période : <strong class="text-white">{{ formatDate(sessionToDuplicate.mounted_date) }} → {{ sessionToDuplicate.dismounted_date ? formatDate(sessionToDuplicate.dismounted_date) : 'En cours' }}</strong></div>
+            <div class="text-slate-400">Distance : <strong class="text-rose-400">+{{ Math.round(sessionToDuplicate.distance_km || 0).toLocaleString('fr-FR') }} km</strong></div>
+            <div v-if="sessionToDuplicate.notes" class="text-slate-400 italic">"{{ sessionToDuplicate.notes }}"</div>
+          </div>
+
+          <!-- Target tires selection -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="font-semibold text-slate-300">Sélectionner les pneus cibles :</label>
+              <div class="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  @click="duplicateTargetTireIds = tires.filter(x => x.tire.id !== selectedTire?.id).map(x => x.tire.id)"
+                  class="text-indigo-400 hover:text-indigo-300 font-semibold"
+                >
+                  Tout cocher
+                </button>
+                <span class="text-slate-600">|</span>
+                <button
+                  type="button"
+                  @click="duplicateTargetTireIds = []"
+                  class="text-slate-400 hover:text-slate-200"
+                >
+                  Tout décocher
+                </button>
+              </div>
+            </div>
+            <div class="space-y-1.5 max-h-56 overflow-y-auto p-1 bg-slate-950/40 rounded-xl border border-slate-800/60">
+              <label
+                v-for="t in tires.filter(x => x.tire.id !== selectedTire?.id)"
+                :key="t.tire.id"
+                class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer text-slate-200"
+              >
+                <input
+                  type="checkbox"
+                  :checked="duplicateTargetTireIds.includes(t.tire.id)"
+                  @change="toggleDuplicateTargetTire(t.tire.id)"
+                  class="rounded accent-indigo-500 w-4 h-4"
+                />
+                <div class="min-w-0 flex-1">
+                  <div class="font-bold truncate text-white">{{ t.tire.brand }} {{ t.tire.model }}</div>
+                  <div class="text-[10px] text-slate-400 truncate">{{ t.tire.dimension }} — {{ t.tire.current_position === 'STORAGE' ? 'Au garage' : 'Roue ' + t.tire.current_position }}</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showDuplicateSessionModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            @click="handleDuplicateSessionSubmit()"
+            :disabled="duplicatingSession || duplicateTargetTireIds.length === 0"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-1.5"
+          >
+            <Copy class="w-4 h-4" />
+            <span>{{ duplicatingSession ? 'Duplication...' : `Dupliquer vers ${duplicateTargetTireIds.length} pneu(s)` }}</span>
           </button>
         </div>
       </div>

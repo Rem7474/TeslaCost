@@ -444,8 +444,12 @@ type MountSessionPayload struct {
 }
 
 func parseSessionPayload(req *MountSessionPayload) (time.Time, *time.Time, error) {
-	if !isMountedPosition(req.Position) {
-		return time.Time{}, nil, errors.New("une session de montage requiert une position FL, FR, RL ou RR")
+	// Historical (completed) sessions may be stored without a precise wheel position.
+	// In that case the frontend sends position=STORAGE, which is accepted only when
+	// a dismounted_date is provided (i.e. the session is already over).
+	isHistoricalStorage := req.Position == models.TirePosStorage && req.DismountedDate != nil
+	if !isMountedPosition(req.Position) && !isHistoricalStorage {
+		return time.Time{}, nil, errors.New("une session de montage requiert une position FL, FR, RL ou RR (ou STORAGE pour une session historique terminée)")
 	}
 	if req.MountedOdometer < 0 || (req.DismountedOdometer != nil && *req.DismountedOdometer < 0) {
 		return time.Time{}, nil, errors.New("odomètre invalide")

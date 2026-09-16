@@ -2452,33 +2452,58 @@ func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, d
 	return list, rows.Err()
 }
 
-func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID string, minOdometer *float64) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error) {
-	query := `
-		SELECT 
+// OdometerRange represents a half-open interval [Min, Max) of vehicle odometer readings.
+// Max == nil means the session is still active (no upper bound).
+type OdometerRange struct {
+	Min float64
+	Max *float64
+}
+
+// GetDrivingTelemetryStats returns driving dynamics averaged over the provided odometer ranges.
+// Each range corresponds to a tire mount session: only drives whose end_odometer falls within
+// [range.Min, range.Max) (or >= range.Min when Max is nil) are included.
+// Returns zeros and count=0 when ranges is empty or no matching drives exist.
+func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID string, ranges []OdometerRange) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error) {
+	if len(ranges) == 0 {
+		return 0, 0, 0, 0, nil
+	}
+
+	// Build a WHERE clause with one OR-clause per range.
+	args := []any{vehicleID}
+	var clauses []string
+	for _, rng := range ranges {
+		lo := len(args) + 1
+		hi := len(args) + 2
+		args = append(args, rng.Min)
+		if rng.Max != nil {
+			args = append(args, *rng.Max)
+			clauses = append(clauses, fmt.Sprintf("(end_odometer >= $%d AND end_odometer <= $%d)", lo, hi))
+		} else {
+			// Active session — upper bound is the vehicle's current odometer (no constraint needed)
+			args = args[:len(args)-1] // drop the unused append
+			clauses = append(clauses, fmt.Sprintf("(end_odometer >= $%d)", lo))
+		}
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
 			COALESCE(AVG(NULLIF(power_max, 0)), 0),
 			COALESCE(AVG(NULLIF(power_min, 0)), 0),
 			COALESCE(AVG(NULLIF(consumption_kwh_100km, 0)), 0),
 			COUNT(*)
 		FROM drives
 		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
-	`
-	args := []any{vehicleID}
-	if minOdometer != nil && *minOdometer > 0 {
-		query += " AND (end_odometer IS NULL OR end_odometer >= $2)"
-		args = append(args, *minOdometer)
-	}
+		  AND (%s)
+	`, strings.Join(clauses, " OR "))
 
 	err = r.pool.QueryRow(ctx, query, args...).Scan(&avgPowerMax, &avgPowerMin, &avgConsumption, &count)
 	if err != nil {
 		return 0, 0, 0, 0, err
 	}
 
-	if count == 0 && minOdometer != nil && *minOdometer > 0 {
-		return r.GetDrivingTelemetryStats(ctx, vehicleID, nil)
-	}
-
 	return avgPowerMax, avgPowerMin, avgConsumption, count, nil
 }
+
 
 // ============================================================================
 // TeslaMate Reconciliation
