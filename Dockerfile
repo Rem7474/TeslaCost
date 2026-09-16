@@ -56,13 +56,18 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
 FROM alpine:3.20 AS prod
 WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata \
-    && addgroup -S teslacost && adduser -S -G teslacost -H teslacost
+    && addgroup -S teslacost && adduser -S -G teslacost -H teslacost \
+    && mkdir -p /data/documents && chown teslacost:teslacost /data/documents
 
 COPY --from=backend-builder /app/teslacost /app/teslacost
 COPY --from=backend-builder /app/migrations /app/migrations
 
 EXPOSE 8080
 ENV PORT=8080
+ENV STORAGE_DIR=/data/documents
 USER teslacost
+
+# Declare the document volume so Docker knows to persist it.
+VOLUME ["/data/documents"]
 
 CMD ["/app/teslacost"]

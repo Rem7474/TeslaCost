@@ -24,6 +24,7 @@ import (
 	"github.com/teslacost/teslacost/internal/handlers"
 	appMiddleware "github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/services"
+	"github.com/teslacost/teslacost/internal/storage"
 	"github.com/teslacost/teslacost/web"
 )
 
@@ -136,7 +137,12 @@ func main() {
 		vehicleHandler := handlers.NewVehicleHandler(repo, encryptor, syncService)
 		driveHandler := handlers.NewDriveHandler(repo, carpoolService)
 		tireHandler := handlers.NewTireHandler(repo, tireWearService)
-		expenseHandler := handlers.NewExpenseHandler(repo)
+
+		storageService, err := storage.NewFileStorageService(cfg.StorageDir)
+		if err != nil {
+			log.Fatalf("Failed to initialize file storage service: %v", err)
+		}
+		expenseHandler := handlers.NewExpenseHandler(repo, storageService)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
 		checkpointHandler := handlers.NewCheckpointHandler(repo)
