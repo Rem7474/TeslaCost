@@ -2,6 +2,8 @@ package services
 
 import (
 	"testing"
+
+	"github.com/teslacost/teslacost/internal/money"
 )
 
 func TestCarpoolUnitRatesDefaults(t *testing.T) {
@@ -37,5 +39,37 @@ func TestCarpoolUnitRatesDefaults(t *testing.T) {
 
 	if netCost >= totalCost {
 		t.Errorf("expected net cost to be reduced by passengers revenue")
+	}
+}
+
+func TestDailyInsuranceAllocationFormula(t *testing.T) {
+	annualInsuranceEUR := 365.25
+	dailyInsuranceEUR := annualInsuranceEUR / 365.25 // 1.00 EUR/day
+
+	// Day 1: 40 km leg 1, 60 km leg 2, 100 km other driving -> total 200 km
+	totalDay1Km := 200.0
+	leg1Km := 40.0
+	leg2Km := 60.0
+
+	leg1Cost := money.FromFloat(dailyInsuranceEUR * (leg1Km / totalDay1Km))
+	leg2Cost := money.FromFloat(dailyInsuranceEUR * (leg2Km / totalDay1Km))
+
+	if leg1Cost != 20 {
+		t.Fatalf("expected 20 cents, got %d", leg1Cost)
+	}
+	if leg2Cost != 30 {
+		t.Fatalf("expected 30 cents, got %d", leg2Cost)
+	}
+	totalTripCost := leg1Cost + leg2Cost
+	if totalTripCost != 50 {
+		t.Fatalf("expected 50 cents, got %d", totalTripCost)
+	}
+
+	// Day 2: 50 km leg, 50 km total (only driving of the day)
+	totalDay2Km := 50.0
+	leg3Km := 50.0
+	leg3Cost := money.FromFloat(dailyInsuranceEUR * (leg3Km / totalDay2Km))
+	if leg3Cost != 100 {
+		t.Fatalf("expected 100 cents (100%% of daily insurance), got %d", leg3Cost)
 	}
 }

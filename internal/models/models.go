@@ -384,9 +384,10 @@ type CarpoolCostEstimate struct {
 	TotalCost             money.Cents `json:"total_cost"`
 	ElectricityRatePerKwh float64     `json:"electricity_rate_per_kwh"`
 	TiresRatePerKm        float64     `json:"tires_rate_per_km"`
-	MaintenanceRatePerKm  float64     `json:"maintenance_rate_per_km"`
-	InsuranceRatePerKm    float64     `json:"insurance_rate_per_km"`
-	InsuranceSource       string      `json:"insurance_source"` // "VEHICLE_SETTINGS", "RECORDED_EXPENSES", "DEFAULT"
+	MaintenanceRatePerKm  float64      `json:"maintenance_rate_per_km"`
+	InsuranceRatePerKm    float64      `json:"insurance_rate_per_km"`
+	DailyInsuranceCost    *money.Cents `json:"daily_insurance_cost,omitempty"`
+	InsuranceSource       string       `json:"insurance_source"` // "VEHICLE_SETTINGS", "RECORDED_EXPENSES", "DEFAULT"
 	// Insurance share: insurance paid over the reference window divided by the kilometers driven over it.
 	InsuranceWindowCost   *money.Cents `json:"insurance_window_cost,omitempty"`
 	InsuranceWindowKm     *float64     `json:"insurance_window_km,omitempty"`
