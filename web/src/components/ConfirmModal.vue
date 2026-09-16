@@ -50,7 +50,7 @@ onUnmounted(() => {
     >
       <div
         v-if="isOpen"
-        class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm"
+        class="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm overflow-y-auto"
         @click.self="onCancel"
       >
         <Transition
@@ -63,7 +63,7 @@ onUnmounted(() => {
         >
           <div
             v-if="isOpen"
-            class="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl shadow-black/80 space-y-5 overflow-hidden"
+            class="relative w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl shadow-black/80 space-y-5 overflow-hidden my-auto"
             role="dialog"
             aria-modal="true"
           >

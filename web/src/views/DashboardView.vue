@@ -1131,27 +1131,27 @@ function renderCharts() {
     <!-- Modal: Monthly Cost & Donut Detail -->
     <div
       v-if="selectedMonth && selectedMonthBreakdown"
-      class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
       @click.self="closeMonthDetail"
     >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
         <!-- Header with Month Title, Prev/Next Navigation, and Close Button -->
-        <div class="flex items-center justify-between gap-2 pb-4 border-b border-slate-800">
-          <div class="flex items-center gap-2 sm:gap-3">
-            <div class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between gap-2 shrink-0 bg-slate-900/95">
+          <div class="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+            <div class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl shrink-0">
               <PieChart class="w-5 h-5" />
             </div>
-            <div>
-              <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
-                <span>Détail des coûts — {{ formatMonthName(selectedMonthBreakdown.month) }}</span>
+            <div class="min-w-0 truncate">
+              <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate">
+                <span class="truncate">Détail des coûts — {{ formatMonthName(selectedMonthBreakdown.month) }}</span>
               </h3>
-              <p class="text-xs text-slate-400">
+              <p class="text-xs text-slate-400 truncate">
                 Ventilation complète des postes de dépenses et coût kilométrique
               </p>
             </div>
           </div>
 
-          <div class="flex items-center gap-1 sm:gap-2">
+          <div class="flex items-center gap-1 sm:gap-2 shrink-0">
             <div class="flex items-center bg-slate-800/80 rounded-xl border border-slate-700/60 p-0.5">
               <button
                 type="button"
@@ -1182,6 +1182,9 @@ function renderCharts() {
             </button>
           </div>
         </div>
+
+        <!-- Body -->
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-5">
 
         <!-- 4 KPI Summary Cards for the Month -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
@@ -1331,9 +1334,10 @@ function renderCharts() {
             </div>
           </div>
         </div>
+        </div>
 
         <!-- Footer with Quick Links and Close Button -->
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-slate-900/95">
           <div class="flex items-center gap-2">
             <router-link
               to="/drives"
