@@ -16,6 +16,12 @@ import {
   Activity,
   Calendar,
   AlertTriangle,
+  Shield,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  PieChart,
+  Info,
 } from 'lucide-vue-next'
 import { Chart, registerables } from 'chart.js'
 
@@ -96,6 +102,254 @@ let monthlyChartInstance: Chart | null = null
 let mileageChartInstance: Chart | null = null
 let donutChartInstance: Chart | null = null
 
+const selectedMonth = ref<any | null>(null)
+const monthDonutRef = ref<HTMLCanvasElement | null>(null)
+let monthDonutChartInstance: Chart | null = null
+const monthDetailViewMode = ref<'economic' | 'cash'>('economic')
+
+function formatMonthName(monthStr: string) {
+  if (!monthStr) return ''
+  const parts = monthStr.split('-')
+  if (parts.length < 2) return monthStr
+  const year = parseInt(parts[0], 10)
+  const month = parseInt(parts[1], 10) - 1
+  const d = new Date(year, month, 1)
+  const formatted = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1)
+}
+
+const selectedMonthIndex = computed(() => {
+  if (!selectedMonth.value || !tco.value?.monthly_costs) return -1
+  return tco.value.monthly_costs.findIndex((m: any) => m.month === selectedMonth.value.month)
+})
+
+const hasPrevMonth = computed(() => selectedMonthIndex.value > 0)
+const hasNextMonth = computed(() => {
+  if (!tco.value?.monthly_costs) return false
+  return selectedMonthIndex.value >= 0 && selectedMonthIndex.value < tco.value.monthly_costs.length - 1
+})
+
+function selectPrevMonth() {
+  if (hasPrevMonth.value && tco.value?.monthly_costs) {
+    openMonthDetail(tco.value.monthly_costs[selectedMonthIndex.value - 1])
+  }
+}
+
+function selectNextMonth() {
+  if (hasNextMonth.value && tco.value?.monthly_costs) {
+    openMonthDetail(tco.value.monthly_costs[selectedMonthIndex.value + 1])
+  }
+}
+
+async function openMonthDetail(m: any) {
+  if (!m) return
+  selectedMonth.value = m
+  await nextTick()
+  renderMonthDonutChart()
+}
+
+function closeMonthDetail() {
+  selectedMonth.value = null
+  if (monthDonutChartInstance) {
+    monthDonutChartInstance.destroy()
+    monthDonutChartInstance = null
+  }
+}
+
+const selectedMonthBreakdown = computed(() => {
+  if (!selectedMonth.value) return null
+  const m = selectedMonth.value
+  const dist = m.distance_km || 0
+
+  const items = [
+    {
+      key: 'energy',
+      label: 'Énergie',
+      subLabel: '',
+      icon: Zap,
+      color: '#38bdf8',
+      amount: m.energy || 0,
+      cashAmount: m.energy || 0,
+      note: m.smoothed_energy > 0 ? `dont ${m.smoothed_energy.toFixed(2)} € estimés avant TeslaMate` : null,
+    },
+    {
+      key: 'tolls',
+      label: 'Péages & Parkings',
+      subLabel: '',
+      icon: Receipt,
+      color: '#f59e0b',
+      amount: m.tolls || 0,
+      cashAmount: m.tolls || 0,
+      note: null,
+    },
+    {
+      key: 'tires',
+      label: 'Pneus',
+      subLabel: 'usure amortie',
+      icon: Disc,
+      color: '#10b981',
+      amount: m.tires_amortized || 0,
+      cashAmount: m.tires || 0,
+      note: (m.tires || 0) > 0
+        ? `${Number(m.tires).toFixed(2)} € décaissés ce mois (achat pneus)`
+        : (m.tires_amortized > 0 ? `Amorti sur ${Math.round(dist).toLocaleString('fr-FR')} km (0 € décaissé)` : null),
+    },
+    {
+      key: 'maintenance',
+      label: 'Entretien & Réparations',
+      subLabel: 'lissé',
+      icon: Wrench,
+      color: '#ec4899',
+      amount: m.maintenance_amortized || 0,
+      cashAmount: m.maintenance || 0,
+      note: (m.maintenance || 0) > 0
+        ? `${Number(m.maintenance).toFixed(2)} € facturés à l'atelier ce mois`
+        : (m.maintenance_amortized > 0 ? `Lissage révisions/pièces sur la période` : null),
+    },
+    {
+      key: 'insurance',
+      label: 'Assurance',
+      subLabel: '',
+      icon: Shield,
+      color: '#a855f7',
+      amount: m.insurance || 0,
+      cashAmount: m.insurance || 0,
+      note: null,
+    },
+    {
+      key: 'financing',
+      label: 'Financement & Location',
+      subLabel: 'lissé',
+      icon: Briefcase,
+      color: '#f97316',
+      amount: m.financing_amortized || m.financing || 0,
+      cashAmount: m.financing || 0,
+      note: (m.financing_amortized > 0 && Math.abs(m.financing_amortized - (m.financing || 0)) > 0.01)
+        ? `Lissé : ${m.financing_amortized.toFixed(2)} € (mensualité réglée : ${(m.financing || 0).toFixed(2)} €)`
+        : null,
+    },
+    {
+      key: 'other',
+      label: 'Abonnements, taxes & autres',
+      subLabel: '',
+      icon: Coins,
+      color: '#64748b',
+      amount: m.other || 0,
+      cashAmount: m.other || 0,
+      note: null,
+    },
+  ]
+
+  const economicTotal = items.reduce((sum, it) => sum + it.amount, 0)
+  const cashTotal = typeof m.total === 'number' ? m.total : items.reduce((sum, it) => sum + it.cashAmount, 0)
+  const activeTotal = monthDetailViewMode.value === 'economic' ? economicTotal : cashTotal
+
+  const itemsWithStats = items.map((it) => {
+    const displayAmount = monthDetailViewMode.value === 'economic' ? it.amount : it.cashAmount
+    const costPerKm = dist > 0 ? displayAmount / dist : 0
+    const sharePct = activeTotal > 0 ? (displayAmount / activeTotal) * 100 : 0
+    return {
+      ...it,
+      displayAmount,
+      costPerKm,
+      sharePct,
+    }
+  })
+
+  return {
+    month: m.month,
+    distanceKm: dist,
+    trackedDistanceKm: m.tracked_distance_km || 0,
+    smoothedKm: m.smoothed_km || 0,
+    costPerKm: m.cost_per_km || (dist > 0 ? economicTotal / dist : 0),
+    economicTotal,
+    cashTotal,
+    activeTotal,
+    items: itemsWithStats,
+  }
+})
+
+function renderMonthDonutChart() {
+  if (monthDonutChartInstance) {
+    monthDonutChartInstance.destroy()
+    monthDonutChartInstance = null
+  }
+  if (!monthDonutRef.value || !selectedMonthBreakdown.value) return
+
+  const breakdown = selectedMonthBreakdown.value
+  const activeItems = breakdown.items.filter((it) => it.displayAmount > 0.005)
+
+  let labels: string[]
+  let data: number[]
+  let backgroundColors: string[]
+
+  if (activeItems.length > 0) {
+    labels = activeItems.map((it) => it.label)
+    data = activeItems.map((it) => it.displayAmount)
+    backgroundColors = activeItems.map((it) => it.color)
+  } else {
+    labels = ['Aucune dépense']
+    data = [1]
+    backgroundColors = ['#334155']
+  }
+
+  monthDonutChartInstance = new Chart(monthDonutRef.value, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [
+        {
+          data,
+          backgroundColor: backgroundColors,
+          borderWidth: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#94a3b8',
+            font: { size: 11 },
+            boxWidth: 10,
+            padding: 10,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              if (activeItems.length === 0) return ' Aucune dépense enregistrée'
+              const val = Number(ctx.raw || 0).toFixed(2)
+              const total = breakdown.activeTotal
+              const pct = total > 0 ? ((Number(ctx.raw || 0) / total) * 100).toFixed(1) : '0'
+              return ` ${ctx.label} : ${val} € (${pct}%)`
+            },
+          },
+        },
+      },
+      cutout: '68%',
+    },
+  })
+}
+
+watch(monthDetailViewMode, () => {
+  renderMonthDonutChart()
+})
+
+function onKeydown(e: KeyboardEvent) {
+  if (!selectedMonth.value) return
+  if (e.key === 'Escape') {
+    closeMonthDetail()
+  } else if (e.key === 'ArrowLeft') {
+    selectPrevMonth()
+  } else if (e.key === 'ArrowRight') {
+    selectNextMonth()
+  }
+}
+
 // Current month stats computed
 const currentMonthStats = computed(() => {
   if (!tco.value?.monthly_costs?.length) return null
@@ -106,6 +360,7 @@ const currentMonthStats = computed(() => {
   const prev = prevIdx >= 0 ? list[prevIdx] : null
 
   return {
+    raw: current,
     month: current.month,
     distance_km: current.distance_km || 0,
     cost_per_km: current.cost_per_km || 0,
@@ -145,13 +400,16 @@ watch([monthlyChartRange, mileageChartRange], () => {
 })
 
 onMounted(() => {
+  window.addEventListener('keydown', onKeydown)
   loadTCO()
 })
 
 onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
   if (monthlyChartInstance) monthlyChartInstance.destroy()
   if (mileageChartInstance) mileageChartInstance.destroy()
   if (donutChartInstance) donutChartInstance.destroy()
+  if (monthDonutChartInstance) monthDonutChartInstance.destroy()
 })
 
 function renderCharts() {
@@ -191,6 +449,32 @@ function renderCharts() {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        onClick: (event: any) => {
+          if (!monthlyChartInstance) return
+          const points = monthlyChartInstance.getElementsAtEventForMode(
+            event.native || event,
+            'index',
+            { intersect: false },
+            true
+          )
+          if (points && points.length > 0) {
+            const dataIndex = points[0].index
+            const monthItem = filteredList[dataIndex]
+            if (monthItem) {
+              openMonthDetail(monthItem)
+            }
+          }
+        },
+        onHover: (event: any, elements: any[]) => {
+          const canvas = monthlyChartRef.value
+          if (canvas) {
+            canvas.style.cursor = elements && elements.length > 0 ? 'pointer' : 'default'
+          }
+        },
         plugins: {
           legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
           tooltip: {
@@ -269,6 +553,28 @@ function renderCharts() {
         interaction: {
           mode: 'index',
           intersect: false,
+        },
+        onClick: (event: any) => {
+          if (!mileageChartInstance) return
+          const points = mileageChartInstance.getElementsAtEventForMode(
+            event.native || event,
+            'index',
+            { intersect: false },
+            true
+          )
+          if (points && points.length > 0) {
+            const dataIndex = points[0].index
+            const monthItem = filteredMileageList[dataIndex]
+            if (monthItem) {
+              openMonthDetail(monthItem)
+            }
+          }
+        },
+        onHover: (event: any, elements: any[]) => {
+          const canvas = mileageChartRef.value
+          if (canvas) {
+            canvas.style.cursor = elements && elements.length > 0 ? 'pointer' : 'default'
+          }
         },
         plugins: {
           legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
@@ -642,8 +948,19 @@ function renderCharts() {
             <Calendar class="w-5 h-5" />
           </div>
           <div>
-            <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Activité du mois ({{ currentMonthStats.month }})</span>
-            <div class="text-lg font-bold text-white flex items-center gap-3">
+            <div class="flex items-center gap-2">
+              <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Activité du mois ({{ currentMonthStats.month }})</span>
+              <button
+                type="button"
+                @click="openMonthDetail(currentMonthStats.raw)"
+                class="px-2 py-0.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded text-[10px] font-semibold border border-indigo-500/40 flex items-center gap-1 transition-colors"
+                title="Afficher le détail chiffré et le diagramme circulaire"
+              >
+                <PieChart class="w-3 h-3" />
+                <span>Détail</span>
+              </button>
+            </div>
+            <div class="text-lg font-bold text-white flex items-center gap-3 mt-0.5">
               <span>{{ Math.round(currentMonthStats.distance_km).toLocaleString('fr-FR') }} km roulés</span>
               <span class="text-slate-500">•</span>
               <span class="text-emerald-400">{{ currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km.toFixed(3) + ' €/km' : '0.000 €/km' }}</span>
@@ -652,12 +969,22 @@ function renderCharts() {
             </div>
           </div>
         </div>
-        <router-link
-          to="/drives"
-          class="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 self-start sm:self-auto"
-        >
-          Analyser les trajets du mois <ArrowRight class="w-3.5 h-3.5" />
-        </router-link>
+        <div class="flex items-center gap-2 self-start sm:self-auto">
+          <button
+            type="button"
+            @click="openMonthDetail(currentMonthStats.raw)"
+            class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+          >
+            <PieChart class="w-3.5 h-3.5" />
+            <span>Voir la répartition</span>
+          </button>
+          <router-link
+            to="/drives"
+            class="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1 px-2 py-1.5"
+          >
+            Trajets <ArrowRight class="w-3.5 h-3.5" />
+          </router-link>
+        </div>
       </div>
 
       <!-- Chart 1 & Donut: Expenses & Breakdown -->
@@ -667,7 +994,7 @@ function renderCharts() {
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <h3 class="text-sm font-bold text-white flex items-center gap-2">
               <span>Évolution mensuelle des dépenses (€)</span>
-              <span class="text-xs text-slate-400 font-normal">Montants décaissés par mois</span>
+              <span class="text-xs text-slate-400 font-normal">Montants décaissés par mois (cliquable)</span>
             </h3>
             <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5 self-start sm:self-auto">
               <button
@@ -699,12 +1026,12 @@ function renderCharts() {
       </div>
 
       <!-- Chart 2: Monthly Distance & Average Cost/Km Dual-Axis Chart -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h3 class="text-sm font-bold text-white flex items-center gap-2">
               <Activity class="w-4 h-4 text-indigo-400" />
-              Kilométrage Mensuel & Coût de Revient au Km (€/km)
+              <span>Kilométrage Mensuel & Coût de Revient au Km (€/km)</span>
             </h3>
             <p class="text-xs text-slate-400">
               Histogramme des kilomètres parcourus chaque mois et courbe du coût de revient au km
@@ -737,8 +1064,41 @@ function renderCharts() {
             </div>
           </div>
         </div>
+
+        <div class="flex items-center justify-between text-[11px] text-slate-400 bg-slate-800/30 px-3 py-1.5 rounded-xl border border-slate-800">
+          <span class="flex items-center gap-1.5 text-slate-400">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
+            <span>Astuce : cliquez sur n'importe quel mois du graphique pour afficher son détail chiffré et son diagramme circulaire</span>
+          </span>
+          <button
+            v-if="filteredMileageCosts.length"
+            type="button"
+            @click="openMonthDetail(filteredMileageCosts[filteredMileageCosts.length - 1])"
+            class="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 shrink-0 ml-2 transition-colors"
+          >
+            <PieChart class="w-3 h-3" />
+            <span>Détail dernier mois</span>
+          </button>
+        </div>
+
         <div class="h-64 sm:h-72">
           <canvas ref="mileageChartRef"></canvas>
+        </div>
+
+        <!-- Quick Month Selection Pills -->
+        <div v-if="filteredMileageCosts.length" class="flex items-center gap-1.5 overflow-x-auto pt-1 text-xs no-scrollbar">
+          <span class="text-slate-500 text-[11px] shrink-0 mr-1">Mois :</span>
+          <button
+            v-for="m in filteredMileageCosts"
+            :key="m.month"
+            type="button"
+            @click="openMonthDetail(m)"
+            class="px-2.5 py-1 bg-slate-800/80 hover:bg-indigo-600/30 hover:text-indigo-300 hover:border-indigo-500/50 border border-slate-700/60 rounded-lg text-slate-300 text-[11px] font-medium shrink-0 flex items-center gap-1.5 transition-colors group"
+            title="Cliquer pour afficher le détail chiffré et le diagramme de ce mois"
+          >
+            <span>{{ formatMonthName(m.month) }}</span>
+            <span class="text-[10px] font-bold text-emerald-400 group-hover:text-emerald-300">{{ (m.cost_per_km || 0).toFixed(3) }} €/km</span>
+          </button>
         </div>
       </div>
 
@@ -764,6 +1124,240 @@ function renderCharts() {
               <span class="text-lg font-extrabold text-white">{{ item.percentage }}%</span>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Monthly Cost & Donut Detail -->
+    <div
+      v-if="selectedMonth && selectedMonthBreakdown"
+      class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="closeMonthDetail"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full p-5 sm:p-6 space-y-5 shadow-2xl my-auto">
+        <!-- Header with Month Title, Prev/Next Navigation, and Close Button -->
+        <div class="flex items-center justify-between gap-2 pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-2 sm:gap-3">
+            <div class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl">
+              <PieChart class="w-5 h-5" />
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                <span>Détail des coûts — {{ formatMonthName(selectedMonthBreakdown.month) }}</span>
+              </h3>
+              <p class="text-xs text-slate-400">
+                Ventilation complète des postes de dépenses et coût kilométrique
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1 sm:gap-2">
+            <div class="flex items-center bg-slate-800/80 rounded-xl border border-slate-700/60 p-0.5">
+              <button
+                type="button"
+                :disabled="!hasPrevMonth"
+                @click="selectPrevMonth"
+                class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 rounded-lg hover:bg-slate-700/50 transition-colors"
+                title="Mois précédent (←)"
+              >
+                <ChevronLeft class="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                :disabled="!hasNextMonth"
+                @click="selectNextMonth"
+                class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 rounded-lg hover:bg-slate-700/50 transition-colors"
+                title="Mois suivant (→)"
+              >
+                <ChevronRight class="w-4 h-4" />
+              </button>
+            </div>
+            <button
+              type="button"
+              @click="closeMonthDetail"
+              class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+              title="Fermer (Échap)"
+            >
+              <X class="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 KPI Summary Cards for the Month -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+          <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+            <span class="text-[11px] font-medium text-slate-400 block">Distance totale</span>
+            <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
+              {{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString('fr-FR') }} <span class="text-xs font-normal text-slate-400">km</span>
+            </div>
+            <span v-if="selectedMonthBreakdown.smoothedKm > 0" class="text-[10px] text-slate-400 block truncate">
+              dont {{ Math.round(selectedMonthBreakdown.smoothedKm).toLocaleString('fr-FR') }} km lissés
+            </span>
+            <span v-else class="text-[10px] text-slate-500 block truncate">100% trajets GPS</span>
+          </div>
+
+          <div class="bg-emerald-500/5 border border-emerald-500/30 p-3 rounded-xl">
+            <span class="text-[11px] font-medium text-emerald-400 block">Coût kilométrique</span>
+            <div class="text-base sm:text-lg font-extrabold text-emerald-400 mt-0.5">
+              {{ selectedMonthBreakdown.costPerKm.toFixed(3) }} <span class="text-xs font-normal text-emerald-500/80">€/km</span>
+            </div>
+            <span class="text-[10px] text-emerald-400/70 block">Coût de revient réel</span>
+          </div>
+
+          <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+            <span class="text-[11px] font-medium text-slate-400 block">Coût d'usage calculé</span>
+            <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
+              {{ selectedMonthBreakdown.economicTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
+            </div>
+            <span class="text-[10px] text-slate-400 block">Base coût au km</span>
+          </div>
+
+          <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+            <span class="text-[11px] font-medium text-slate-400 block">Total décaissé (cash)</span>
+            <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
+              {{ selectedMonthBreakdown.cashTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
+            </div>
+            <span class="text-[10px] text-slate-400 block">Règlements du mois</span>
+          </div>
+        </div>
+
+        <!-- Toggle View Mode: Economic Cost vs Cash-Flow -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-slate-800/40 border border-slate-700/50 rounded-xl text-xs">
+          <span class="text-slate-300 font-medium flex items-center gap-1.5">
+            <Info class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span>Mode de calcul de la répartition :</span>
+          </span>
+          <div class="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-700/70">
+            <button
+              type="button"
+              @click="monthDetailViewMode = 'economic'"
+              :class="[
+                'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+                monthDetailViewMode === 'economic' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              ]"
+            >
+              Coût de revient (€/km)
+            </button>
+            <button
+              type="button"
+              @click="monthDetailViewMode = 'cash'"
+              :class="[
+                'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+                monthDetailViewMode === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              ]"
+            >
+              Dépenses décaissées (€)
+            </button>
+          </div>
+        </div>
+
+        <!-- Content: Donut Chart (Left) + Itemized Breakdown List (Right) -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+          <!-- Left (2 cols): Donut Chart -->
+          <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
+            <h4 class="text-xs font-bold text-white mb-2 self-start flex items-center gap-1.5">
+              <PieChart class="w-3.5 h-3.5 text-indigo-400" />
+              <span>Répartition du mois</span>
+            </h4>
+            <div class="w-full h-56 sm:h-64 relative">
+              <canvas ref="monthDonutRef"></canvas>
+            </div>
+          </div>
+
+          <!-- Right (3 cols): Itemized Table / List -->
+          <div class="md:col-span-3 space-y-2">
+            <h4 class="text-xs font-bold text-white mb-2 flex items-center justify-between">
+              <span>Détail chiffré par poste de dépense</span>
+              <span class="text-[11px] text-slate-400 font-normal">
+                {{ monthDetailViewMode === 'economic' ? 'Lissage d\'usage inclus' : 'Montants comptants' }}
+              </span>
+            </h4>
+
+            <div class="space-y-1.5 max-h-72 sm:max-h-80 overflow-y-auto pr-1">
+              <div
+                v-for="item in selectedMonthBreakdown.items"
+                :key="item.key"
+                class="p-2.5 bg-slate-800/50 border border-slate-700/40 rounded-xl flex items-center justify-between gap-3 text-xs hover:border-slate-600 transition-colors"
+              >
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <span
+                    class="w-2.5 h-2.5 rounded-full shrink-0"
+                    :style="{ backgroundColor: item.color }"
+                  ></span>
+                  <component :is="item.icon" class="w-4 h-4 shrink-0 text-slate-400" />
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5">
+                      <span class="font-semibold text-white truncate">{{ item.label }}</span>
+                      <span v-if="item.subLabel" class="text-[10px] px-1.5 py-0.2 bg-slate-700 text-slate-300 rounded font-normal">
+                        {{ item.subLabel }}
+                      </span>
+                    </div>
+                    <p v-if="item.note" class="text-[10px] text-slate-400 truncate">
+                      {{ item.note }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="text-right shrink-0">
+                  <div class="flex items-baseline justify-end gap-2">
+                    <span class="font-bold text-white text-xs sm:text-sm">
+                      {{ item.displayAmount.toFixed(2) }} €
+                    </span>
+                    <span class="text-[10px] text-slate-400 font-medium">
+                      ({{ item.sharePct.toFixed(1) }}%)
+                    </span>
+                  </div>
+                  <div class="text-[10px] text-emerald-400 font-medium">
+                    {{ item.costPerKm.toFixed(3) }} €/km
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Total Row -->
+            <div class="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex items-center justify-between text-xs mt-2">
+              <div class="font-bold text-white flex items-center gap-2">
+                <span>Total du mois</span>
+                <span class="text-[11px] text-slate-400 font-normal">({{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString('fr-FR') }} km)</span>
+              </div>
+              <div class="text-right">
+                <div class="font-extrabold text-white text-sm sm:text-base">
+                  {{ selectedMonthBreakdown.activeTotal.toFixed(2) }} €
+                </div>
+                <div class="text-[11px] font-bold text-emerald-400">
+                  {{ (selectedMonthBreakdown.distanceKm > 0 ? selectedMonthBreakdown.activeTotal / selectedMonthBreakdown.distanceKm : 0).toFixed(3) }} €/km
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer with Quick Links and Close Button -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-4 border-t border-slate-800">
+          <div class="flex items-center gap-2">
+            <router-link
+              to="/drives"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5"
+            >
+              <Activity class="w-3.5 h-3.5 text-indigo-400" />
+              <span>Trajets du véhicule</span>
+            </router-link>
+            <router-link
+              to="/expenses"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5"
+            >
+              <Receipt class="w-3.5 h-3.5 text-amber-400" />
+              <span>Dépenses & Factures</span>
+            </router-link>
+          </div>
+
+          <button
+            type="button"
+            @click="closeMonthDetail"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors self-end sm:self-auto"
+          >
+            Fermer
+          </button>
         </div>
       </div>
     </div>
