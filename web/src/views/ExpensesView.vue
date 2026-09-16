@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
@@ -27,6 +27,9 @@ import {
   Download,
   Eye,
   UploadCloud,
+  ExternalLink,
+  Image as ImageIcon,
+  Loader2,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -610,8 +613,59 @@ async function onFileInputChange(event: Event, form: any) {
   }
 }
 
+interface DocumentPreviewState {
+  url: string
+  filename: string
+  isPdf: boolean
+  isImage: boolean
+}
+const previewDoc = ref<DocumentPreviewState | null>(null)
+const loadingDocId = ref<string | null>(null)
+
+function closeDocPreview() {
+  if (previewDoc.value?.url) {
+    URL.revokeObjectURL(previewDoc.value.url)
+  }
+  previewDoc.value = null
+}
+
+function downloadFromPreview() {
+  if (!previewDoc.value) return
+  const a = document.createElement('a')
+  a.href = previewDoc.value.url
+  a.download = previewDoc.value.filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
+function openInNewTab() {
+  if (!previewDoc.value) return
+  window.open(previewDoc.value.url, '_blank')
+}
+
+function handlePreviewKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && previewDoc.value) {
+    closeDocPreview()
+  }
+}
+
+watch(previewDoc, (val) => {
+  if (val) {
+    window.addEventListener('keydown', handlePreviewKeydown)
+  } else {
+    window.removeEventListener('keydown', handlePreviewKeydown)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handlePreviewKeydown)
+  closeDocPreview()
+})
+
 async function viewOrDownloadDocument(docId: string, filename?: string, download = false) {
   if (!vehicleStore.activeVehicle || !docId) return
+  loadingDocId.value = docId
   try {
     const { blob, filename: serverFilename } = await api.downloadDocumentBlob(vehicleStore.activeVehicle.id, docId)
     const finalName = filename || serverFilename || 'document'
@@ -625,11 +679,22 @@ async function viewOrDownloadDocument(docId: string, filename?: string, download
       document.body.removeChild(a)
       setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
     } else {
-      window.open(blobUrl, '_blank')
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+      closeDocPreview()
+      const lower = finalName.toLowerCase()
+      const mime = (blob.type || '').toLowerCase()
+      const isPdf = lower.endsWith('.pdf') || mime.includes('pdf')
+      const isImage = /\.(png|jpe?g|webp|gif|svg)$/i.test(lower) || mime.startsWith('image/')
+      previewDoc.value = {
+        url: blobUrl,
+        filename: finalName,
+        isPdf,
+        isImage,
+      }
     }
   } catch (err: any) {
     showAlert(`Erreur lors de l'accès au document : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    loadingDocId.value = null
   }
 }
 
@@ -1124,10 +1189,12 @@ function formatDriveTime(dateStr: string) {
             <div class="flex items-center gap-1.5">
               <button
                 @click="viewOrDownloadDocument(d.id, d.filename, false)"
-                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
+                :disabled="loadingDocId === d.id"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors disabled:opacity-50"
                 title="Consulter le fichier"
               >
-                <Eye class="w-3.5 h-3.5 text-indigo-400" />
+                <Loader2 v-if="loadingDocId === d.id" class="w-3.5 h-3.5 text-indigo-400 animate-spin" />
+                <Eye v-else class="w-3.5 h-3.5 text-indigo-400" />
                 <span>Ouvrir</span>
               </button>
               <button
@@ -1850,6 +1917,103 @@ function formatDriveTime(dateStr: string) {
             <UploadCloud class="w-4 h-4" />
             <span>{{ isUploadingDocument ? 'Téléversement...' : 'Téléverser' }}</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Document In-App Preview -->
+    <div
+      v-if="previewDoc"
+      class="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden"
+      @click.self="closeDocPreview"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[92vh] sm:h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <!-- Header -->
+        <div class="px-4 sm:px-6 py-3.5 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95 gap-3">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+              <FileText v-if="previewDoc.isPdf" class="w-4 h-4 text-indigo-400" />
+              <ImageIcon v-else-if="previewDoc.isImage" class="w-4 h-4 text-emerald-400" />
+              <Paperclip v-else class="w-4 h-4 text-slate-400" />
+            </div>
+            <div class="min-w-0">
+              <h3 class="text-sm font-bold text-white truncate" :title="previewDoc.filename">
+                {{ previewDoc.filename }}
+              </h3>
+              <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
+                <span v-if="previewDoc.isPdf" class="text-indigo-400 font-semibold">Document PDF</span>
+                <span v-else-if="previewDoc.isImage" class="text-emerald-400 font-semibold">Image</span>
+                <span v-else class="text-slate-400 font-semibold">Fichier</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-1.5 shrink-0">
+            <!-- Download Button -->
+            <button
+              @click="downloadFromPreview"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
+              title="Télécharger le fichier"
+            >
+              <Download class="w-3.5 h-3.5 text-indigo-400" />
+              <span class="hidden sm:inline">Télécharger</span>
+            </button>
+
+            <!-- Open in New Tab Button -->
+            <button
+              @click="openInNewTab"
+              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
+              title="Ouvrir dans un nouvel onglet"
+            >
+              <ExternalLink class="w-3.5 h-3.5 text-slate-400" />
+              <span class="hidden md:inline">Nouvel onglet</span>
+            </button>
+
+            <!-- Close Button -->
+            <button
+              @click="closeDocPreview"
+              class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors ml-1"
+              title="Fermer"
+            >
+              <X class="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Preview Body -->
+        <div class="flex-1 bg-slate-950/70 overflow-hidden flex items-center justify-center min-h-0 relative">
+          <!-- PDF preview -->
+          <iframe
+            v-if="previewDoc.isPdf"
+            :src="previewDoc.url"
+            class="w-full h-full border-0 bg-white"
+            :title="previewDoc.filename"
+          />
+
+          <!-- Image preview -->
+          <div
+            v-else-if="previewDoc.isImage"
+            class="w-full h-full p-4 flex items-center justify-center overflow-auto"
+          >
+            <img
+              :src="previewDoc.url"
+              :alt="previewDoc.filename"
+              class="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+            />
+          </div>
+
+          <!-- Unsupported preview fallback -->
+          <div v-else class="p-8 text-center space-y-3">
+            <FileText class="w-12 h-12 text-slate-500 mx-auto" />
+            <p class="text-sm text-slate-300">Ce format de fichier ne supporte pas l'aperçu direct dans le navigateur.</p>
+            <button
+              @click="downloadFromPreview"
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-2 transition-colors"
+            >
+              <Download class="w-4 h-4" />
+              Télécharger pour consulter
+            </button>
+          </div>
         </div>
       </div>
     </div>
