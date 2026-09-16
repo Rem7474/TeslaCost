@@ -755,7 +755,7 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 	if len(est.Legs) != 3 || *est.Legs[0].StartLabel != "Annecy" || *est.Legs[2].EndLabel != "Valence" {
 		t.Fatalf("expected 3 chronological legs with place labels, got %+v", est.Legs)
 	}
-	if est.StartDate == nil || !est.StartDate.Equal(base) {
+	if est.StartDate == nil || !est.StartDate.Truncate(time.Microsecond).Equal(base.Truncate(time.Microsecond)) {
 		t.Fatalf("expected est.StartDate %v, got %v", base, est.StartDate)
 	}
 	if est.Legs[0].TollsCost != 1000 || est.Legs[1].TollsCost != 1200 || est.Legs[2].TollsCost != 1800 || est.TollsCost != 4000 {
@@ -1007,11 +1007,13 @@ func TestCarpoolDailyInsuranceAllocation(t *testing.T) {
 	leaseV := mustVehicle(t, repo, "lease_ins@example.com")
 	leaseStart := day1.AddDate(-1, 0, 0)
 	price := money.Cents(4000000)
+	leaseDuration := 36
 	if err := repo.SaveVehicleOwnership(ctx, &models.VehicleOwnership{
 		VehicleID:              leaseV.ID,
 		AcquisitionType:        models.AcquisitionLLD,
 		StartDate:              leaseStart,
 		PurchasePrice:          &price,
+		LeaseDurationMonths:    &leaseDuration,
 		LeaseIncludesInsurance: true,
 	}); err != nil {
 		t.Fatal(err)
