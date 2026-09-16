@@ -101,6 +101,21 @@ type Drive struct {
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
+// IsHighway returns true if the drive matches the highway detection heuristic:
+// either distance >= 40 km and speed_avg >= 70 km/h,
+// or distance >= 20 km and speed_max > 125 km/h.
+func (d Drive) IsHighway() bool {
+	speedAvg := 0.0
+	if d.SpeedAvg != nil {
+		speedAvg = *d.SpeedAvg
+	}
+	speedMax := 0
+	if d.SpeedMax != nil {
+		speedMax = *d.SpeedMax
+	}
+	return (d.DistanceKm >= 40 && speedAvg >= 70) || (d.DistanceKm >= 20 && speedMax > 125)
+}
+
 // TripGroup allows grouping multiple drives (e.g. holiday trip with stops).
 type TripGroup struct {
 	ID        string    `json:"id"`
