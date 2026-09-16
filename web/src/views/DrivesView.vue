@@ -664,42 +664,42 @@ function formatDate(dateStr: string) {
       <div
         v-for="d in drives"
         :key="d.id"
-        class="bg-slate-900 border border-slate-800 hover:border-slate-700/90 p-4 rounded-2xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+        class="bg-slate-900 border border-slate-800 hover:border-slate-700/90 p-4 rounded-2xl transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
         :class="{ 'border-rose-500/40 bg-slate-800/40 shadow-lg shadow-rose-950/20': selectedDriveIds.includes(d.id) }"
       >
-        <div class="flex items-start gap-3">
+        <div class="flex items-start gap-3 min-w-0 flex-1">
           <!-- Selection checkbox -->
-          <button @click="toggleSelectDrive(d)" class="mt-1 text-slate-500 hover:text-rose-400 transition-colors">
+          <button @click="toggleSelectDrive(d)" class="mt-1 text-slate-500 hover:text-rose-400 transition-colors shrink-0">
             <component :is="selectedDriveIds.includes(d.id) ? CheckSquare : Square" class="w-5 h-5 text-rose-400" />
           </button>
 
           <!-- Drive Details -->
-          <div>
+          <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap mb-1.5">
-              <span class="text-xs font-semibold text-slate-400">{{ formatDate(d.start_time) }}</span>
-              <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-800 text-slate-200 border border-slate-700/60">
+              <span class="text-xs font-semibold text-slate-400 shrink-0">{{ formatDate(d.start_time) }}</span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-800 text-slate-200 border border-slate-700/60 shrink-0">
                 {{ d.distance_km }} km
               </span>
-              <span v-if="d.duration_min" class="text-xs text-slate-400 flex items-center gap-1">
+              <span v-if="d.duration_min" class="text-xs text-slate-400 flex items-center gap-1 shrink-0">
                 <Clock class="w-3 h-3" /> {{ d.duration_min }} min
               </span>
-              <span v-if="d.consumption_kwh_100km" class="text-xs text-sky-400 font-mono">
+              <span v-if="d.consumption_kwh_100km" class="text-xs text-sky-400 font-mono shrink-0">
                 {{ d.consumption_kwh_100km }} kWh/100km
               </span>
             </div>
 
             <!-- Route Address -->
-            <div class="text-sm text-slate-300 flex items-center gap-1.5 flex-wrap">
+            <div class="text-sm text-slate-300 flex items-center gap-1.5 flex-wrap min-w-0">
               <MapPin class="w-3.5 h-3.5 text-rose-400 shrink-0" />
-              <span class="truncate max-w-xs font-medium">{{ d.start_address || 'Départ inconnu' }}</span>
-              <span class="text-slate-500">→</span>
-              <span class="truncate max-w-xs font-medium">{{ d.end_address || 'Arrivée inconnue' }}</span>
+              <span class="truncate max-w-[140px] sm:max-w-[220px] md:max-w-xs font-medium" :title="d.start_address">{{ d.start_address || 'Départ inconnu' }}</span>
+              <span class="text-slate-500 shrink-0">→</span>
+              <span class="truncate max-w-[140px] sm:max-w-[220px] md:max-w-xs font-medium" :title="d.end_address">{{ d.end_address || 'Arrivée inconnue' }}</span>
             </div>
           </div>
         </div>
 
         <!-- Right Side: Cost Badge & Actions -->
-        <div class="flex items-center gap-2.5 self-end sm:self-auto flex-wrap sm:flex-nowrap">
+        <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0">
           <!-- Toll qualification: 2 taps -->
           <div v-if="needsTollQualification(d)" class="flex items-center gap-1">
             <button
@@ -827,18 +827,18 @@ function formatDate(dateStr: string) {
       <template v-else>
       <div v-for="tg in tripGroups" :key="tg.id" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
+          <div class="min-w-0 flex-1">
             <div class="text-sm font-bold text-white flex items-center gap-2">
-              <Layers class="w-4 h-4 text-indigo-400" /> {{ tg.name }}
+              <Layers class="w-4 h-4 text-indigo-400 shrink-0" /> <span class="truncate">{{ tg.name }}</span>
             </div>
             <p class="text-xs text-slate-400 mt-0.5">
               {{ formatTripDates(tg) }} • {{ tg.drive_ids.length }} trajet(s) • {{ Math.round(tg.distance_km).toLocaleString('fr-FR') }} km
               <template v-if="tg.expense_count"> • {{ tg.expense_count }} frais ({{ Number(tg.expenses_total).toFixed(2) }} €)</template>
               <template v-if="tg.carpool_count"> • {{ tg.carpool_count }} covoiturage(s)</template>
             </p>
-            <p v-if="tg.notes" class="text-xs text-slate-500 mt-0.5">{{ tg.notes }}</p>
+            <p v-if="tg.notes" class="text-xs text-slate-500 mt-0.5 truncate">{{ tg.notes }}</p>
           </div>
-          <div class="flex items-center gap-1.5">
+          <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
             <button @click="toggleTripDetails(tg)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700/60">
               {{ expandedTripId === tg.id ? 'Masquer' : 'Trajets' }}
             </button>
@@ -858,8 +858,8 @@ function formatDate(dateStr: string) {
           </div>
         </div>
         <div v-if="expandedTripId === tg.id" class="space-y-1.5 border-t border-slate-800 pt-2">
-          <div v-for="d in tripDrives" :key="d.id" class="flex items-center justify-between gap-3 text-xs text-slate-300 bg-slate-800/40 rounded-lg px-2.5 py-1.5">
-            <span class="truncate">
+          <div v-for="d in tripDrives" :key="d.id" class="flex items-center justify-between gap-3 text-xs text-slate-300 bg-slate-800/40 rounded-lg px-2.5 py-1.5 min-w-0">
+            <span class="truncate min-w-0 flex-1">
               {{ formatDate(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}
               <span class="text-slate-500">({{ d.distance_km }} km)</span>
             </span>

@@ -97,3 +97,21 @@ func TestOwnershipMissingContract(t *testing.T) {
 		t.Fatalf("expected an incomplete lease warning, got %v", c.Missing)
 	}
 }
+
+func TestOwnershipLeaseEndDateComputed(t *testing.T) {
+	start := time.Date(2024, 11, 16, 0, 0, 0, 0, time.UTC)
+	duration := 48
+	loa := &models.VehicleOwnership{
+		AcquisitionType:     models.AcquisitionLOA,
+		StartDate:           start,
+		LeaseDurationMonths: &duration,
+	}
+	c := ComputeOwnershipCosts(loa, start.AddDate(1, 0, 0), 10000)
+	if c.ContractEndDate == nil {
+		t.Fatal("expected ContractEndDate to be computed even with incomplete contract")
+	}
+	expectedEnd := start.AddDate(0, 48, 0)
+	if !c.ContractEndDate.Equal(expectedEnd) {
+		t.Fatalf("expected contract end date %v, got %v", expectedEnd, *c.ContractEndDate)
+	}
+}
