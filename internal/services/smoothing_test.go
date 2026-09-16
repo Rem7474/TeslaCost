@@ -96,3 +96,90 @@ func TestPreTeslaMateEnergyCalculation(t *testing.T) {
 	}
 }
 
+func TestAllocateSmoothingForInterval_PostTeslaMate_NoPreTeslaMateEnergy(t *testing.T) {
+	loc := time.UTC
+	// TeslaMate started tracking on 2023-01-01
+	firstTrackingTime := time.Date(2023, 1, 1, 0, 0, 0, 0, loc)
+
+	// An interval between 2024-05-01 and 2024-06-01 (long after TeslaMate started)
+	t1 := time.Date(2024, 5, 1, 0, 0, 0, 0, loc)
+	t2 := time.Date(2024, 6, 1, 0, 0, 0, 0, loc)
+	missingKm := 36.6 // minor GPS drift smoothing
+
+	smoothed, preTm := allocateSmoothingForInterval(t1, t2, missingKm, &firstTrackingTime)
+
+	// Distance smoothing should still apply for May 2024
+	if math.Abs(smoothed["2024-05"]-36.6) > 0.01 {
+		t.Errorf("expected 36.6 smoothed km in 2024-05, got %f", smoothed["2024-05"])
+	}
+
+	// But pre-TeslaMate km MUST BE ZERO so no synthetic energy is added when real data is available!
+	if len(preTm) != 0 || preTm["2024-05"] > 0 {
+		t.Errorf("expected 0 pre-TeslaMate km for post-tracking interval, got %v", preTm)
+	}
+}
+
+func TestAllocateSmoothingForInterval_PreTeslaMate_FullPreTeslaMateEnergy(t *testing.T) {
+	loc := time.UTC
+	// TeslaMate started tracking on 2023-06-01
+	firstTrackingTime := time.Date(2023, 6, 1, 0, 0, 0, 0, loc)
+
+	// An interval between 2022-01-01 and 2022-03-01 (before TeslaMate started)
+	t1 := time.Date(2022, 1, 1, 0, 0, 0, 0, loc)
+	t2 := time.Date(2022, 3, 1, 0, 0, 0, 0, loc)
+	missingKm := 2000.0
+
+	smoothed, preTm := allocateSmoothingForInterval(t1, t2, missingKm, &firstTrackingTime)
+
+	// Both smoothed and preTm should have the missing km allocated across Jan & Feb 2022
+	var totalPreTm float64
+	for _, km := range preTm {
+		totalPreTm += km
+	}
+	if math.Abs(totalPreTm-2000.0) > 0.01 {
+		t.Errorf("expected 2000 pre-TeslaMate km, got %f", totalPreTm)
+	}
+	if math.Abs(smoothed["2022-01"]-preTm["2022-01"]) > 0.01 {
+		t.Errorf("expected smoothed and preTm to match for pre-TeslaMate interval")
+	}
+}
+
+func TestAllocateSmoothingForInterval_SpanningBoundary(t *testing.T) {
+	loc := time.UTC
+	// TeslaMate started tracking on 2023-05-15 12:00:00 (mid-May)
+	firstTrackingTime := time.Date(2023, 5, 15, 12, 0, 0, 0, loc)
+
+	// Interval starts 2023-05-01 00:00 and ends 2023-05-30 00:00 (29 days)
+	t1 := time.Date(2023, 5, 1, 0, 0, 0, 0, loc)
+	t2 := time.Date(2023, 5, 30, 0, 0, 0, 0, loc)
+	missingKm := 290.0 // 10 km/day
+
+	smoothed, preTm := allocateSmoothingForInterval(t1, t2, missingKm, &firstTrackingTime)
+
+	// Full interval distance smoothed
+	if math.Abs(smoothed["2023-05"]-290.0) > 0.01 {
+		t.Errorf("expected 290 smoothed km, got %f", smoothed["2023-05"])
+	}
+
+	// Pre-TeslaMate portion is exactly 14.5 days out of 29 days = 50% = 145 km
+	if math.Abs(preTm["2023-05"]-145.0) > 0.01 {
+		t.Errorf("expected 145 pre-TeslaMate km, got %f", preTm["2023-05"])
+	}
+}
+
+func TestAllocateSmoothingForInterval_NoTeslaMateData(t *testing.T) {
+	loc := time.UTC
+	t1 := time.Date(2023, 1, 1, 0, 0, 0, 0, loc)
+	t2 := time.Date(2023, 2, 1, 0, 0, 0, 0, loc)
+	missingKm := 500.0
+
+	smoothed, preTm := allocateSmoothingForInterval(t1, t2, missingKm, nil)
+
+	if math.Abs(smoothed["2023-01"]-500.0) > 0.01 {
+		t.Errorf("expected 500 smoothed km, got %f", smoothed["2023-01"])
+	}
+	if math.Abs(preTm["2023-01"]-500.0) > 0.01 {
+		t.Errorf("expected 500 preTm km, got %f", preTm["2023-01"])
+	}
+}
+
