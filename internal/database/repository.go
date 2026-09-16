@@ -313,8 +313,10 @@ type DriveFilter struct {
 	TripGroupID     string
 }
 
-// HighwayDrivePredicate matches long and fast drives, likely to use toll roads.
-const HighwayDrivePredicate = `drives.distance_km >= 40 AND COALESCE(drives.speed_avg, 0) >= 70`
+// HighwayDrivePredicate matches drives likely to have used toll roads:
+// either long and reasonably fast (distance >= 40 km, speed_avg >= 70 km/h),
+// or over 20 km with a highway top speed (distance >= 20 km, speed_max > 125 km/h).
+const HighwayDrivePredicate = `((drives.distance_km >= 40 AND COALESCE(drives.speed_avg, 0) >= 70) OR (drives.distance_km >= 20 AND COALESCE(drives.speed_max, 0) > 125))`
 
 // Highway-like drives (long and fast) with no toll attached and no explicit "no toll" review.
 const UnqualifiedDrivePredicate = HighwayDrivePredicate + `
