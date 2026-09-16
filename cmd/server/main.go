@@ -27,6 +27,9 @@ import (
 	"github.com/teslacost/teslacost/web"
 )
 
+// AppVersion is the application version, injected at build time via -ldflags "-X main.AppVersion=...".
+var AppVersion = "1.11.0"
+
 func main() {
 	log.Println("Starting TeslaCost Full-Stack Server...")
 
@@ -100,8 +103,6 @@ func main() {
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))
-
-	const AppVersion = "1.11.0"
 
 	// Public Health Check Endpoint
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
