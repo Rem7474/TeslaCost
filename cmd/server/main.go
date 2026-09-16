@@ -28,7 +28,7 @@ import (
 )
 
 // AppVersion is the application version, injected at build time via -ldflags "-X main.AppVersion=...".
-var AppVersion = "1.11.0"
+var AppVersion = "1.12.0"
 
 func main() {
 	log.Println("Starting TeslaCost Full-Stack Server...")
