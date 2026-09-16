@@ -48,7 +48,7 @@ function onVehicleChange(event: Event) {
           <select id="topbar-active-vehicle"
             :value="vehicleStore.activeVehicle?.id"
             @change="onVehicleChange"
-            class="bg-slate-800 text-slate-100 text-sm font-semibold rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500 transition-colors"
+            class="bg-slate-800 text-slate-100 text-sm font-semibold rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500 transition-colors max-w-[130px] sm:max-w-[200px] md:max-w-xs truncate"
           >
             <option v-for="v in vehicleStore.vehicles" :key="v.id" :value="v.id">
               {{ v.name }}
