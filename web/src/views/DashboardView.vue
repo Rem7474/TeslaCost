@@ -22,6 +22,8 @@ import {
   ChevronRight,
   PieChart,
   Info,
+  FileText,
+  CheckCircle2,
 } from 'lucide-vue-next'
 import { Chart, registerables } from 'chart.js'
 
@@ -95,6 +97,141 @@ const insuranceSourceLabel = computed(() => {
       return 'incluse dans la location'
     default:
       return 'non renseignée'
+  }
+})
+
+// Contract lease computed metrics
+const leaseContract = computed(() => {
+  if (!tco.value || !['LOA', 'LLD'].includes(tco.value.acquisition_type)) {
+    return null
+  }
+  const t = tco.value
+  const startDateStr = t.contract_start_date
+  const endDateStr = t.contract_end_date
+  if (!endDateStr && !t.contract_duration_months && !t.lease_duration_months) {
+    return null
+  }
+
+  const now = new Date()
+  const start = startDateStr ? new Date(startDateStr) : null
+  const durationMonths = t.contract_duration_months || t.lease_duration_months || 0
+  let end = endDateStr ? new Date(endDateStr) : null
+  if (!end && start && durationMonths > 0) {
+    end = new Date(start.getFullYear(), start.getMonth() + durationMonths, start.getDate())
+  }
+
+  let totalMonths = durationMonths
+  if (!totalMonths && start && end) {
+    totalMonths = Math.max(1, Math.round((end.getTime() - start.getTime()) / (1000 * 3600 * 24 * 30.4375)))
+  }
+
+  let elapsedMonths = 0
+  let remainingMonths = 0
+  let durationProgressPct = 0
+  let isEnded = false
+  let isNotStarted = false
+
+  if (start && end) {
+    const totalMs = end.getTime() - start.getTime()
+    const elapsedMs = now.getTime() - start.getTime()
+    if (elapsedMs < 0) {
+      isNotStarted = true
+      durationProgressPct = 0
+      remainingMonths = totalMonths
+    } else if (now.getTime() >= end.getTime()) {
+      isEnded = true
+      durationProgressPct = 100
+      elapsedMonths = totalMonths
+      remainingMonths = 0
+    } else {
+      durationProgressPct = Math.min(100, Math.max(0, Math.round((elapsedMs / totalMs) * 100)))
+      elapsedMonths = Math.max(0, Math.round(elapsedMs / (1000 * 3600 * 24 * 30.4375)))
+      remainingMonths = Math.max(0, Math.round((end.getTime() - now.getTime()) / (1000 * 3600 * 24 * 30.4375)))
+    }
+  } else if (totalMonths > 0) {
+    durationProgressPct = 50
+  }
+
+  // Mileage
+  const kmDriven = t.lease_km_driven || 0
+  const kmAllowanceToDate = t.lease_km_allowance_to_date || 0
+  const kmAllowanceTotal = t.lease_km_allowance_total || 0
+  const hasMileageAllowance = kmAllowanceToDate > 0 || kmAllowanceTotal > 0
+
+  let mileageProgressPct = 0
+  let kmDiff = 0
+  let actualPaceKmMonth = 0
+  let contractualPaceKmMonth = 0
+
+  if (hasMileageAllowance) {
+    if (kmAllowanceTotal > 0) {
+      mileageProgressPct = Math.min(100, Math.max(0, Math.round((kmDriven / kmAllowanceTotal) * 100)))
+    } else if (kmAllowanceToDate > 0) {
+      mileageProgressPct = Math.min(100, Math.max(0, Math.round((kmDriven / kmAllowanceToDate) * 100)))
+    }
+
+    kmDiff = Math.round(kmDriven - kmAllowanceToDate)
+
+    if (elapsedMonths > 0) {
+      actualPaceKmMonth = Math.round(kmDriven / elapsedMonths)
+    }
+    if (t.lease_km_allowance_per_year) {
+      contractualPaceKmMonth = Math.round(t.lease_km_allowance_per_year / 12)
+    } else if (totalMonths > 0 && kmAllowanceTotal > 0) {
+      contractualPaceKmMonth = Math.round(kmAllowanceTotal / totalMonths)
+    }
+  }
+
+  // Status
+  let status = { label: 'En cours', class: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' }
+  if (t.option_exercised_date) {
+    status = { label: "Option d'achat levée", class: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' }
+  } else if (isEnded) {
+    status = { label: 'Terminé', class: 'bg-slate-800 text-slate-400 border-slate-700' }
+  } else if (remainingMonths <= 3 && !isNotStarted) {
+    status = { label: 'Échéance proche', class: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
+  }
+
+  // Color for mileage bar
+  let mileageColor = 'bg-gradient-to-r from-emerald-500 to-teal-500'
+  if (kmAllowanceToDate > 0 && kmDriven > kmAllowanceToDate) {
+    mileageColor = 'bg-gradient-to-r from-rose-500 to-red-500'
+  } else if (kmAllowanceToDate > 0 && kmDriven / kmAllowanceToDate > 0.92) {
+    mileageColor = 'bg-gradient-to-r from-amber-500 to-orange-500'
+  }
+
+  return {
+    acquisitionType: t.acquisition_type,
+    startDate: start,
+    endDate: end,
+    totalMonths,
+    elapsedMonths,
+    remainingMonths,
+    durationProgressPct,
+    isEnded,
+    isNotStarted,
+    status,
+    // Mileage
+    hasMileageAllowance,
+    kmDriven,
+    kmAllowanceToDate,
+    kmAllowanceTotal,
+    mileageProgressPct,
+    kmDiff,
+    actualPaceKmMonth,
+    contractualPaceKmMonth,
+    mileageColor,
+    // Financials
+    monthlyRent: t.lease_monthly_rent,
+    downPayment: t.lease_down_payment,
+    purchaseOptionPrice: t.lease_purchase_option_price,
+    excessKmCost: t.lease_excess_km_cost || 0,
+    excessKmProjected: t.lease_excess_km_projected || 0,
+    excessKmPrice: t.lease_excess_km_price,
+    // Included services
+    includesMaintenance: t.lease_includes_maintenance,
+    includesInsurance: t.lease_includes_insurance,
+    includesTires: t.lease_includes_tires,
   }
 })
 
@@ -822,28 +959,163 @@ function renderCharts() {
         </div>
       </div>
 
-      <!-- Lease contract follow-up -->
+      <!-- Lease contract follow-up card -->
       <div
-        v-if="tco && ['LOA', 'LLD'].includes(tco.acquisition_type) && (tco.lease_km_allowance_to_date > 0 || tco.contract_end_date)"
-        class="bg-slate-900 border border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        v-if="leaseContract"
+        class="bg-gradient-to-br from-slate-900/90 to-indigo-950/20 border border-indigo-500/20 p-4 sm:p-5 rounded-2xl shadow-sm space-y-4"
       >
-        <div class="space-y-1">
-          <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Contrat {{ tco.acquisition_type }}</span>
-          <p v-if="tco.lease_km_allowance_to_date > 0" class="text-sm text-slate-200">
-            {{ Math.round(tco.lease_km_driven).toLocaleString('fr-FR') }} km parcourus pour
-            {{ Math.round(tco.lease_km_allowance_to_date).toLocaleString('fr-FR') }} km autorisés à date
-            <span :class="tco.lease_km_driven > tco.lease_km_allowance_to_date ? 'text-rose-400' : 'text-emerald-400'">
-              ({{ Math.round((tco.lease_km_driven / tco.lease_km_allowance_to_date) * 100) }} %)
+        <!-- Card Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+          <div class="flex items-center gap-2.5 flex-wrap">
+            <span class="px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 flex items-center gap-1.5">
+              <FileText class="w-3.5 h-3.5" />
+              Contrat {{ leaseContract.acquisitionType }}
             </span>
-          </p>
-          <p v-if="tco.contract_end_date" class="text-xs text-slate-400">
-            Fin de contrat le {{ new Date(tco.contract_end_date).toLocaleDateString('fr-FR') }}
-          </p>
+            <span
+              class="px-2.5 py-0.5 rounded-full text-xs font-semibold border"
+              :class="leaseContract.status.class"
+            >
+              {{ leaseContract.status.label }}
+            </span>
+          </div>
+
+          <!-- Monthly rent / downpayment -->
+          <div v-if="leaseContract.monthlyRent" class="self-start sm:self-auto text-left sm:text-right">
+            <span class="text-base sm:text-lg font-extrabold text-white">
+              {{ Number(leaseContract.monthlyRent).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+            </span>
+            <span class="text-xs text-slate-400 font-normal"> / mois</span>
+            <span v-if="leaseContract.downPayment && leaseContract.downPayment > 0" class="block text-[11px] text-slate-400">
+              (Apport : {{ Number(leaseContract.downPayment).toLocaleString('fr-FR', { maximumFractionDigits: 0 }) }} €)
+            </span>
+          </div>
         </div>
-        <div class="text-right text-xs">
-          <p v-if="tco.lease_excess_km_cost > 0" class="text-rose-300">Dépassement à date : {{ tco.lease_excess_km_cost.toFixed(2) }} €</p>
-          <p v-if="tco.lease_excess_km_projected > 0" class="text-amber-300">Pénalité projetée en fin de contrat : {{ tco.lease_excess_km_projected.toFixed(2) }} €</p>
-          <p v-if="!tco.lease_excess_km_projected && tco.lease_km_allowance_to_date > 0" class="text-emerald-400">Forfait kilométrique respecté au rythme actuel</p>
+
+        <!-- Progress Bars Section: 1 col on mobile, 2 cols on desktop if mileage allowance configured -->
+        <div
+          class="grid gap-4"
+          :class="leaseContract.hasMileageAllowance ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'"
+        >
+          <!-- Bar 1: Contract Duration Progress -->
+          <div class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+                <Calendar class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                Durée du contrat
+              </span>
+              <span class="font-bold text-indigo-300">
+                {{ leaseContract.elapsedMonths }} / {{ leaseContract.totalMonths }} mois
+                <span class="text-slate-400 font-normal">({{ leaseContract.durationProgressPct }} %)</span>
+              </span>
+            </div>
+
+            <!-- Progress Bar Track -->
+            <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+              <div
+                class="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-full transition-all duration-500"
+                :style="{ width: `${leaseContract.durationProgressPct}%` }"
+              ></div>
+            </div>
+
+            <!-- Sub-info: start date, remaining, end date -->
+            <div class="flex items-center justify-between text-[11px] text-slate-400 flex-wrap gap-1">
+              <span v-if="leaseContract.startDate">
+                Début : {{ leaseContract.startDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+              </span>
+              <span class="font-medium text-slate-300">
+                {{ leaseContract.isEnded ? 'Contrat terminé' : leaseContract.isNotStarted ? 'Contrat à venir' : `${leaseContract.remainingMonths} mois restants` }}
+              </span>
+              <span v-if="leaseContract.endDate">
+                Fin : {{ leaseContract.endDate.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+              </span>
+            </div>
+          </div>
+
+          <!-- Bar 2: Mileage Allowance Progress (if configured) -->
+          <div v-if="leaseContract.hasMileageAllowance" class="bg-slate-950/50 border border-slate-800/80 rounded-xl p-3.5 space-y-2.5">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-semibold text-slate-300 flex items-center gap-1.5">
+                <Gauge class="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                Forfait kilométrique
+              </span>
+              <span class="font-bold text-slate-200">
+                {{ Math.round(leaseContract.kmDriven).toLocaleString('fr-FR') }} km
+                <span v-if="leaseContract.kmAllowanceTotal" class="text-slate-400 font-normal">
+                  / {{ Math.round(leaseContract.kmAllowanceTotal).toLocaleString('fr-FR') }} km
+                </span>
+                <span v-else class="text-slate-400 font-normal">
+                  / {{ Math.round(leaseContract.kmAllowanceToDate).toLocaleString('fr-FR') }} km à date
+                </span>
+              </span>
+            </div>
+
+            <!-- Progress Bar Track -->
+            <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden">
+              <div
+                class="h-full rounded-full transition-all duration-500"
+                :class="leaseContract.mileageColor"
+                :style="{ width: `${Math.min(100, leaseContract.mileageProgressPct)}%` }"
+              ></div>
+            </div>
+
+            <!-- Sub-info: Pace & Diff -->
+            <div class="flex items-center justify-between text-[11px] flex-wrap gap-1">
+              <span class="text-slate-400">
+                Rythme : <strong>{{ leaseContract.actualPaceKmMonth }} km/mois</strong>
+                <template v-if="leaseContract.contractualPaceKmMonth"> (prévu : {{ leaseContract.contractualPaceKmMonth }} km/mois)</template>
+              </span>
+              <span
+                v-if="leaseContract.kmDiff !== undefined"
+                :class="leaseContract.kmDiff > 0 ? 'text-rose-400 font-semibold' : 'text-emerald-400 font-semibold'"
+              >
+                {{ leaseContract.kmDiff > 0 ? `+${leaseContract.kmDiff.toLocaleString('fr-FR')} km de dépassement` : `${Math.abs(leaseContract.kmDiff).toLocaleString('fr-FR')} km d'avance` }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer: Buyout option, penalties, included services -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/60 text-xs text-slate-400">
+          <div class="flex items-center gap-2 flex-wrap">
+            <!-- Purchase option (LOA) -->
+            <span
+              v-if="leaseContract.purchaseOptionPrice"
+              class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium border border-slate-700/60 flex items-center gap-1.5"
+            >
+              <Coins class="w-3.5 h-3.5 text-amber-400" />
+              Option d'achat finale : <strong class="text-white">{{ Number(leaseContract.purchaseOptionPrice).toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) }} €</strong>
+            </span>
+
+            <!-- Included Services Badges -->
+            <span
+              v-if="leaseContract.includesMaintenance"
+              class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium flex items-center gap-1"
+            >
+              <CheckCircle2 class="w-3 h-3" /> Entretien inclus
+            </span>
+            <span
+              v-if="leaseContract.includesInsurance"
+              class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium flex items-center gap-1"
+            >
+              <CheckCircle2 class="w-3 h-3" /> Assurance incluse
+            </span>
+            <span
+              v-if="leaseContract.includesTires"
+              class="px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium flex items-center gap-1"
+            >
+              <CheckCircle2 class="w-3 h-3" /> Pneus inclus
+            </span>
+          </div>
+
+          <!-- Penalty Warnings if applicable -->
+          <div class="flex items-center gap-3">
+            <span v-if="leaseContract.excessKmCost > 0" class="text-rose-400 font-semibold">
+              Dépassement à date : {{ leaseContract.excessKmCost.toFixed(2) }} €
+            </span>
+            <span v-if="leaseContract.excessKmProjected > 0" class="text-amber-400 font-semibold">
+              Pénalité estimée fin de contrat : {{ leaseContract.excessKmProjected.toFixed(2) }} €
+            </span>
+          </div>
         </div>
       </div>
 
@@ -933,12 +1205,12 @@ function renderCharts() {
 
       <!-- Current Month Quick Highlight Banner -->
       <div v-if="currentMonthStats" class="bg-slate-900/80 border border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div class="flex items-center gap-3">
-          <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl">
+        <div class="flex items-center gap-3 min-w-0 flex-1">
+          <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl shrink-0">
             <Calendar class="w-5 h-5" />
           </div>
-          <div>
-            <div class="flex items-center gap-2">
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Activité du mois ({{ currentMonthStats.month }})</span>
               <button
                 type="button"
@@ -950,7 +1222,7 @@ function renderCharts() {
                 <span>Détail</span>
               </button>
             </div>
-            <div class="text-lg font-bold text-white flex items-center gap-3 mt-0.5">
+            <div class="text-base sm:text-lg font-bold text-white flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
               <span>{{ Math.round(currentMonthStats.distance_km).toLocaleString('fr-FR') }} km roulés</span>
               <span class="text-slate-500">•</span>
               <span class="text-emerald-400">{{ currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km.toFixed(3) + ' €/km' : '0.000 €/km' }}</span>

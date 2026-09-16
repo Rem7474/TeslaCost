@@ -546,7 +546,7 @@ onMounted(() => {
     </div>
 
     <!-- KPI Summary Grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4">
       <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
         <div class="flex items-center justify-between">
           <span class="text-xs font-medium text-slate-400">Trajets covoiturés</span>
@@ -634,24 +634,24 @@ onMounted(() => {
       <div v-for="trip in trips" :key="trip.id" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 hover:border-slate-700 transition-all shadow-sm space-y-4">
         <!-- Trip Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2.5 flex-wrap">
-              <h3 class="text-base font-bold text-white">{{ trip.title }}</h3>
-              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium">{{ trip.distance_km }} km</span>
+          <div class="space-y-1 min-w-0 flex-1">
+            <div class="flex items-center gap-2.5 flex-wrap min-w-0">
+              <h3 class="text-base font-bold text-white truncate max-w-sm sm:max-w-md" :title="trip.title">{{ trip.title }}</h3>
+              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium shrink-0">{{ trip.distance_km }} km</span>
               <span
-                class="text-xs px-2.5 py-0.5 rounded-full font-semibold border"
+                class="text-xs px-2.5 py-0.5 rounded-full font-semibold border shrink-0"
                 :class="trip.net_cost <= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'"
               >
                 {{ trip.net_cost <= 0 ? 'Trajet 100% rentabilisé !' : `Amorti à ${trip.total_cost > 0 ? Math.min(100, Math.round((trip.total_revenue / trip.total_cost) * 100)) : 0}%` }}
               </span>
             </div>
-            <div class="flex items-center gap-2 text-xs text-slate-400">
-              <Calendar class="w-3.5 h-3.5" />
-              <span>{{ formatDate(trip.date) }}</span>
-              <span v-if="trip.notes" class="text-slate-500">• {{ trip.notes }}</span>
+            <div class="flex items-center gap-2 text-xs text-slate-400 min-w-0">
+              <Calendar class="w-3.5 h-3.5 shrink-0" />
+              <span class="shrink-0">{{ formatDate(trip.date) }}</span>
+              <span v-if="trip.notes" class="text-slate-500 truncate">• {{ trip.notes }}</span>
             </div>
           </div>
-          <div class="flex items-center gap-2 self-end sm:self-auto">
+          <div class="flex items-center gap-2 shrink-0 self-end sm:self-auto">
             <button @click="openEditModal(trip)" class="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg" title="Modifier">
               <Edit2 class="w-4 h-4" />
             </button>
