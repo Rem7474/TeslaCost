@@ -1,4 +1,4 @@
-﻿CREATE TABLE IF NOT EXISTS maintenance_reminders (
+CREATE TABLE IF NOT EXISTS maintenance_reminders (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     vehicle_id UUID NOT NULL REFERENCES vehicles(id) ON DELETE CASCADE,
     title VARCHAR(100) NOT NULL,
