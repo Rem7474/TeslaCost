@@ -290,4 +290,57 @@ export const api = {
     const blob = await res.blob()
     return { blob, filename }
   },
+
+  // Maintenance Reminders & Webhooks
+  getReminders: (vehicleId: string) =>
+    request<MaintenanceReminder[]>(`/vehicles/${vehicleId}/reminders`),
+  createReminder: (vehicleId: string, data: any) =>
+    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders`, { method: 'POST', body: JSON.stringify(data) }, 'Rappel créé'),
+  updateReminder: (vehicleId: string, reminderId: string, data: any) =>
+    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders/${reminderId}`, { method: 'PUT', body: JSON.stringify(data) }, 'Rappel mis à jour'),
+  deleteReminder: (vehicleId: string, reminderId: string) =>
+    request<{ success: boolean }>(`/vehicles/${vehicleId}/reminders/${reminderId}`, { method: 'DELETE' }, 'Rappel supprimé'),
+  completeReminder: (vehicleId: string, reminderId: string, data: { completed_date: string; completed_odometer?: number }) =>
+    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders/${reminderId}/complete`, { method: 'POST', body: JSON.stringify(data) }, 'Entretien marqué comme réalisé'),
+  getVehicleWebhook: (vehicleId: string) =>
+    request<VehicleWebhook | null>(`/vehicles/${vehicleId}/webhook`),
+  saveVehicleWebhook: (vehicleId: string, data: any) =>
+    request<VehicleWebhook>(`/vehicles/${vehicleId}/webhook`, { method: 'PUT', body: JSON.stringify(data) }, 'Webhook enregistré'),
+  deleteVehicleWebhook: (vehicleId: string) =>
+    request<{ success: boolean }>(`/vehicles/${vehicleId}/webhook`, { method: 'DELETE' }, 'Webhook supprimé'),
+  testVehicleWebhook: (vehicleId: string, data: any) =>
+    request<{ success: boolean; message: string }>(`/vehicles/${vehicleId}/webhook/test`, { method: 'POST', body: JSON.stringify(data) }, 'Test de notification envoyé'),
+}
+
+export interface MaintenanceReminder {
+  id: string
+  vehicle_id: string
+  title: string
+  category: string
+  interval_km?: number | null
+  interval_months?: number | null
+  last_service_odometer?: number | null
+  last_service_date?: string | null
+  lead_km: number
+  lead_days: number
+  webhook_enabled: boolean
+  last_notified_at?: string | null
+  last_notified_odometer?: number | null
+  created_at: string
+  updated_at: string
+  status: 'OK' | 'DUE_SOON' | 'OVERDUE'
+  remaining_km?: number | null
+  remaining_days?: number | null
+  due_odometer?: number | null
+  due_date?: string | null
+}
+
+export interface VehicleWebhook {
+  id: string
+  vehicle_id: string
+  url: string
+  type: string
+  enabled: boolean
+  created_at: string
+  updated_at: string
 }
