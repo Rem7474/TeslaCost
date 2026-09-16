@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
-import { api } from '@/services/api'
+import { api, type ExpenseDocumentHeader } from '@/services/api'
 import {
   Receipt,
   Plus,
@@ -22,12 +22,17 @@ import {
   Pencil,
   Trash2,
   AlertTriangle,
+  Paperclip,
+  FileText,
+  Download,
+  Eye,
+  UploadCloud,
 } from 'lucide-vue-next'
 
 const router = useRouter()
 const vehicleStore = useVehicleStore()
 const { showConfirm, showAlert } = useConfirm()
-const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'CHARGES'>('TOLLS')
+const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'CHARGES' | 'DOCUMENTS'>('TOLLS')
 
 const driveExpenses = ref<any[]>([])
 const maintenanceExpenses = ref<any[]>([])
@@ -38,6 +43,13 @@ const chargesPage = ref(1)
 const loadingMoreCharges = ref(false)
 const missingCostOnly = ref(false)
 const loading = ref(false)
+
+// Documents & Invoices
+const documents = ref<ExpenseDocumentHeader[]>([])
+const isUploadingDocument = ref(false)
+const showUploadDocModal = ref(false)
+const uploadDocDescription = ref('')
+const uploadDocFile = ref<File | null>(null)
 
 // Modals
 const showAddTollModal = ref(false)
@@ -87,6 +99,8 @@ const tollForm = ref({
   fx_rate: '',
   date: toLocalDateTimeInput(new Date()),
   notes: '',
+  document_id: null as string | null,
+  document_filename: null as string | null,
 })
 
 const maintForm = ref({
@@ -104,6 +118,8 @@ const maintForm = ref({
   coverage_months: 24,
   closes_maintenance_id: null as string | null,
   description: '',
+  document_id: null as string | null,
+  document_filename: null as string | null,
 })
 
 const detectedOdometer = ref<number | null>(null)
@@ -174,6 +190,15 @@ function currencyPayload(form: { currency: string; fx_rate: string }) {
   return { currency: form.currency, fx_rate: form.fx_rate ? Number(form.fx_rate) : null }
 }
 
+async function ensureDocumentsLoaded() {
+  if (!vehicleStore.activeVehicle) return
+  try {
+    documents.value = await api.getDocuments(vehicleStore.activeVehicle.id)
+  } catch (err) {
+    console.error('Failed to load documents', err)
+  }
+}
+
 async function loadData() {
   if (!vehicleStore.activeVehicle) return
   loading.value = true
@@ -188,7 +213,10 @@ async function loadData() {
       charges.value = res.charges
       chargesTotal.value = res.total || 0
       chargesWithoutCost.value = res.charges_without_cost || 0
+    } else if (activeTab.value === 'DOCUMENTS') {
+      documents.value = await api.getDocuments(vehicleStore.activeVehicle.id)
     }
+    ensureDocumentsLoaded()
   } catch (err) {
     console.error('Failed to load expenses', err)
   } finally {
@@ -215,12 +243,15 @@ function openAddTollModal() {
     fx_rate: '',
     date: toLocalDateTimeInput(new Date()),
     notes: '',
+    document_id: null,
+    document_filename: null,
   }
   associationMode.value = 'NONE'
   selectedDriveId.value = ''
   selectedDriveIds.value = []
   showAddTollModal.value = true
   loadRecentDrives()
+  ensureDocumentsLoaded()
 }
 
 function openEditTollModal(e: any) {
@@ -232,6 +263,8 @@ function openEditTollModal(e: any) {
     fx_rate: e.fx_rate ? String(e.fx_rate) : '',
     date: toLocalDateTimeInput(new Date(e.date)),
     notes: e.notes || '',
+    document_id: e.document_id || null,
+    document_filename: e.document_filename || null,
   }
   if (e.trip_group_id) {
     // Keep the trip group link: its drives are preselected in multi-step mode
@@ -249,6 +282,7 @@ function openEditTollModal(e: any) {
   }
   showAddTollModal.value = true
   loadRecentDrives()
+  ensureDocumentsLoaded()
 }
 
 async function handleDeleteToll(e: any) {
@@ -322,6 +356,7 @@ async function handleCreateToll() {
       ...currencyPayload(tollForm.value),
       date: new Date(tollForm.value.date).toISOString(),
       notes: tollForm.value.notes,
+      document_id: tollForm.value.document_id || null,
     }
 
     if (associationMode.value === 'SINGLE' && selectedDriveId.value) {
@@ -363,9 +398,12 @@ function openAddMaintModal() {
     coverage_months: 24,
     closes_maintenance_id: null,
     description: '',
+    document_id: null,
+    document_filename: null,
   }
   showAddMaintModal.value = true
   checkOdometerForDate(maintForm.value.date)
+  ensureDocumentsLoaded()
 }
 
 function openEditMaintModal(m: any) {
@@ -387,8 +425,11 @@ function openEditMaintModal(m: any) {
     coverage_months: m.coverage_months ? Number(m.coverage_months) : 24,
     closes_maintenance_id: m.closes_maintenance_id || null,
     description: m.description || '',
+    document_id: m.document_id || null,
+    document_filename: m.document_filename || null,
   }
   showAddMaintModal.value = true
+  ensureDocumentsLoaded()
 }
 
 async function handleDeleteMaint(m: any) {
@@ -435,6 +476,7 @@ async function handleCreateMaint() {
         maintForm.value.is_recurring && maintForm.value.recurrence_end_date
           ? new Date(maintForm.value.recurrence_end_date).toISOString()
           : null,
+      document_id: maintForm.value.document_id || null,
     }
     if (editingMaintId.value) {
       await api.updateMaintenance(vehicleStore.activeVehicle.id, editingMaintId.value, payload)
@@ -485,8 +527,11 @@ function openAddChargeModal() {
     address: '',
     odometer: vehicleStore.activeVehicle?.current_odometer ? String(Math.round(vehicleStore.activeVehicle.current_odometer)) : '',
     notes: '',
+    document_id: null,
+    document_filename: null,
   }
   showChargeModal.value = true
+  ensureDocumentsLoaded()
 }
 
 function openEditChargeModal(c: any) {
@@ -500,8 +545,11 @@ function openEditChargeModal(c: any) {
     address: c.address || '',
     odometer: c.odometer ? String(Math.round(c.odometer)) : '',
     notes: c.notes || '',
+    document_id: c.document_id || null,
+    document_filename: c.document_filename || null,
   }
   showChargeModal.value = true
+  ensureDocumentsLoaded()
 }
 
 async function handleSaveCharge() {
@@ -514,6 +562,7 @@ async function handleSaveCharge() {
     address: chargeForm.value.address || null,
     odometer: chargeForm.value.odometer ? Number(chargeForm.value.odometer) : null,
     notes: chargeForm.value.notes || null,
+    document_id: chargeForm.value.document_id || null,
   }
   try {
     if (editingCharge.value) {
@@ -526,6 +575,120 @@ async function handleSaveCharge() {
   } catch (err: any) {
     showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
+}
+
+function onSelectExistingDoc(docId: string, form: any) {
+  if (!docId) {
+    form.document_id = null
+    form.document_filename = null
+    return
+  }
+  const found = documents.value.find((d) => d.id === docId)
+  if (found) {
+    form.document_id = found.id
+    form.document_filename = found.filename
+  }
+}
+
+async function onFileInputChange(event: Event, form: any) {
+  const input = event.target as HTMLInputElement
+  if (!input.files || !input.files.length) return
+  const file = input.files[0]
+  if (!vehicleStore.activeVehicle) return
+  isUploadingDocument.value = true
+  try {
+    const doc = await api.uploadDocument(vehicleStore.activeVehicle.id, file)
+    documents.value.unshift(doc)
+    form.document_id = doc.id
+    form.document_filename = doc.filename
+    showAlert(`Fichier « ${doc.filename} » téléversé et rattaché`, 'Succès', 'success')
+  } catch (err: any) {
+    showAlert(`Erreur lors du téléversement : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    isUploadingDocument.value = false
+    input.value = ''
+  }
+}
+
+async function viewOrDownloadDocument(docId: string, filename?: string, download = false) {
+  if (!vehicleStore.activeVehicle || !docId) return
+  try {
+    const { blob, filename: serverFilename } = await api.downloadDocumentBlob(vehicleStore.activeVehicle.id, docId)
+    const finalName = filename || serverFilename || 'document'
+    const blobUrl = URL.createObjectURL(blob)
+    if (download) {
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = finalName
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+    } else {
+      window.open(blobUrl, '_blank')
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000)
+    }
+  } catch (err: any) {
+    showAlert(`Erreur lors de l'accès au document : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+async function handleDeleteDocument(doc: ExpenseDocumentHeader) {
+  if (!vehicleStore.activeVehicle) return
+  const ok = await showConfirm({
+    title: 'Supprimer le justificatif',
+    message: `Supprimer le justificatif « ${doc.filename} » ? Les dépenses associées seront conservées mais ne pointeront plus vers ce document.`,
+    confirmText: 'Supprimer',
+    type: 'danger',
+  })
+  if (!ok) return
+  try {
+    await api.deleteDocument(vehicleStore.activeVehicle.id, doc.id)
+    documents.value = documents.value.filter((d) => d.id !== doc.id)
+    showAlert('Justificatif supprimé', 'Succès', 'success')
+    await loadData()
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+function openUploadDocumentModal() {
+  uploadDocDescription.value = ''
+  uploadDocFile.value = null
+  showUploadDocModal.value = true
+}
+
+function onUploadDocFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files && input.files.length > 0) {
+    uploadDocFile.value = input.files[0]
+  }
+}
+
+async function handleUploadStandaloneDocument() {
+  if (!vehicleStore.activeVehicle || !uploadDocFile.value) {
+    showAlert('Veuillez sélectionner un fichier', 'Champ requis', 'warning')
+    return
+  }
+  isUploadingDocument.value = true
+  try {
+    const doc = await api.uploadDocument(vehicleStore.activeVehicle.id, uploadDocFile.value, uploadDocDescription.value)
+    documents.value.unshift(doc)
+    showUploadDocModal.value = false
+    showAlert(`Fichier « ${doc.filename} » ajouté avec succès`, 'Succès', 'success')
+  } catch (err: any) {
+    showAlert(`Erreur lors du téléversement : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    isUploadingDocument.value = false
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 o'
+  const k = 1024
+  const sizes = ['o', 'Ko', 'Mo', 'Go']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
 
 async function handleDeleteCharge(c: any) {
@@ -597,14 +760,22 @@ function formatDriveTime(dateStr: string) {
           <Plus class="w-3.5 h-3.5" />
           Recharge hors TeslaMate
         </button>
+        <button
+          v-if="activeTab === 'DOCUMENTS'"
+          @click="openUploadDocumentModal"
+          class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+        >
+          <Plus class="w-3.5 h-3.5" />
+          Ajouter un justificatif
+        </button>
       </div>
     </div>
 
     <!-- Sub-tabs -->
-    <div class="flex items-center gap-2 border-b border-slate-800 pb-2">
+    <div class="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
       <button
         @click="activeTab = 'TOLLS'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors"
+        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
         :class="activeTab === 'TOLLS' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-white'"
       >
         <Receipt class="w-4 h-4" />
@@ -612,7 +783,7 @@ function formatDriveTime(dateStr: string) {
       </button>
       <button
         @click="activeTab = 'MAINTENANCE'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors"
+        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
         :class="activeTab === 'MAINTENANCE' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' : 'text-slate-400 hover:text-white'"
       >
         <Wrench class="w-4 h-4" />
@@ -620,11 +791,19 @@ function formatDriveTime(dateStr: string) {
       </button>
       <button
         @click="activeTab = 'CHARGES'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors"
+        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
         :class="activeTab === 'CHARGES' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'text-slate-400 hover:text-white'"
       >
         <Zap class="w-4 h-4" />
         Recharges Électriques
+      </button>
+      <button
+        @click="activeTab = 'DOCUMENTS'"
+        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
+        :class="activeTab === 'DOCUMENTS' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-white'"
+      >
+        <Paperclip class="w-4 h-4" />
+        Justificatifs & Factures
       </button>
     </div>
 
@@ -652,6 +831,15 @@ function formatDriveTime(dateStr: string) {
               <span v-else-if="e.trip_group_name" class="text-xs px-2.5 py-0.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 flex items-center gap-1">
                 <Layers class="w-3 h-3" /> {{ e.trip_group_name }}
               </span>
+              <button
+                v-if="e.document_id"
+                @click="viewOrDownloadDocument(e.document_id, e.document_filename, false)"
+                class="text-xs px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 flex items-center gap-1 transition-colors"
+                title="Voir le justificatif"
+              >
+                <Paperclip class="w-3 h-3" />
+                <span>{{ e.document_filename || 'Facture' }}</span>
+              </button>
             </div>
             <p v-if="e.notes" class="text-sm text-slate-300">{{ e.notes }}</p>
           </div>
@@ -723,6 +911,15 @@ function formatDriveTime(dateStr: string) {
               <span v-if="m.closes_maintenance_id" class="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20">
                 Clôture la révision précédente
               </span>
+              <button
+                v-if="m.document_id"
+                @click="viewOrDownloadDocument(m.document_id, m.document_filename, false)"
+                class="text-xs px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 flex items-center gap-1 transition-colors"
+                title="Voir le justificatif"
+              >
+                <Paperclip class="w-3 h-3" />
+                <span>{{ m.document_filename || 'Facture' }}</span>
+              </button>
             </div>
             <p class="text-sm font-semibold text-slate-200">{{ m.description }}</p>
             <p v-if="m.odometer" class="text-xs text-slate-400">À {{ Math.round(m.odometer) }} km</p>
@@ -805,6 +1002,15 @@ function formatDriveTime(dateStr: string) {
               <span class="text-xs text-slate-400">{{ formatDate(c.date) }}</span>
               <span v-if="c.is_manual" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Manuelle</span>
               <span v-else-if="c.cost_source === 'MANUAL'" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700">Coût corrigé</span>
+              <button
+                v-if="c.document_id"
+                @click="viewOrDownloadDocument(c.document_id, c.document_filename, false)"
+                class="text-xs px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 flex items-center gap-1 transition-colors"
+                title="Voir le justificatif"
+              >
+                <Paperclip class="w-3 h-3" />
+                <span>{{ c.document_filename || 'Facture' }}</span>
+              </button>
             </div>
             <p class="text-sm text-slate-300 mt-1">{{ c.address || 'Lieu de recharge inconnu' }}</p>
           </div>
@@ -849,6 +1055,99 @@ function formatDriveTime(dateStr: string) {
           >
             {{ loadingMoreCharges ? 'Chargement...' : 'Charger plus' }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content: Documents & Invoices -->
+    <div v-if="activeTab === 'DOCUMENTS'" class="space-y-4">
+      <!-- Info banner -->
+      <div class="p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-indigo-300">
+        <div class="flex items-center gap-2.5">
+          <Paperclip class="w-4 h-4 text-indigo-400 shrink-0" />
+          <span>
+            Les justificatifs (factures, tickets, rapports d'atelier) sont stockés directement dans la base de données. Plusieurs dépenses peuvent être rattachées au même fichier.
+          </span>
+        </div>
+        <span class="font-semibold shrink-0">
+          {{ documents.length }} document(s)
+        </span>
+      </div>
+
+      <div v-if="loading" class="text-center py-12 text-slate-400">Chargement...</div>
+      <div v-else-if="!documents.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 space-y-3">
+        <p>Aucun justificatif ou facture téléversé pour ce véhicule.</p>
+        <button
+          @click="openUploadDocumentModal"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-2 shadow-lg shadow-indigo-600/20"
+        >
+          <UploadCloud class="w-4 h-4" />
+          Téléverser un premier document
+        </button>
+      </div>
+
+      <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div
+          v-for="d in documents"
+          :key="d.id"
+          class="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex flex-col justify-between gap-3 hover:border-slate-700 transition-colors"
+        >
+          <div class="space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="p-2 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+                  <FileText class="w-5 h-5" />
+                </div>
+                <div class="min-w-0">
+                  <h4 class="text-sm font-semibold text-white truncate" :title="d.filename">
+                    {{ d.filename }}
+                  </h4>
+                  <p class="text-xs text-slate-400">
+                    {{ formatDate(d.created_at) }} • {{ formatFileSize(d.file_size) }}
+                  </p>
+                </div>
+              </div>
+              <span
+                class="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border"
+                :class="d.linked_expenses_count > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'"
+              >
+                {{ d.linked_expenses_count > 0 ? `${d.linked_expenses_count} dépense(s) liée(s)` : 'Non associé' }}
+              </span>
+            </div>
+
+            <p v-if="d.description" class="text-xs text-slate-300 italic pl-1">
+              « {{ d.description }} »
+            </p>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
+            <div class="flex items-center gap-1.5">
+              <button
+                @click="viewOrDownloadDocument(d.id, d.filename, false)"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
+                title="Consulter le fichier"
+              >
+                <Eye class="w-3.5 h-3.5 text-indigo-400" />
+                <span>Ouvrir</span>
+              </button>
+              <button
+                @click="viewOrDownloadDocument(d.id, d.filename, true)"
+                class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
+                title="Télécharger le fichier"
+              >
+                <Download class="w-3.5 h-3.5 text-indigo-400" />
+                <span>Télécharger</span>
+              </button>
+            </div>
+
+            <button
+              @click="handleDeleteDocument(d)"
+              class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
+              title="Supprimer ce document"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -982,6 +1281,74 @@ function formatDriveTime(dateStr: string) {
             <div>
               <label for="expense-toll-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes / Description</label>
               <input id="expense-toll-notes" v-model="tollForm.notes" placeholder="A10 Paris-Bordeaux..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+            </div>
+          </div>
+
+          <!-- Justificatif / Facture -->
+          <div class="space-y-2 bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Paperclip class="w-3.5 h-3.5 text-indigo-400" />
+                Justificatif / Facture
+              </span>
+              <span v-if="tollForm.document_id" class="text-[11px] text-emerald-400 font-medium">Lié</span>
+            </div>
+
+            <div v-if="tollForm.document_id" class="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/30 rounded-xl">
+              <div class="flex items-center gap-2 min-w-0">
+                <FileText class="w-4 h-4 text-indigo-400 shrink-0" />
+                <span class="text-xs text-white truncate font-medium">{{ tollForm.document_filename || 'Facture liée' }}</span>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  @click="viewOrDownloadDocument(tollForm.document_id, tollForm.document_filename, false)"
+                  class="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800"
+                  title="Voir le document"
+                >
+                  <Eye class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  @click="tollForm.document_id = null; tollForm.document_filename = null"
+                  class="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                  title="Détacher le justificatif"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div v-else class="space-y-2">
+              <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex-1" v-if="documents.length > 0">
+                  <label for="toll-existing-doc" class="sr-only">Choisir une facture existante</label>
+                  <select
+                    id="toll-existing-doc"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
+                    @change="(e: any) => onSelectExistingDoc(e.target.value, tollForm)"
+                  >
+                    <option value="">-- Associer une facture existante --</option>
+                    <option v-for="d in documents" :key="d.id" :value="d.id">
+                      {{ d.filename }} ({{ formatDate(d.created_at) }})
+                    </option>
+                  </select>
+                </div>
+                <label class="cursor-pointer px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+                  <UploadCloud class="w-3.5 h-3.5" />
+                  <span>{{ isUploadingDocument ? 'Téléversement...' : 'Nouveau fichier' }}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/webp"
+                    class="hidden"
+                    :disabled="isUploadingDocument"
+                    @change="(e: any) => onFileInputChange(e, tollForm)"
+                  />
+                </label>
+              </div>
+              <p class="text-[10px] text-slate-400">
+                PDF ou image. Plusieurs péages peuvent être rattachés à la même facture mensuelle.
+              </p>
             </div>
           </div>
 
@@ -1211,6 +1578,74 @@ function formatDriveTime(dateStr: string) {
             </div>
           </div>
 
+          <!-- Justificatif / Facture -->
+          <div class="space-y-2 bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Paperclip class="w-3.5 h-3.5 text-indigo-400" />
+                Justificatif / Facture
+              </span>
+              <span v-if="maintForm.document_id" class="text-[11px] text-emerald-400 font-medium">Lié</span>
+            </div>
+
+            <div v-if="maintForm.document_id" class="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/30 rounded-xl">
+              <div class="flex items-center gap-2 min-w-0">
+                <FileText class="w-4 h-4 text-indigo-400 shrink-0" />
+                <span class="text-xs text-white truncate font-medium">{{ maintForm.document_filename || 'Facture liée' }}</span>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  @click="viewOrDownloadDocument(maintForm.document_id, maintForm.document_filename, false)"
+                  class="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800"
+                  title="Voir le document"
+                >
+                  <Eye class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  @click="maintForm.document_id = null; maintForm.document_filename = null"
+                  class="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                  title="Détacher le justificatif"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div v-else class="space-y-2">
+              <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex-1" v-if="documents.length > 0">
+                  <label for="maint-existing-doc" class="sr-only">Choisir une facture existante</label>
+                  <select
+                    id="maint-existing-doc"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
+                    @change="(e: any) => onSelectExistingDoc(e.target.value, maintForm)"
+                  >
+                    <option value="">-- Associer une facture existante --</option>
+                    <option v-for="d in documents" :key="d.id" :value="d.id">
+                      {{ d.filename }} ({{ formatDate(d.created_at) }})
+                    </option>
+                  </select>
+                </div>
+                <label class="cursor-pointer px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+                  <UploadCloud class="w-3.5 h-3.5" />
+                  <span>{{ isUploadingDocument ? 'Téléversement...' : 'Nouveau fichier' }}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/webp"
+                    class="hidden"
+                    :disabled="isUploadingDocument"
+                    @change="(e: any) => onFileInputChange(e, maintForm)"
+                  />
+                </label>
+              </div>
+              <p class="text-[10px] text-slate-400">
+                PDF ou image (facture atelier, justificatif d'assurance, etc.).
+              </p>
+            </div>
+          </div>
+
           <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
             <button type="button" @click="showAddMaintModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
               Annuler
@@ -1286,12 +1721,136 @@ function formatDriveTime(dateStr: string) {
             <input id="charge-form-notes" v-model="chargeForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
+          <!-- Justificatif / Facture -->
+          <div class="space-y-2 bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                <Paperclip class="w-3.5 h-3.5 text-indigo-400" />
+                Justificatif / Facture
+              </span>
+              <span v-if="chargeForm.document_id" class="text-[11px] text-emerald-400 font-medium">Lié</span>
+            </div>
+
+            <div v-if="chargeForm.document_id" class="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/30 rounded-xl">
+              <div class="flex items-center gap-2 min-w-0">
+                <FileText class="w-4 h-4 text-indigo-400 shrink-0" />
+                <span class="text-xs text-white truncate font-medium">{{ chargeForm.document_filename || 'Facture liée' }}</span>
+              </div>
+              <div class="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  @click="viewOrDownloadDocument(chargeForm.document_id, chargeForm.document_filename, false)"
+                  class="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800"
+                  title="Voir le document"
+                >
+                  <Eye class="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  @click="chargeForm.document_id = null; chargeForm.document_filename = null"
+                  class="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                  title="Détacher le justificatif"
+                >
+                  <X class="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+
+            <div v-else class="space-y-2">
+              <div class="flex flex-col sm:flex-row gap-2">
+                <div class="flex-1" v-if="documents.length > 0">
+                  <label for="charge-existing-doc" class="sr-only">Choisir une facture existante</label>
+                  <select
+                    id="charge-existing-doc"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
+                    @change="(e: any) => onSelectExistingDoc(e.target.value, chargeForm)"
+                  >
+                    <option value="">-- Associer une facture existante --</option>
+                    <option v-for="d in documents" :key="d.id" :value="d.id">
+                      {{ d.filename }} ({{ formatDate(d.created_at) }})
+                    </option>
+                  </select>
+                </div>
+                <label class="cursor-pointer px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+                  <UploadCloud class="w-3.5 h-3.5" />
+                  <span>{{ isUploadingDocument ? 'Téléversement...' : 'Nouveau fichier' }}</span>
+                  <input
+                    type="file"
+                    accept=".pdf,image/png,image/jpeg,image/webp"
+                    class="hidden"
+                    :disabled="isUploadingDocument"
+                    @change="(e: any) => onFileInputChange(e, chargeForm)"
+                  />
+                </label>
+              </div>
+              <p class="text-[10px] text-slate-400">
+                PDF ou image (reçu Superchargeur, borne publique, etc.).
+              </p>
+            </div>
+          </div>
+
           <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
             <button type="button" @click="showChargeModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
               Annuler
             </button>
             <button type="submit" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl font-medium">
               Enregistrer
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Modal: Upload Standalone Document -->
+    <div
+      v-if="showUploadDocModal"
+      class="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-white flex items-center gap-2">
+            <UploadCloud class="w-5 h-5 text-indigo-400" />
+            Ajouter un Justificatif ou une Facture
+          </h3>
+          <button @click="showUploadDocModal = false" class="text-slate-400 hover:text-white">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <form @submit.prevent="handleUploadStandaloneDocument" class="space-y-3">
+          <div>
+            <label for="standalone-doc-file" class="block text-xs font-semibold text-slate-300 mb-1">Fichier (PDF, PNG, JPEG, WEBP, max 15 Mo)</label>
+            <input
+              id="standalone-doc-file"
+              type="file"
+              accept=".pdf,image/png,image/jpeg,image/webp"
+              required
+              @change="onUploadDocFileSelect"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+            />
+          </div>
+
+          <div>
+            <label for="standalone-doc-desc" class="block text-xs font-semibold text-slate-300 mb-1">Description / Réf. facture (optionnel)</label>
+            <input
+              id="standalone-doc-desc"
+              v-model="uploadDocDescription"
+              placeholder="ex: Facture révision Tesla Chambourcy, péages août 2026..."
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
+            />
+          </div>
+
+          <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+            <button type="button" @click="showUploadDocModal = false" class="px-4 py-2 bg-slate-800 text-slate-300 text-xs font-semibold rounded-xl">
+              Annuler
+            </button>
+            <button
+              type="submit"
+              :disabled="isUploadingDocument"
+              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl font-medium disabled:opacity-50 flex items-center gap-2"
+            >
+              <UploadCloud class="w-4 h-4" />
+              <span>{{ isUploadingDocument ? 'Téléversement...' : 'Téléverser' }}</span>
             </button>
           </div>
         </form>

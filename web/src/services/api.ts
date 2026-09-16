@@ -3,10 +3,11 @@ import { newIdempotencyKey } from '@/services/offlineQueue'
 
 const BASE_URL = '/api'
 
-function getHeaders(): HeadersInit {
+function getHeaders(body?: any): HeadersInit {
   const token = localStorage.getItem('teslacost_token')
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
+  const headers: Record<string, string> = {}
+  if (!(body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json'
   }
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
@@ -16,6 +17,17 @@ function getHeaders(): HeadersInit {
 
 export interface QueuedResult {
   queued: true
+}
+
+export interface ExpenseDocumentHeader {
+  id: string
+  vehicle_id: string
+  filename: string
+  mime_type: string
+  file_size: number
+  description?: string | null
+  linked_expenses_count: number
+  created_at: string
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}, offlineLabel?: string): Promise<T> {
@@ -42,7 +54,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, offlineLa
     res = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
       headers: {
-        ...getHeaders(),
+        ...getHeaders(options.body),
         ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
         ...(options.headers || {}),
       },
@@ -223,5 +235,44 @@ export const api = {
     if (params.drive_ids && params.drive_ids.length > 0) q.set('drive_ids', params.drive_ids.join(','))
     if (params.distance_km !== undefined) q.set('distance_km', params.distance_km.toString())
     return request<any>(`/vehicles/${vehicleId}/carpools/estimate?${q.toString()}`)
+  },
+
+  // Documents & Invoices
+  getDocuments: (vehicleId: string) =>
+    request<ExpenseDocumentHeader[]>(`/vehicles/${vehicleId}/documents`),
+
+  uploadDocument: async (vehicleId: string, file: File, description?: string): Promise<ExpenseDocumentHeader> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (description) {
+      formData.append('description', description)
+    }
+    return request<ExpenseDocumentHeader>(`/vehicles/${vehicleId}/documents`, {
+      method: 'POST',
+      body: formData,
+    })
+  },
+
+  deleteDocument: (vehicleId: string, docId: string) =>
+    request<{ message: string }>(`/vehicles/${vehicleId}/documents/${docId}`, { method: 'DELETE' }),
+
+  downloadDocumentBlob: async (vehicleId: string, docId: string): Promise<{ blob: Blob; filename: string }> => {
+    const token = localStorage.getItem('teslacost_token')
+    const headers: Record<string, string> = {}
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+    }
+    const res = await fetch(`${BASE_URL}/vehicles/${vehicleId}/documents/${docId}`, { headers })
+    if (!res.ok) {
+      throw new Error('Impossible de charger le document')
+    }
+    const contentDisposition = res.headers.get('content-disposition') || ''
+    let filename = 'document'
+    const match = contentDisposition.match(/filename="?([^";]+)"?/)
+    if (match && match[1]) {
+      filename = match[1]
+    }
+    const blob = await res.blob()
+    return { blob, filename }
   },
 }

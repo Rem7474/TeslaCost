@@ -3,7 +3,10 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -34,6 +37,7 @@ type CreateDriveExpenseRequest struct {
 	FxRate      *float64    `json:"fx_rate"`
 	Date        string      `json:"date"`
 	Notes       *string     `json:"notes"`
+	DocumentID  *string     `json:"document_id"`
 }
 
 // buildDriveExpense validates a drive expense payload.
@@ -67,6 +71,7 @@ func buildDriveExpense(vehicleID string, req *CreateDriveExpenseRequest) (*model
 		FxRate:      fxRate,
 		Date:        expDate,
 		Notes:       req.Notes,
+		DocumentID:  req.DocumentID,
 	}, nil
 }
 
@@ -191,6 +196,7 @@ type CreateMaintenanceRequest struct {
 	CoverageMonths           *int        `json:"coverage_months"`
 	ClosesMaintenanceID     *string     `json:"closes_maintenance_id"`
 	Description              string      `json:"description"`
+	DocumentID               *string     `json:"document_id"`
 }
 
 // buildMaintenanceExpense validates a maintenance / fixed expense payload.
@@ -282,6 +288,7 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 		CoverageMonths:           covMonths,
 		ClosesMaintenanceID:     closesID,
 		Description:              req.Description,
+		DocumentID:               req.DocumentID,
 	}, nil
 }
 
@@ -440,15 +447,16 @@ func (h *ExpenseHandler) ListCharges(w http.ResponseWriter, r *http.Request) {
 }
 
 type SaveChargeRequest struct {
-	Date     string       `json:"date"`
-	EndDate  *string      `json:"end_date"`
-	Address  *string      `json:"address"`
-	KwhAdded float64      `json:"kwh_added"`
-	Cost     *money.Cents `json:"cost"`
-	Currency string       `json:"currency"`
-	FxRate   *float64     `json:"fx_rate"`
-	Odometer *float64     `json:"odometer"`
-	Notes    *string      `json:"notes"`
+	Date       string       `json:"date"`
+	EndDate    *string      `json:"end_date"`
+	Address    *string      `json:"address"`
+	KwhAdded   float64      `json:"kwh_added"`
+	Cost       *money.Cents `json:"cost"`
+	Currency   string       `json:"currency"`
+	FxRate     *float64     `json:"fx_rate"`
+	Odometer   *float64     `json:"odometer"`
+	Notes      *string      `json:"notes"`
+	DocumentID *string      `json:"document_id"`
 }
 
 func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, error) {
@@ -480,16 +488,17 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 		odometer = nil
 	}
 	return &models.ChargeLog{
-		VehicleID: vehicleID,
-		Date:      date,
-		EndDate:   endDate,
-		Address:   req.Address,
-		KwhAdded:  req.KwhAdded,
-		Cost:      req.Cost,
-		Currency:  curr,
-		FxRate:    fxRate,
-		Odometer:  odometer,
-		Notes:     req.Notes,
+		VehicleID:  vehicleID,
+		Date:       date,
+		EndDate:    endDate,
+		Address:    req.Address,
+		KwhAdded:   req.KwhAdded,
+		Cost:       req.Cost,
+		Currency:   curr,
+		FxRate:     fxRate,
+		Odometer:   odometer,
+		Notes:      req.Notes,
+		DocumentID: req.DocumentID,
 	}, nil
 }
 
@@ -577,3 +586,161 @@ func (h *ExpenseHandler) DeleteManualCharge(w http.ResponseWriter, r *http.Reque
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
+
+// ============================================================================
+// Documents & Invoices
+// ============================================================================
+
+// UploadDocument uploads a new invoice or document (PDF or image) for a vehicle.
+func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	const maxUploadSize = 15 << 20 // 15 MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
+		writeError(w, http.StatusBadRequest, "Fichier trop volumineux (max 15 Mo) ou formulaire invalide")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Fichier manquant (champ 'file' requis)")
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
+		return
+	}
+	if len(data) == 0 {
+		writeError(w, http.StatusBadRequest, "Le fichier est vide")
+		return
+	}
+
+	// Determine MIME type
+	detected := http.DetectContentType(data)
+	headerType := strings.ToLower(header.Header.Get("Content-Type"))
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+
+	var mimeType string
+	switch {
+	case strings.HasPrefix(headerType, "application/pdf") || strings.HasPrefix(detected, "application/pdf") || ext == ".pdf":
+		mimeType = "application/pdf"
+	case strings.HasPrefix(headerType, "image/jpeg") || strings.HasPrefix(detected, "image/jpeg") || ext == ".jpg" || ext == ".jpeg":
+		mimeType = "image/jpeg"
+	case strings.HasPrefix(headerType, "image/png") || strings.HasPrefix(detected, "image/png") || ext == ".png":
+		mimeType = "image/png"
+	case strings.HasPrefix(headerType, "image/webp") || strings.HasPrefix(detected, "image/webp") || ext == ".webp":
+		mimeType = "image/webp"
+	default:
+		writeError(w, http.StatusBadRequest, "Format de fichier non supporté. Formats acceptés : PDF, PNG, JPEG, WEBP")
+		return
+	}
+
+	filename := filepath.Base(header.Filename)
+	if filename == "" || filename == "." {
+		filename = "document"
+	}
+	filename = strings.ReplaceAll(filename, "\n", "")
+	filename = strings.ReplaceAll(filename, "\r", "")
+	if len(filename) > 200 {
+		filename = filename[:200]
+	}
+
+	var descPtr *string
+	if desc := strings.TrimSpace(r.FormValue("description")); desc != "" {
+		descPtr = &desc
+	}
+
+	doc := &models.ExpenseDocument{
+		UserID:      userID,
+		VehicleID:   vehicleID,
+		Filename:    filename,
+		MimeType:    mimeType,
+		FileSize:    int64(len(data)),
+		Data:        data,
+		Description: descPtr,
+	}
+
+	if err := h.repo.SaveExpenseDocument(r.Context(), doc); err != nil {
+		writeRepoError(w, err, "Failed to save document")
+		return
+	}
+
+	headerResp := models.ExpenseDocumentHeader{
+		ID:                  doc.ID,
+		VehicleID:           doc.VehicleID,
+		Filename:            doc.Filename,
+		MimeType:            doc.MimeType,
+		FileSize:            doc.FileSize,
+		Description:         doc.Description,
+		LinkedExpensesCount: 0,
+		CreatedAt:           doc.CreatedAt,
+	}
+
+	writeJSON(w, http.StatusCreated, headerResp)
+}
+
+// ListDocuments lists all documents/invoices for a vehicle without returning large binary bodies.
+func (h *ExpenseHandler) ListDocuments(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	docs, err := h.repo.ListExpenseDocuments(r.Context(), vehicleID, userID)
+	if err != nil {
+		writeRepoError(w, err, "Failed to list documents")
+		return
+	}
+	if docs == nil {
+		docs = []models.ExpenseDocumentHeader{}
+	}
+
+	writeJSON(w, http.StatusOK, docs)
+}
+
+// DownloadDocument streams the document binary to the client for display or download.
+func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	docID := chi.URLParam(r, "docId")
+
+	doc, err := h.repo.GetExpenseDocumentByID(r.Context(), docID, vehicleID, userID)
+	if err != nil {
+		writeRepoError(w, err, "Document not found")
+		return
+	}
+
+	w.Header().Set("Content-Type", doc.MimeType)
+	w.Header().Set("Content-Length", strconv.FormatInt(doc.FileSize, 10))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", doc.Filename))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(doc.Data)
+}
+
+// DeleteDocument deletes a document. Linked expenses automatically have document_id set to NULL.
+func (h *ExpenseHandler) DeleteDocument(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+	docID := chi.URLParam(r, "docId")
+
+	if err := h.repo.DeleteExpenseDocument(r.Context(), docID, vehicleID, userID); err != nil {
+		writeRepoError(w, err, "Failed to delete document")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Document deleted successfully"})
+}
+
