@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -65,11 +66,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filter := database.DriveFilter{
-		Tag:             r.URL.Query().Get("tag"),
-		UnqualifiedOnly: r.URL.Query().Get("unqualified") == "true",
-		TripGroupID:     r.URL.Query().Get("trip_group_id"),
-	}
+	filter := parseDriveFilter(r)
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page <= 0 {
 		page = 1
@@ -363,4 +360,31 @@ func (h *DriveHandler) DeleteTripGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+func parseDriveFilter(r *http.Request) database.DriveFilter {
+	filter := database.DriveFilter{
+		Tag:             r.URL.Query().Get("tag"),
+		UnqualifiedOnly: r.URL.Query().Get("unqualified") == "true",
+		TripGroupID:     r.URL.Query().Get("trip_group_id"),
+		Query:           strings.TrimSpace(r.URL.Query().Get("q")),
+	}
+
+	if fromStr := r.URL.Query().Get("from"); fromStr != "" {
+		if t, err := time.Parse(time.RFC3339, fromStr); err == nil {
+			filter.From = &t
+		} else if t, err := time.Parse("2006-01-02", fromStr); err == nil {
+			filter.From = &t
+		}
+	}
+
+	if toStr := r.URL.Query().Get("to"); toStr != "" {
+		if t, err := time.Parse(time.RFC3339, toStr); err == nil {
+			filter.To = &t
+		} else if t, err := time.Parse("2006-01-02", toStr); err == nil {
+			tEnd := t.Add(23*time.Hour + 59*time.Minute + 59*time.Second)
+			filter.To = &tEnd
+		}
+	}
+	return filter
 }

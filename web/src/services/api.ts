@@ -129,13 +129,28 @@ export const api = {
     request<any>(`/vehicles/${vehicleId}/odometer-checkpoints/${checkpointId}`, { method: 'DELETE' }),
 
   // Drives
-  getDrives: (vehicleId: string, params?: { tag?: string; page?: number; limit?: number; unqualified?: boolean; tripGroupId?: string }) => {
+  getDrives: (
+    vehicleId: string,
+    params?: {
+      tag?: string
+      page?: number
+      limit?: number
+      unqualified?: boolean
+      tripGroupId?: string
+      from?: string
+      to?: string
+      q?: string
+    }
+  ) => {
     const q = new URLSearchParams()
     if (params?.tag) q.set('tag', params.tag)
     if (params?.tripGroupId) q.set('trip_group_id', params.tripGroupId)
     if (params?.unqualified) q.set('unqualified', 'true')
     if (params?.page) q.set('page', params.page.toString())
     if (params?.limit) q.set('limit', params.limit.toString())
+    if (params?.from) q.set('from', params.from)
+    if (params?.to) q.set('to', params.to)
+    if (params?.q) q.set('q', params.q)
     return request<any>(`/vehicles/${vehicleId}/drives?${q.toString()}`)
   },
   updateDriveTags: (vehicleId: string, driveId: string, tags: string[]) =>
