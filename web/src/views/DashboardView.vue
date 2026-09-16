@@ -757,7 +757,6 @@ function renderCharts() {
           <div class="flex items-center gap-2 text-sm font-bold" :class="tco.completeness.is_complete ? 'text-emerald-400' : 'text-amber-400'">
             <AlertTriangle v-if="!tco.completeness.is_complete" class="w-4 h-4" />
             TCO consolidé à {{ tco.completeness.score_pct }} %
-            <span v-if="!tco.completeness.is_complete" class="font-normal text-amber-300/80">— montants partiels, probablement sous-estimés</span>
           </div>
           <div class="w-full sm:w-48 h-2 bg-slate-800 rounded-full overflow-hidden">
             <div
@@ -767,15 +766,6 @@ function renderCharts() {
             ></div>
           </div>
         </div>
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-x-4 gap-y-1">
-          <div v-for="d in tco.completeness.dimensions" :key="d.key" class="flex items-center justify-between text-[11px] text-slate-400">
-            <span class="truncate">{{ d.label }}</span>
-            <span class="font-mono" :class="d.score_pct === 100 ? 'text-emerald-400' : 'text-amber-300'">{{ d.score_pct }} %</span>
-          </div>
-        </div>
-        <ul class="text-xs text-amber-200/90 space-y-1 list-disc pl-6">
-          <li v-for="w in tco.completeness.warnings" :key="w">{{ w }}</li>
-        </ul>
         <div class="flex flex-wrap gap-2 pt-1">
           <router-link
             v-if="tco.completeness.charges_without_cost > 0"
@@ -870,16 +860,15 @@ function renderCharts() {
           <div class="text-2xl sm:text-3xl font-extrabold text-white">
             {{ (tco?.total_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
           </div>
-          <p class="text-xs text-slate-400 mt-1">
-            Dépenses courantes décaissées (hors achat du véhicule)
-          </p>
-          <p class="text-xs text-slate-300 mt-1">
-            Coût complet : {{ (tco?.full_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
-            <span v-if="tco?.depreciation_cost" class="text-slate-400">dont décote {{ tco.depreciation_cost.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €</span>
-          </p>
-          <p v-if="tco?.carpool_revenue" class="text-[11px] text-emerald-400 mt-0.5">
-            Net des covoiturages : {{ (tco.full_cost_net || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} € ({{ (tco.full_cost_net_per_km || 0).toFixed(3) }} €/km)
-          </p>
+          <div class="mt-2 space-y-0.5">
+            <p class="text-xs text-slate-300">
+              Coût complet : {{ (tco?.full_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+              <span v-if="tco?.depreciation_cost" class="text-slate-400 text-[11px]"> (dont décote {{ tco.depreciation_cost.toLocaleString('fr-FR', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) }} €)</span>
+            </p>
+            <p v-if="tco?.carpool_revenue" class="text-[11px] text-emerald-400">
+              Net covoiturage : {{ (tco.full_cost_net || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+            </p>
+          </div>
         </div>
 
         <!-- Cost per km -->
@@ -893,15 +882,15 @@ function renderCharts() {
           <div class="text-2xl sm:text-3xl font-extrabold text-emerald-400">
             {{ (tco?.full_cost_per_km || 0).toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }} €<span class="text-xs font-normal text-slate-400">/km</span>
           </div>
-          <p class="text-xs text-slate-400 mt-1">
-            Usage direct (énergie + péages) : {{ (tco?.usage_cost_per_km || 0).toFixed(3) }} €/km
-            • sur {{ Math.round(tco?.distance_basis_km || 0).toLocaleString('fr-FR') }} km
-            <template v-if="tco?.smoothed_distance_km"> (dont {{ Math.round(tco.smoothed_distance_km).toLocaleString('fr-FR') }} km lissés)</template>
-          </p>
-          <p class="text-[11px] text-slate-500 mt-0.5">
-            Assurance : {{ insuranceSourceLabel }}
-            <template v-if="tco?.depreciation_cost_per_km"> • décote {{ tco.depreciation_cost_per_km.toFixed(3) }} €/km</template>
-          </p>
+          <div class="mt-2 space-y-0.5">
+            <p class="text-xs text-slate-400">
+              Usage direct : {{ (tco?.usage_cost_per_km || 0).toFixed(3) }} €/km
+            </p>
+            <p class="text-[11px] text-slate-500">
+              Sur {{ Math.round(tco?.distance_basis_km || 0).toLocaleString('fr-FR') }} km
+              <template v-if="tco?.depreciation_cost_per_km"> • décote {{ tco.depreciation_cost_per_km.toFixed(3) }} €/km</template>
+            </p>
+          </div>
         </div>
 
         <!-- Energy Cost -->
@@ -915,15 +904,14 @@ function renderCharts() {
           <div class="text-2xl sm:text-3xl font-extrabold text-sky-400">
             {{ (tco?.energy_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
           </div>
-          <p class="text-xs text-slate-400 mt-1">
-            {{ (tco?.energy_cost_per_km || 0).toFixed(3) }} €/km ({{ Math.round(tco?.total_kwh_added || 0).toLocaleString('fr-FR') }} kWh)
-          </p>
-          <p v-if="tco?.pre_teslamate_cost" class="text-[11px] text-sky-300/90 mt-0.5">
-            dont {{ tco.pre_teslamate_cost.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} € estimés avant TeslaMate ({{ Math.round(tco.pre_teslamate_kwh || 0).toLocaleString('fr-FR') }} kWh)
-          </p>
-          <p v-if="tco?.completeness?.charges_without_cost" class="text-[11px] text-amber-400 mt-0.5">
-            {{ tco.completeness.charges_without_cost }} recharge(s) sans coût
-          </p>
+          <div class="mt-2 space-y-0.5">
+            <p class="text-xs text-slate-400">
+              {{ (tco?.energy_cost_per_km || 0).toFixed(3) }} €/km • {{ Math.round(tco?.total_kwh_added || 0).toLocaleString('fr-FR') }} kWh
+            </p>
+            <p v-if="tco?.completeness?.charges_without_cost" class="text-[11px] text-amber-400">
+              {{ tco.completeness.charges_without_cost }} recharge(s) sans coût
+            </p>
+          </div>
         </div>
 
         <!-- Tolls & Parkings -->
@@ -937,7 +925,9 @@ function renderCharts() {
           <div class="text-2xl sm:text-3xl font-extrabold text-amber-400">
             {{ (tco?.tolls_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
           </div>
-          <p class="text-xs text-slate-400 mt-1">{{ (tco?.tolls_cost_per_km || 0).toFixed(3) }} €/km</p>
+          <div class="mt-2">
+            <p class="text-xs text-slate-400">{{ (tco?.tolls_cost_per_km || 0).toFixed(3) }} €/km</p>
+          </div>
         </div>
       </div>
 
@@ -994,7 +984,6 @@ function renderCharts() {
           <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
             <h3 class="text-sm font-bold text-white flex items-center gap-2">
               <span>Évolution mensuelle des dépenses (€)</span>
-              <span class="text-xs text-slate-400 font-normal">Montants décaissés par mois (cliquable)</span>
             </h3>
             <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5 self-start sm:self-auto">
               <button
@@ -1033,11 +1022,17 @@ function renderCharts() {
               <Activity class="w-4 h-4 text-indigo-400" />
               <span>Kilométrage Mensuel & Coût de Revient au Km (€/km)</span>
             </h3>
-            <p class="text-xs text-slate-400">
-              Histogramme des kilomètres parcourus chaque mois et courbe du coût de revient au km
-            </p>
           </div>
-          <div class="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+          <div class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+            <button
+              v-if="filteredMileageCosts.length"
+              type="button"
+              @click="openMonthDetail(filteredMileageCosts[filteredMileageCosts.length - 1])"
+              class="px-2.5 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-colors"
+            >
+              <PieChart class="w-3.5 h-3.5" />
+              <span>Détail dernier mois</span>
+            </button>
             <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5">
               <button
                 v-for="opt in monthlyRangeOptions"
@@ -1063,22 +1058,6 @@ function renderCharts() {
               </span>
             </div>
           </div>
-        </div>
-
-        <div class="flex items-center justify-between text-[11px] text-slate-400 bg-slate-800/30 px-3 py-1.5 rounded-xl border border-slate-800">
-          <span class="flex items-center gap-1.5 text-slate-400">
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse"></span>
-            <span>Astuce : cliquez sur n'importe quel mois du graphique pour afficher son détail chiffré et son diagramme circulaire</span>
-          </span>
-          <button
-            v-if="filteredMileageCosts.length"
-            type="button"
-            @click="openMonthDetail(filteredMileageCosts[filteredMileageCosts.length - 1])"
-            class="text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 shrink-0 ml-2 transition-colors"
-          >
-            <PieChart class="w-3 h-3" />
-            <span>Détail dernier mois</span>
-          </button>
         </div>
 
         <div class="h-64 sm:h-72">

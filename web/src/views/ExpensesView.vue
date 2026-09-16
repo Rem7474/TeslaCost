@@ -1201,9 +1201,6 @@ function formatDriveTime(dateStr: string) {
             <span class="block text-xs font-semibold text-slate-200">
               Associer à un trajet TeslaMate
             </span>
-            <p class="text-[11px] text-slate-400">
-              Permet de récupérer automatiquement ce montant pour le covoiturage (BlaBlaCar) et le coût du trajet.
-            </p>
 
             <div class="grid grid-cols-3 gap-1.5 pt-1">
               <button
@@ -1474,9 +1471,6 @@ function formatDriveTime(dateStr: string) {
             <span class="block text-xs font-semibold text-slate-200">
               Lissage du coût de revient au km
             </span>
-            <p class="text-[11px] text-slate-400">
-              Évite les pics artificiels sur la courbe mensuelle (€/km).
-            </p>
 
             <div class="grid grid-cols-4 gap-1.5 pt-1">
               <button
@@ -1574,9 +1568,6 @@ function formatDriveTime(dateStr: string) {
                 <label for="maint-form-recurrence-end-date" class="block text-xs font-semibold text-slate-300 mb-1">Fin (optionnelle)</label>
                 <input id="maint-form-recurrence-end-date" v-model="maintForm.recurrence_end_date" type="date" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
-              <p class="col-span-2 text-[11px] text-slate-400">
-                Chaque échéance est comptée dans le TCO jusqu'à aujourd'hui (ou jusqu'à la date de fin).
-              </p>
             </div>
           </div>
 

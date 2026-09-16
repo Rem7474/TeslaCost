@@ -316,9 +316,6 @@ function finishOnboarding() {
                 placeholder="http://192.168.1.50:8080 ou http://host.docker.internal:8080"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
               />
-              <p class="text-[11px] text-slate-400 mt-1.5">
-                💡 Si TeslaCost s'exécute dans Docker, utilisez <code class="text-rose-300">http://host.docker.internal:PORT</code> ou l'IP locale (ex: <code class="text-rose-300">192.168.x.x</code>) au lieu de <code class="text-slate-500">localhost</code>.
-              </p>
             </div>
 
             <div>

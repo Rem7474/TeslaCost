@@ -1630,8 +1630,8 @@ function formatDate(d: string) {
             </div>
           </div>
 
-          <p class="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
-            💡 <strong>Analyse d'usure :</strong> {{ selectedTireStats.wear_explanation }}
+          <p v-if="selectedTireStats.wear_explanation" class="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
+            {{ selectedTireStats.wear_explanation }}
           </p>
         </div>
 
@@ -1972,10 +1972,6 @@ function formatDate(d: string) {
         </div>
 
         <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
-          <p class="text-xs text-slate-400">
-            Les 4 pneus actuellement montés vont être envoyés au garage avec leur kilométrage figé. Sélectionnez les 4 pneus du garage à monter sur la Tesla :
-          </p>
-
           <div>
             <label for="tire-pack-swap-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre de la permutation (km)</label>
             <input id="tire-pack-swap-odometer"
@@ -2155,7 +2151,6 @@ function formatDate(d: string) {
                 <input id="tire-edit-mounted-odometer" v-model.number="tireEditForm.mounted_odometer" type="number" min="0" :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
               </div>
             </div>
-            <p class="text-[11px] text-slate-400">S'applique à la session de montage en cours des pneus montés sélectionnés (les pneus au garage ne sont pas concernés).</p>
           </div>
         </form>
 
@@ -2188,8 +2183,8 @@ function formatDate(d: string) {
         </div>
 
         <form id="tire-dispose-modal-form" @submit.prevent="handleDisposeTire" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
-          <p class="text-[11px] text-slate-400">
-            {{ selectedTire.brand }} {{ selectedTire.model }} : le montage en cours est clôturé, l'historique est conservé et le prix d'achat est compté comme entièrement consommé.
+          <p class="text-xs text-slate-300 font-semibold">
+            {{ selectedTire.brand }} {{ selectedTire.model }}
           </p>
           <div>
             <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date</label>

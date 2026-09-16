@@ -1032,9 +1032,6 @@ onMounted(() => {
             <div class="text-sm font-bold" :class="liveNet > 0 ? 'text-white' : 'text-emerald-400'">{{ fmt(euros(Math.abs(liveNet))) }} €</div>
           </div>
         </div>
-        <p v-if="currentRates && currentRates.insurance_source !== 'RECORDED_EXPENSES'" class="text-[11px] text-amber-400/90">
-          Quote-part d'assurance non calculée ({{ currentRates.insurance_source === 'INCLUDED_IN_LEASE' ? 'incluse dans la location' : 'aucune prime enregistrée ou kilométrage insuffisant' }}).
-        </p>
 
         <div>
           <label for="carpool-notes" class="block text-xs font-semibold text-slate-400 mb-1">Notes (optionnel)</label>

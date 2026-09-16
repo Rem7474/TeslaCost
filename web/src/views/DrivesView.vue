@@ -1161,19 +1161,19 @@ function formatDate(dateStr: string) {
     >
       <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
         <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
-          <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <div class="flex items-center gap-2">
             <Layers class="w-5 h-5 text-rose-400" />
-            Créer un Voyage / Fusion
-          </h3>
+            <h3 class="text-base font-bold text-white">Créer un Voyage / Fusion</h3>
+            <span class="px-2 py-0.5 bg-rose-500/10 text-rose-300 text-xs font-semibold rounded-lg border border-rose-500/20">
+              {{ selectedDriveIds.length }} trajets
+            </span>
+          </div>
           <button @click="showGroupModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
             <X class="w-5 h-5" />
           </button>
         </div>
 
         <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
-          <p class="text-xs text-slate-400">
-            Vous allez fusionner <strong>{{ selectedDriveIds.length }} trajets</strong> consécutifs (ex: trajet segmenté par des arrêts recharge/déjeuner) et lui assigner un péage ou parking global, réparti entre les étapes au prorata des kilomètres.
-          </p>
 
           <div>
             <label for="drive-group-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du voyage / groupe</label>
@@ -1292,7 +1292,6 @@ function formatDate(dateStr: string) {
             <select id="add-to-trip" v-model="addToTripId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500">
               <option v-for="tg in tripGroups" :key="tg.id" :value="tg.id">{{ tg.name }} ({{ tg.drive_ids.length }} trajets)</option>
             </select>
-            <p class="text-[11px] text-slate-400 mt-1">Les frais du voyage seront répartis sur l'ensemble de ses trajets au prorata des km.</p>
           </div>
         </form>
 
