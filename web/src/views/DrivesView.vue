@@ -768,7 +768,9 @@ function formatDate(dateStr: string) {
             >
               <ChevronLeft class="w-4 h-4" />
             </button>
+            <label for="drives-month-select" class="sr-only">Sélectionner le mois</label>
             <input
+              id="drives-month-select"
               type="month"
               v-model="selectedMonth"
               @change="onMonthChange"
@@ -793,15 +795,17 @@ function formatDate(dateStr: string) {
 
           <!-- Custom Date Range (when periodMode === 'CUSTOM') -->
           <div v-if="periodMode === 'CUSTOM'" class="flex items-center gap-2 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800/80 text-xs">
-            <span class="text-slate-400">Du</span>
+            <label for="drives-filter-from" class="text-slate-400">Du</label>
             <input
+              id="drives-filter-from"
               type="date"
               v-model="customFrom"
               @change="onCustomDateChange"
               class="bg-slate-900 text-white text-xs px-2 py-1 rounded-lg border border-slate-800 outline-none focus:border-rose-500"
             />
-            <span class="text-slate-400">Au</span>
+            <label for="drives-filter-to" class="text-slate-400">Au</label>
             <input
+              id="drives-filter-to"
               type="date"
               v-model="customTo"
               @change="onCustomDateChange"
@@ -812,8 +816,10 @@ function formatDate(dateStr: string) {
 
         <!-- Search Bar -->
         <div class="relative min-w-[240px] max-w-sm flex-1">
+          <label for="drives-search-input" class="sr-only">Rechercher une ville ou une adresse</label>
           <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
+            id="drives-search-input"
             type="text"
             v-model="searchQuery"
             @input="onSearchInput"
@@ -1134,8 +1140,9 @@ function formatDate(dateStr: string) {
 
           <!-- Direct jump input -->
           <div v-if="totalPages > 1" class="flex items-center gap-1 ml-2 border-l border-slate-800 pl-2">
-            <span class="text-xs text-slate-500">Page</span>
+            <label for="drives-jump-page" class="text-xs text-slate-500">Page</label>
             <input
+              id="drives-jump-page"
               type="number"
               min="1"
               :max="totalPages"
