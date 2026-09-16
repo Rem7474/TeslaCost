@@ -667,9 +667,6 @@ function clearCardTestResult(id: string) {
                 :disabled="!!form.teslamate_api_url"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
               />
-              <p v-if="form.teslamate_api_url" class="text-[11px] text-slate-400 mt-1">
-                Géré automatiquement par la synchronisation TeslaMate.
-              </p>
             </div>
           </div>
 
@@ -686,9 +683,6 @@ function clearCardTestResult(id: string) {
                 <input id="vehicle-pre-rate" v-model.number="form.pre_teslamate_eur_per_kwh" type="number" step="0.0001" min="0.01" max="5" placeholder="ex: 0.22" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
             </div>
-            <p class="text-[11px] text-slate-400">
-              💡 Utilisé pour estimer les coûts énergétiques des kilomètres parcourus avant l'installation de TeslaMate.
-            </p>
           </div>
 
           <!-- TeslaMate API Section -->
@@ -697,10 +691,7 @@ function clearCardTestResult(id: string) {
 
             <div>
               <label for="vehicle-teslamate-api-url" class="block text-xs font-semibold text-slate-300 mb-1">URL de base teslamateapi</label>
-              <input id="vehicle-teslamate-api-url" v-model="form.teslamate_api_url" placeholder="http://192.168.1.50:8080 ou https://tm.mondomaine.com" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-              <p class="text-[11px] text-slate-400 mt-1">
-                💡 Si TeslaCost s'exécute dans Docker, utilisez <code class="text-rose-300">http://host.docker.internal:PORT</code> ou l'IP locale (ex: <code class="text-rose-300">192.168.x.x</code>) au lieu de <code class="text-slate-500">localhost</code>.
-              </p>
+              <input id="vehicle-teslamate-api-url" v-model="form.teslamate_api_url" placeholder="ex: http://192.168.1.50:8080 ou http://host.docker.internal:8080" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
 
             <div class="grid grid-cols-2 gap-3">
@@ -769,11 +760,6 @@ function clearCardTestResult(id: string) {
               </div>
             </div>
           </div>
-
-          <p class="text-[11px] text-slate-400 pt-2 border-t border-slate-800">
-            L'acquisition (achat, crédit, LOA, LLD) se configure depuis la carte du véhicule, et l'assurance se saisit dans
-            Dépenses → Entretien & coûts fixes (catégorie « Assurance », dépense récurrente).
-          </p>
         </form>
 
         <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
@@ -929,9 +915,8 @@ function clearCardTestResult(id: string) {
               </div>
             </div>
             <p v-if="leasePreview" class="text-[11px] text-slate-400">
-              Coût total du contrat {{ leasePreview.total.toFixed(2) }} € (≈ {{ leasePreview.perMonth.toFixed(2) }} €/mois tout compris)
-              <template v-if="leasePreview.totalKm"> • {{ Math.round(leasePreview.totalKm).toLocaleString('fr-FR') }} km inclus</template>.
-              L'apport et les frais sont étalés sur la durée dans le coût complet ; le dépassement kilométrique est estimé au fil du contrat.
+              Total contrat : {{ leasePreview.total.toFixed(2) }} € (≈ {{ leasePreview.perMonth.toFixed(2) }} €/mois)
+              <template v-if="leasePreview.totalKm"> • {{ Math.round(leasePreview.totalKm).toLocaleString('fr-FR') }} km inclus</template>
             </p>
             <div v-if="ownershipForm.acquisition_type === 'LOA'" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
@@ -956,12 +941,7 @@ function clearCardTestResult(id: string) {
                 <input id="own-holding" v-model.number="ownershipForm.expected_holding_months" type="number" min="1" max="360" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>
-            <p class="text-[11px] text-slate-400">
-              Décote linéaire : (prix + frais − aides − revente estimée) répartie sur la durée de détention.
-              <template v-if="ownershipForm.acquisition_type === 'LOA'">Après la levée d'option, la base est le prix de l'option.</template>
-            </p>
           </div>
-
           <!-- End of ownership -->
           <div class="space-y-3 pt-3 border-t border-slate-800">
             <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">Fin de détention</h4>
@@ -975,9 +955,6 @@ function clearCardTestResult(id: string) {
                 <input id="own-sale-price" v-model.number="ownershipForm.sale_price" type="number" step="0.01" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>
-            <p class="text-[11px] text-slate-400">
-              Les dépenses récurrentes (assurance, abonnements…) s'arrêtent à cette date et la décote est figée sur le prix de revente réel.
-            </p>
           </div>
 
         </form>
@@ -1028,18 +1005,7 @@ function clearCardTestResult(id: string) {
 
         <!-- Body -->
         <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-6">
-          <!-- Explanatory Banner -->
-        <div class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-4 text-xs text-slate-300 space-y-2">
-          <div class="font-semibold text-white flex items-center gap-1.5">
-            <span>ℹ️</span> Comment fonctionne le lissage kilométrique automatique ?
-          </div>
-          <p class="text-slate-400 leading-relaxed">
-            Si votre véhicule a roulé sans TeslaMate (ex. avant l'installation, ou achat d'occasion), renseignez vos relevés kilométriques (contrôle technique, révision, déclaration d'assurance…).
-            TeslaCost calcule automatiquement les kilomètres non suivis et les distribue au prorata temporis dans l'historique mensuel.
-          </p>
-        </div>
-
-        <!-- Add / Edit Form -->
+          <!-- Add / Edit Form -->
         <form @submit.prevent="handleSaveCheckpoint" class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider">
