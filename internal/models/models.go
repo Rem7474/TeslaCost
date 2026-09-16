@@ -263,7 +263,7 @@ type ChargeLog struct {
 	CreatedAt         time.Time    `json:"created_at"`
 }
 
-// ExpenseDocument represents a file attachment or invoice stored in PostgreSQL.
+// ExpenseDocument represents a file attachment or invoice stored on the filesystem volume.
 type ExpenseDocument struct {
 	ID          string    `json:"id"`
 	UserID      string    `json:"user_id"`
@@ -271,7 +271,7 @@ type ExpenseDocument struct {
 	Filename    string    `json:"filename"`
 	MimeType    string    `json:"mime_type"`
 	FileSize    int64     `json:"file_size"`
-	Data        []byte    `json:"-"` // Binary payload excluded from standard JSON
+	StoragePath *string   `json:"-"` // Relative path on the Docker volume (vehicleID/docID)
 	Description *string   `json:"description,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

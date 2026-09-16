@@ -46,9 +46,13 @@ services:
       APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
     ports:
       - "${PORT:-8080}:8080"
+    volumes:
+      - teslacost_documents:/data/documents
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
 volumes:
   postgres_data:
+    driver: local
+  teslacost_documents:
     driver: local

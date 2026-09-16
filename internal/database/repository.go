@@ -2897,30 +2897,32 @@ func (r *Repository) DeleteOdometerCheckpoint(ctx context.Context, vehicleID, ch
 // Expense Documents & Invoices
 // ============================================================================
 
-// SaveExpenseDocument stores a new uploaded document in PostgreSQL.
+// SaveExpenseDocument stores a new uploaded document record in PostgreSQL.
+// The binary data is stored on the filesystem volume; only the storage_path is persisted here.
 func (r *Repository) SaveExpenseDocument(ctx context.Context, doc *models.ExpenseDocument) error {
 	query := `
 		INSERT INTO expense_documents (
-			user_id, vehicle_id, filename, mime_type, file_size, data, description
+			user_id, vehicle_id, filename, mime_type, file_size, storage_path, description
 		) VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, created_at, updated_at;
 	`
 	return r.pool.QueryRow(ctx, query,
-		doc.UserID, doc.VehicleID, doc.Filename, doc.MimeType, doc.FileSize, doc.Data, doc.Description,
+		doc.UserID, doc.VehicleID, doc.Filename, doc.MimeType, doc.FileSize, doc.StoragePath, doc.Description,
 	).Scan(&doc.ID, &doc.CreatedAt, &doc.UpdatedAt)
 }
 
-// GetExpenseDocumentByID retrieves an expense document including its binary data.
+// GetExpenseDocumentByID retrieves an expense document metadata and its storage path.
+// Ownership is verified via JOIN on vehicles to prevent cross-user access.
 func (r *Repository) GetExpenseDocumentByID(ctx context.Context, id, vehicleID, userID string) (*models.ExpenseDocument, error) {
 	query := `
-		SELECT d.id, d.user_id, d.vehicle_id, d.filename, d.mime_type, d.file_size, d.data, d.description, d.created_at, d.updated_at
+		SELECT d.id, d.user_id, d.vehicle_id, d.filename, d.mime_type, d.file_size, d.storage_path, d.description, d.created_at, d.updated_at
 		FROM expense_documents d
 		JOIN vehicles v ON v.id = d.vehicle_id
 		WHERE d.id::text = $1 AND d.vehicle_id = $2 AND v.user_id = $3;
 	`
 	var doc models.ExpenseDocument
 	err := r.pool.QueryRow(ctx, query, id, vehicleID, userID).Scan(
-		&doc.ID, &doc.UserID, &doc.VehicleID, &doc.Filename, &doc.MimeType, &doc.FileSize, &doc.Data, &doc.Description, &doc.CreatedAt, &doc.UpdatedAt,
+		&doc.ID, &doc.UserID, &doc.VehicleID, &doc.Filename, &doc.MimeType, &doc.FileSize, &doc.StoragePath, &doc.Description, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -2982,6 +2984,13 @@ func (r *Repository) DeleteExpenseDocument(ctx context.Context, id, vehicleID, u
 		return ErrNotFound
 	}
 	return nil
+}
+
+// UpdateDocumentStoragePath sets the storage_path for a document after the file has been written to the volume.
+func (r *Repository) UpdateDocumentStoragePath(ctx context.Context, docID, storagePath string) error {
+	query := `UPDATE expense_documents SET storage_path = $1 WHERE id::text = $2;`
+	_, err := r.pool.Exec(ctx, query, storagePath, docID)
+	return err
 }
 
 // ============================================================================

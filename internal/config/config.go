@@ -23,6 +23,7 @@ type Config struct {
 	AllowedOrigins       []string
 	SyncIntervalMinutes  int
 	ReportingTimezone    string
+	StorageDir           string // Directory for document file storage (Docker volume mount point)
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -81,6 +82,7 @@ func Load() *Config {
 	}
 
 	reportingTimezone := getEnv("APP_TIMEZONE", "Europe/Paris")
+	storageDir := getEnv("STORAGE_DIR", "./data/documents")
 
 	return &Config{
 		Port:                 port,
@@ -96,6 +98,7 @@ func Load() *Config {
 		AllowedOrigins:       allowedOrigins,
 		SyncIntervalMinutes:  syncIntervalMinutes,
 		ReportingTimezone:    reportingTimezone,
+		StorageDir:           storageDir,
 	}
 }
 
