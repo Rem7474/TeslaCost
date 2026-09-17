@@ -155,12 +155,54 @@ docker run -d \
   --name teslacost \
   -p 8080:8080 \
   -v teslacost_docs:/data/documents \
+  -e ENVIRONMENT="production" \
   -e DATABASE_URL="postgres://user:password@postgres-host:5432/teslacost?sslmode=disable" \
   -e JWT_SECRET="votre_clef_secrete_jwt_robuste" \
-  -e ENCRYPTION_KEY="clef_hexadecimale_de_64_caracteres_exactement" \
+  -e APP_ENCRYPTION_KEY="clef_hexadecimale_de_64_caracteres_exactement" \
   -e APP_TIMEZONE="Europe/Paris" \
   ghcr.io/rem7474/teslacost:latest
 ```
+
+---
+
+### Exposition sur Internet : reverse proxy & headers de sécurité
+
+TeslaCost ne termine pas le TLS et ne pose pas lui-même de headers de sécurité HTTP : ces responsabilités sont déléguées au reverse proxy placé devant, comme c'est l'usage pour une application self-hébergée. Si vous exposez l'instance au-delà de votre réseau local, placez-la derrière un reverse proxy qui gère au minimum :
+
+- **TLS** (certificat Let's Encrypt automatique via Traefik/Caddy, ou certificat existant avec Nginx)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY` (ou `SAMEORIGIN` si vous embarquez l'app ailleurs)
+- `Referrer-Policy: strict-origin-when-cross-origin`
+
+Exemple avec **Caddy** (`Caddyfile`) :
+
+```caddyfile
+teslacost.homelab.local {
+    reverse_proxy localhost:8080
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+```
+
+Exemple avec **Traefik** (labels docker-compose sur le service `api`) :
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.teslacost.rule=Host(`teslacost.homelab.local`)"
+  - "traefik.http.routers.teslacost.tls.certresolver=letsencrypt"
+  - "traefik.http.middlewares.teslacost-headers.headers.stsSeconds=31536000"
+  - "traefik.http.middlewares.teslacost-headers.headers.contentTypeNosniff=true"
+  - "traefik.http.middlewares.teslacost-headers.headers.frameDeny=true"
+  - "traefik.http.routers.teslacost.middlewares=teslacost-headers"
+```
+
+Pensez aussi à ajuster `APP_BASE_URL` et `CORS_ALLOWED_ORIGINS` pour qu'ils reflètent le nom de domaine public utilisé, et à laisser `COOKIE_SECURE` sur sa valeur par défaut (activée automatiquement dès que `APP_BASE_URL` commence par `https://` ou que `ENVIRONMENT=production`).
 
 ---
 
