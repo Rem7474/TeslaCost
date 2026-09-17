@@ -2,7 +2,14 @@
 
 Suivi des actions issues de l'audit du 2026-09-17. Statuts : `⬜ à faire` / `🔄 en cours` / `✅ fait` / `⏭️ reporté`.
 
-PR de suivi : [#42 — fix(ops): production-readiness quick wins + top-5 blocking actions](https://github.com/Rem7474/TeslaCost/pull/42).
+PR de suivi : [#42 — fix(ops): production-readiness quick wins + top-5 blocking actions](https://github.com/Rem7474/TeslaCost/pull/42). ✅ Tous les checks CI passent (Backend, Frontend, SonarCloud, Docker build).
+
+## Trouvés en corrigeant la CI (pas dans l'audit initial)
+
+| # | Action | Fichier(s) | Statut | Notes |
+|---|---|---|---|---|
+| C1 | `go.mod` pinnait `go 1.26.0` (version exacte, non patchée) — le toolchain auto-résolu par CI reprenait exactement cette version avec 9 CVE stdlib connus (déjà corrigés en 1.26.4–1.26.6) | `go.mod`, `.github/workflows/ci.yml` | ✅ | Bump vers `go 1.26.8`. CI passée en `go-version-file: go.mod` pour ne plus pouvoir dériver silencieusement (elle pointait vers `1.25`, un cran en dessous de ce que `go.mod` exigeait déjà). `govulncheck` confirmé clean après coup. |
+| C2 | Le conteneur `backup` tournait en `root` (défaut de l'image `postgres:16-alpine`) | `backup/Dockerfile` | ✅ | Bascule sur l'utilisateur `postgres` (uid 70) déjà créé par l'image de base, `chown` du répertoire `/backups`. Revérifié en conditions réelles : dump complet (25 tables) toujours produit correctement en non-root. Signalé par le Quality Gate SonarCloud (« B Security Rating on New Code »). |
 
 ## Quick wins
 
