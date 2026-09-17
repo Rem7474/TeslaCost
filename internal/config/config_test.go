@@ -41,6 +41,31 @@ func TestSpecialCharactersInPassword(t *testing.T) {
 	}
 }
 
+func TestInsecureDefaultsDetectsKnownPlaceholders(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:        "super_secret_jwt_signing_key_for_teslacost_app",
+		AppEncryptionKey: "generate_a_random_32_characters_key_here!",
+		DatabaseURL:      "postgres://teslacost:teslacost_dev_secret@postgres:5432/teslacost?sslmode=disable",
+	}
+
+	warnings := cfg.InsecureDefaults()
+	if len(warnings) != 3 {
+		t.Fatalf("expected 3 warnings for JWT secret, encryption key and DB password, got %d: %v", len(warnings), warnings)
+	}
+}
+
+func TestInsecureDefaultsClearOnCustomSecrets(t *testing.T) {
+	cfg := &config.Config{
+		JWTSecret:        "a-real-random-secret",
+		AppEncryptionKey: "another-real-random-key-value-xx",
+		DatabaseURL:      "postgres://teslacost:S0m3R34lPassw0rd@postgres:5432/teslacost?sslmode=disable",
+	}
+
+	if warnings := cfg.InsecureDefaults(); len(warnings) != 0 {
+		t.Fatalf("expected no warnings for custom secrets, got: %v", warnings)
+	}
+}
+
 func TestNormalizeDatabaseURLWithUnescapedPassword(t *testing.T) {
 	raw := "postgres://teslacost:MyPasswordM&!@123@postgres:5432/teslacost?sslmode=disable"
 	normalized := config.NormalizeDatabaseURL(raw)

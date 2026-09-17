@@ -2,6 +2,7 @@
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -62,6 +63,36 @@ func TestFormatPayloadTelegramAndGotify(t *testing.T) {
 	gotifyMap := gotifyPayload.(map[string]any)
 	if gotifyMap["priority"] != 8 {
 		t.Errorf("expected priority 8 for OVERDUE, got %v", gotifyMap["priority"])
+	}
+}
+
+func TestFormatSyncAlertPayload(t *testing.T) {
+	cause := context.DeadlineExceeded
+	retryAt := time.Date(2026, 9, 17, 18, 0, 0, 0, time.UTC)
+
+	discord := formatSyncAlertPayload("DISCORD", "Model 3", cause, retryAt).(map[string]any)
+	embeds, ok := discord["embeds"].([]map[string]any)
+	if !ok || len(embeds) == 0 {
+		t.Fatalf("expected embeds array")
+	}
+	if embeds[0]["color"] != 15158332 {
+		t.Errorf("expected red color for a sync failure alert, got %v", embeds[0]["color"])
+	}
+
+	generic := formatSyncAlertPayload("GENERIC", "Model 3", cause, retryAt).(map[string]any)
+	if generic["event"] != "sync_circuit_open" {
+		t.Errorf("expected sync_circuit_open event, got %v", generic["event"])
+	}
+	if generic["vehicle_name"] != "Model 3" {
+		t.Errorf("expected vehicle_name to be set, got %v", generic["vehicle_name"])
+	}
+}
+
+func TestNotifySyncCircuitOpenWithoutRepoIsNoop(t *testing.T) {
+	svc := NewNotificationService(nil)
+	err := svc.NotifySyncCircuitOpen(context.Background(), &models.Vehicle{ID: "v1", Name: "Model 3"}, errors.New("boom"), time.Now())
+	if err != nil {
+		t.Fatalf("expected no error without a repo, got %v", err)
 	}
 }
 

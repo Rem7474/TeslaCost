@@ -3,8 +3,11 @@ package services
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -1379,6 +1382,49 @@ func TestMigrateLegacyDocumentsIntegration(t *testing.T) {
 	}
 	if countSecond != 0 {
 		t.Fatalf("expected 0 documents migrated on second run, got %d", countSecond)
+	}
+}
+
+func TestRecordSyncFailureAlertsOnlyOnTransitionToOpen(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	v := mustVehicle(t, repo, "circuit-alert@example.com")
+
+	var callCount int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&callCount, 1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	if err := repo.UpsertVehicleWebhook(context.Background(), &models.VehicleWebhook{
+		VehicleID: v.ID,
+		URL:       server.URL,
+		Type:      "GENERIC",
+		Enabled:   true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	svc := NewSyncService(repo, nil)
+	svc.SetNotificationService(NewNotificationService(repo))
+	cb := NewCircuitBreaker(CircuitBreakerConfig{FailureThreshold: 2, Cooldown: time.Hour})
+	svc.SetCircuitBreaker(v.ID, cb)
+
+	svc.recordSyncFailure(*v, cb, errors.New("boom 1")) // below threshold: no alert yet
+	svc.recordSyncFailure(*v, cb, errors.New("boom 2")) // trips the breaker to OPEN: alert fires once
+	svc.recordSyncFailure(*v, cb, errors.New("boom 3")) // already OPEN: no additional alert
+
+	// The alert is dispatched from a background goroutine (best-effort); give it a moment.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) && atomic.LoadInt32(&callCount) == 0 {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	if got := atomic.LoadInt32(&callCount); got != 1 {
+		t.Fatalf("expected exactly 1 webhook call when the circuit breaker opens, got %d", got)
+	}
+	if cb.State() != CircuitOpen {
+		t.Fatalf("expected circuit breaker to be OPEN, got %s", cb.State())
 	}
 }
 

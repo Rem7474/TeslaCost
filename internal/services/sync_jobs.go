@@ -18,6 +18,27 @@ func recoverPanic(tag string) {
 	}
 }
 
+// recordSyncFailure records a sync failure on the vehicle's circuit breaker and, only on the
+// failure that trips the breaker from CLOSED/HALF_OPEN to OPEN, dispatches a best-effort webhook
+// alert so a repeatedly failing sync doesn't go unnoticed until someone opens the app.
+func (s *SyncService) recordSyncFailure(v models.Vehicle, cb *CircuitBreaker, syncErr error) {
+	wasOpen := cb.State() == CircuitOpen
+	cb.RecordFailure(syncErr)
+
+	if wasOpen || cb.State() != CircuitOpen || s.notifications == nil {
+		return
+	}
+	retryAt := cb.NextRetry()
+	go func(veh models.Vehicle, cause error, retry time.Time) {
+		defer recoverPanic("sync.circuitBreakerAlert")
+		alertCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := s.notifications.NotifySyncCircuitOpen(alertCtx, &veh, cause, retry); err != nil {
+			log.Printf("[notification] failed to alert on circuit breaker open for vehicle %s: %v", veh.ID, err)
+		}
+	}(v, syncErr, retryAt)
+}
+
 // Sync job statuses.
 const (
 	SyncJobRunning   = "RUNNING"
@@ -110,7 +131,7 @@ func (s *SyncService) StartSync(v models.Vehicle) (job *SyncJob, started bool) {
 		res, err := s.SyncVehicle(ctx, &v)
 		cb := s.getCircuitBreaker(v.ID)
 		if err != nil {
-			cb.RecordFailure(err)
+			s.recordSyncFailure(v, cb, err)
 		} else {
 			cb.RecordSuccess()
 		}
@@ -141,7 +162,7 @@ func (s *SyncService) runScheduledSync(ctx context.Context, v models.Vehicle) {
 	cancel()
 
 	if err != nil {
-		cb.RecordFailure(err)
+		s.recordSyncFailure(v, cb, err)
 		log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v (circuit breaker: %s)", v.Name, v.ID, err, cb.State())
 	} else {
 		cb.RecordSuccess()

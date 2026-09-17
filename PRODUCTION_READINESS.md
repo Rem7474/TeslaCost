@@ -19,13 +19,13 @@ Build Go, `go vet`, `go test ./...`, build Docker multi-stage et un run complet 
 
 ## Top 5 actions bloquantes
 
-| # | Action | Fichier(s) | Statut | Commit |
+| # | Action | Fichier(s) | Statut | Notes |
 |---|---|---|---|---|
-| B1 | Garde-fou démarrage : refuser de lancer en prod avec les secrets par défaut | `internal/config/config.go`, `cmd/server/main.go` | ⬜ | |
-| B2 | Sauvegarde automatisée DB + documents avec procédure de restauration documentée | `docker-compose.yml`, `README.md`, script backup | ⬜ | |
-| B3 | Healthcheck Docker fiable sur `api` | *(couvert par quick win #1 et #2)* | ⬜ | |
-| B4 | Goroutines sans `recover()` | *(couvert par quick win #4)* | ⬜ | |
-| B5 | Alerting sur erreurs critiques (sync down, circuit breaker OPEN) | `internal/services/notification_service.go`, `internal/services/sync_jobs.go` | ⬜ | |
+| B1 | Garde-fou démarrage : détecter les secrets par défaut en prod | `internal/config/config.go`, `cmd/server/main.go` | ✅ | Décision produit : **warning loggué**, ne bloque pas le démarrage (pour ne pas casser un déploiement existant). `Config.InsecureDefaults()` détecte JWT_SECRET, APP_ENCRYPTION_KEY (3 valeurs placeholder connues : config.go/docker-compose.yml/.env.example) et le mot de passe DB par défaut ; loggué uniquement si `ENVIRONMENT=production`. Testé unitairement. |
+| B2 | Sauvegarde automatisée DB + documents avec procédure de restauration documentée | `backup/` (nouveau service), `docker-compose.yml`, `.env.example`, `README.md` | ✅ | Décision produit : **service cron dans docker-compose** (pas de dépendance à l'hôte Proxmox). Sidecar basé sur `postgres:16-alpine` (pg_dump de la bonne version), boucle simple (pas de crond), dump + archive documents + purge par rétention. Bug de course découvert et corrigé en testant : le service attendait seulement `postgres` healthy, pas `api` healthy, donc le tout premier backup pouvait précéder les migrations (1 table au lieu de 25) — corrigé via `depends_on: api: condition: service_healthy`. Cycle complet (backup + restauration DB + restauration documents) vérifié en conditions réelles avec docker compose. |
+| B3 | Healthcheck Docker fiable sur `api` | *(couvert par quick win #1 et #2)* | ✅ | |
+| B4 | Goroutines sans `recover()` | *(couvert par quick win #4)* | ✅ | |
+| B5 | Alerting sur erreurs critiques (sync down, circuit breaker OPEN) | `internal/services/notification_service.go`, `internal/services/sync_jobs.go` | ✅ | Décision produit : **réutilisation du webhook véhicule existant**. Nouvelle alerte `NotifySyncCircuitOpen` envoyée une seule fois exactement au moment où le circuit breaker d'un véhicule bascule OPEN (pas à chaque échec suivant). L'alerte globale sur panne DB elle-même n'est **pas** couverte par ce mécanisme : si la DB est down, l'app ne peut pas lire la config webhook en base pour alerter — ce cas relève du monitoring externe sur `/api/health` (documenté dans la nouvelle section README « Exploitation »), pas d'un webhook applicatif. Testé en intégration avec une vraie base Postgres (`TestRecordSyncFailureAlertsOnlyOnTransitionToOpen`) : exactement 1 appel webhook sur 3 échecs consécutifs. |
 
 ## Autres constats (⚠️ à améliorer)
 
@@ -36,7 +36,7 @@ Build Go, `go vet`, `go test ./...`, build Docker multi-stage et un run complet 
 | A3 | Rate limiting sur `/auth/login` et `/auth/register` | `internal/handlers/auth_handler.go` | ⬜ | |
 | A4 | Access token en cookie httpOnly plutôt que `localStorage` | `web/src/services/api.ts` | ⏭️ reporté (refonte du flux auth, à planifier séparément) | |
 | A5 | Documenter headers de sécurité recommandés côté reverse proxy | `README.md` | ⬜ | |
-| A6 | Section "Exploitation" dans le README (backup, logs, diagnostic incident) | `README.md` | ⬜ | |
+| A6 | Section "Exploitation" dans le README (backup, logs, diagnostic incident) | `README.md` | ✅ | Ajoutée en même temps que B2 (sauvegardes, restauration, diagnostic, rollback). |
 
 ---
 *Ce fichier est un artefact de suivi temporaire pour la remédiation en cours ; il pourra être supprimé une fois toutes les actions traitées.*

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 	_ "time/tzdata" // reporting timezone available even in minimal container images
@@ -36,6 +37,20 @@ func main() {
 
 	// 1. Load configuration
 	cfg := config.Load()
+
+	// Warn loudly (without blocking startup) if a production deployment still uses one of the
+	// well-known placeholder secrets shipped in docker-compose.yml / .env.example.
+	if strings.EqualFold(cfg.Environment, "production") {
+		if warnings := cfg.InsecureDefaults(); len(warnings) > 0 {
+			log.Println("[security] ##################################################")
+			log.Println("[security] INSECURE DEFAULT SECRETS DETECTED IN PRODUCTION:")
+			for _, w := range warnings {
+				log.Printf("[security] - %s", w)
+			}
+			log.Println("[security] Change these values immediately (see .env.example).")
+			log.Println("[security] ##################################################")
+		}
+	}
 
 	// 2. Initialize encryption module
 	encryptor, err := crypto.NewEncryptor(cfg.AppEncryptionKey)

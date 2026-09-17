@@ -55,6 +55,7 @@
   - **Telegram** : messages formatés Markdown via bot HTTP.
   - **Gotify** : notifications push auto-hébergées avec gestion des priorités.
   - **JSON Générique** : intégration directe avec Home Assistant, Node-RED ou n8n.
+- **Alerte de synchronisation en échec** : le même webhook véhicule est aussi utilisé pour prévenir quand la synchronisation TeslaMate échoue de façon répétée et est automatiquement suspendue (circuit breaker), sans attendre d'ouvrir l'application.
 
 ### 5. Archivage & Gestion des Documents
 - **Stockage sur volume filesystem** : migration des pièces jointes (factures d'entretien, justificatifs) hors de PostgreSQL vers un volume dédié (`/data/documents`).
@@ -133,96 +134,7 @@ TeslaCost/
 
 L'application est disponible sur **`http://localhost:8080`**.
 
-<details>
-<summary>📋 Voir le contenu direct de <code>docker-compose.yml</code></summary>
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: teslacost-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USER:-teslacost}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
-      POSTGRES_DB: ${DB_NAME:-teslacost}
-    ports:
-      # Bound to localhost only by default; override DB_PORT_BIND for external access.
-      - "${DB_PORT_BIND:-127.0.0.1:5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-teslacost} -d ${DB_NAME:-teslacost}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  api:
-    # Pin TESLACOST_VERSION (e.g. "v1.17.0") in your .env for reproducible deployments.
-    image: ghcr.io/rem7474/teslacost:${TESLACOST_VERSION:-latest}
-    pull_policy: missing
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod
-    container_name: teslacost-api
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/health"]
-      interval: 30s
-      timeout: 5s
-      start_period: 15s
-      retries: 3
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
-    environment:
-      PORT: 8080
-      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-teslacost}
-      DB_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
-      DB_NAME: ${DB_NAME:-teslacost}
-      DB_SSLMODE: disable
-      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
-      JWT_SECRET: ${JWT_SECRET}
-      DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
-      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
-      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
-      # OIDC / SSO (optionnel)
-      # OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
-      # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-      # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      # OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
-      # OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-SSO}
-    ports:
-      - "${PORT:-8080}:8080"
-    volumes:
-      - teslacost_documents:/data/documents
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-volumes:
-  postgres_data:
-    driver: local
-  teslacost_documents:
-    driver: local
-```
-
-</details>
+> Le fichier [`docker-compose.yml`](./docker-compose.yml) du repo (celui téléchargé à l'étape 1) fait foi ; il inclut les services `postgres`, `api` et `backup` (sauvegardes automatiques, voir la section « Exploitation » plus bas) avec leurs healthchecks respectifs.
 
 ---
 
@@ -248,6 +160,48 @@ docker run -d \
   -e APP_TIMEZONE="Europe/Paris" \
   ghcr.io/rem7474/teslacost:latest
 ```
+
+---
+
+## 🛟 Exploitation : sauvegardes, restauration & diagnostic
+
+### Sauvegardes automatiques
+
+Le service `backup` de `docker-compose.yml` tourne en continu à côté de `postgres` et `api` : toutes les `BACKUP_INTERVAL_HOURS` heures (24h par défaut), il produit un dump PostgreSQL compressé et une archive du volume de documents dans le volume nommé `teslacost_backups`, et supprime les fichiers plus vieux que `BACKUP_RETENTION_DAYS` jours (14 par défaut).
+
+```bash
+# Lister les sauvegardes disponibles
+docker compose exec backup ls -lh /backups
+
+# Suivre le service de sauvegarde
+docker compose logs -f backup
+```
+
+⚠️ Un volume Docker nommé reste sur le même disque que le reste de la stack : il ne protège pas contre une panne du disque ou de l'hôte Proxmox. Copiez régulièrement le contenu de `teslacost_backups` ailleurs (job de backup Proxmox sur le volume, `rsync` vers un autre hôte, etc.).
+
+### Restauration
+
+```bash
+# 1. Copier un dump hors du conteneur
+docker compose cp backup:/backups/teslacost-db-<horodatage>.sql.gz .
+
+# 2. Restaurer la base (écrase les données existantes de la base ciblée)
+gunzip -c teslacost-db-<horodatage>.sql.gz | docker compose exec -T postgres psql -U "${DB_USER:-teslacost}" -d "${DB_NAME:-teslacost}"
+
+# 3. Restaurer les documents dans le volume applicatif
+docker compose cp backup:/backups/teslacost-documents-<horodatage>.tar.gz .
+docker run --rm \
+  -v teslacost_teslacost_documents:/data \
+  -v "$(pwd)":/backup \
+  alpine sh -c "cd /data && tar -xzf /backup/teslacost-documents-<horodatage>.tar.gz --strip-components=1"
+```
+
+### Diagnostic d'incident
+
+- **État de santé** : `curl http://localhost:8080/api/health` — renvoie `503`/`unhealthy` si la base est injoignable, `200`/`healthy` sinon. C'est aussi ce qu'utilise le `HEALTHCHECK` Docker (`docker inspect --format='{{json .State.Health}}' teslacost-api`).
+- **Logs applicatifs** : `docker compose logs -f api`. Les lignes préfixées `[auto-sync]`, `[sync]`, `[auth]`, `[notification]`, `[security]`, `[panic]` identifient le sous-système concerné.
+- **État de la synchronisation TeslaMate** : une panne prolongée de l'API TeslaMate ouvre le circuit breaker par véhicule (log `circuit breaker: OPEN`) ; les tentatives reprennent automatiquement après le cooldown (10 minutes par défaut) sans action manuelle.
+- **Rollback** : redéployer avec `TESLACOST_VERSION` pointé sur le tag précédent (`docker compose pull && docker compose up -d`), puis si une migration doit être défaite, appliquer le `.down.sql` correspondant dans `migrations/` manuellement contre la base.
 
 ---
 

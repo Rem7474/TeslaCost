@@ -10,11 +10,11 @@ import (
 
 // Config stores application configuration loaded from environment variables.
 type Config struct {
-	Port                 string
-	AppBaseURL           string
-	Environment          string
-	DatabaseURL          string
-	AppEncryptionKey     string
+	Port                       string
+	AppBaseURL                 string
+	Environment                string
+	DatabaseURL                string
+	AppEncryptionKey           string
 	JWTSecret                  string
 	JWTExpirationHours         int
 	JWTAccessExpirationMinutes int
@@ -28,10 +28,9 @@ type Config struct {
 	ReportingTimezone          string
 	StorageDir                 string // Directory for document file storage (Docker volume mount point)
 
-
 	// OIDC / OAuth2 SSO (optional — enabled when OIDCIssuerURL is non-empty)
 	OIDCEnabled          bool
-	OIDCIssuerURL        string   // e.g. https://auth.homelab.local/application/o/teslacost/
+	OIDCIssuerURL        string // e.g. https://auth.homelab.local/application/o/teslacost/
 	OIDCClientID         string
 	OIDCClientSecret     string
 	OIDCRedirectURL      string   // e.g. https://teslacost.homelab.local/api/auth/oidc/callback
@@ -167,6 +166,45 @@ func Load() *Config {
 		OIDCAllowedEmails:          oidcAllowedEmails,
 		OIDCDisableLocalAuth:       oidcDisableLocalAuth,
 	}
+}
+
+// knownDefaultJWTSecret and knownDefaultEncryptionKeys are the literal placeholder values
+// shipped in docker-compose.yml, .env.example and this package's own defaults. Running with
+// one of these in production means anyone who has read the (public) source code can forge
+// authentication tokens or decrypt stored TeslaMate credentials.
+const knownDefaultJWTSecret = "super_secret_jwt_signing_key_for_teslacost_app"
+const knownDefaultDBPassword = "teslacost_dev_secret"
+
+var knownDefaultEncryptionKeys = []string{
+	"dev-default-32-byte-secret-key!!",             // internal/config/config.go Load() fallback
+	"change-this-to-a-secure-32-byte-key-in-prod!", // docker-compose.yml fallback
+	"generate_a_random_32_characters_key_here!",    // .env.example placeholder
+}
+
+// InsecureDefaults returns a human-readable warning for each secret that still holds a
+// known placeholder/default value. It is intended to be logged loudly (not to block startup)
+// so a misconfigured production deployment is easy to spot in the logs.
+func (c *Config) InsecureDefaults() []string {
+	var warnings []string
+
+	if c.JWTSecret == knownDefaultJWTSecret {
+		warnings = append(warnings, "JWT_SECRET is set to the well-known default value from the repository — anyone can forge valid session tokens")
+	}
+
+	for _, known := range knownDefaultEncryptionKeys {
+		if c.AppEncryptionKey == known {
+			warnings = append(warnings, "APP_ENCRYPTION_KEY is set to a well-known placeholder value — stored TeslaMate credentials can be decrypted by anyone with the source code")
+			break
+		}
+	}
+
+	if u, err := url.Parse(c.DatabaseURL); err == nil && u.User != nil {
+		if pass, _ := u.User.Password(); pass == knownDefaultDBPassword {
+			warnings = append(warnings, "DB_PASSWORD is set to the well-known default value from the repository")
+		}
+	}
+
+	return warnings
 }
 
 func getEnv(key, defaultVal string) string {
