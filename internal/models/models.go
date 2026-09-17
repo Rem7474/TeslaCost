@@ -614,3 +614,17 @@ type VehicleWebhook struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
+
+// RefreshToken represents a long-lived refresh token session with rotation family tracking.
+type RefreshToken struct {
+	ID        string    `json:"id"`
+	UserID    string    `json:"user_id"`
+	TokenHash string    `json:"-"`
+	FamilyID  string    `json:"family_id"`
+	IsRevoked bool      `json:"is_revoked"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	CreatedIP *string   `json:"created_ip,omitempty"`
+	UserAgent *string   `json:"user_agent,omitempty"`
+}
+

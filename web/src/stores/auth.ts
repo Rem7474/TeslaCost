@@ -31,7 +31,12 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('teslacost_token', res.token)
   }
 
-  function logout() {
+  async function logout() {
+    try {
+      await api.logout()
+    } catch {
+      // Ignorer les erreurs réseau lors de la déconnexion
+    }
     token.value = null
     user.value = null
     localStorage.removeItem('teslacost_token')

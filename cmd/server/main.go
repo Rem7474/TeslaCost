@@ -167,10 +167,13 @@ func main() {
 			r.Get("/config", authHandler.GetConfig)
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
+			r.Post("/refresh", authHandler.RefreshToken)
+			r.Post("/logout", authHandler.Logout)
 			// OIDC Authorization Code Flow endpoints (public — no JWT required)
 			r.Get("/oidc/login", authHandler.OIDCLogin)
 			r.Get("/oidc/callback", authHandler.OIDCCallback)
 		})
+
 
 		// Protected Routes
 		r.Group(func(r chi.Router) {

@@ -3,6 +3,8 @@ import { newIdempotencyKey } from '@/services/offlineQueue'
 
 const BASE_URL = '/api'
 
+let refreshPromise: Promise<string | null> | null = null
+
 function getHeaders(body?: any): HeadersInit {
   const token = localStorage.getItem('teslacost_token')
   const headers: Record<string, string> = {}
@@ -13,6 +15,38 @@ function getHeaders(body?: any): HeadersInit {
     headers['Authorization'] = `Bearer ${token}`
   }
   return headers
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  if (refreshPromise) {
+    return refreshPromise
+  }
+
+  refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        throw new Error('Refresh failed')
+      }
+      const data = await res.json()
+      if (data.token) {
+        localStorage.setItem('teslacost_token', data.token)
+        return data.token as string
+      }
+      return null
+    } catch (err) {
+      localStorage.removeItem('teslacost_token')
+      return null
+    } finally {
+      refreshPromise = null
+    }
+  })()
+
+  return refreshPromise
 }
 
 export interface QueuedResult {
@@ -61,6 +95,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, offlineLa
   try {
     res = await fetch(`${BASE_URL}${endpoint}`, {
       ...options,
+      credentials: options.credentials || 'include',
       headers: {
         ...getHeaders(options.body),
         ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
@@ -75,10 +110,30 @@ async function request<T>(endpoint: string, options: RequestInit = {}, offlineLa
     throw err
   }
 
+  // Intercept 401 Unauthorized for token refresh
   if (res.status === 401) {
-    localStorage.removeItem('teslacost_token')
-    if (window.location.pathname !== '/login' && window.location.pathname !== '/register' && window.location.pathname !== '/onboarding') {
-      window.location.href = '/login'
+    const isAuthEndpoint =
+      endpoint.startsWith('/auth/login') ||
+      endpoint.startsWith('/auth/register') ||
+      endpoint.startsWith('/auth/refresh') ||
+      endpoint.startsWith('/auth/config')
+
+    if (!isAuthEndpoint) {
+      const newToken = await refreshAccessToken()
+      if (newToken) {
+        // Retry the original request with the new access token
+        return request<T>(endpoint, options, offlineLabel)
+      }
+
+      // Refresh failed or token invalid -> clear session and redirect to login
+      localStorage.removeItem('teslacost_token')
+      if (
+        window.location.pathname !== '/login' &&
+        window.location.pathname !== '/register' &&
+        window.location.pathname !== '/onboarding'
+      ) {
+        window.location.href = '/login'
+      }
     }
   }
 
@@ -105,6 +160,8 @@ export const api = {
   // Auth
   login: (credentials: any) => request<any>('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   register: (payload: any) => request<any>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
+  refresh: () => request<any>('/auth/refresh', { method: 'POST' }),
+  logout: () => request<any>('/auth/logout', { method: 'POST' }),
   getMe: () => request<any>('/auth/me'),
   getAuthConfig: () => request<AuthConfig>('/auth/config'),
 
