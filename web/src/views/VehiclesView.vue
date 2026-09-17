@@ -632,14 +632,23 @@ function clearCardTestResult(id: string) {
           </div>
 
           <div v-if="v.role === 'OWNER'">
-            <span class="text-slate-400">Acquisition</span>
-            <p v-if="ownerships[v.id]" class="text-xs font-semibold text-indigo-300 mt-1">
-              {{ ownershipSummary(ownerships[v.id]) }}
-              <span v-if="ownerships[v.id].end_date" class="block text-[11px] font-normal text-slate-400">
-                Fin de détention le {{ new Date(ownerships[v.id].end_date).toLocaleDateString('fr-FR') }}
-              </span>
-            </p>
-            <p v-else class="text-xs text-amber-400/90 mt-1">Non renseignée</p>
+            <span class="text-slate-400 block mb-1">Acquisition & Contrat</span>
+            <button
+              type="button"
+              @click="openOwnershipModal(v)"
+              class="group text-left inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border"
+              :class="
+                ownerships[v.id]
+                  ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
+              "
+              :title="ownerships[v.id] ? 'Cliquer pour modifier les termes du contrat' : 'Cliquer pour configurer l\'achat ou la location (LOA/LLD)'"
+            >
+              <FileText v-if="ownerships[v.id]" class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+              <Plus v-else class="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>{{ ownerships[v.id] ? ownershipSummary(ownerships[v.id]) : 'Renseigner le contrat' }}</span>
+              <Pencil v-if="ownerships[v.id]" class="w-3 h-3 text-indigo-400 opacity-60 group-hover:opacity-100 shrink-0 ml-0.5" />
+            </button>
           </div>
           <div v-else>
             <span class="text-slate-400">Accès véhicule</span>

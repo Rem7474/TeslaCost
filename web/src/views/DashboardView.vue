@@ -1278,15 +1278,6 @@ function renderCharts() {
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Activité du mois ({{ currentMonthStats.month }})</span>
-              <button
-                type="button"
-                @click="openMonthDetail(currentMonthStats.raw)"
-                class="px-2 py-0.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded text-[10px] font-semibold border border-indigo-500/40 flex items-center gap-1 transition-colors"
-                title="Afficher le détail chiffré et le diagramme circulaire"
-              >
-                <PieChart class="w-3 h-3" />
-                <span>Détail</span>
-              </button>
             </div>
             <div class="text-base sm:text-lg font-bold text-white flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
               <span>{{ Math.round(currentMonthStats.distance_km).toLocaleString('fr-FR') }} km roulés</span>
