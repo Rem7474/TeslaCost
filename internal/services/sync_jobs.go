@@ -16,8 +16,13 @@ const (
 	SyncJobFailed    = "FAILED"
 )
 
-// syncJobTimeout bounds a single synchronization, long enough for a first full history import.
-const syncJobTimeout = 15 * time.Minute
+// Sync job timeouts.
+const (
+	// manualSyncTimeout bounds a user-triggered synchronization, long enough for a first full history import.
+	manualSyncTimeout = 15 * time.Minute
+	// scheduledSyncTimeout bounds a periodic background synchronization to avoid hanging worker loops.
+	scheduledSyncTimeout = 3 * time.Minute
+)
 
 // SyncJob tracks the last synchronization of a vehicle.
 type SyncJob struct {
@@ -90,9 +95,15 @@ func (s *SyncService) StartSync(v models.Vehicle) (job *SyncJob, started bool) {
 		return job, false
 	}
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), syncJobTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), manualSyncTimeout)
 		defer cancel()
 		res, err := s.SyncVehicle(ctx, &v)
+		cb := s.getCircuitBreaker(v.ID)
+		if err != nil {
+			cb.RecordFailure(err)
+		} else {
+			cb.RecordSuccess()
+		}
 		s.jobs.finish(v.ID, res, err)
 	}()
 	return job, true
@@ -103,20 +114,32 @@ func (s *SyncService) GetSyncJob(vehicleID string) *SyncJob {
 	return s.jobs.get(vehicleID)
 }
 
-// runScheduledSync synchronizes a vehicle from the background worker unless a manual sync is running.
+// runScheduledSync synchronizes a vehicle from the background worker unless a manual sync is running
+// or the vehicle's circuit breaker is currently open.
 func (s *SyncService) runScheduledSync(ctx context.Context, v models.Vehicle) {
+	cb := s.getCircuitBreaker(v.ID)
+	if err := cb.CanExecute(); err != nil {
+		log.Printf("[auto-sync] Vehicle %s (%s): skipping scheduled sync: %v", v.Name, v.ID, err)
+		return
+	}
+
 	if _, started := s.jobs.begin(v.ID, "SCHEDULED"); !started {
 		return
 	}
-	vCtx, cancel := context.WithTimeout(ctx, syncJobTimeout)
+	vCtx, cancel := context.WithTimeout(ctx, scheduledSyncTimeout)
 	res, err := s.SyncVehicle(vCtx, &v)
 	cancel()
-	s.jobs.finish(v.ID, res, err)
 
 	if err != nil {
-		log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v", v.Name, v.ID, err)
-	} else if res != nil && (res.DrivesAdded > 0 || res.ChargesAdded > 0) {
-		log.Printf("[auto-sync] Vehicle %s (%s): +%d new drives, +%d new charges (odometer: %.0f km)",
-			v.Name, v.ID, res.DrivesAdded, res.ChargesAdded, res.CurrentOdometer)
+		cb.RecordFailure(err)
+		log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v (circuit breaker: %s)", v.Name, v.ID, err, cb.State())
+	} else {
+		cb.RecordSuccess()
+		if res != nil && (res.DrivesAdded > 0 || res.ChargesAdded > 0) {
+			log.Printf("[auto-sync] Vehicle %s (%s): +%d new drives, +%d new charges (odometer: %.0f km)",
+				v.Name, v.ID, res.DrivesAdded, res.ChargesAdded, res.CurrentOdometer)
+		}
 	}
+
+	s.jobs.finish(v.ID, res, err)
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/teslacost/teslacost/internal/crypto"
@@ -74,11 +75,16 @@ type SyncService struct {
 	encryptor     *crypto.Encryptor
 	jobs          syncJobs
 	notifications *NotificationService
+	cbMu          sync.RWMutex
+	breakers      map[string]*CircuitBreaker
 }
 
 // NewSyncService creates a new SyncService.
 func NewSyncService(repo *database.Repository, encryptor *crypto.Encryptor) *SyncService {
-	s := &SyncService{encryptor: encryptor}
+	s := &SyncService{
+		encryptor: encryptor,
+		breakers:  make(map[string]*CircuitBreaker),
+	}
 	if repo != nil {
 		s.repo = repo
 	}
@@ -88,6 +94,35 @@ func NewSyncService(repo *database.Repository, encryptor *crypto.Encryptor) *Syn
 // SetNotificationService attaches a NotificationService to dispatch alerts on odometer updates.
 func (s *SyncService) SetNotificationService(notifications *NotificationService) {
 	s.notifications = notifications
+}
+
+func (s *SyncService) getCircuitBreaker(vehicleID string) *CircuitBreaker {
+	s.cbMu.Lock()
+	defer s.cbMu.Unlock()
+	if s.breakers == nil {
+		s.breakers = make(map[string]*CircuitBreaker)
+	}
+	cb, ok := s.breakers[vehicleID]
+	if !ok {
+		cb = NewCircuitBreaker()
+		s.breakers[vehicleID] = cb
+	}
+	return cb
+}
+
+// GetCircuitBreaker returns the circuit breaker for a given vehicle.
+func (s *SyncService) GetCircuitBreaker(vehicleID string) *CircuitBreaker {
+	return s.getCircuitBreaker(vehicleID)
+}
+
+// SetCircuitBreaker overrides or sets a custom circuit breaker for testing or configuration.
+func (s *SyncService) SetCircuitBreaker(vehicleID string, cb *CircuitBreaker) {
+	s.cbMu.Lock()
+	defer s.cbMu.Unlock()
+	if s.breakers == nil {
+		s.breakers = make(map[string]*CircuitBreaker)
+	}
+	s.breakers[vehicleID] = cb
 }
 
 // TestConnection verifies if connection to TeslaMate works for a given vehicle config.
@@ -190,7 +225,9 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			v.CurrentOdometer = odometer
 			if s.notifications != nil {
 				go func(veh models.Vehicle, odo float64) {
-					_ = s.notifications.CheckAndNotify(context.Background(), &veh, odo)
+					notifyCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+					defer cancel()
+					_ = s.notifications.CheckAndNotify(notifyCtx, &veh, odo)
 				}(*v, odometer)
 			}
 		} else if odometer > 0 && odometer+1 < v.CurrentOdometer {
