@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onUnmounted } from 'vue'
+import { ref, computed, watch, onUnmounted, useId } from 'vue'
 import { UploadCloud, FileText, Image as ImageIcon, X, AlertCircle } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -26,7 +26,8 @@ const emit = defineEmits<{
   (e: 'error', message: string): void
 }>()
 
-const uniqueId = props.id || `dropzone-input-${Math.random().toString(36).slice(2, 9)}`
+const generatedId = useId()
+const uniqueId = computed(() => props.id || generatedId)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 const validationError = ref<string | null>(null)
