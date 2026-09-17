@@ -182,6 +182,34 @@ function selectMountedTires() {
   selectedTireIds.value = ['FL', 'FR', 'RL', 'RR'].map((pos) => mountedTires.value[pos]?.tire.id).filter(Boolean)
 }
 
+const currentTabTireIds = computed<string[]>(() => {
+  if (activeTab.value === 'chassis') {
+    return ['FL', 'FR', 'RL', 'RR'].map((pos) => mountedTires.value[pos]?.tire.id).filter(Boolean)
+  }
+  if (activeTab.value === 'storage') {
+    return storageTires.value.map((t) => t.tire.id)
+  }
+  if (activeTab.value === 'disposed') {
+    return disposedTires.value.map((t) => t.tire.id)
+  }
+  return []
+})
+
+const isCurrentTabAllSelected = computed<boolean>(() => {
+  const ids = currentTabTireIds.value
+  return ids.length > 0 && ids.every((id) => selectedTireIds.value.includes(id))
+})
+
+function toggleSelectAllCurrentTab() {
+  const ids = currentTabTireIds.value
+  if (!ids.length) return
+  if (isCurrentTabAllSelected.value) {
+    selectedTireIds.value = selectedTireIds.value.filter((id) => !ids.includes(id))
+  } else {
+    selectedTireIds.value = Array.from(new Set([...selectedTireIds.value, ...ids]))
+  }
+}
+
 // Edit (single or batch): empty fields are left unchanged
 const showTireEditModal = ref(false)
 const tireEditIds = ref<string[]>([])
@@ -1163,45 +1191,17 @@ function formatDate(d: string) {
       </button>
     </BulkSelectionBar>
 
-    <!-- Quick batch selector buttons bar -->
-    <div v-if="vehicleStore.canEdit" class="flex flex-wrap items-center justify-between gap-2 text-xs">
-      <div class="flex items-center gap-2 flex-wrap">
-        <button
-          v-if="activeTab === 'chassis'"
-          type="button"
-          @click="selectMountedTires"
-          class="text-slate-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 transition-colors"
-        >
-          <CheckSquare class="w-3.5 h-3.5 text-rose-400" />
-          <span>Sélectionner les 4 montés</span>
-        </button>
-        <button
-          v-else-if="activeTab === 'storage' && storageTires.length"
-          type="button"
-          @click="selectedTireIds = storageTires.map((t) => t.tire.id)"
-          class="text-slate-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 transition-colors"
-        >
-          <CheckSquare class="w-3.5 h-3.5 text-rose-400" />
-          <span>Sélectionner tout le garage ({{ storageTires.length }})</span>
-        </button>
-        <button
-          v-else-if="activeTab === 'disposed' && disposedTires.length"
-          type="button"
-          @click="selectedTireIds = disposedTires.map((t) => t.tire.id)"
-          class="text-slate-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 transition-colors"
-        >
-          <CheckSquare class="w-3.5 h-3.5 text-rose-400" />
-          <span>Sélectionner tous les pneus au rebut ({{ disposedTires.length }})</span>
-        </button>
-        <button
-          v-if="selectedTireIds.length"
-          type="button"
-          @click="selectedTireIds = []"
-          class="text-slate-500 hover:text-slate-300 flex items-center gap-1 px-2 py-1 transition-colors"
-        >
-          Tout désélectionner
-        </button>
-      </div>
+    <!-- Header row: Select all toggle & Total info -->
+    <div v-if="vehicleStore.canEdit" class="flex items-center justify-between text-xs text-slate-400 px-2">
+      <button
+        type="button"
+        @click="toggleSelectAllCurrentTab"
+        class="flex items-center gap-2 hover:text-slate-200 transition-colors"
+      >
+        <component :is="isCurrentTabAllSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
+        <span>{{ isCurrentTabAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }}</span>
+      </button>
+      <span>{{ currentTabTireIds.length }} pneu(s) dans cette vue</span>
     </div>
 
     <!-- View Switcher Tabs -->
@@ -1286,7 +1286,7 @@ function formatDate(d: string) {
                   type="checkbox"
                   :checked="selectedTireIds.includes(mountedTires.FL.tire.id)"
                   @change="toggleTireSelection(mountedTires.FL.tire.id)"
-                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                  class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
                 />
                 <span>Avant Gauche (FL)</span>
               </label>
@@ -1348,7 +1348,7 @@ function formatDate(d: string) {
                   type="checkbox"
                   :checked="selectedTireIds.includes(mountedTires.FR.tire.id)"
                   @change="toggleTireSelection(mountedTires.FR.tire.id)"
-                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                  class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
                 />
                 <span>Avant Droit (FR)</span>
               </label>
@@ -1409,7 +1409,7 @@ function formatDate(d: string) {
                   type="checkbox"
                   :checked="selectedTireIds.includes(mountedTires.RL.tire.id)"
                   @change="toggleTireSelection(mountedTires.RL.tire.id)"
-                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                  class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
                 />
                 <span>Arrière Gauche (RL)</span>
               </label>
@@ -1470,7 +1470,7 @@ function formatDate(d: string) {
                   type="checkbox"
                   :checked="selectedTireIds.includes(mountedTires.RR.tire.id)"
                   @change="toggleTireSelection(mountedTires.RR.tire.id)"
-                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                  class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
                 />
                 <span>Arrière Droit (RR)</span>
               </label>
@@ -1678,7 +1678,7 @@ function formatDate(d: string) {
                     type="checkbox"
                     :checked="selectedTireIds.includes(t.tire.id)"
                     @change="toggleTireSelection(t.tire.id)"
-                    class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                    class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
                   />
                 </label>
                 {{ t.tire.brand }} {{ t.tire.model }}
@@ -1982,7 +1982,7 @@ function formatDate(d: string) {
                   type="checkbox"
                   :checked="selectedTireIds.includes(t.tire.id)"
                   @change="toggleTireSelection(t.tire.id)"
-                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                  class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
                 />
               </label>
               {{ t.tire.brand }} {{ t.tire.model }}
