@@ -3165,28 +3165,23 @@ type OdometerRange struct {
 	Max *float64
 }
 
-// GetDrivingTelemetryStats returns driving dynamics averaged over the provided odometer ranges.
-// Each range corresponds to a tire mount session: only drives whose end_odometer falls within
-// [range.Min, range.Max) (or >= range.Min when Max is nil) are included.
-// Returns zeros and count=0 when ranges is empty or no matching drives exist.
-func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID string, ranges []OdometerRange) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error) {
+// buildDrivingTelemetryQuery constructs the SQL query and arguments for telemetry stats.
+func buildDrivingTelemetryQuery(vehicleID string, ranges []OdometerRange) (string, []any) {
 	if len(ranges) == 0 {
-		return 0, 0, 0, 0, nil
+		return "", nil
 	}
 
-	// Build a WHERE clause with one OR-clause per range.
 	args := []any{vehicleID}
 	var clauses []string
 	for _, rng := range ranges {
 		lo := len(args) + 1
-		hi := len(args) + 2
 		args = append(args, rng.Min)
 		if rng.Max != nil {
+			hi := len(args) + 1
 			args = append(args, *rng.Max)
 			clauses = append(clauses, fmt.Sprintf("(end_odometer >= $%d AND end_odometer <= $%d)", lo, hi))
 		} else {
 			// Active session — upper bound is the vehicle's current odometer (no constraint needed)
-			args = args[:len(args)-1] // drop the unused append
 			clauses = append(clauses, fmt.Sprintf("(end_odometer >= $%d)", lo))
 		}
 	}
@@ -3201,6 +3196,20 @@ func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID str
 		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
 		  AND (%s)
 	`, strings.Join(clauses, " OR "))
+
+	return query, args
+}
+
+// GetDrivingTelemetryStats returns driving dynamics averaged over the provided odometer ranges.
+// Each range corresponds to a tire mount session: only drives whose end_odometer falls within
+// [range.Min, range.Max) (or >= range.Min when Max is nil) are included.
+// Returns zeros and count=0 when ranges is empty or no matching drives exist.
+func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID string, ranges []OdometerRange) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error) {
+	if len(ranges) == 0 {
+		return 0, 0, 0, 0, nil
+	}
+
+	query, args := buildDrivingTelemetryQuery(vehicleID, ranges)
 
 	err = r.pool.QueryRow(ctx, query, args...).Scan(&avgPowerMax, &avgPowerMin, &avgConsumption, &count)
 	if err != nil {

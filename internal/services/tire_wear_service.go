@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"strconv"
 
@@ -170,15 +171,32 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 	// Each mount session provides an odometer window [MountedOdometer, DismountedOdometer].
 	var avgPowerMax, avgPowerMin, avgConsumption float64
 	var drivesCount int
-	if tire.VehicleID != nil && *tire.VehicleID != "" && len(sessions) > 0 {
-		ranges := make([]database.OdometerRange, 0, len(sessions))
-		for _, sess := range sessions {
-			ranges = append(ranges, database.OdometerRange{
-				Min: sess.MountedOdometer,
-				Max: sess.DismountedOdometer,
-			})
+	if tire.VehicleID != nil && *tire.VehicleID != "" {
+		var ranges []database.OdometerRange
+		if len(sessions) > 0 {
+			ranges = make([]database.OdometerRange, 0, len(sessions))
+			for _, sess := range sessions {
+				ranges = append(ranges, database.OdometerRange{
+					Min: sess.MountedOdometer,
+					Max: sess.DismountedOdometer,
+				})
+			}
+		} else if isMounted && tire.MountedOdometer != nil {
+			ranges = []database.OdometerRange{
+				{
+					Min: *tire.MountedOdometer,
+					Max: nil,
+				},
+			}
 		}
-		avgPowerMax, avgPowerMin, avgConsumption, drivesCount, _ = s.repo.GetDrivingTelemetryStats(ctx, *tire.VehicleID, ranges)
+
+		if len(ranges) > 0 {
+			var errTelemetry error
+			avgPowerMax, avgPowerMin, avgConsumption, drivesCount, errTelemetry = s.repo.GetDrivingTelemetryStats(ctx, *tire.VehicleID, ranges)
+			if errTelemetry != nil {
+				log.Printf("[tire-wear] Failed to get driving telemetry stats for tire %s: %v", tire.ID, errTelemetry)
+			}
+		}
 	}
 
 	accelFactor := 1.0
