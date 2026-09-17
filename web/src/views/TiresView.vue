@@ -987,10 +987,16 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click.stop="toggleTireSelection(mountedTires.FL.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.FL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
-                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.FL.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+              <label :for="'chassis-select-fl-' + mountedTires.FL.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.FL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input
+                  :id="'chassis-select-fl-' + mountedTires.FL.tire.id"
+                  type="checkbox"
+                  :checked="selectedTireIds.includes(mountedTires.FL.tire.id)"
+                  @change="toggleTireSelection(mountedTires.FL.tire.id)"
+                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                />
                 <span>Avant Gauche (FL)</span>
-              </button>
+              </label>
               <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.FL.tire.brand }} {{ mountedTires.FL.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.FL.tire.dimension }}</div>
             </div>
@@ -1095,10 +1101,16 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click.stop="toggleTireSelection(mountedTires.FR.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.FR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
-                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.FR.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+              <label :for="'chassis-select-fr-' + mountedTires.FR.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.FR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input
+                  :id="'chassis-select-fr-' + mountedTires.FR.tire.id"
+                  type="checkbox"
+                  :checked="selectedTireIds.includes(mountedTires.FR.tire.id)"
+                  @change="toggleTireSelection(mountedTires.FR.tire.id)"
+                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                />
                 <span>Avant Droit (FR)</span>
-              </button>
+              </label>
               <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.FR.tire.brand }} {{ mountedTires.FR.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.FR.tire.dimension }}</div>
             </div>
@@ -1200,10 +1212,16 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click.stop="toggleTireSelection(mountedTires.RL.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.RL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
-                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.RL.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+              <label :for="'chassis-select-rl-' + mountedTires.RL.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.RL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input
+                  :id="'chassis-select-rl-' + mountedTires.RL.tire.id"
+                  type="checkbox"
+                  :checked="selectedTireIds.includes(mountedTires.RL.tire.id)"
+                  @change="toggleTireSelection(mountedTires.RL.tire.id)"
+                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                />
                 <span>Arrière Gauche (RL)</span>
-              </button>
+              </label>
               <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.RL.tire.brand }} {{ mountedTires.RL.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.RL.tire.dimension }}</div>
             </div>
@@ -1305,10 +1323,16 @@ function formatDate(d: string) {
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click.stop="toggleTireSelection(mountedTires.RR.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.RR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
-                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.RR.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+              <label :for="'chassis-select-rr-' + mountedTires.RR.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.RR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input
+                  :id="'chassis-select-rr-' + mountedTires.RR.tire.id"
+                  type="checkbox"
+                  :checked="selectedTireIds.includes(mountedTires.RR.tire.id)"
+                  @change="toggleTireSelection(mountedTires.RR.tire.id)"
+                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                />
                 <span>Arrière Droit (RR)</span>
-              </button>
+              </label>
               <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.RR.tire.brand }} {{ mountedTires.RR.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.RR.tire.dimension }}</div>
             </div>
@@ -1511,7 +1535,7 @@ function formatDate(d: string) {
 
         <!-- Add Type Selection -->
         <div class="space-y-1.5">
-          <label class="block text-xs font-semibold text-slate-300">Format d'enregistrement :</label>
+          <span class="block text-xs font-semibold text-slate-300">Format d'enregistrement :</span>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
             <button
               type="button"
@@ -2533,9 +2557,9 @@ function formatDate(d: string) {
           <!-- Tire selection from storage -->
           <div>
             <div class="flex items-center justify-between mb-2">
-              <label class="font-semibold text-slate-300">
+              <span class="font-semibold text-slate-300">
                 Pneus du garage concernés ({{ batchSessionTireIds.length }}/{{ storageTires.length }})
-              </label>
+              </span>
               <div class="flex items-center gap-2 text-[11px]">
                 <button type="button" @click="selectAllBatchSessionTires()" class="text-rose-400 hover:text-rose-300 font-semibold">
                   Tout cocher
@@ -2686,7 +2710,7 @@ function formatDate(d: string) {
           <!-- Target tires selection -->
           <div>
             <div class="flex items-center justify-between mb-2">
-              <label class="font-semibold text-slate-300">Sélectionner les pneus cibles :</label>
+              <span class="font-semibold text-slate-300">Sélectionner les pneus cibles :</span>
               <div class="flex items-center gap-2 text-[11px]">
                 <button
                   type="button"

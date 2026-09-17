@@ -123,7 +123,7 @@ function clearTripSelection() {
 function toDateInputString(dateVal: string | Date | null | undefined): string {
   if (!dateVal) return ''
   const d = new Date(dateVal)
-  if (isNaN(d.getTime())) return ''
+  if (Number.isNaN(d.getTime())) return ''
   const year = d.getFullYear()
   const month = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -823,14 +823,21 @@ onMounted(() => {
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div class="flex items-start gap-3 min-w-0 flex-1">
             <!-- Select Checkbox -->
-            <input
+            <label
               v-if="vehicleStore.canEdit"
-              type="checkbox"
-              :checked="selectedTripIds.includes(trip.id)"
-              @change="toggleTripSelection(trip.id)"
-              class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer mt-1 shrink-0"
+              :for="'carpool-select-' + trip.id"
+              class="mt-1 shrink-0 flex items-center cursor-pointer"
               title="Sélectionner ce covoiturage"
-            />
+            >
+              <span class="sr-only">Sélectionner ce covoiturage</span>
+              <input
+                :id="'carpool-select-' + trip.id"
+                type="checkbox"
+                :checked="selectedTripIds.includes(trip.id)"
+                @change="toggleTripSelection(trip.id)"
+                class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+              />
+            </label>
 
             <div class="space-y-1 min-w-0 flex-1">
               <div class="flex items-center gap-2.5 flex-wrap min-w-0">

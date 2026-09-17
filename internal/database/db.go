@@ -91,7 +91,7 @@ func (db *DB) Migrate(ctx context.Context) error {
 	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock($1)`, migrationLockID); err != nil {
 		return fmt.Errorf("failed to acquire migration lock: %w", err)
 	}
-	defer conn.Exec(context.Background(), `SELECT pg_advisory_unlock($1)`, migrationLockID)
+	defer conn.Exec(ctx, `SELECT pg_advisory_unlock($1)`, migrationLockID)
 
 	if _, err := conn.Exec(ctx, `
 		CREATE TABLE IF NOT EXISTS schema_migrations (

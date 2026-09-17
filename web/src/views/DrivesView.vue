@@ -962,14 +962,21 @@ function formatDate(dateStr: string) {
       >
         <div class="flex items-start gap-3 min-w-0 flex-1">
           <!-- Selection checkbox -->
-          <input
+          <label
             v-if="vehicleStore.canEdit"
-            type="checkbox"
-            :checked="selectedDriveIds.includes(d.id)"
-            @change="toggleSelectDrive(d)"
-            class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer mt-1 shrink-0"
+            :for="'drive-select-' + d.id"
+            class="mt-1 shrink-0 flex items-center cursor-pointer"
             title="Sélectionner ce trajet"
-          />
+          >
+            <span class="sr-only">Sélectionner ce trajet</span>
+            <input
+              :id="'drive-select-' + d.id"
+              type="checkbox"
+              :checked="selectedDriveIds.includes(d.id)"
+              @change="toggleSelectDrive(d)"
+              class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+            />
+          </label>
 
           <!-- Drive Details -->
           <div class="min-w-0 flex-1">
