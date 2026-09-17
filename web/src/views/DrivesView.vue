@@ -146,7 +146,12 @@ function goToPage(targetPage: number) {
   if (p !== page.value) {
     page.value = p
     loadDrives()
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    const scrollContainer = document.querySelector('main')?.parentElement
+    if (scrollContainer) {
+      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
   }
 }
 

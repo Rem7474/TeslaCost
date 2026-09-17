@@ -49,7 +49,7 @@ onMounted(async () => {
     </div>
   </div>
 
-  <div v-else class="min-h-screen bg-slate-950">
+  <div v-else class="h-full overflow-y-auto bg-slate-950">
     <router-view />
   </div>
 

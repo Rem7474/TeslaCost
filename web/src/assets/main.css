@@ -78,6 +78,14 @@
   :root {
     color-scheme: dark;
   }
+  html,
+  body {
+    height: 100%;
+    overflow: hidden;
+  }
+  #app {
+    height: 100%;
+  }
   * {
     scrollbar-width: thin;
     scrollbar-color: #334155 #0f172a;
