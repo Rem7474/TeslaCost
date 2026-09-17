@@ -19,11 +19,11 @@ services:
 
   api:
     image: ghcr.io/rem7474/teslacost:latest
-    # Pour compiler les sources locales au lieu d'utiliser l'image pré-compilée :
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile
-    #   target: prod
+    pull_policy: missing
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
     container_name: teslacost-api
     restart: unless-stopped
     depends_on:

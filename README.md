@@ -108,9 +108,7 @@ TeslaCost/
 
 ### Option 1 : Docker Compose (Recommandé)
 
-> **Inutile de cloner le dépôt !** Vous avez uniquement besoin du fichier `docker-compose.yml` et de votre configuration `.env`.
-
-1. **Préparez un répertoire et téléchargez les deux fichiers :**
+1. **Créez un répertoire et téléchargez les fichiers de configuration :**
    ```bash
    mkdir teslacost && cd teslacost
    curl -O https://raw.githubusercontent.com/Rem7474/TeslaCost/main/docker-compose.yml
@@ -122,21 +120,21 @@ TeslaCost/
    # Générer une clé de chiffrement AES-256 de 32 octets (64 caractères hexadécimaux) :
    openssl rand -hex 32
    ```
-   Éditez le fichier `.env` pour définir :
-   - `APP_ENCRYPTION_KEY` : la clé générée ci-dessus
-   - `DB_PASSWORD` : le mot de passe de votre base PostgreSQL
-   - `JWT_SECRET` : votre secret de signature de session
-   - *(Optionnel)* La section OIDC / SSO si vous utilisez Authentik, Keycloak ou Authelia
+   Renseignez vos clés dans le fichier `.env` :
+   - `APP_ENCRYPTION_KEY` : la clé de chiffrement générée
+   - `DB_PASSWORD` : mot de passe de la base de données
+   - `JWT_SECRET` : secret de signature des sessions
+   - *(Optionnel)* La section OIDC / SSO si vous déléguez l'authentification à votre IdP
 
 3. **Lancez la stack :**
    ```bash
    docker compose up -d
    ```
 
-L'application et son interface web sont immédiatement disponibles sur **`http://localhost:8080`**.
+L'application est disponible sur **`http://localhost:8080`**.
 
 <details>
-<summary>📋 Voir le contenu direct de <code>docker-compose.yml</code> (si vous préférez le créer manuellement)</summary>
+<summary>📋 Voir le contenu direct de <code>docker-compose.yml</code></summary>
 
 ```yaml
 services:
@@ -160,6 +158,11 @@ services:
 
   api:
     image: ghcr.io/rem7474/teslacost:latest
+    pull_policy: missing
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
     container_name: teslacost-api
     restart: unless-stopped
     depends_on:
