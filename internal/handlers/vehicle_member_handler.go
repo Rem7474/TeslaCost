@@ -41,7 +41,7 @@ func (h *VehicleMemberHandler) ListMembers(w http.ResponseWriter, r *http.Reques
 
 	members, err := h.repo.ListVehicleMembers(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Impossible de récupérer les membres")
+		writeRepoError(w, r, err, "Impossible de récupérer les membres")
 		return
 	}
 	if members == nil {
@@ -87,7 +87,7 @@ func (h *VehicleMemberHandler) AddMember(w http.ResponseWriter, r *http.Request)
 			writeError(w, http.StatusNotFound, "Aucun utilisateur trouvé avec cette adresse email")
 			return
 		}
-		writeRepoError(w, err, err.Error())
+		writeRepoError(w, r, err, err.Error())
 		return
 	}
 
@@ -125,7 +125,7 @@ func (h *VehicleMemberHandler) UpdateMemberRole(w http.ResponseWriter, r *http.R
 			writeError(w, http.StatusNotFound, "Membre non trouvé")
 			return
 		}
-		writeRepoError(w, err, err.Error())
+		writeRepoError(w, r, err, err.Error())
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *VehicleMemberHandler) RemoveMember(w http.ResponseWriter, r *http.Reque
 			writeError(w, http.StatusNotFound, "Membre non trouvé")
 			return
 		}
-		writeRepoError(w, err, err.Error())
+		writeRepoError(w, r, err, err.Error())
 		return
 	}
 

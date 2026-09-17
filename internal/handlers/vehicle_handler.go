@@ -104,7 +104,7 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateVehicle(r.Context(), v); err != nil {
-		writeRepoError(w, err, "Failed to create vehicle")
+		writeRepoError(w, r, err, "Failed to create vehicle")
 		return
 	}
 
@@ -228,13 +228,13 @@ func (h *VehicleHandler) UpdatePreTeslaMateEnergy(w http.ResponseWriter, r *http
 	}
 
 	if err := h.repo.UpdateVehiclePreTeslaMateEnergy(r.Context(), vehicleID, userID, req.PreTeslaMateKwh100km, req.PreTeslaMateEurPerKwh); err != nil {
-		writeRepoError(w, err, "Failed to update pre-teslamate energy")
+		writeRepoError(w, r, err, "Failed to update pre-teslamate energy")
 		return
 	}
 
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to get vehicle")
+		writeRepoError(w, r, err, "Failed to get vehicle")
 		return
 	}
 
@@ -422,7 +422,7 @@ func (h *VehicleHandler) GetOdometerAtDate(w http.ResponseWriter, r *http.Reques
 
 	odo, source, err := h.repo.GetOdometerAtDate(r.Context(), vehicleID, targetTime)
 	if err != nil {
-		writeRepoError(w, err, "Failed to resolve odometer")
+		writeRepoError(w, r, err, "Failed to resolve odometer")
 		return
 	}
 

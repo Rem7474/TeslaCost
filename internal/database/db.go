@@ -3,7 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -47,7 +47,7 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 			err = pool.Ping(pingCtx)
 			cancel()
 			if err == nil {
-				log.Println("[database] Connected successfully to PostgreSQL")
+				slog.Info("connected successfully to PostgreSQL", "component", "database")
 				return &DB{Pool: pool}, nil
 			}
 			pool.Close()
@@ -55,7 +55,7 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 
 		lastErr = err
 		if attempt < maxAttempts {
-			log.Printf("[database] Waiting for PostgreSQL to be ready (attempt %d/%d): %v", attempt, maxAttempts, err)
+			slog.Warn("waiting for PostgreSQL to be ready", "component", "database", "attempt", attempt, "max_attempts", maxAttempts, "error", err)
 			time.Sleep(2 * time.Second)
 		}
 	}
@@ -146,10 +146,10 @@ func (db *DB) Migrate(ctx context.Context) error {
 		if err := tx.Commit(ctx); err != nil {
 			return fmt.Errorf("failed to commit migration %s: %w", file, err)
 		}
-		log.Printf("[database] Applied migration: %s", file)
+		slog.Info("applied migration", "component", "database", "file", file)
 	}
 
-	log.Println("[database] Schema is up-to-date")
+	slog.Info("schema is up-to-date", "component", "database")
 	return nil
 }
 
@@ -157,6 +157,6 @@ func (db *DB) Migrate(ctx context.Context) error {
 func (db *DB) Close() {
 	if db.Pool != nil {
 		db.Pool.Close()
-		log.Println("[database] Connection pool closed")
+		slog.Info("connection pool closed", "component", "database")
 	}
 }

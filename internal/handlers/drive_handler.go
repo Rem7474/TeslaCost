@@ -76,7 +76,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	drives, total, err := h.repo.ListDrives(r.Context(), vehicleID, filter, limit, offset)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list drives")
+		writeRepoError(w, r, err, "Failed to list drives")
 		return
 	}
 	if drives == nil {
@@ -86,7 +86,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Calculate unit rates for real cost breakdown
 	rates, err := h.carpoolService.GetVehicleUnitRates(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to compute cost rates")
+		writeRepoError(w, r, err, "Failed to compute cost rates")
 		return
 	}
 
@@ -97,12 +97,12 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	tollsMap, err := h.repo.GetTollExpensesForDrives(r.Context(), vehicleID, driveIDs)
 	if err != nil {
-		writeRepoError(w, err, "Failed to load drive expenses")
+		writeRepoError(w, r, err, "Failed to load drive expenses")
 		return
 	}
 	unqualifiedCount, err := h.repo.CountUnqualifiedDrives(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list drives")
+		writeRepoError(w, r, err, "Failed to list drives")
 		return
 	}
 
@@ -170,7 +170,7 @@ func (h *DriveHandler) GetDriveExpenses(w http.ResponseWriter, r *http.Request) 
 
 	expenses, err := h.repo.GetDriveExpensesByDriveID(r.Context(), vehicleID, driveID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to load drive expenses")
+		writeRepoError(w, r, err, "Failed to load drive expenses")
 		return
 	}
 	if expenses == nil {
@@ -203,7 +203,7 @@ func (h *DriveHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateDriveTags(r.Context(), driveID, vehicleID, req.Tags); err != nil {
-		writeRepoError(w, err, "Failed to update tags")
+		writeRepoError(w, r, err, "Failed to update tags")
 		return
 	}
 
@@ -233,7 +233,7 @@ func (h *DriveHandler) SetTollReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.SetDriveTollReviewed(r.Context(), driveID, vehicleID, req.Reviewed); err != nil {
-		writeRepoError(w, err, "Failed to update toll review")
+		writeRepoError(w, r, err, "Failed to update toll review")
 		return
 	}
 
@@ -276,7 +276,7 @@ func (h *DriveHandler) CreateTripGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateTripGroup(r.Context(), tg, req.DriveIDs); err != nil {
-		writeRepoError(w, err, "Failed to create trip group")
+		writeRepoError(w, r, err, "Failed to create trip group")
 		return
 	}
 
@@ -325,7 +325,7 @@ func (h *DriveHandler) UpdateTripGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	tg := &models.TripGroup{ID: chi.URLParam(r, "groupId"), VehicleID: vehicleID, Name: req.Name, Notes: req.Notes}
 	if err := h.repo.UpdateTripGroup(r.Context(), tg, req.DriveIDs); err != nil {
-		writeRepoError(w, err, "Failed to update trip group")
+		writeRepoError(w, r, err, "Failed to update trip group")
 		return
 	}
 	writeJSON(w, http.StatusOK, tg)
@@ -339,7 +339,7 @@ func (h *DriveHandler) DeleteTripGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	deleteExpenses := r.URL.Query().Get("delete_expenses") == "true"
 	if err := h.repo.DeleteTripGroup(r.Context(), vehicleID, chi.URLParam(r, "groupId"), deleteExpenses); err != nil {
-		writeRepoError(w, err, "Failed to delete trip group")
+		writeRepoError(w, r, err, "Failed to delete trip group")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})

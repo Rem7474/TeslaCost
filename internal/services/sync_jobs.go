@@ -2,12 +2,42 @@ package services
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/teslacost/teslacost/internal/models"
 )
+
+// recoverPanic logs and swallows a panic recovered from a background goroutine so that
+// an unexpected error in a single background job (e.g. a malformed TeslaMate response)
+// cannot crash the whole server process.
+func recoverPanic(tag string) {
+	if r := recover(); r != nil {
+		slog.Error("recovered panic in background goroutine", "component", tag, "panic", r)
+	}
+}
+
+// recordSyncFailure records a sync failure on the vehicle's circuit breaker and, only on the
+// failure that trips the breaker from CLOSED/HALF_OPEN to OPEN, dispatches a best-effort webhook
+// alert so a repeatedly failing sync doesn't go unnoticed until someone opens the app.
+func (s *SyncService) recordSyncFailure(v models.Vehicle, cb *CircuitBreaker, syncErr error) {
+	wasOpen := cb.State() == CircuitOpen
+	cb.RecordFailure(syncErr)
+
+	if wasOpen || cb.State() != CircuitOpen || s.notifications == nil {
+		return
+	}
+	retryAt := cb.NextRetry()
+	go func(veh models.Vehicle, cause error, retry time.Time) {
+		defer recoverPanic("sync.circuitBreakerAlert")
+		alertCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if err := s.notifications.NotifySyncCircuitOpen(alertCtx, &veh, cause, retry); err != nil {
+			slog.Error("failed to alert on circuit breaker open", "component", "notification", "vehicle_id", veh.ID, "error", err)
+		}
+	}(v, syncErr, retryAt)
+}
 
 // Sync job statuses.
 const (
@@ -95,12 +125,13 @@ func (s *SyncService) StartSync(v models.Vehicle) (job *SyncJob, started bool) {
 		return job, false
 	}
 	go func() {
+		defer recoverPanic("sync.StartSync")
 		ctx, cancel := context.WithTimeout(context.Background(), manualSyncTimeout)
 		defer cancel()
 		res, err := s.SyncVehicle(ctx, &v)
 		cb := s.getCircuitBreaker(v.ID)
 		if err != nil {
-			cb.RecordFailure(err)
+			s.recordSyncFailure(v, cb, err)
 		} else {
 			cb.RecordSuccess()
 		}
@@ -119,7 +150,7 @@ func (s *SyncService) GetSyncJob(vehicleID string) *SyncJob {
 func (s *SyncService) runScheduledSync(ctx context.Context, v models.Vehicle) {
 	cb := s.getCircuitBreaker(v.ID)
 	if err := cb.CanExecute(); err != nil {
-		log.Printf("[auto-sync] Vehicle %s (%s): skipping scheduled sync: %v", v.Name, v.ID, err)
+		slog.Info("skipping scheduled sync", "component", "auto-sync", "vehicle_name", v.Name, "vehicle_id", v.ID, "reason", err)
 		return
 	}
 
@@ -131,13 +162,13 @@ func (s *SyncService) runScheduledSync(ctx context.Context, v models.Vehicle) {
 	cancel()
 
 	if err != nil {
-		cb.RecordFailure(err)
-		log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v (circuit breaker: %s)", v.Name, v.ID, err, cb.State())
+		s.recordSyncFailure(v, cb, err)
+		slog.Warn("scheduled sync failed", "component", "auto-sync", "vehicle_name", v.Name, "vehicle_id", v.ID, "error", err, "circuit_breaker", cb.State())
 	} else {
 		cb.RecordSuccess()
 		if res != nil && (res.DrivesAdded > 0 || res.ChargesAdded > 0) {
-			log.Printf("[auto-sync] Vehicle %s (%s): +%d new drives, +%d new charges (odometer: %.0f km)",
-				v.Name, v.ID, res.DrivesAdded, res.ChargesAdded, res.CurrentOdometer)
+			slog.Info("scheduled sync completed", "component", "auto-sync", "vehicle_name", v.Name, "vehicle_id", v.ID,
+				"drives_added", res.DrivesAdded, "charges_added", res.ChargesAdded, "odometer_km", res.CurrentOdometer)
 		}
 	}
 

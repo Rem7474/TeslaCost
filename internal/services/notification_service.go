@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -72,13 +72,13 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 
 		// Dispatch notification
 		if err := s.sendReminderWebhook(ctx, webhook, vehicle.Name, &rem, currentOdometer); err != nil {
-			log.Printf("[notification] Failed to dispatch webhook for vehicle %s reminder %s: %v", vehicle.ID, rem.ID, err)
+			slog.Error("failed to dispatch webhook", "component", "notification", "vehicle_id", vehicle.ID, "reminder_id", rem.ID, "error", err)
 			continue
 		}
 
 		// Update last notified
 		if err := s.repo.MarkReminderNotified(ctx, rem.ID, now, currentOdometer); err != nil {
-			log.Printf("[notification] Failed to mark reminder notified: %v", err)
+			slog.Error("failed to mark reminder notified", "component", "notification", "reminder_id", rem.ID, "error", err)
 		}
 	}
 
@@ -106,14 +106,39 @@ func (s *NotificationService) sendReminderWebhook(
 	rem *models.MaintenanceReminder,
 	currentOdo float64,
 ) error {
-	url := strings.TrimSpace(webhook.URL)
-	if url == "" {
-		return fmt.Errorf("webhook URL is empty")
-	}
-
 	payload, err := formatPayload(webhook.Type, vehicleName, rem, currentOdo)
 	if err != nil {
 		return err
+	}
+	return s.postWebhook(ctx, webhook.URL, payload)
+}
+
+// NotifySyncCircuitOpen alerts a vehicle's configured webhook that its TeslaMate
+// synchronization has failed repeatedly and has been automatically suspended until retryAt.
+// Unlike maintenance reminders this is not evaluated on a schedule: callers are expected to
+// invoke it exactly once, right when a circuit breaker trips from CLOSED/HALF_OPEN to OPEN.
+func (s *NotificationService) NotifySyncCircuitOpen(ctx context.Context, vehicle *models.Vehicle, cause error, retryAt time.Time) error {
+	if s.repo == nil || vehicle == nil {
+		return nil
+	}
+
+	webhook, err := s.repo.GetVehicleWebhook(ctx, vehicle.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get vehicle webhook: %w", err)
+	}
+	if webhook == nil || !webhook.Enabled || strings.TrimSpace(webhook.URL) == "" {
+		return nil // No active webhook configured
+	}
+
+	payload := formatSyncAlertPayload(webhook.Type, vehicle.Name, cause, retryAt)
+	return s.postWebhook(ctx, webhook.URL, payload)
+}
+
+// postWebhook serializes and POSTs payload to url, shared by all webhook notification kinds.
+func (s *NotificationService) postWebhook(ctx context.Context, webhookURL string, payload any) error {
+	url := strings.TrimSpace(webhookURL)
+	if url == "" {
+		return fmt.Errorf("webhook URL is empty")
 	}
 
 	body, err := json.Marshal(payload)
@@ -208,6 +233,56 @@ func formatPayload(
 			"remaining_days":   rem.RemainingDays,
 			"timestamp":        time.Now().Format(time.RFC3339),
 		}, nil
+	}
+}
+
+// formatSyncAlertPayload builds a webhook payload announcing that automatic TeslaMate
+// synchronization has been suspended for a vehicle after repeated failures.
+func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryAt time.Time) any {
+	message := fmt.Sprintf(
+		"La synchronisation TeslaMate a échoué plusieurs fois de suite et a été suspendue automatiquement (nouvel essai après %s).\nDernière erreur : %v",
+		retryAt.Format("02/01/2006 15:04 MST"), cause,
+	)
+
+	switch strings.ToUpper(webhookType) {
+	case "DISCORD":
+		return map[string]any{
+			"username":   "TeslaCost",
+			"avatar_url": "https://raw.githubusercontent.com/Rem7474/TeslaCost/main/web/public/favicon.svg",
+			"embeds": []map[string]any{
+				{
+					"title":       fmt.Sprintf("[ALERTE] Synchronisation TeslaMate en échec : %s", vehicleName),
+					"description": message,
+					"color":       15158332, // Red
+					"footer": map[string]string{
+						"text": "TeslaCost • Alerte système",
+					},
+					"timestamp": time.Now().Format(time.RFC3339),
+				},
+			},
+		}
+
+	case "TELEGRAM":
+		return map[string]any{
+			"text":       fmt.Sprintf("*TeslaCost — Alerte synchronisation*\n\nVéhicule : *%s*\n%s", vehicleName, message),
+			"parse_mode": "Markdown",
+		}
+
+	case "GOTIFY":
+		return map[string]any{
+			"title":    fmt.Sprintf("TeslaCost : synchronisation en échec (%s)", vehicleName),
+			"message":  message,
+			"priority": 8,
+		}
+
+	default: // GENERIC
+		return map[string]any{
+			"event":        "sync_circuit_open",
+			"vehicle_name": vehicleName,
+			"error":        cause.Error(),
+			"retry_at":     retryAt.Format(time.RFC3339),
+			"timestamp":    time.Now().Format(time.RFC3339),
+		}
 	}
 }
 

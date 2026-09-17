@@ -206,13 +206,13 @@ func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	trips, err := h.repo.ListCarpoolTrips(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list carpool trips")
+		writeRepoError(w, r, err, "Failed to list carpool trips")
 		return
 	}
 
 	summary, err := h.repo.GetCarpoolSummary(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to summarize carpool trips")
+		writeRepoError(w, r, err, "Failed to summarize carpool trips")
 		return
 	}
 	for i := range trips {
@@ -236,7 +236,7 @@ func (h *CarpoolHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	trip, err := h.repo.GetCarpoolTrip(r.Context(), chi.URLParam(r, "id"), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to load carpool trip")
+		writeRepoError(w, r, err, "Failed to load carpool trip")
 		return
 	}
 	allocate(trip)
@@ -270,7 +270,7 @@ func (h *CarpoolHandler) save(w http.ResponseWriter, r *http.Request, tripID str
 		err = h.repo.UpdateCarpoolTrip(r.Context(), trip, legs, passengers)
 	}
 	if err != nil {
-		writeRepoError(w, err, "Failed to save carpool trip")
+		writeRepoError(w, r, err, "Failed to save carpool trip")
 		return
 	}
 
@@ -296,7 +296,7 @@ func (h *CarpoolHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.DeleteCarpoolTrip(r.Context(), id, vehicleID); err != nil {
-		writeRepoError(w, err, "Failed to delete carpool trip")
+		writeRepoError(w, r, err, "Failed to delete carpool trip")
 		return
 	}
 
@@ -332,7 +332,7 @@ func (h *CarpoolHandler) Estimate(w http.ResponseWriter, r *http.Request) {
 
 	estimate, err := h.carpoolService.EstimateCosts(r.Context(), vehicleID, driveID, tripGroupID, driveIDs, distanceKm)
 	if err != nil {
-		writeRepoError(w, err, "Failed to estimate costs")
+		writeRepoError(w, r, err, "Failed to estimate costs")
 		return
 	}
 
@@ -360,7 +360,7 @@ func (h *CarpoolHandler) Recalculate(w http.ResponseWriter, r *http.Request) {
 
 	trips, err := h.carpoolService.RecalculateTrips(r.Context(), vehicleID, req.TripIDs)
 	if err != nil {
-		writeRepoError(w, err, "Failed to recalculate carpool trips")
+		writeRepoError(w, r, err, "Failed to recalculate carpool trips")
 		return
 	}
 

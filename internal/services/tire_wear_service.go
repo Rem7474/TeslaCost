@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"strconv"
 
@@ -194,7 +194,7 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 			var errTelemetry error
 			avgPowerMax, avgPowerMin, avgConsumption, drivesCount, errTelemetry = s.repo.GetDrivingTelemetryStats(ctx, *tire.VehicleID, ranges)
 			if errTelemetry != nil {
-				log.Printf("[tire-wear] Failed to get driving telemetry stats for tire %s: %v", tire.ID, errTelemetry)
+				slog.Error("failed to get driving telemetry stats", "component", "tire-wear", "tire_id", tire.ID, "error", errTelemetry)
 			}
 		}
 	}

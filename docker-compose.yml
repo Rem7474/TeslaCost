@@ -8,7 +8,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
       POSTGRES_DB: ${DB_NAME:-teslacost}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Bound to localhost only: the DB does not need to be reachable from outside the host.
+      # Set DB_PORT_BIND to 0.0.0.0:5432 (or similar) if you need external access.
+      - "${DB_PORT_BIND:-127.0.0.1:5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -16,9 +18,16 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
-    image: ghcr.io/rem7474/teslacost:latest
+    # Pin TESLACOST_VERSION (e.g. "v1.17.0") in your .env for reproducible deployments.
+    # Defaults to "latest" for the quick-start curl-and-go flow described in the README.
+    image: ghcr.io/rem7474/teslacost:${TESLACOST_VERSION:-latest}
     pull_policy: missing
     build:
       context: .
@@ -29,8 +38,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       PORT: 8080
+      # This compose file is the production deployment path; docker-compose.dev.yml overrides
+      # this back to "development" for the local hot-reload workflow.
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       DB_HOST: postgres
       DB_PORT: 5432
@@ -63,8 +86,40 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  backup:
+    build:
+      context: ./backup
+      dockerfile: Dockerfile
+    container_name: teslacost-backup
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        # Wait for the app's own healthcheck (which requires a live DB connection) rather than
+        # just postgres, so the first backup cycle doesn't race the schema migrations on startup.
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-teslacost}
+      DB_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
+      DB_NAME: ${DB_NAME:-teslacost}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+    volumes:
+      - teslacost_documents:/data/documents:ro
+      - teslacost_backups:/backups
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   postgres_data:
     driver: local
   teslacost_documents:
+    driver: local
+  teslacost_backups:
     driver: local

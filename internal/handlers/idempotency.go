@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"bytes"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/teslacost/teslacost/internal/database"
@@ -48,7 +48,7 @@ func Idempotency(repo *database.Repository) func(http.Handler) http.Handler {
 
 			stored, err := repo.GetIdempotentResponse(r.Context(), userID, key)
 			if err != nil {
-				log.Printf("[idempotency] lookup failed: %v", err)
+				slog.ErrorContext(r.Context(), "idempotency lookup failed", "component", "idempotency", "error", err)
 				writeError(w, http.StatusInternalServerError, "Idempotency check failed")
 				return
 			}
@@ -70,7 +70,7 @@ func Idempotency(repo *database.Repository) func(http.Handler) http.Handler {
 				if err := repo.SaveIdempotentResponse(r.Context(), userID, key, database.StoredResponse{
 					Method: r.Method, Path: r.URL.Path, StatusCode: rec.status, Body: rec.body.Bytes(),
 				}); err != nil {
-					log.Printf("[idempotency] store failed: %v", err)
+					slog.ErrorContext(r.Context(), "idempotency store failed", "component", "idempotency", "error", err)
 				}
 			}
 		})

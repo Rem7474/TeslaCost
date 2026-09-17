@@ -30,6 +30,7 @@
   - Just-In-Time (JIT) provisioning : création automatique du compte ou liaison avec un compte local existant partageant le même email.
   - Whitelist optionnelle (`OIDC_ALLOWED_EMAILS`) et désactivation possible de l'authentification locale (`OIDC_DISABLE_LOCAL_AUTH`).
 - **Chiffrement au repos** : chiffrement symétrique AES-256-GCM des identifiants et tokens de connexion TeslaMate dans PostgreSQL.
+- **Rate limiting** : `/api/auth/login` et `/api/auth/register` sont limités à 10 tentatives/minute par IP pour ralentir le brute force et l'énumération de comptes.
 
 ### 2. Synchronisation TeslaMate API
 - **Odomètre temps réel** : actualisation en direct de l'odomètre du véhicule dès que TeslaMate le remonte.
@@ -55,6 +56,7 @@
   - **Telegram** : messages formatés Markdown via bot HTTP.
   - **Gotify** : notifications push auto-hébergées avec gestion des priorités.
   - **JSON Générique** : intégration directe avec Home Assistant, Node-RED ou n8n.
+- **Alerte de synchronisation en échec** : le même webhook véhicule est aussi utilisé pour prévenir quand la synchronisation TeslaMate échoue de façon répétée et est automatiquement suspendue (circuit breaker), sans attendre d'ouvrir l'application.
 
 ### 5. Archivage & Gestion des Documents
 - **Stockage sur volume filesystem** : migration des pièces jointes (factures d'entretien, justificatifs) hors de PostgreSQL vers un volume dédié (`/data/documents`).
@@ -133,78 +135,7 @@ TeslaCost/
 
 L'application est disponible sur **`http://localhost:8080`**.
 
-<details>
-<summary>📋 Voir le contenu direct de <code>docker-compose.yml</code></summary>
-
-```yaml
-services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: teslacost-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: ${DB_USER:-teslacost}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
-      POSTGRES_DB: ${DB_NAME:-teslacost}
-    ports:
-      - "${DB_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-teslacost} -d ${DB_NAME:-teslacost}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  api:
-    image: ghcr.io/rem7474/teslacost:latest
-    pull_policy: missing
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod
-    container_name: teslacost-api
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      PORT: 8080
-      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-teslacost}
-      DB_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
-      DB_NAME: ${DB_NAME:-teslacost}
-      DB_SSLMODE: disable
-      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
-      JWT_SECRET: ${JWT_SECRET}
-      DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
-      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
-      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
-      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
-      # OIDC / SSO (optionnel)
-      # OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
-      # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-      # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      # OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
-      # OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-SSO}
-    ports:
-      - "${PORT:-8080}:8080"
-    volumes:
-      - teslacost_documents:/data/documents
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-
-volumes:
-  postgres_data:
-    driver: local
-  teslacost_documents:
-    driver: local
-```
-
-</details>
+> Le fichier [`docker-compose.yml`](./docker-compose.yml) du repo (celui téléchargé à l'étape 1) fait foi ; il inclut les services `postgres`, `api` et `backup` (sauvegardes automatiques, voir la section « Exploitation » plus bas) avec leurs healthchecks respectifs.
 
 ---
 
@@ -224,12 +155,96 @@ docker run -d \
   --name teslacost \
   -p 8080:8080 \
   -v teslacost_docs:/data/documents \
+  -e ENVIRONMENT="production" \
   -e DATABASE_URL="postgres://user:password@postgres-host:5432/teslacost?sslmode=disable" \
   -e JWT_SECRET="votre_clef_secrete_jwt_robuste" \
-  -e ENCRYPTION_KEY="clef_hexadecimale_de_64_caracteres_exactement" \
+  -e APP_ENCRYPTION_KEY="clef_hexadecimale_de_64_caracteres_exactement" \
   -e APP_TIMEZONE="Europe/Paris" \
   ghcr.io/rem7474/teslacost:latest
 ```
+
+---
+
+### Exposition sur Internet : reverse proxy & headers de sécurité
+
+TeslaCost ne termine pas le TLS et ne pose pas lui-même de headers de sécurité HTTP : ces responsabilités sont déléguées au reverse proxy placé devant, comme c'est l'usage pour une application self-hébergée. Si vous exposez l'instance au-delà de votre réseau local, placez-la derrière un reverse proxy qui gère au minimum :
+
+- **TLS** (certificat Let's Encrypt automatique via Traefik/Caddy, ou certificat existant avec Nginx)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
+- `X-Content-Type-Options: nosniff`
+- `X-Frame-Options: DENY` (ou `SAMEORIGIN` si vous embarquez l'app ailleurs)
+- `Referrer-Policy: strict-origin-when-cross-origin`
+
+Exemple avec **Caddy** (`Caddyfile`) :
+
+```caddyfile
+teslacost.homelab.local {
+    reverse_proxy localhost:8080
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+}
+```
+
+Exemple avec **Traefik** (labels docker-compose sur le service `api`) :
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.http.routers.teslacost.rule=Host(`teslacost.homelab.local`)"
+  - "traefik.http.routers.teslacost.tls.certresolver=letsencrypt"
+  - "traefik.http.middlewares.teslacost-headers.headers.stsSeconds=31536000"
+  - "traefik.http.middlewares.teslacost-headers.headers.contentTypeNosniff=true"
+  - "traefik.http.middlewares.teslacost-headers.headers.frameDeny=true"
+  - "traefik.http.routers.teslacost.middlewares=teslacost-headers"
+```
+
+Pensez aussi à ajuster `APP_BASE_URL` et `CORS_ALLOWED_ORIGINS` pour qu'ils reflètent le nom de domaine public utilisé, et à laisser `COOKIE_SECURE` sur sa valeur par défaut (activée automatiquement dès que `APP_BASE_URL` commence par `https://` ou que `ENVIRONMENT=production`).
+
+---
+
+## 🛟 Exploitation : sauvegardes, restauration & diagnostic
+
+### Sauvegardes automatiques
+
+Le service `backup` de `docker-compose.yml` tourne en continu à côté de `postgres` et `api` : toutes les `BACKUP_INTERVAL_HOURS` heures (24h par défaut), il produit un dump PostgreSQL compressé et une archive du volume de documents dans le volume nommé `teslacost_backups`, et supprime les fichiers plus vieux que `BACKUP_RETENTION_DAYS` jours (14 par défaut).
+
+```bash
+# Lister les sauvegardes disponibles
+docker compose exec backup ls -lh /backups
+
+# Suivre le service de sauvegarde
+docker compose logs -f backup
+```
+
+⚠️ Un volume Docker nommé reste sur le même disque que le reste de la stack : il ne protège pas contre une panne du disque ou de l'hôte Proxmox. Copiez régulièrement le contenu de `teslacost_backups` ailleurs (job de backup Proxmox sur le volume, `rsync` vers un autre hôte, etc.).
+
+### Restauration
+
+```bash
+# 1. Copier un dump hors du conteneur
+docker compose cp backup:/backups/teslacost-db-<horodatage>.sql.gz .
+
+# 2. Restaurer la base (écrase les données existantes de la base ciblée)
+gunzip -c teslacost-db-<horodatage>.sql.gz | docker compose exec -T postgres psql -U "${DB_USER:-teslacost}" -d "${DB_NAME:-teslacost}"
+
+# 3. Restaurer les documents dans le volume applicatif
+docker compose cp backup:/backups/teslacost-documents-<horodatage>.tar.gz .
+docker run --rm \
+  -v teslacost_teslacost_documents:/data \
+  -v "$(pwd)":/backup \
+  alpine sh -c "cd /data && tar -xzf /backup/teslacost-documents-<horodatage>.tar.gz --strip-components=1"
+```
+
+### Diagnostic d'incident
+
+- **État de santé** : `curl http://localhost:8080/api/health` — renvoie `503`/`unhealthy` si la base est injoignable, `200`/`healthy` sinon. C'est aussi ce qu'utilise le `HEALTHCHECK` Docker (`docker inspect --format='{{json .State.Health}}' teslacost-api`).
+- **Logs applicatifs** : `docker compose logs -f api`. Les lignes préfixées `[auto-sync]`, `[sync]`, `[auth]`, `[notification]`, `[security]`, `[panic]` identifient le sous-système concerné.
+- **État de la synchronisation TeslaMate** : une panne prolongée de l'API TeslaMate ouvre le circuit breaker par véhicule (log `circuit breaker: OPEN`) ; les tentatives reprennent automatiquement après le cooldown (10 minutes par défaut) sans action manuelle.
+- **Rollback** : redéployer avec `TESLACOST_VERSION` pointé sur le tag précédent (`docker compose pull && docker compose up -d`), puis si une migration doit être défaite, appliquer le `.down.sql` correspondant dans `migrations/` manuellement contre la base.
 
 ---
 
@@ -238,16 +253,21 @@ docker run -d \
 | Variable | Description | Valeur par défaut |
 |---|---|---|
 | `PORT` | Port d'écoute du serveur HTTP | `8080` |
-| `APP_ENV` | Environnement d'exécution (`production`, `development`) | `production` |
-| `DATABASE_URL` | Chaîne de connexion PostgreSQL (`postgres://...`) | *Obligatoire* |
-| `JWT_SECRET` | Secret de signature des jetons JWT | *Obligatoire* |
+| `ENVIRONMENT` | Environnement d'exécution (`production`, `development`) — active les logs JSON, le niveau `INFO` par défaut (jamais `DEBUG`), les cookies `Secure` et le garde-fou sur les secrets par défaut | `production` dans `docker-compose.yml` |
+| `LOG_LEVEL` | Force le niveau de log (`DEBUG`, `INFO`, `WARN`, `ERROR`), remplace le défaut lié à `ENVIRONMENT` | *Optionnel* |
+| `TESLACOST_VERSION` | Tag d'image à déployer (`ghcr.io/rem7474/teslacost:<tag>`) ; à pinner en production | `latest` |
+| `DATABASE_URL` | Chaîne de connexion PostgreSQL (`postgres://...`) ; alternative aux variables `DB_*` | *Optionnel* |
+| `JWT_SECRET` | Secret de signature des jetons JWT — **à changer impérativement**, la valeur par défaut est connue publiquement | *Obligatoire* |
 | `JWT_EXPIRATION_HOURS` | Durée de validité des sessions utilisateurs (heures) | `72` |
-| `ENCRYPTION_KEY` | Clé hexadécimale AES-256 de 64 caractères | *Obligatoire* |
+| `APP_ENCRYPTION_KEY` | Clé de chiffrement AES-256 des identifiants TeslaMate — **à changer impérativement**, la valeur par défaut est connue publiquement | *Obligatoire* |
 | `APP_TIMEZONE` | Fuseau horaire de calcul et reporting | `Europe/Paris` |
 | `STORAGE_DIR` | Répertoire de stockage des documents sur le volume | `/data/documents` |
 | `DISABLE_REGISTRATION` | Désactiver la création libre de compte local | `false` |
 | `INITIAL_ADMIN_EMAIL` | Email de l'administrateur pré-initialisé | *Optionnel* |
 | `INITIAL_ADMIN_PASSWORD` | Mot de passe de l'administrateur pré-initialisé | *Optionnel* |
+| `DB_PORT_BIND` | Adresse:port de liaison du conteneur Postgres sur l'hôte | `127.0.0.1:5432` |
+| `BACKUP_INTERVAL_HOURS` | Intervalle entre deux cycles de sauvegarde automatique | `24` |
+| `BACKUP_RETENTION_DAYS` | Durée de rétention des sauvegardes avant purge | `14` |
 | `CORS_ALLOWED_ORIGINS` | Origines autorisées (séparées par virgule) | `http://localhost:8080` |
 
 ### Configuration OIDC / SSO (Optionnel)

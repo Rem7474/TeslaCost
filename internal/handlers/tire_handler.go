@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -138,7 +139,7 @@ func (h *TireHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateTire(r.Context(), t); err != nil {
-		writeRepoError(w, err, "Failed to create tire")
+		writeRepoError(w, r, err, "Failed to create tire")
 		return
 	}
 
@@ -262,7 +263,7 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateTiresBatch(r.Context(), tires); err != nil {
-		writeRepoError(w, err, "Failed to batch create tires")
+		writeRepoError(w, r, err, "Failed to batch create tires")
 		return
 	}
 
@@ -293,7 +294,7 @@ func (h *TireHandler) QuickRotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.QuickRotateTires(r.Context(), vehicleID, req.Mode, req.Odometer, req.SwapWithPackTireIDs); err != nil {
-		writeRepoError(w, err, "Failed to perform quick rotation")
+		writeRepoError(w, r, err, "Failed to perform quick rotation")
 		return
 	}
 
@@ -384,7 +385,7 @@ func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateTire(r.Context(), t); err != nil {
-		writeRepoError(w, err, "Failed to update tire")
+		writeRepoError(w, r, err, "Failed to update tire")
 		return
 	}
 
@@ -406,9 +407,18 @@ func (h *TireHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	stats, _ := h.tireWearService.CalculateTireWear(r.Context(), t, v.CurrentOdometer)
-	sessions, _ := h.repo.ListTireMountSessions(r.Context(), tireID)
-	logs, _ := h.repo.ListTireLogs(r.Context(), tireID)
+	stats, err := h.tireWearService.CalculateTireWear(r.Context(), t, v.CurrentOdometer)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to calculate tire wear", "component", "tire", "tire_id", tireID, "error", err)
+	}
+	sessions, err := h.repo.ListTireMountSessions(r.Context(), tireID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to list mount sessions", "component", "tire", "tire_id", tireID, "error", err)
+	}
+	logs, err := h.repo.ListTireLogs(r.Context(), tireID)
+	if err != nil {
+		slog.ErrorContext(r.Context(), "failed to list tire logs", "component", "tire", "tire_id", tireID, "error", err)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tire":     t,
@@ -494,7 +504,7 @@ func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateTireMountSession(r.Context(), session); err != nil {
-		writeRepoError(w, err, "Failed to create mount session")
+		writeRepoError(w, r, err, "Failed to create mount session")
 		return
 	}
 
@@ -536,7 +546,7 @@ func (h *TireHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateTireMountSession(r.Context(), session); err != nil {
-		writeRepoError(w, err, "Failed to update mount session")
+		writeRepoError(w, r, err, "Failed to update mount session")
 		return
 	}
 
@@ -553,7 +563,7 @@ func (h *TireHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.DeleteTireMountSession(r.Context(), vehicleID, sessionID, tireID); err != nil {
-		writeRepoError(w, err, "Failed to delete mount session")
+		writeRepoError(w, r, err, "Failed to delete mount session")
 		return
 	}
 
@@ -575,7 +585,7 @@ func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.EnsureTireOwned(r.Context(), vehicleID, tireID); err != nil {
-		writeRepoError(w, err, "Failed to record tire log")
+		writeRepoError(w, r, err, "Failed to record tire log")
 		return
 	}
 
@@ -613,7 +623,7 @@ func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.AddTireLog(r.Context(), log); err != nil {
-		writeRepoError(w, err, "Failed to record tire log")
+		writeRepoError(w, r, err, "Failed to record tire log")
 		return
 	}
 
@@ -659,7 +669,7 @@ func (h *TireHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.AddTireRotation(r.Context(), rot); err != nil {
-		writeRepoError(w, err, "Failed to apply tire rotation")
+		writeRepoError(w, r, err, "Failed to apply tire rotation")
 		return
 	}
 
@@ -762,7 +772,7 @@ func (h *TireHandler) BatchUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.BatchUpdateTires(r.Context(), vehicleID, req.TireIDs, patch); err != nil {
-		writeRepoError(w, err, "Failed to update tires")
+		writeRepoError(w, r, err, "Failed to update tires")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "count": len(req.TireIDs)})
@@ -775,7 +785,7 @@ func (h *TireHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.DeleteTire(r.Context(), vehicleID, chi.URLParam(r, "tireId")); err != nil {
-		writeRepoError(w, err, "Failed to delete tire")
+		writeRepoError(w, r, err, "Failed to delete tire")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -813,7 +823,7 @@ func (h *TireHandler) Dispose(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := h.repo.DisposeTire(r.Context(), vehicleID, chi.URLParam(r, "tireId"), at, req.Odometer); err != nil {
-		writeRepoError(w, err, "Failed to dispose tire")
+		writeRepoError(w, r, err, "Failed to dispose tire")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -841,7 +851,7 @@ func (h *TireHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
 	}
 	l := &models.TireLog{ID: chi.URLParam(r, "logId"), TireID: chi.URLParam(r, "tireId"), Date: date, Odometer: req.Odometer, DepthMm: req.DepthMm, Notes: req.Notes}
 	if err := h.repo.UpdateTireLog(r.Context(), vehicleID, l); err != nil {
-		writeRepoError(w, err, "Failed to update tire log")
+		writeRepoError(w, r, err, "Failed to update tire log")
 		return
 	}
 	writeJSON(w, http.StatusOK, l)
@@ -854,7 +864,7 @@ func (h *TireHandler) DeleteLog(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.DeleteTireLog(r.Context(), vehicleID, chi.URLParam(r, "tireId"), chi.URLParam(r, "logId")); err != nil {
-		writeRepoError(w, err, "Failed to delete tire log")
+		writeRepoError(w, r, err, "Failed to delete tire log")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -896,7 +906,7 @@ func (h *TireHandler) BatchDispose(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if err := h.repo.BatchDisposeTires(r.Context(), vehicleID, req.TireIDs, at, req.Odometer); err != nil {
-		writeRepoError(w, err, "Failed to batch dispose tires")
+		writeRepoError(w, r, err, "Failed to batch dispose tires")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -925,7 +935,7 @@ func (h *TireHandler) CopyHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	sourceTireID := chi.URLParam(r, "tireId")
 	if err := h.repo.CopyTireHistory(r.Context(), vehicleID, sourceTireID, req.TargetTireIDs, req.CopySessions, req.CopyLogs, req.AdaptPosition); err != nil {
-		writeRepoError(w, err, "Failed to copy tire history")
+		writeRepoError(w, r, err, "Failed to copy tire history")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
