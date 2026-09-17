@@ -2111,7 +2111,7 @@ async function handleDeleteWebhook() {
               </div>
 
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</label>
+                <span class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</span>
                 <AppDropzone
                   :model-value="null"
                   :disabled="isUploadingDocument"
@@ -2395,7 +2395,7 @@ async function handleDeleteWebhook() {
               </div>
 
               <div>
-                <label class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</label>
+                <span class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</span>
                 <AppDropzone
                   :model-value="null"
                   :disabled="isUploadingDocument"
@@ -2583,7 +2583,7 @@ async function handleDeleteWebhook() {
 
         <form id="standalone-doc-form" @submit.prevent="handleUploadStandaloneDocument" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
           <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Fichier justificatif</label>
+            <span class="block text-xs font-semibold text-slate-300 mb-1.5">Fichier justificatif</span>
             <AppDropzone
               v-model="uploadDocFile"
               :disabled="isUploadingDocument"

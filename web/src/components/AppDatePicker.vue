@@ -42,7 +42,7 @@ const internalValue = computed({
       if (parts.length === 2) {
         const y = Number(parts[0])
         const m = Number(parts[1])
-        if (!isNaN(y) && !isNaN(m)) {
+        if (!Number.isNaN(y) && !Number.isNaN(m)) {
           return { year: y, month: m - 1 }
         }
       }
@@ -62,7 +62,7 @@ const internalValue = computed({
         emit('change', str)
         return
       }
-      if (val instanceof Date && !isNaN(val.getTime())) {
+      if (val instanceof Date && !Number.isNaN(val.getTime())) {
         const str = `${val.getFullYear()}-${String(val.getMonth() + 1).padStart(2, '0')}`
         emit('update:modelValue', str)
         emit('change', str)

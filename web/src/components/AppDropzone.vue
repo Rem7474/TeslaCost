@@ -4,6 +4,7 @@ import { UploadCloud, FileText, Image as ImageIcon, X, AlertCircle } from 'lucid
 
 const props = withDefaults(
   defineProps<{
+    id?: string
     modelValue: File | null
     accept?: string
     maxSizeMb?: number
@@ -25,6 +26,7 @@ const emit = defineEmits<{
   (e: 'error', message: string): void
 }>()
 
+const uniqueId = props.id || `dropzone-input-${Math.random().toString(36).slice(2, 9)}`
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isDragging = ref(false)
 const validationError = ref<string | null>(null)
@@ -160,7 +162,9 @@ function removeFile() {
 <template>
   <div class="space-y-2">
     <!-- Hidden native file input -->
+    <label :for="uniqueId" class="sr-only">{{ label }}</label>
     <input
+      :id="uniqueId"
       ref="fileInputRef"
       type="file"
       :accept="accept"

@@ -1045,7 +1045,7 @@ function clearCardTestResult(id: string) {
           <!-- STEP 1: Acquisition Type & Dates -->
           <div v-show="currentOwnershipStep === 1" class="space-y-4">
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-2">Mode d'acquisition</label>
+              <span class="block text-xs font-semibold text-slate-300 mb-2">Mode d'acquisition</span>
               <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                 <button
                   type="button"
