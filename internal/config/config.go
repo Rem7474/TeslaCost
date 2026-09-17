@@ -15,15 +15,19 @@ type Config struct {
 	Environment          string
 	DatabaseURL          string
 	AppEncryptionKey     string
-	JWTSecret            string
-	JWTExpirationHours   int
-	DisableRegistration  bool
-	InitialAdminEmail    string
-	InitialAdminPassword string
-	AllowedOrigins       []string
-	SyncIntervalMinutes  int
-	ReportingTimezone    string
-	StorageDir           string // Directory for document file storage (Docker volume mount point)
+	JWTSecret                  string
+	JWTExpirationHours         int
+	JWTAccessExpirationMinutes int
+	JWTRefreshExpirationDays   int
+	CookieSecure               bool
+	DisableRegistration        bool
+	InitialAdminEmail          string
+	InitialAdminPassword       string
+	AllowedOrigins             []string
+	SyncIntervalMinutes        int
+	ReportingTimezone          string
+	StorageDir                 string // Directory for document file storage (Docker volume mount point)
+
 
 	// OIDC / OAuth2 SSO (optional — enabled when OIDCIssuerURL is non-empty)
 	OIDCEnabled          bool
@@ -74,6 +78,20 @@ func Load() *Config {
 		jwtExpHours = 72
 	}
 
+	jwtAccessExpMinutes, _ := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRATION_MINUTES", "15"))
+	if jwtAccessExpMinutes <= 0 {
+		jwtAccessExpMinutes = 15
+	}
+
+	jwtRefreshExpDays, _ := strconv.Atoi(getEnv("JWT_REFRESH_EXPIRATION_DAYS", "30"))
+	if jwtRefreshExpDays <= 0 {
+		jwtRefreshExpDays = 30
+	}
+
+	// Default CookieSecure to true in production or if appBaseURL uses https
+	defaultCookieSecure := strings.EqualFold(env, "production") || strings.HasPrefix(strings.ToLower(appBaseURL), "https://")
+	cookieSecure := getEnvBool("COOKIE_SECURE", defaultCookieSecure)
+
 	disableRegistration := getEnvBool("DISABLE_REGISTRATION", false)
 	initialAdminEmail := getEnv("INITIAL_ADMIN_EMAIL", "")
 	initialAdminPassword := getEnv("INITIAL_ADMIN_PASSWORD", "")
@@ -122,29 +140,32 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Port:                 port,
-		AppBaseURL:           appBaseURL,
-		Environment:          env,
-		DatabaseURL:          dbURL,
-		AppEncryptionKey:     encKey,
-		JWTSecret:            jwtSecret,
-		JWTExpirationHours:   jwtExpHours,
-		DisableRegistration:  disableRegistration,
-		InitialAdminEmail:    initialAdminEmail,
-		InitialAdminPassword: initialAdminPassword,
-		AllowedOrigins:       allowedOrigins,
-		SyncIntervalMinutes:  syncIntervalMinutes,
-		ReportingTimezone:    reportingTimezone,
-		StorageDir:           storageDir,
-		OIDCEnabled:          oidcIssuerURL != "",
-		OIDCIssuerURL:        oidcIssuerURL,
-		OIDCClientID:         oidcClientID,
-		OIDCClientSecret:     oidcClientSecret,
-		OIDCRedirectURL:      oidcRedirectURL,
-		OIDCScopes:           oidcScopes,
-		OIDCProviderName:     oidcProviderName,
-		OIDCAllowedEmails:    oidcAllowedEmails,
-		OIDCDisableLocalAuth: oidcDisableLocalAuth,
+		Port:                       port,
+		AppBaseURL:                 appBaseURL,
+		Environment:                env,
+		DatabaseURL:                dbURL,
+		AppEncryptionKey:           encKey,
+		JWTSecret:                  jwtSecret,
+		JWTExpirationHours:         jwtExpHours,
+		JWTAccessExpirationMinutes: jwtAccessExpMinutes,
+		JWTRefreshExpirationDays:   jwtRefreshExpDays,
+		CookieSecure:               cookieSecure,
+		DisableRegistration:        disableRegistration,
+		InitialAdminEmail:          initialAdminEmail,
+		InitialAdminPassword:       initialAdminPassword,
+		AllowedOrigins:             allowedOrigins,
+		SyncIntervalMinutes:        syncIntervalMinutes,
+		ReportingTimezone:          reportingTimezone,
+		StorageDir:                 storageDir,
+		OIDCEnabled:                oidcIssuerURL != "",
+		OIDCIssuerURL:              oidcIssuerURL,
+		OIDCClientID:               oidcClientID,
+		OIDCClientSecret:           oidcClientSecret,
+		OIDCRedirectURL:            oidcRedirectURL,
+		OIDCScopes:                 oidcScopes,
+		OIDCProviderName:           oidcProviderName,
+		OIDCAllowedEmails:          oidcAllowedEmails,
+		OIDCDisableLocalAuth:       oidcDisableLocalAuth,
 	}
 }
 

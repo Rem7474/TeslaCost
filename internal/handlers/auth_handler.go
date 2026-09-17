@@ -15,9 +15,10 @@ import (
 )
 
 const (
-	oidcStateCookie = "oidc_state"
-	oidcNonceCookie = "oidc_nonce"
-	oidcCookieTTL   = 10 * time.Minute
+	oidcStateCookie     = "oidc_state"
+	oidcNonceCookie     = "oidc_nonce"
+	oidcCookieTTL       = 10 * time.Minute
+	refreshTokenCookie  = "teslacost_refresh_token"
 )
 
 type AuthHandler struct {
@@ -40,9 +41,79 @@ type LoginRequest struct {
 	Password string `json:"password"`
 }
 
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 type AuthResponse struct {
-	Token string `json:"token"`
-	User  any    `json:"user"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	User         any    `json:"user"`
+}
+
+func (h *AuthHandler) setRefreshTokenCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookie,
+		Value:    token,
+		Expires:  expiresAt,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+}
+
+func (h *AuthHandler) clearRefreshTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookie,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+}
+
+func (h *AuthHandler) issueSession(w http.ResponseWriter, r *http.Request, userID, email, familyID string) (string, string, error) {
+	accessToken, err := auth.GenerateAccessToken(userID, email, h.cfg.JWTSecret, h.cfg.JWTAccessExpirationMinutes)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	plainRefreshToken, tokenHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	if familyID == "" {
+		newFamID, famErr := auth.NewUUID()
+		if famErr != nil {
+			return "", "", fmt.Errorf("failed to generate family ID: %w", famErr)
+		}
+		familyID = newFamID
+	}
+
+	expiresAt := time.Now().Add(time.Duration(h.cfg.JWTRefreshExpirationDays) * 24 * time.Hour)
+	ip := r.RemoteAddr
+	ua := r.UserAgent()
+	var ipPtr, uaPtr *string
+	if ip != "" {
+		ipPtr = &ip
+	}
+	if ua != "" {
+		uaPtr = &ua
+	}
+
+	_, err = h.repo.CreateRefreshToken(r.Context(), userID, tokenHash, familyID, expiresAt, ipPtr, uaPtr)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to persist refresh token: %w", err)
+	}
+
+	h.setRefreshTokenCookie(w, plainRefreshToken, expiresAt)
+	return accessToken, plainRefreshToken, nil
 }
 
 // GetConfig returns public authentication configuration used by the frontend.
@@ -105,12 +176,16 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateToken(user.ID, user.Email, h.cfg.JWTSecret, h.cfg.JWTExpirationHours)
+	accessToken, refreshToken, err := h.issueSession(w, r, user.ID, user.Email, "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate token")
+		writeError(w, http.StatusInternalServerError, "Failed to generate session tokens")
 		return
 	}
-	writeJSON(w, http.StatusCreated, AuthResponse{Token: token, User: user})
+	writeJSON(w, http.StatusCreated, AuthResponse{
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+		User:         user,
+	})
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -135,12 +210,112 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateToken(user.ID, user.Email, h.cfg.JWTSecret, h.cfg.JWTExpirationHours)
+	accessToken, refreshToken, err := h.issueSession(w, r, user.ID, user.Email, "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate token")
+		writeError(w, http.StatusInternalServerError, "Failed to generate session tokens")
 		return
 	}
-	writeJSON(w, http.StatusOK, AuthResponse{Token: token, User: user})
+	writeJSON(w, http.StatusOK, AuthResponse{
+		Token:        accessToken,
+		RefreshToken: refreshToken,
+		User:         user,
+	})
+}
+
+func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	var plainToken string
+
+	// 1. Check HttpOnly cookie
+	if cookie, err := r.Cookie(refreshTokenCookie); err == nil && cookie.Value != "" {
+		plainToken = cookie.Value
+	}
+
+	// 2. Check JSON payload fallback
+	if plainToken == "" && r.Body != nil {
+		var req RefreshRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		plainToken = req.RefreshToken
+	}
+
+	if plainToken == "" {
+		writeError(w, http.StatusUnauthorized, "Missing refresh token")
+		return
+	}
+
+	oldTokenHash := auth.HashRefreshToken(plainToken)
+
+	newPlainToken, newTokenHash, err := auth.GenerateRefreshToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to generate new refresh token")
+		return
+	}
+
+	expiresAt := time.Now().Add(time.Duration(h.cfg.JWTRefreshExpirationDays) * 24 * time.Hour)
+	ip := r.RemoteAddr
+	ua := r.UserAgent()
+	var ipPtr, uaPtr *string
+	if ip != "" {
+		ipPtr = &ip
+	}
+	if ua != "" {
+		uaPtr = &ua
+	}
+
+	rotatedToken, err := h.repo.RotateRefreshToken(r.Context(), oldTokenHash, newTokenHash, expiresAt, ipPtr, uaPtr)
+	if err != nil {
+		h.clearRefreshTokenCookie(w)
+		if errors.Is(err, database.ErrRefreshTokenReused) {
+			writeError(w, http.StatusUnauthorized, "Security alert: refresh token reuse detected")
+			return
+		}
+		if errors.Is(err, database.ErrNotFound) || err.Error() == "refresh token expired" {
+			writeError(w, http.StatusUnauthorized, "Invalid or expired refresh token")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Failed to refresh token")
+		return
+	}
+
+	user, err := h.repo.GetUserByID(r.Context(), rotatedToken.UserID)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "User account no longer exists")
+		return
+	}
+
+	accessToken, err := auth.GenerateAccessToken(user.ID, user.Email, h.cfg.JWTSecret, h.cfg.JWTAccessExpirationMinutes)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to generate access token")
+		return
+	}
+
+	h.setRefreshTokenCookie(w, newPlainToken, expiresAt)
+	writeJSON(w, http.StatusOK, AuthResponse{
+		Token:        accessToken,
+		RefreshToken: newPlainToken,
+		User:         user,
+	})
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	var plainToken string
+	if cookie, err := r.Cookie(refreshTokenCookie); err == nil && cookie.Value != "" {
+		plainToken = cookie.Value
+	}
+	if plainToken == "" && r.Body != nil {
+		var req RefreshRequest
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		plainToken = req.RefreshToken
+	}
+
+	if plainToken != "" && h.repo != nil {
+		tokenHash := auth.HashRefreshToken(plainToken)
+		_ = h.repo.RevokeRefreshToken(r.Context(), tokenHash)
+	}
+
+	h.clearRefreshTokenCookie(w)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "Logged out successfully",
+	})
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +358,7 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Expires:  expire,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
@@ -192,7 +367,7 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    noncePlain,
 		Expires:  expire,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
@@ -201,7 +376,7 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // OIDCCallback handles the redirect from the IdP, exchanges the authorization code,
-// performs JIT user provisioning, issues a TeslaCost JWT, and redirects to the SPA.
+// performs JIT user provisioning, issues a TeslaCost JWT + Refresh Token, and redirects to the SPA.
 func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	if h.oidcService == nil {
 		writeError(w, http.StatusNotFound, "OIDC is not configured on this instance")
@@ -254,13 +429,13 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.GenerateToken(dbUser.ID, dbUser.Email, h.cfg.JWTSecret, h.cfg.JWTExpirationHours)
+	accessToken, _, err := h.issueSession(w, r, dbUser.ID, dbUser.Email, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
 
-	http.Redirect(w, r, "/oidc-callback?token="+url.QueryEscape(token), http.StatusFound)
+	http.Redirect(w, r, "/oidc-callback?token="+url.QueryEscape(accessToken), http.StatusFound)
 }
 
 // clearCookie immediately expires a named cookie.
@@ -275,4 +450,4 @@ func clearCookie(w http.ResponseWriter, name string) {
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
-}
+}

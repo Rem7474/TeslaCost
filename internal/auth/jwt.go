@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -19,18 +22,28 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
-// GenerateToken creates a signed JWT token for a user.
+// GenerateToken creates a signed JWT token for a user with expiration specified in hours.
 func GenerateToken(userID, email, secret string, expirationHours int) (string, error) {
 	if expirationHours <= 0 {
 		expirationHours = 72
 	}
+	return GenerateAccessToken(userID, email, secret, expirationHours*60)
+}
 
+// GenerateAccessToken creates a signed short-lived JWT token with expiration in minutes.
+func GenerateAccessToken(userID, email, secret string, expirationMinutes int) (string, error) {
+	if expirationMinutes <= 0 {
+		expirationMinutes = 15
+	}
+
+	now := time.Now()
 	claims := &Claims{
 		UserID: userID,
 		Email:  email,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expirationHours) * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Duration(expirationMinutes) * time.Minute)),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
 			Issuer:    "teslacost",
 		},
 	}
@@ -64,3 +77,35 @@ func ValidateToken(tokenString, secret string) (*Claims, error) {
 
 	return claims, nil
 }
+
+// GenerateRefreshToken generates a cryptographically secure random 32-byte token (hex string)
+// and returns both the plain token and its SHA-256 hash.
+func GenerateRefreshToken() (plainToken string, tokenHash string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", fmt.Errorf("failed to generate random refresh token: %w", err)
+	}
+	plainToken = hex.EncodeToString(b)
+	tokenHash = HashRefreshToken(plainToken)
+	return plainToken, tokenHash, nil
+}
+
+// HashRefreshToken computes the SHA-256 hex digest of a refresh token string.
+func HashRefreshToken(plainToken string) string {
+	hash := sha256.Sum256([]byte(plainToken))
+	return hex.EncodeToString(hash[:])
+}
+
+// NewUUID generates a cryptographically secure random UUID (RFC 4122 v4).
+func NewUUID() (string, error) {
+	var u [16]byte
+	if _, err := rand.Read(u[:]); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes for UUID: %w", err)
+	}
+	u[6] = (u[6] & 0x0f) | 0x40 // Version 4
+	u[8] = (u[8] & 0x3f) | 0x80 // Variant RFC 4122
+	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		u[0:4], u[4:6], u[6:8], u[8:10], u[10:16]), nil
+}
+
+
