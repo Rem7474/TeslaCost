@@ -313,6 +313,7 @@ type ExpenseDocument struct {
 	MimeType    string    `json:"mime_type"`
 	FileSize    int64     `json:"file_size"`
 	StoragePath *string   `json:"-"` // Relative path on the Docker volume (vehicleID/docID)
+	Data        []byte    `json:"-"` // Legacy binary data from PostgreSQL (used for migration & fallback)
 	Description *string   `json:"description,omitempty"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

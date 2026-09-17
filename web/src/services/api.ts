@@ -363,7 +363,16 @@ export const api = {
     }
     const res = await fetch(`${BASE_URL}/vehicles/${vehicleId}/documents/${docId}`, { headers })
     if (!res.ok) {
-      throw new Error('Impossible de charger le document')
+      let errorMsg = 'Impossible de charger le document'
+      try {
+        const errorData = await res.json()
+        if (errorData && errorData.error) {
+          errorMsg = errorData.error
+        }
+      } catch {
+        // Non-JSON response
+      }
+      throw new Error(errorMsg)
     }
     const contentDisposition = res.headers.get('content-disposition') || ''
     let filename = 'document'

@@ -155,6 +155,16 @@ func main() {
 		if err != nil {
 			log.Fatalf("Failed to initialize file storage service: %v", err)
 		}
+
+		// Migrate any legacy unmigrated documents from PostgreSQL BYTEA column to the storage volume
+		migCtx, migCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		if count, err := repo.MigrateLegacyDocuments(migCtx, storageService.Save); err != nil {
+			log.Printf("[storage] Warning: legacy document migration encountered an error: %v", err)
+		} else if count > 0 {
+			log.Printf("[storage] Successfully migrated %d legacy document(s) from database to volume storage", count)
+		}
+		migCancel()
+
 		expenseHandler := handlers.NewExpenseHandler(repo, storageService)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)

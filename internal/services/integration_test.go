@@ -1314,3 +1314,72 @@ func TestExpenseDocumentsIntegration(t *testing.T) {
 	}
 }
 
+func TestMigrateLegacyDocumentsIntegration(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "legacy_user@example.com")
+
+	legacyBytes := []byte("Legacy PDF binary content stored directly in PostgreSQL BYTEA")
+
+	// Insert legacy document with data BYTEA and storage_path = NULL
+	var docID string
+	err := db.Pool.QueryRow(ctx, `
+		INSERT INTO expense_documents (user_id, vehicle_id, filename, mime_type, file_size, data, storage_path)
+		VALUES ($1, $2, 'facture_legacy.pdf', 'application/pdf', $3, $4, NULL)
+		RETURNING id::text;
+	`, v.UserID, v.ID, len(legacyBytes), legacyBytes).Scan(&docID)
+	if err != nil {
+		t.Fatalf("failed to insert legacy document: %v", err)
+	}
+
+	// Verify GetExpenseDocumentByID retrieves Data even when storage_path is NULL
+	fetched, err := repo.GetExpenseDocumentByID(ctx, docID, v.ID, v.UserID)
+	if err != nil {
+		t.Fatalf("GetExpenseDocumentByID failed: %v", err)
+	}
+	if fetched.StoragePath != nil {
+		t.Fatalf("expected StoragePath to be nil, got %v", *fetched.StoragePath)
+	}
+	if string(fetched.Data) != string(legacyBytes) {
+		t.Fatalf("expected legacy Data %q, got %q", string(legacyBytes), string(fetched.Data))
+	}
+
+	// Run migration
+	savedCalls := make(map[string][]byte)
+	count, err := repo.MigrateLegacyDocuments(ctx, func(vehicleID, id string, data []byte) (string, error) {
+		savedCalls[id] = data
+		return vehicleID + "/" + id, nil
+	})
+	if err != nil {
+		t.Fatalf("MigrateLegacyDocuments failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 document migrated, got %d", count)
+	}
+	if string(savedCalls[docID]) != string(legacyBytes) {
+		t.Fatalf("saved bytes mismatch: got %q", string(savedCalls[docID]))
+	}
+
+	// Verify document now has storage_path in database
+	fetchedAfter, err := repo.GetExpenseDocumentByID(ctx, docID, v.ID, v.UserID)
+	if err != nil {
+		t.Fatalf("GetExpenseDocumentByID failed after migration: %v", err)
+	}
+	expectedPath := v.ID + "/" + docID
+	if fetchedAfter.StoragePath == nil || *fetchedAfter.StoragePath != expectedPath {
+		t.Fatalf("expected storage path %q, got %v", expectedPath, fetchedAfter.StoragePath)
+	}
+
+	// Migration is idempotent
+	countSecond, err := repo.MigrateLegacyDocuments(ctx, func(vehicleID, id string, data []byte) (string, error) {
+		return vehicleID + "/" + id, nil
+	})
+	if err != nil {
+		t.Fatalf("MigrateLegacyDocuments second run failed: %v", err)
+	}
+	if countSecond != 0 {
+		t.Fatalf("expected 0 documents migrated on second run, got %d", countSecond)
+	}
+}
+
+

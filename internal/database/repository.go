@@ -3570,11 +3570,11 @@ func (r *Repository) SaveExpenseDocument(ctx context.Context, doc *models.Expens
 	).Scan(&doc.ID, &doc.CreatedAt, &doc.UpdatedAt)
 }
 
-// GetExpenseDocumentByID retrieves an expense document metadata and its storage path.
+// GetExpenseDocumentByID retrieves an expense document metadata, its storage path, and legacy binary data if present.
 // Access is verified via vehicles or vehicle_members.
 func (r *Repository) GetExpenseDocumentByID(ctx context.Context, id, vehicleID, userID string) (*models.ExpenseDocument, error) {
 	query := `
-		SELECT d.id, d.user_id, d.vehicle_id, d.filename, d.mime_type, d.file_size, d.storage_path, d.description, d.created_at, d.updated_at
+		SELECT d.id, d.user_id, d.vehicle_id, d.filename, d.mime_type, d.file_size, d.storage_path, d.data, d.description, d.created_at, d.updated_at
 		FROM expense_documents d
 		JOIN vehicles v ON v.id = d.vehicle_id
 		WHERE d.id::text = $1 AND d.vehicle_id::text = $2 AND (v.user_id::text = $3 OR EXISTS (
@@ -3583,7 +3583,7 @@ func (r *Repository) GetExpenseDocumentByID(ctx context.Context, id, vehicleID, 
 	`
 	var doc models.ExpenseDocument
 	err := r.pool.QueryRow(ctx, query, id, vehicleID, userID).Scan(
-		&doc.ID, &doc.UserID, &doc.VehicleID, &doc.Filename, &doc.MimeType, &doc.FileSize, &doc.StoragePath, &doc.Description, &doc.CreatedAt, &doc.UpdatedAt,
+		&doc.ID, &doc.UserID, &doc.VehicleID, &doc.Filename, &doc.MimeType, &doc.FileSize, &doc.StoragePath, &doc.Data, &doc.Description, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -3656,6 +3656,57 @@ func (r *Repository) UpdateDocumentStoragePath(ctx context.Context, docID, stora
 	query := `UPDATE expense_documents SET storage_path = $1 WHERE id::text = $2;`
 	_, err := r.pool.Exec(ctx, query, storagePath, docID)
 	return err
+}
+
+// LegacyDocumentRecord represents an unmigrated document record still containing binary data in PostgreSQL.
+type LegacyDocumentRecord struct {
+	ID        string
+	VehicleID string
+	Data      []byte
+}
+
+// GetUnmigratedDocuments retrieves all documents that have raw binary data in PostgreSQL but no storage_path.
+func (r *Repository) GetUnmigratedDocuments(ctx context.Context) ([]LegacyDocumentRecord, error) {
+	query := `SELECT id::text, vehicle_id::text, data FROM expense_documents WHERE storage_path IS NULL AND data IS NOT NULL;`
+	rows, err := r.pool.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var docs []LegacyDocumentRecord
+	for rows.Next() {
+		var d LegacyDocumentRecord
+		if err := rows.Scan(&d.ID, &d.VehicleID, &d.Data); err != nil {
+			return nil, err
+		}
+		docs = append(docs, d)
+	}
+	return docs, rows.Err()
+}
+
+// MigrateLegacyDocuments migrates all unmigrated documents from PostgreSQL BYTEA column to volume storage.
+// It writes each file using the saveFile callback, then updates the storage_path in PostgreSQL.
+func (r *Repository) MigrateLegacyDocuments(ctx context.Context, saveFile func(vehicleID, docID string, data []byte) (string, error)) (int, error) {
+	docs, err := r.GetUnmigratedDocuments(ctx)
+	if err != nil {
+		return 0, err
+	}
+	migrated := 0
+	for _, doc := range docs {
+		if len(doc.Data) == 0 {
+			continue
+		}
+		storagePath, err := saveFile(doc.VehicleID, doc.ID, doc.Data)
+		if err != nil {
+			return migrated, fmt.Errorf("failed to save document %s to storage: %w", doc.ID, err)
+		}
+		if err := r.UpdateDocumentStoragePath(ctx, doc.ID, storagePath); err != nil {
+			return migrated, fmt.Errorf("failed to update storage path for document %s: %w", doc.ID, err)
+		}
+		migrated++
+	}
+	return migrated, nil
 }
 
 // ============================================================================

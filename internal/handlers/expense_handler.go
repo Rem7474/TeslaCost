@@ -711,15 +711,39 @@ func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	var fileData []byte
 	if doc.StoragePath == nil || *doc.StoragePath == "" {
-		writeError(w, http.StatusNotFound, "Fichier introuvable sur le volume de stockage")
-		return
-	}
-
-	fileData, err := h.storageService.Read(*doc.StoragePath)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
-		return
+		if len(doc.Data) > 0 {
+			// Legacy document still stored in database — write to volume on-the-fly and persist storage path
+			storagePath, err := h.storageService.Save(vehicleID, doc.ID, doc.Data)
+			if err == nil {
+				_ = h.repo.UpdateDocumentStoragePath(r.Context(), doc.ID, storagePath)
+				doc.StoragePath = &storagePath
+			}
+			fileData = doc.Data
+		} else {
+			writeError(w, http.StatusNotFound, "Fichier introuvable sur le volume de stockage")
+			return
+		}
+	} else {
+		data, err := h.storageService.Read(*doc.StoragePath)
+		if err != nil {
+			// If missing from volume but still present in database, heal and recover on-the-fly
+			if len(doc.Data) > 0 {
+				_, saveErr := h.storageService.Save(vehicleID, doc.ID, doc.Data)
+				if saveErr == nil {
+					fileData = doc.Data
+				} else {
+					writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
+					return
+				}
+			} else {
+				writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
+				return
+			}
+		} else {
+			fileData = data
+		}
 	}
 
 	w.Header().Set("Content-Type", doc.MimeType)
