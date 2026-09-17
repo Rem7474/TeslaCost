@@ -770,13 +770,16 @@ function formatDate(dateStr: string) {
               <ChevronLeft class="w-4 h-4" />
             </button>
             <label for="drives-month-select" class="sr-only">Sélectionner le mois</label>
-            <input
-              id="drives-month-select"
-              type="month"
-              v-model="selectedMonth"
-              @change="onMonthChange"
-              class="bg-transparent text-xs font-semibold text-white px-1.5 py-0.5 rounded outline-none cursor-pointer border border-transparent hover:border-slate-700"
-            />
+            <div class="w-40 sm:w-44">
+              <AppDatePicker
+                id="drives-month-select"
+                v-model="selectedMonth"
+                month-picker
+                size="xs"
+                :clearable="false"
+                @change="onMonthChange"
+              />
+            </div>
             <button
               @click="nextMonth"
               class="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
