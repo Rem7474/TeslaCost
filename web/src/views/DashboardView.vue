@@ -644,14 +644,7 @@ function renderCharts() {
           tooltip: {
             callbacks: {
               label: (context) => {
-                const monthItem = filteredList[context.dataIndex]
                 const val = Number(context.raw || 0).toFixed(2)
-                if (context.dataset.label?.startsWith('Énergie') && monthItem && monthItem.smoothed_energy > 0) {
-                  return `${context.dataset.label} : ${val} € (dont ${monthItem.smoothed_energy.toFixed(2)} € estimés avant TeslaMate)`
-                }
-                if (context.dataset.label?.startsWith('Financement') && monthItem && monthItem.financing_amortized > 0 && Math.abs(monthItem.financing_amortized - (monthItem.financing || 0)) > 0.01) {
-                  return `${context.dataset.label} : ${val} € (${monthItem.financing_amortized.toFixed(2)} € lissé pour le coût/km)`
-                }
                 return `${context.dataset.label} : ${val} €`
               },
               footer: (items) => {
@@ -745,28 +738,11 @@ function renderCharts() {
           tooltip: {
             callbacks: {
               label: (context) => {
-                const monthItem = filteredMileageList[context.dataIndex]
                 if (context.dataset.yAxisID === 'yDistance') {
                   const dist = Number(context.raw).toLocaleString('fr-FR')
-                  if (monthItem && monthItem.smoothed_km > 0) {
-                    return `Distance : ${dist} km (dont ${Math.round(monthItem.smoothed_km).toLocaleString('fr-FR')} km lissés)`
-                  }
                   return `Distance : ${dist} km`
                 }
                 const costPerKm = Number(context.raw).toFixed(3)
-                const extras: string[] = []
-                if (monthItem && monthItem.tires_amortized > 0) {
-                  extras.push(`${monthItem.tires_amortized.toFixed(2)} € pneus lissés`)
-                }
-                if (monthItem && monthItem.maintenance_amortized > 0) {
-                  extras.push(`${monthItem.maintenance_amortized.toFixed(2)} € entretien lissé`)
-                }
-                if (monthItem && monthItem.financing_amortized > 0 && Math.abs(monthItem.financing_amortized - (monthItem.financing || 0)) > 0.01) {
-                  extras.push(`${monthItem.financing_amortized.toFixed(2)} € financement lissé`)
-                }
-                if (extras.length > 0) {
-                  return `Coût de revient : ${costPerKm} €/km (dont ${extras.join(', ')})`
-                }
                 return `Coût de revient : ${costPerKm} €/km`
               },
             },
@@ -1278,15 +1254,6 @@ function renderCharts() {
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2 flex-wrap">
               <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Activité du mois ({{ currentMonthStats.month }})</span>
-              <button
-                type="button"
-                @click="openMonthDetail(currentMonthStats.raw)"
-                class="px-2 py-0.5 bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 rounded text-[10px] font-semibold border border-indigo-500/40 flex items-center gap-1 transition-colors"
-                title="Afficher le détail chiffré et le diagramme circulaire"
-              >
-                <PieChart class="w-3 h-3" />
-                <span>Détail</span>
-              </button>
             </div>
             <div class="text-base sm:text-lg font-bold text-white flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
               <span>{{ Math.round(currentMonthStats.distance_km).toLocaleString('fr-FR') }} km roulés</span>
@@ -1360,6 +1327,7 @@ function renderCharts() {
               <Activity class="w-4 h-4 text-indigo-400" />
               <span>Kilométrage Mensuel & Coût de Revient au Km (€/km)</span>
             </h3>
+            <p class="text-xs text-slate-400 mt-0.5">Cliquer sur une barre du graphique pour ouvrir le détail chiffré du mois.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
             <button
@@ -1400,22 +1368,6 @@ function renderCharts() {
 
         <div class="h-64 sm:h-72">
           <canvas ref="mileageChartRef"></canvas>
-        </div>
-
-        <!-- Quick Month Selection Pills -->
-        <div v-if="filteredMileageCosts.length" class="flex items-center gap-1.5 overflow-x-auto pt-1 text-xs no-scrollbar">
-          <span class="text-slate-500 text-[11px] shrink-0 mr-1">Mois :</span>
-          <button
-            v-for="m in filteredMileageCosts"
-            :key="m.month"
-            type="button"
-            @click="openMonthDetail(m)"
-            class="px-2.5 py-1 bg-slate-800/80 hover:bg-indigo-600/30 hover:text-indigo-300 hover:border-indigo-500/50 border border-slate-700/60 rounded-lg text-slate-300 text-[11px] font-medium shrink-0 flex items-center gap-1.5 transition-colors group"
-            title="Cliquer pour afficher le détail chiffré et le diagramme de ce mois"
-          >
-            <span>{{ formatMonthName(m.month) }}</span>
-            <span class="text-[10px] font-bold text-emerald-400 group-hover:text-emerald-300">{{ (m.cost_per_km || 0).toFixed(3) }} €/km</span>
-          </button>
         </div>
       </div>
 
