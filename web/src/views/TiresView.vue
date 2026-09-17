@@ -982,12 +982,16 @@ function formatDate(d: string) {
         <!-- Wheel Card: FL (Avant Gauche) -->
         <div
           v-if="mountedTires.FL"
-          class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 space-y-4 shadow-sm transition-all"
+          @click="openHistoryModal(mountedTires.FL)"
+          class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click="toggleTireSelection(mountedTires.FL.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.FL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.FL.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Avant Gauche (FL)</button>
-              <h3 class="text-base font-bold text-white">{{ mountedTires.FL.tire.brand }} {{ mountedTires.FL.tire.model }}</h3>
+              <button type="button" @click.stop="toggleTireSelection(mountedTires.FL.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.FL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.FL.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+                <span>Avant Gauche (FL)</span>
+              </button>
+              <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.FL.tire.brand }} {{ mountedTires.FL.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.FL.tire.dimension }}</div>
             </div>
             <span
@@ -1063,14 +1067,14 @@ function formatDate(d: string) {
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
               v-if="vehicleStore.canEdit"
-              @click="openLogModal(mountedTires.FL)"
+              @click.stop="openLogModal(mountedTires.FL)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
               <Ruler class="w-3.5 h-3.5 text-rose-400" />
               Mesurer gomme
             </button>
             <button
-              @click="openHistoryModal(mountedTires.FL)"
+              @click.stop="openHistoryModal(mountedTires.FL)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
               <History class="w-3.5 h-3.5" />
@@ -1086,12 +1090,16 @@ function formatDate(d: string) {
         <!-- Wheel Card: FR (Avant Droit) -->
         <div
           v-if="mountedTires.FR"
-          class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 space-y-4 shadow-sm transition-all"
+          @click="openHistoryModal(mountedTires.FR)"
+          class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click="toggleTireSelection(mountedTires.FR.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.FR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.FR.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Avant Droit (FR)</button>
-              <h3 class="text-base font-bold text-white">{{ mountedTires.FR.tire.brand }} {{ mountedTires.FR.tire.model }}</h3>
+              <button type="button" @click.stop="toggleTireSelection(mountedTires.FR.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.FR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.FR.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+                <span>Avant Droit (FR)</span>
+              </button>
+              <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.FR.tire.brand }} {{ mountedTires.FR.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.FR.tire.dimension }}</div>
             </div>
             <span
@@ -1164,14 +1172,14 @@ function formatDate(d: string) {
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
               v-if="vehicleStore.canEdit"
-              @click="openLogModal(mountedTires.FR)"
+              @click.stop="openLogModal(mountedTires.FR)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
               <Ruler class="w-3.5 h-3.5 text-rose-400" />
               Mesurer gomme
             </button>
             <button
-              @click="openHistoryModal(mountedTires.FR)"
+              @click.stop="openHistoryModal(mountedTires.FR)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
               <History class="w-3.5 h-3.5" />
@@ -1187,12 +1195,16 @@ function formatDate(d: string) {
         <!-- Wheel Card: RL (Arrière Gauche) -->
         <div
           v-if="mountedTires.RL"
-          class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 space-y-4 shadow-sm transition-all"
+          @click="openHistoryModal(mountedTires.RL)"
+          class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click="toggleTireSelection(mountedTires.RL.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.RL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.RL.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Arrière Gauche (RL)</button>
-              <h3 class="text-base font-bold text-white">{{ mountedTires.RL.tire.brand }} {{ mountedTires.RL.tire.model }}</h3>
+              <button type="button" @click.stop="toggleTireSelection(mountedTires.RL.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.RL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.RL.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+                <span>Arrière Gauche (RL)</span>
+              </button>
+              <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.RL.tire.brand }} {{ mountedTires.RL.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.RL.tire.dimension }}</div>
             </div>
             <span
@@ -1265,14 +1277,14 @@ function formatDate(d: string) {
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
               v-if="vehicleStore.canEdit"
-              @click="openLogModal(mountedTires.RL)"
+              @click.stop="openLogModal(mountedTires.RL)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
               <Ruler class="w-3.5 h-3.5 text-rose-400" />
               Mesurer gomme
             </button>
             <button
-              @click="openHistoryModal(mountedTires.RL)"
+              @click.stop="openHistoryModal(mountedTires.RL)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
               <History class="w-3.5 h-3.5" />
@@ -1288,12 +1300,16 @@ function formatDate(d: string) {
         <!-- Wheel Card: RR (Arrière Droit) -->
         <div
           v-if="mountedTires.RR"
-          class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-3xl p-5 space-y-4 shadow-sm transition-all"
+          @click="openHistoryModal(mountedTires.RR)"
+          class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
         >
           <div class="flex items-start justify-between">
             <div>
-              <button type="button" @click="toggleTireSelection(mountedTires.RR.tire.id)" class="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-rose-400" :title="selectedTireIds.includes(mountedTires.RR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'"><component :is="selectedTireIds.includes(mountedTires.RR.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />Arrière Droit (RR)</button>
-              <h3 class="text-base font-bold text-white">{{ mountedTires.RR.tire.brand }} {{ mountedTires.RR.tire.model }}</h3>
+              <button type="button" @click.stop="toggleTireSelection(mountedTires.RR.tire.id)" class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300" :title="selectedTireIds.includes(mountedTires.RR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+                <input type="checkbox" :checked="selectedTireIds.includes(mountedTires.RR.tire.id)" class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer" readOnly />
+                <span>Arrière Droit (RR)</span>
+              </button>
+              <h3 class="text-base font-bold text-white group-hover:text-rose-300 transition-colors mt-0.5">{{ mountedTires.RR.tire.brand }} {{ mountedTires.RR.tire.model }}</h3>
               <div class="text-xs text-slate-400 font-mono">{{ mountedTires.RR.tire.dimension }}</div>
             </div>
             <span
@@ -1366,14 +1382,14 @@ function formatDate(d: string) {
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
               v-if="vehicleStore.canEdit"
-              @click="openLogModal(mountedTires.RR)"
+              @click.stop="openLogModal(mountedTires.RR)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
               <Ruler class="w-3.5 h-3.5 text-rose-400" />
               Mesurer gomme
             </button>
             <button
-              @click="openHistoryModal(mountedTires.RR)"
+              @click.stop="openHistoryModal(mountedTires.RR)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
               <History class="w-3.5 h-3.5" />
