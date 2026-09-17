@@ -51,6 +51,9 @@ services:
         max-file: "3"
     environment:
       PORT: 8080
+      # This compose file is the production deployment path; docker-compose.dev.yml overrides
+      # this back to "development" for the local hot-reload workflow.
+      ENVIRONMENT: ${ENVIRONMENT:-production}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
       DB_HOST: postgres
       DB_PORT: 5432

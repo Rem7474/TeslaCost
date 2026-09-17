@@ -3,7 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -409,15 +409,15 @@ func (h *TireHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	stats, err := h.tireWearService.CalculateTireWear(r.Context(), t, v.CurrentOdometer)
 	if err != nil {
-		log.Printf("[tire] failed to calculate tire wear for tire %s: %v", tireID, err)
+		slog.Error("failed to calculate tire wear", "component", "tire", "tire_id", tireID, "error", err)
 	}
 	sessions, err := h.repo.ListTireMountSessions(r.Context(), tireID)
 	if err != nil {
-		log.Printf("[tire] failed to list mount sessions for tire %s: %v", tireID, err)
+		slog.Error("failed to list mount sessions", "component", "tire", "tire_id", tireID, "error", err)
 	}
 	logs, err := h.repo.ListTireLogs(r.Context(), tireID)
 	if err != nil {
-		log.Printf("[tire] failed to list logs for tire %s: %v", tireID, err)
+		slog.Error("failed to list tire logs", "component", "tire", "tire_id", tireID, "error", err)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

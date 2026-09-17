@@ -33,7 +33,7 @@ Build Go, `go vet`, `go test ./...`, build Docker multi-stage et un run complet 
 
 | # | Action | Fichier(s) | Statut | Commit |
 |---|---|---|---|---|
-| A1 | Logging structuré (`log/slog`) avec niveaux | tout le backend | ⬜ | |
+| A1 | Logging structuré (`log/slog`) avec niveaux | tout le backend (9 fichiers) | ✅ | JSON en prod, texte lisible sinon ; niveau par défaut `INFO` en prod / `DEBUG` en dev, override via `LOG_LEVEL`. **Bug découvert en testant** : `docker-compose.yml` ne positionnait jamais `ENVIRONMENT`, et `.env.example` le mettait explicitement à `development` — donc ni les logs JSON, ni le garde-fou B1, ni les cookies `Secure` ne s'activaient jamais en suivant le README. Corrigé : `ENVIRONMENT: ${ENVIRONMENT:-production}` dans `docker-compose.yml`, override `development` dans `docker-compose.dev.yml`, `.env.example` mis à `production`. **Bug de doc découvert en même temps** : le tableau README référençait `APP_ENV`/`ENCRYPTION_KEY`, des noms qui n'existent pas dans le code (les vraies variables sont `ENVIRONMENT`/`APP_ENCRYPTION_KEY`) — corrigé. Vérifié en conditions réelles : `docker compose up` avec `.env.example` non modifié produit désormais des logs JSON et affiche les 3 avertissements de sécurité dès le démarrage. Portée : les logs applicatifs (`log.*` → `slog.*`) ; le logger d'accès HTTP de chi (`chiMiddleware.Logger`) n'a pas été touché (déjà structuré ligne par ligne, non-JSON). |
 | A2 | Propagation du request ID dans les logs métier | services + handlers | ⬜ | |
 | A3 | Rate limiting sur `/auth/login` et `/auth/register` | `internal/handlers/auth_handler.go` | ⬜ | |
 | A4 | Access token en cookie httpOnly plutôt que `localStorage` | `web/src/services/api.ts` | ⏭️ reporté (refonte du flux auth, à planifier séparément) | |

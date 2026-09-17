@@ -210,16 +210,21 @@ docker run --rm \
 | Variable | Description | Valeur par défaut |
 |---|---|---|
 | `PORT` | Port d'écoute du serveur HTTP | `8080` |
-| `APP_ENV` | Environnement d'exécution (`production`, `development`) | `production` |
-| `DATABASE_URL` | Chaîne de connexion PostgreSQL (`postgres://...`) | *Obligatoire* |
-| `JWT_SECRET` | Secret de signature des jetons JWT | *Obligatoire* |
+| `ENVIRONMENT` | Environnement d'exécution (`production`, `development`) — active les logs JSON, le niveau `INFO` par défaut (jamais `DEBUG`), les cookies `Secure` et le garde-fou sur les secrets par défaut | `production` dans `docker-compose.yml` |
+| `LOG_LEVEL` | Force le niveau de log (`DEBUG`, `INFO`, `WARN`, `ERROR`), remplace le défaut lié à `ENVIRONMENT` | *Optionnel* |
+| `TESLACOST_VERSION` | Tag d'image à déployer (`ghcr.io/rem7474/teslacost:<tag>`) ; à pinner en production | `latest` |
+| `DATABASE_URL` | Chaîne de connexion PostgreSQL (`postgres://...`) ; alternative aux variables `DB_*` | *Optionnel* |
+| `JWT_SECRET` | Secret de signature des jetons JWT — **à changer impérativement**, la valeur par défaut est connue publiquement | *Obligatoire* |
 | `JWT_EXPIRATION_HOURS` | Durée de validité des sessions utilisateurs (heures) | `72` |
-| `ENCRYPTION_KEY` | Clé hexadécimale AES-256 de 64 caractères | *Obligatoire* |
+| `APP_ENCRYPTION_KEY` | Clé de chiffrement AES-256 des identifiants TeslaMate — **à changer impérativement**, la valeur par défaut est connue publiquement | *Obligatoire* |
 | `APP_TIMEZONE` | Fuseau horaire de calcul et reporting | `Europe/Paris` |
 | `STORAGE_DIR` | Répertoire de stockage des documents sur le volume | `/data/documents` |
 | `DISABLE_REGISTRATION` | Désactiver la création libre de compte local | `false` |
 | `INITIAL_ADMIN_EMAIL` | Email de l'administrateur pré-initialisé | *Optionnel* |
 | `INITIAL_ADMIN_PASSWORD` | Mot de passe de l'administrateur pré-initialisé | *Optionnel* |
+| `DB_PORT_BIND` | Adresse:port de liaison du conteneur Postgres sur l'hôte | `127.0.0.1:5432` |
+| `BACKUP_INTERVAL_HOURS` | Intervalle entre deux cycles de sauvegarde automatique | `24` |
+| `BACKUP_RETENTION_DAYS` | Durée de rétention des sauvegardes avant purge | `14` |
 | `CORS_ALLOWED_ORIGINS` | Origines autorisées (séparées par virgule) | `http://localhost:8080` |
 
 ### Configuration OIDC / SSO (Optionnel)

@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -72,13 +72,13 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 
 		// Dispatch notification
 		if err := s.sendReminderWebhook(ctx, webhook, vehicle.Name, &rem, currentOdometer); err != nil {
-			log.Printf("[notification] Failed to dispatch webhook for vehicle %s reminder %s: %v", vehicle.ID, rem.ID, err)
+			slog.Error("failed to dispatch webhook", "component", "notification", "vehicle_id", vehicle.ID, "reminder_id", rem.ID, "error", err)
 			continue
 		}
 
 		// Update last notified
 		if err := s.repo.MarkReminderNotified(ctx, rem.ID, now, currentOdometer); err != nil {
-			log.Printf("[notification] Failed to mark reminder notified: %v", err)
+			slog.Error("failed to mark reminder notified", "component", "notification", "reminder_id", rem.ID, "error", err)
 		}
 	}
 

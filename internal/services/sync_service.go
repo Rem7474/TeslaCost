@@ -3,7 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
@@ -209,7 +209,7 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 	status, units, err := client.GetCarStatus(ctx, carID)
 	if err != nil {
 		formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
-		log.Printf("[sync] Error fetching car status: %v", formattedErr)
+		slog.Error("error fetching car status", "component", "sync", "vehicle_id", v.ID, "error", formattedErr)
 		return nil, fmt.Errorf("impossible de joindre TeslaMate (%s) : %w", *v.TeslaMateAPIURL, formattedErr)
 	} else if status != nil {
 		odometer := status.Odometer
@@ -229,7 +229,7 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 					notifyCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
 					if err := s.notifications.CheckAndNotify(notifyCtx, &veh, odo); err != nil {
-						log.Printf("[notification] CheckAndNotify failed for vehicle %s: %v", veh.ID, err)
+						slog.Error("CheckAndNotify failed", "component", "notification", "vehicle_id", veh.ID, "error", err)
 					}
 				}(*v, odometer)
 			}
@@ -354,7 +354,7 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 		})
 		if err != nil {
 			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
-			log.Printf("[sync] Warning: Could not fetch drives (page %d): %v", page, formattedErr)
+			slog.Warn("could not fetch drives", "component", "sync", "vehicle_id", v.ID, "page", page, "error", formattedErr)
 			st.warnings = append(st.warnings, fmt.Sprintf("Trajets (page %d) : %v — l'import reprendra à la prochaine synchronisation", page, formattedErr))
 			break
 		}
@@ -474,7 +474,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 		})
 		if err != nil {
 			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
-			log.Printf("[sync] Warning: Could not fetch charges (page %d): %v", page, formattedErr)
+			slog.Warn("could not fetch charges", "component", "sync", "vehicle_id", v.ID, "page", page, "error", formattedErr)
 			st.warnings = append(st.warnings, fmt.Sprintf("Recharges (page %d) : %v — l'import reprendra à la prochaine synchronisation", page, formattedErr))
 			break
 		}
@@ -609,12 +609,12 @@ func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) 
 // StartBackgroundWorker runs periodic incremental sync for all vehicles with TeslaMate configured.
 func (s *SyncService) StartBackgroundWorker(ctx context.Context, intervalMinutes int) {
 	if intervalMinutes <= 0 {
-		log.Println("[auto-sync] Background auto-sync worker disabled (interval <= 0)")
+		slog.Info("background auto-sync worker disabled (interval <= 0)", "component", "auto-sync")
 		return
 	}
 
 	interval := time.Duration(intervalMinutes) * time.Minute
-	log.Printf("[auto-sync] Background auto-sync worker started (running every %v)", interval)
+	slog.Info("background auto-sync worker started", "component", "auto-sync", "interval", interval.String())
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -622,7 +622,7 @@ func (s *SyncService) StartBackgroundWorker(ctx context.Context, intervalMinutes
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[auto-sync] Background auto-sync worker stopped.")
+			slog.Info("background auto-sync worker stopped", "component", "auto-sync")
 			return
 		case <-ticker.C:
 			s.runBackgroundSyncCycle(ctx)
@@ -637,7 +637,7 @@ func (s *SyncService) runBackgroundSyncCycle(ctx context.Context) {
 
 	vehicles, err := s.repo.ListAllVehiclesWithTeslaMate(ctx)
 	if err != nil {
-		log.Printf("[auto-sync] Failed to list vehicles: %v", err)
+		slog.Error("failed to list vehicles", "component", "auto-sync", "error", err)
 		return
 	}
 

@@ -2,7 +2,7 @@ package services
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -14,7 +14,7 @@ import (
 // cannot crash the whole server process.
 func recoverPanic(tag string) {
 	if r := recover(); r != nil {
-		log.Printf("[panic] recovered in %s: %v", tag, r)
+		slog.Error("recovered panic in background goroutine", "component", tag, "panic", r)
 	}
 }
 
@@ -34,7 +34,7 @@ func (s *SyncService) recordSyncFailure(v models.Vehicle, cb *CircuitBreaker, sy
 		alertCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if err := s.notifications.NotifySyncCircuitOpen(alertCtx, &veh, cause, retry); err != nil {
-			log.Printf("[notification] failed to alert on circuit breaker open for vehicle %s: %v", veh.ID, err)
+			slog.Error("failed to alert on circuit breaker open", "component", "notification", "vehicle_id", veh.ID, "error", err)
 		}
 	}(v, syncErr, retryAt)
 }
@@ -150,7 +150,7 @@ func (s *SyncService) GetSyncJob(vehicleID string) *SyncJob {
 func (s *SyncService) runScheduledSync(ctx context.Context, v models.Vehicle) {
 	cb := s.getCircuitBreaker(v.ID)
 	if err := cb.CanExecute(); err != nil {
-		log.Printf("[auto-sync] Vehicle %s (%s): skipping scheduled sync: %v", v.Name, v.ID, err)
+		slog.Info("skipping scheduled sync", "component", "auto-sync", "vehicle_name", v.Name, "vehicle_id", v.ID, "reason", err)
 		return
 	}
 
@@ -163,12 +163,12 @@ func (s *SyncService) runScheduledSync(ctx context.Context, v models.Vehicle) {
 
 	if err != nil {
 		s.recordSyncFailure(v, cb, err)
-		log.Printf("[auto-sync] Vehicle %s (%s): sync warning/error: %v (circuit breaker: %s)", v.Name, v.ID, err, cb.State())
+		slog.Warn("scheduled sync failed", "component", "auto-sync", "vehicle_name", v.Name, "vehicle_id", v.ID, "error", err, "circuit_breaker", cb.State())
 	} else {
 		cb.RecordSuccess()
 		if res != nil && (res.DrivesAdded > 0 || res.ChargesAdded > 0) {
-			log.Printf("[auto-sync] Vehicle %s (%s): +%d new drives, +%d new charges (odometer: %.0f km)",
-				v.Name, v.ID, res.DrivesAdded, res.ChargesAdded, res.CurrentOdometer)
+			slog.Info("scheduled sync completed", "component", "auto-sync", "vehicle_name", v.Name, "vehicle_id", v.ID,
+				"drives_added", res.DrivesAdded, "charges_added", res.ChargesAdded, "odometer_km", res.CurrentOdometer)
 		}
 	}
 

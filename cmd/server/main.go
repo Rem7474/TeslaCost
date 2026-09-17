@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -32,30 +32,53 @@ import (
 // AppVersion is the application version, injected at build time via -ldflags "-X main.AppVersion=...".
 var AppVersion = "1.17.0"
 
-func main() {
-	log.Println("Starting TeslaCost Full-Stack Server...")
+// configureLogging sets the process-wide slog default: JSON output in production (log
+// aggregators, jq-friendly), human-readable text otherwise. Level defaults to Info in
+// production (never Debug) and Debug in development; LOG_LEVEL overrides either.
+func configureLogging(cfg *config.Config) {
+	level := slog.LevelInfo
+	if !strings.EqualFold(cfg.Environment, "production") {
+		level = slog.LevelDebug
+	}
+	if raw := strings.TrimSpace(os.Getenv("LOG_LEVEL")); raw != "" {
+		var parsed slog.Level
+		if err := parsed.UnmarshalText([]byte(strings.ToUpper(raw))); err == nil {
+			level = parsed
+		}
+	}
 
+	var handler slog.Handler
+	opts := &slog.HandlerOptions{Level: level}
+	if strings.EqualFold(cfg.Environment, "production") {
+		handler = slog.NewJSONHandler(os.Stdout, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stdout, opts)
+	}
+	slog.SetDefault(slog.New(handler))
+}
+
+func main() {
 	// 1. Load configuration
 	cfg := config.Load()
+	configureLogging(cfg)
+
+	slog.Info("Starting TeslaCost Full-Stack Server...")
 
 	// Warn loudly (without blocking startup) if a production deployment still uses one of the
 	// well-known placeholder secrets shipped in docker-compose.yml / .env.example.
 	if strings.EqualFold(cfg.Environment, "production") {
 		if warnings := cfg.InsecureDefaults(); len(warnings) > 0 {
-			log.Println("[security] ##################################################")
-			log.Println("[security] INSECURE DEFAULT SECRETS DETECTED IN PRODUCTION:")
 			for _, w := range warnings {
-				log.Printf("[security] - %s", w)
+				slog.Warn("insecure default secret detected in production", "component", "security", "detail", w)
 			}
-			log.Println("[security] Change these values immediately (see .env.example).")
-			log.Println("[security] ##################################################")
 		}
 	}
 
 	// 2. Initialize encryption module
 	encryptor, err := crypto.NewEncryptor(cfg.AppEncryptionKey)
 	if err != nil {
-		log.Fatalf("Failed to initialize crypto module: %v", err)
+		slog.Error("failed to initialize crypto module", "error", err)
+		os.Exit(1)
 	}
 
 	// 3. Connect to PostgreSQL (with retry to wait for DB startup)
@@ -71,11 +94,12 @@ func main() {
 	var notificationService *services.NotificationService
 
 	if err != nil {
-		log.Printf("[warning] Database connection failed: %v. Running in offline/unconnected mode for now.", err)
+		slog.Warn("database connection failed, running in offline/unconnected mode for now", "error", err)
 	} else {
 		defer dbPool.Close()
 		if migErr := dbPool.Migrate(ctx); migErr != nil {
-			log.Fatalf("Database migration failed: %v", migErr)
+			slog.Error("database migration failed", "error", migErr)
+			os.Exit(1)
 		}
 		repo = database.NewRepository(dbPool.Pool)
 
@@ -87,9 +111,9 @@ func main() {
 				if err == nil {
 					adminUser, err := repo.CreateUser(ctx, cfg.InitialAdminEmail, hash)
 					if err == nil {
-						log.Printf("[auth] Initial admin account created successfully (%s)", adminUser.Email)
+						slog.Info("initial admin account created successfully", "component", "auth", "email", adminUser.Email)
 					} else {
-						log.Printf("[auth] Failed to create initial admin account: %v", err)
+						slog.Error("failed to create initial admin account", "component", "auth", "error", err)
 					}
 				}
 			}
@@ -166,12 +190,13 @@ func main() {
 		if cfg.OIDCEnabled {
 			svc, oidcErr := auth.NewOIDCService(context.Background(), cfg)
 			if oidcErr != nil {
-				log.Fatalf("OIDC initialization failed: %v", oidcErr)
+				slog.Error("OIDC initialization failed", "component", "auth", "error", oidcErr)
+				os.Exit(1)
 			}
 			oidcService = svc
-			log.Printf("[auth] OIDC SSO enabled — issuer: %s, provider: %s", cfg.OIDCIssuerURL, cfg.OIDCProviderName)
+			slog.Info("OIDC SSO enabled", "component", "auth", "issuer", cfg.OIDCIssuerURL, "provider", cfg.OIDCProviderName)
 		} else {
-			log.Println("[auth] OIDC not configured — using local JWT auth only")
+			slog.Info("OIDC not configured, using local JWT auth only", "component", "auth")
 		}
 
 		authHandler := handlers.NewAuthHandler(repo, cfg, oidcService)
@@ -181,15 +206,16 @@ func main() {
 
 		storageService, err := storage.NewFileStorageService(cfg.StorageDir)
 		if err != nil {
-			log.Fatalf("Failed to initialize file storage service: %v", err)
+			slog.Error("failed to initialize file storage service", "error", err)
+			os.Exit(1)
 		}
 
 		// Migrate any legacy unmigrated documents from PostgreSQL BYTEA column to the storage volume
 		migCtx, migCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		if count, err := repo.MigrateLegacyDocuments(migCtx, storageService.Save); err != nil {
-			log.Printf("[storage] Warning: legacy document migration encountered an error: %v", err)
+			slog.Warn("legacy document migration encountered an error", "component", "storage", "error", err)
 		} else if count > 0 {
-			log.Printf("[storage] Successfully migrated %d legacy document(s) from database to volume storage", count)
+			slog.Info("migrated legacy documents from database to volume storage", "component", "storage", "count", count)
 		}
 		migCancel()
 
@@ -353,25 +379,28 @@ func main() {
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
-				log.Fatalf("[panic] recovered in HTTP server goroutine: %v", r)
+				slog.Error("recovered panic in HTTP server goroutine", "error", r)
+				os.Exit(1)
 			}
 		}()
-		log.Printf("TeslaCost API & Web listening on port %s (Base URL: %s)", cfg.Port, cfg.AppBaseURL)
+		slog.Info("TeslaCost API & Web listening", "port", cfg.Port, "base_url", cfg.AppBaseURL)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Server error: %v", err)
+			slog.Error("server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 
 	<-stopChan
-	log.Println("Shutting down server...")
+	slog.Info("Shutting down server...")
 	cancelBg()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("Server forced shutdown error: %v", err)
+		slog.Error("server forced shutdown error", "error", err)
+		os.Exit(1)
 	}
 
-	log.Println("TeslaCost server stopped cleanly.")
+	slog.Info("TeslaCost server stopped cleanly.")
 }

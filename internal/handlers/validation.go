@@ -3,7 +3,7 @@ package handlers
 import (
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"net/http"
 	"regexp"
@@ -45,7 +45,7 @@ func writeRepoError(w http.ResponseWriter, err error, fallback string) {
 	case errors.Is(err, database.ErrForeignReference):
 		writeError(w, http.StatusBadRequest, "Référence invalide : trajet, groupe ou pneu inexistant pour ce véhicule")
 	default:
-		log.Printf("[api] %s: %v", fallback, err)
+		slog.Error(fallback, "component", "api", "error", err)
 		writeError(w, http.StatusInternalServerError, fallback)
 	}
 }
