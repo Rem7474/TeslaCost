@@ -2,27 +2,32 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
+	"net/url"
+	"time"
 
 	"github.com/teslacost/teslacost/internal/auth"
+	"github.com/teslacost/teslacost/internal/config"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 )
 
+const (
+	oidcStateCookie = "oidc_state"
+	oidcNonceCookie = "oidc_nonce"
+	oidcCookieTTL   = 10 * time.Minute
+)
+
 type AuthHandler struct {
-	repo                *database.Repository
-	jwtSecret           string
-	jwtExpirationHours  int
-	disableRegistration bool
+	repo        *database.Repository
+	cfg         *config.Config
+	oidcService *auth.OIDCService // nil when OIDC is not configured
 }
 
-func NewAuthHandler(repo *database.Repository, jwtSecret string, jwtExpirationHours int, disableRegistration bool) *AuthHandler {
-	return &AuthHandler{
-		repo:                repo,
-		jwtSecret:           jwtSecret,
-		jwtExpirationHours:  jwtExpirationHours,
-		disableRegistration: disableRegistration,
-	}
+func NewAuthHandler(repo *database.Repository, cfg *config.Config, oidcService *auth.OIDCService) *AuthHandler {
+	return &AuthHandler{repo: repo, cfg: cfg, oidcService: oidcService}
 }
 
 type RegisterRequest struct {
@@ -40,7 +45,7 @@ type AuthResponse struct {
 	User  any    `json:"user"`
 }
 
-// GetConfig returns public authentication configuration (e.g. whether registration is open or onboarding is required)
+// GetConfig returns public authentication configuration used by the frontend.
 func (h *AuthHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	count, err := h.repo.GetUserCount(r.Context())
 	userCount := 0
@@ -49,23 +54,32 @@ func (h *AuthHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	needsOnboarding := (userCount == 0)
 
-	regEnabled := !h.disableRegistration
+	regEnabled := !h.cfg.DisableRegistration
 	if needsOnboarding {
 		regEnabled = true
+	}
+	if h.cfg.OIDCEnabled && h.cfg.OIDCDisableLocalAuth {
+		regEnabled = false
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"registration_enabled": regEnabled,
 		"needs_onboarding":     needsOnboarding,
 		"user_count":           userCount,
+		"oidc_enabled":         h.cfg.OIDCEnabled,
+		"oidc_provider_name":   h.cfg.OIDCProviderName,
 	})
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	if h.disableRegistration {
+	if h.cfg.OIDCEnabled && h.cfg.OIDCDisableLocalAuth {
+		writeError(w, http.StatusForbidden, "L'inscription locale est desactivee - utilisez le SSO")
+		return
+	}
+	if h.cfg.DisableRegistration {
 		count, err := h.repo.GetUserCount(r.Context())
 		if err != nil || count > 0 {
-			writeError(w, http.StatusForbidden, "La création de compte est désactivée sur cette instance")
+			writeError(w, http.StatusForbidden, "La creation de compte est desactivee sur cette instance")
 			return
 		}
 	}
@@ -75,7 +89,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-
 	if req.Email == "" || len(req.Password) < 8 {
 		writeError(w, http.StatusBadRequest, "Email required and password must be at least 8 characters")
 		return
@@ -86,26 +99,26 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
-
 	user, err := h.repo.CreateUser(r.Context(), req.Email, hash)
 	if err != nil {
 		writeError(w, http.StatusConflict, "Email already registered or creation failed")
 		return
 	}
 
-	token, err := auth.GenerateToken(user.ID, user.Email, h.jwtSecret, h.jwtExpirationHours)
+	token, err := auth.GenerateToken(user.ID, user.Email, h.cfg.JWTSecret, h.cfg.JWTExpirationHours)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
-
-	writeJSON(w, http.StatusCreated, AuthResponse{
-		Token: token,
-		User:  user,
-	})
+	writeJSON(w, http.StatusCreated, AuthResponse{Token: token, User: user})
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	if h.cfg.OIDCEnabled && h.cfg.OIDCDisableLocalAuth {
+		writeError(w, http.StatusForbidden, "La connexion locale est desactivee - utilisez le SSO")
+		return
+	}
+
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -113,21 +126,21 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := h.repo.GetUserByEmail(r.Context(), req.Email)
-	if err != nil || !auth.CheckPassword(req.Password, user.PasswordHash) {
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "Invalid email or password")
+		return
+	}
+	if user.PasswordHash == nil || !auth.CheckPassword(req.Password, *user.PasswordHash) {
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
 
-	token, err := auth.GenerateToken(user.ID, user.Email, h.jwtSecret, h.jwtExpirationHours)
+	token, err := auth.GenerateToken(user.ID, user.Email, h.cfg.JWTSecret, h.cfg.JWTExpirationHours)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
-
-	writeJSON(w, http.StatusOK, AuthResponse{
-		Token: token,
-		User:  user,
-	})
+	writeJSON(w, http.StatusOK, AuthResponse{Token: token, User: user})
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -136,12 +149,130 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Unauthorized")
 		return
 	}
-
 	user, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "User not found")
 		return
 	}
-
 	writeJSON(w, http.StatusOK, user)
+}
+
+// OIDCLogin initiates the Authorization Code Flow: generates state + nonce cookies,
+// then redirects the browser to the IdP authorization endpoint.
+func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
+	if h.oidcService == nil {
+		writeError(w, http.StatusNotFound, "OIDC is not configured on this instance")
+		return
+	}
+
+	state, err := auth.GenerateStateToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to generate OIDC state")
+		return
+	}
+	noncePlain, nonceHashed, err := auth.GenerateNonce()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to generate OIDC nonce")
+		return
+	}
+
+	// Secure flag is set to true for OIDC state/nonce cookies.
+	expire := time.Now().Add(oidcCookieTTL)
+	http.SetCookie(w, &http.Cookie{
+		Name:     oidcStateCookie,
+		Value:    state,
+		Expires:  expire,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+	http.SetCookie(w, &http.Cookie{
+		Name:     oidcNonceCookie,
+		Value:    noncePlain,
+		Expires:  expire,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+
+	http.Redirect(w, r, h.oidcService.LoginURL(state, nonceHashed), http.StatusFound)
+}
+
+// OIDCCallback handles the redirect from the IdP, exchanges the authorization code,
+// performs JIT user provisioning, issues a TeslaCost JWT, and redirects to the SPA.
+func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
+	if h.oidcService == nil {
+		writeError(w, http.StatusNotFound, "OIDC is not configured on this instance")
+		return
+	}
+
+	// Verify and consume the state cookie (one-time CSRF token).
+	stateCookie, err := r.Cookie(oidcStateCookie)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Missing OIDC state cookie - session may have expired")
+		return
+	}
+	clearCookie(w, oidcStateCookie)
+
+	if r.URL.Query().Get("state") != stateCookie.Value {
+		writeError(w, http.StatusBadRequest, "OIDC state mismatch - possible CSRF attempt")
+		return
+	}
+
+	nonceCookie, err := r.Cookie(oidcNonceCookie)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Missing OIDC nonce cookie - session may have expired")
+		return
+	}
+	clearCookie(w, oidcNonceCookie)
+
+	code := r.URL.Query().Get("code")
+	if code == "" {
+		oidcErr := r.URL.Query().Get("error")
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("OIDC error: %s", oidcErr))
+		return
+	}
+
+	userInfo, err := h.oidcService.ExchangeCode(r.Context(), code, nonceCookie.Value)
+	if err != nil {
+		if errors.Is(err, auth.ErrEmailNotAllowed) {
+			writeError(w, http.StatusForbidden, "Your email address is not authorized on this instance")
+			return
+		}
+		writeError(w, http.StatusUnauthorized, fmt.Sprintf("OIDC authentication failed: %v", err))
+		return
+	}
+
+	// JIT provisioning: create or link the user account.
+	dbUser, err := h.repo.UpsertOIDCUser(r.Context(),
+		userInfo.Email, userInfo.Subject, h.cfg.OIDCIssuerURL, userInfo.DisplayName,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to provision user account")
+		return
+	}
+
+	token, err := auth.GenerateToken(dbUser.ID, dbUser.Email, h.cfg.JWTSecret, h.cfg.JWTExpirationHours)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to generate token")
+		return
+	}
+
+	http.Redirect(w, r, "/oidc-callback?token="+url.QueryEscape(token), http.StatusFound)
+}
+
+// clearCookie immediately expires a named cookie.
+func clearCookie(w http.ResponseWriter, name string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
 }
