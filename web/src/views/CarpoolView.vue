@@ -5,6 +5,8 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import AppDatePicker from '@/components/AppDatePicker.vue'
+import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
+import { downloadCsv } from '@/utils/csv'
 import {
   Users,
   Plus,
@@ -30,6 +32,7 @@ import {
   RotateCw,
   ChevronDown,
   ChevronUp,
+  Download,
 } from 'lucide-vue-next'
 
 interface LegForm {
@@ -125,6 +128,24 @@ function toggleTripSelection(tripId: string) {
 
 function clearTripSelection() {
   selectedTripIds.value = []
+}
+
+function exportSelectedCarpools() {
+  const selected = trips.value.filter((t) => selectedTripIds.value.includes(t.id))
+  if (!selected.length) return
+  const headers = ['ID', 'Date', 'Titre', 'Distance_km', 'Passagers', 'Cout_Reel_EUR', 'Revenus_EUR', 'Cout_Net_EUR', 'Amortissement_pct']
+  const rows = selected.map((t) => [
+    t.id,
+    toDateInputString(t.date),
+    `"${(t.title || '').replace(/"/g, '""')}"`,
+    t.distance_km,
+    t.passenger_count || (t.passengers || []).length || 0,
+    (t.total_cost || 0).toFixed(2),
+    (t.total_revenue || 0).toFixed(2),
+    (t.net_cost || 0).toFixed(2),
+    t.total_cost > 0 ? Math.min(100, Math.round((t.total_revenue / t.total_cost) * 100)) : 0,
+  ])
+  downloadCsv(`covoiturages_export_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows)
 }
 
 function toDateInputString(dateVal: string | Date | null | undefined): string {
@@ -632,6 +653,11 @@ function formatDriveTime(dateStr: string) {
 }
 
 watch(
+  () => vehicleStore.activeVehicle?.id,
+  () => clearTripSelection()
+)
+
+watch(
   () => [vehicleStore.activeVehicle?.id, vehicleStore.lastSyncTimestamp],
   () => loadData()
 )
@@ -775,50 +801,49 @@ onMounted(() => {
 
     <!-- Trips List -->
     <div v-else class="space-y-4">
-      <!-- Batch Selection & Actions Toolbar -->
-      <div
+      <!-- Sticky Bulk Selection Bar -->
+      <BulkSelectionBar
         v-if="vehicleStore.canEdit"
-        class="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 px-4 py-3 rounded-2xl shadow-sm"
+        :count="selectedTripIds.length"
+        item-label="covoiturage"
+        @clear="clearTripSelection"
       >
-        <div class="flex items-center gap-3">
-          <label
-            v-if="vehicleStore.canEdit"
-            class="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer select-none"
-          >
-            <input
-              type="checkbox"
-              :checked="isAllSelected"
-              @change="toggleSelectAll"
-              class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer shrink-0"
-            />
-            <span>{{ isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }} ({{ trips.length }})</span>
-          </label>
-          <span v-if="selectedTripIds.length > 0" class="text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 rounded-lg">
-            {{ selectedTripIds.length }} sélectionné{{ selectedTripIds.length > 1 ? 's' : '' }}
-          </span>
-        </div>
+        <button
+          type="button"
+          @click="handleBatchRecalculate"
+          :disabled="recalculating"
+          class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-md shadow-rose-600/20 disabled:opacity-50 transition-all"
+          title="Recalculer les coûts réels des covoiturages sélectionnés"
+        >
+          <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': recalculating }" />
+          <span>Recalculer coûts réels ({{ selectedTripIds.length }})</span>
+        </button>
 
-        <div class="flex items-center gap-2">
-          <button
-            v-if="selectedTripIds.length > 0"
-            type="button"
-            @click="handleBatchRecalculate"
-            :disabled="recalculating"
-            class="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-md shadow-rose-600/20 disabled:opacity-50 transition-all"
-            title="Recalculer les coûts réels des covoiturages sélectionnés"
-          >
-            <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': recalculating }" />
-            <span>Recalculer les coûts réels ({{ selectedTripIds.length }})</span>
-          </button>
-          <button
-            v-if="selectedTripIds.length > 0"
-            type="button"
-            @click="clearTripSelection"
-            class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-medium rounded-xl transition-colors"
-          >
-            Annuler
-          </button>
-        </div>
+        <button
+          type="button"
+          @click="exportSelectedCarpools"
+          class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
+          title="Exporter la sélection en CSV"
+        >
+          <Download class="w-3.5 h-3.5 text-slate-300" />
+          <span>Exporter CSV</span>
+        </button>
+      </BulkSelectionBar>
+
+      <!-- Header row: Select all checkbox & Total info -->
+      <div v-if="vehicleStore.canEdit" class="flex items-center justify-between text-xs text-slate-400 px-2">
+        <label
+          class="flex items-center gap-2 font-semibold text-slate-300 hover:text-white cursor-pointer select-none"
+        >
+          <input
+            type="checkbox"
+            :checked="isAllSelected"
+            @change="toggleSelectAll"
+            class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer shrink-0"
+          />
+          <span>{{ isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }} ({{ trips.length }})</span>
+        </label>
+        <span>{{ trips.length }} covoiturage(s) au total</span>
       </div>
 
       <div
