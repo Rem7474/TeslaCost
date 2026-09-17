@@ -133,6 +133,10 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Vehicle not found")
 		return
 	}
+	if existing.Role != models.RoleOwner {
+		writeError(w, http.StatusForbidden, "Seul le propriétaire peut modifier la configuration du véhicule")
+		return
+	}
 
 	var req SaveVehicleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -187,12 +191,6 @@ type SavePreTeslaMateEnergyRequest struct {
 }
 
 func (h *VehicleHandler) UpdatePreTeslaMateEnergy(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
-	vehicleID := chi.URLParam(r, "id")
-	if vehicleID == "" {
-		vehicleID = chi.URLParam(r, "vehicleId")
-	}
-
 	var req SavePreTeslaMateEnergyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
@@ -205,6 +203,27 @@ func (h *VehicleHandler) UpdatePreTeslaMateEnergy(w http.ResponseWriter, r *http
 	}
 	if req.PreTeslaMateEurPerKwh != nil && (*req.PreTeslaMateEurPerKwh <= 0 || *req.PreTeslaMateEurPerKwh > 10) {
 		writeError(w, http.StatusBadRequest, "Le tarif de l'électricité doit être compris entre 0 et 10 €/kWh")
+		return
+	}
+
+	if h.repo == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"success": true})
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "id")
+	if vehicleID == "" {
+		vehicleID = chi.URLParam(r, "vehicleId")
+	}
+
+	vCheck, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if !vCheck.Role.CanEdit() {
+		writeError(w, http.StatusForbidden, "Droits insuffisants pour modifier ce paramètre")
 		return
 	}
 
@@ -225,6 +244,16 @@ func (h *VehicleHandler) UpdatePreTeslaMateEnergy(w http.ResponseWriter, r *http
 func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "id")
+
+	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if v.Role != models.RoleOwner {
+		writeError(w, http.StatusForbidden, "Seul le propriétaire peut supprimer le véhicule")
+		return
+	}
 
 	if err := h.repo.DeleteVehicle(r.Context(), vehicleID, userID); err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to delete vehicle")
@@ -296,8 +325,18 @@ func (h *VehicleHandler) TestTeslaMate(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Vehicle not found")
 		return
 	}
+	if v.Role != models.RoleOwner {
+		writeError(w, http.StatusForbidden, "Seul le propriétaire peut tester la connexion TeslaMate")
+		return
+	}
 
-	status, err := h.syncService.TestConnection(r.Context(), v)
+	fullVehicle, err := h.repo.GetVehicleByIDInternal(r.Context(), vehicleID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to load vehicle credentials")
+		return
+	}
+
+	status, err := h.syncService.TestConnection(r.Context(), fullVehicle)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
@@ -318,8 +357,18 @@ func (h *VehicleHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "Vehicle not found")
 		return
 	}
+	if v.Role == models.RoleViewer {
+		writeError(w, http.StatusForbidden, "Les lecteurs ne peuvent pas déclencher de synchronisation")
+		return
+	}
 
-	job, started := h.syncService.StartSync(*v)
+	fullVehicle, err := h.repo.GetVehicleByIDInternal(r.Context(), vehicleID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Failed to load vehicle credentials")
+		return
+	}
+
+	job, started := h.syncService.StartSync(*fullVehicle)
 	status := http.StatusAccepted
 	if !started {
 		status = http.StatusOK

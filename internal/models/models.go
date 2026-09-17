@@ -48,23 +48,61 @@ type User struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// VehicleRole represents the role of a user on a vehicle.
+type VehicleRole string
+
+const (
+	RoleOwner  VehicleRole = "OWNER"
+	RoleEditor VehicleRole = "EDITOR"
+	RoleViewer VehicleRole = "VIEWER"
+)
+
+func (r VehicleRole) IsValid() bool {
+	return r == RoleOwner || r == RoleEditor || r == RoleViewer
+}
+
+func (r VehicleRole) CanEdit() bool {
+	return r == RoleOwner || r == RoleEditor
+}
+
 // Vehicle represents an automobile owned by a user.
 type Vehicle struct {
-	ID                       string    `json:"id"`
-	UserID                   string    `json:"user_id"`
-	Name                     string    `json:"name"`
-	Vin                      *string   `json:"vin,omitempty"`
-	TeslaMateCarID           *int      `json:"teslamate_car_id,omitempty"`
-	CurrentOdometer          float64   `json:"current_odometer"`
-	TeslaMateAPIURL          *string   `json:"teslamate_api_url,omitempty"`
-	TeslaMateAuthType        AuthMode  `json:"teslamate_auth_type"`
-	TeslaMateAPIKeyEncrypted *string   `json:"-"`
-	TeslaMateBasicUser       *string   `json:"teslamate_basic_user,omitempty"`
-	TeslaMateBasicPassEnc    *string   `json:"-"`
-	PreTeslaMateKwh100km     *float64  `json:"pre_teslamate_kwh_100km,omitempty"`
-	PreTeslaMateEurPerKwh    *float64  `json:"pre_teslamate_eur_per_kwh,omitempty"`
-	CreatedAt                time.Time `json:"created_at"`
-	UpdatedAt                time.Time `json:"updated_at"`
+	ID                       string      `json:"id"`
+	UserID                   string      `json:"user_id"`
+	Role                     VehicleRole `json:"role,omitempty"`
+	Name                     string      `json:"name"`
+	Vin                      *string     `json:"vin,omitempty"`
+	TeslaMateCarID           *int        `json:"teslamate_car_id,omitempty"`
+	CurrentOdometer          float64     `json:"current_odometer"`
+	TeslaMateAPIURL          *string     `json:"teslamate_api_url,omitempty"`
+	TeslaMateAuthType        AuthMode    `json:"teslamate_auth_type"`
+	TeslaMateAPIKeyEncrypted *string     `json:"-"`
+	TeslaMateBasicUser       *string     `json:"teslamate_basic_user,omitempty"`
+	TeslaMateBasicPassEnc    *string     `json:"-"`
+	PreTeslaMateKwh100km     *float64    `json:"pre_teslamate_kwh_100km,omitempty"`
+	PreTeslaMateEurPerKwh    *float64    `json:"pre_teslamate_eur_per_kwh,omitempty"`
+	CreatedAt                time.Time   `json:"created_at"`
+	UpdatedAt                time.Time   `json:"updated_at"`
+}
+
+// VehicleMember represents a user who has access to a vehicle with a specific role.
+type VehicleMember struct {
+	VehicleID   string      `json:"vehicle_id"`
+	UserID      string      `json:"user_id"`
+	Role        VehicleRole `json:"role"`
+	UserEmail   string      `json:"user_email"`
+	DisplayName *string     `json:"display_name,omitempty"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+}
+
+type AddVehicleMemberRequest struct {
+	Email string      `json:"email"`
+	Role  VehicleRole `json:"role"`
+}
+
+type UpdateVehicleMemberRoleRequest struct {
+	Role VehicleRole `json:"role"`
 }
 
 // OdometerCheckpoint represents a manual odometer milestone at a specific date.

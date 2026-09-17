@@ -85,11 +85,8 @@ func expenseGroupName(notes *string) string {
 }
 
 func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -114,11 +111,8 @@ func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ExpenseHandler) ListDriveExpenses(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -135,12 +129,9 @@ func (h *ExpenseHandler) ListDriveExpenses(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	expenseID := chi.URLParam(r, "expenseId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -166,12 +157,9 @@ func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ExpenseHandler) DeleteDriveExpense(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	expenseID := chi.URLParam(r, "expenseId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -295,11 +283,8 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 }
 
 func (h *ExpenseHandler) CreateMaintenance(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -330,11 +315,8 @@ func (h *ExpenseHandler) CreateMaintenance(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ExpenseHandler) ListMaintenance(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -351,12 +333,9 @@ func (h *ExpenseHandler) ListMaintenance(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	maintID := chi.URLParam(r, "maintenanceId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -388,12 +367,9 @@ func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ExpenseHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	maintID := chi.URLParam(r, "maintenanceId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -406,11 +382,8 @@ func (h *ExpenseHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Reques
 }
 
 func (h *ExpenseHandler) ListCharges(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -505,11 +478,8 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 }
 
 func (h *ExpenseHandler) CreateManualCharge(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -540,12 +510,9 @@ func (h *ExpenseHandler) CreateManualCharge(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *ExpenseHandler) UpdateCharge(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	chargeID := chi.URLParam(r, "chargeId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -573,12 +540,9 @@ func (h *ExpenseHandler) UpdateCharge(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ExpenseHandler) DeleteManualCharge(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	chargeID := chi.URLParam(r, "chargeId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -598,9 +562,7 @@ func (h *ExpenseHandler) DeleteManualCharge(w http.ResponseWriter, r *http.Reque
 func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -716,8 +678,7 @@ func (h *ExpenseHandler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -739,6 +700,10 @@ func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	docID := chi.URLParam(r, "docId")
+
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
+		return
+	}
 
 	doc, err := h.repo.GetExpenseDocumentByID(r.Context(), docID, vehicleID, userID)
 	if err != nil {
@@ -771,6 +736,10 @@ func (h *ExpenseHandler) DeleteDocument(w http.ResponseWriter, r *http.Request) 
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	docID := chi.URLParam(r, "docId")
+
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+		return
+	}
 
 	// Fetch first to get the storage path before deletion.
 	doc, err := h.repo.GetExpenseDocumentByID(r.Context(), docID, vehicleID, userID)

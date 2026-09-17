@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/teslacost/teslacost/internal/database"
-	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
@@ -199,11 +198,9 @@ func allocate(t *models.CarpoolTripWithPassengers) {
 }
 
 func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -231,11 +228,9 @@ func (h *CarpoolHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CarpoolHandler) Get(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -249,11 +244,9 @@ func (h *CarpoolHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CarpoolHandler) save(w http.ResponseWriter, r *http.Request, tripID string) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -295,12 +288,10 @@ func (h *CarpoolHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CarpoolHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	id := chi.URLParam(r, "id")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -313,11 +304,9 @@ func (h *CarpoolHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CarpoolHandler) Estimate(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -355,11 +344,9 @@ type RecalculateCarpoolsRequest struct {
 }
 
 func (h *CarpoolHandler) Recalculate(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 

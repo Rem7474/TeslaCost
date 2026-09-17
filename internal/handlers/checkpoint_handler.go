@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/teslacost/teslacost/internal/database"
-	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -53,14 +52,12 @@ func decodeCheckpointRequest(r *http.Request) (time.Time, float64, *string, erro
 }
 
 func (h *CheckpointHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	if vehicleID == "" {
 		vehicleID = chi.URLParam(r, "id")
 	}
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -76,14 +73,12 @@ func (h *CheckpointHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CheckpointHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	if vehicleID == "" {
 		vehicleID = chi.URLParam(r, "id")
 	}
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -109,15 +104,13 @@ func (h *CheckpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CheckpointHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	if vehicleID == "" {
 		vehicleID = chi.URLParam(r, "id")
 	}
 	checkpointID := chi.URLParam(r, "checkpointId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -144,15 +137,13 @@ func (h *CheckpointHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CheckpointHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	if vehicleID == "" {
 		vehicleID = chi.URLParam(r, "id")
 	}
 	checkpointID := chi.URLParam(r, "checkpointId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 

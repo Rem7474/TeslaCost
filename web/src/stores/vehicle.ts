@@ -17,6 +17,12 @@ export const useVehicleStore = defineStore('vehicle', () => {
     return vehicles.value.find((v) => v.id === activeVehicleId.value) || vehicles.value[0]
   })
 
+  const userRole = computed<'OWNER' | 'EDITOR' | 'VIEWER'>(() => activeVehicle.value?.role || 'OWNER')
+  const isOwner = computed(() => userRole.value === 'OWNER')
+  const isEditor = computed(() => userRole.value === 'EDITOR')
+  const isViewer = computed(() => userRole.value === 'VIEWER')
+  const canEdit = computed(() => isOwner.value || isEditor.value)
+
   async function fetchVehicles() {
     isLoading.value = true
     try {
@@ -104,6 +110,11 @@ export const useVehicleStore = defineStore('vehicle', () => {
     vehicles,
     activeVehicleId,
     activeVehicle,
+    userRole,
+    isOwner,
+    isEditor,
+    isViewer,
+    canEdit,
     isSyncing,
     syncResult,
     syncError,

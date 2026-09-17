@@ -222,8 +222,13 @@ func centsValue(c *money.Cents) money.Cents {
 func (h *VehicleHandler) GetOwnership(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "id")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if v.Role != models.RoleOwner {
+		writeError(w, http.StatusForbidden, "Seul le propriétaire du véhicule peut consulter ou modifier le contrat d'acquisition")
 		return
 	}
 	o, err := h.repo.GetVehicleOwnership(r.Context(), vehicleID)
@@ -238,8 +243,13 @@ func (h *VehicleHandler) GetOwnership(w http.ResponseWriter, r *http.Request) {
 func (h *VehicleHandler) SaveOwnership(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "id")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if v.Role != models.RoleOwner {
+		writeError(w, http.StatusForbidden, "Seul le propriétaire du véhicule peut consulter ou modifier le contrat d'acquisition")
 		return
 	}
 
@@ -264,8 +274,13 @@ func (h *VehicleHandler) SaveOwnership(w http.ResponseWriter, r *http.Request) {
 func (h *VehicleHandler) DeleteOwnership(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "id")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
+	if err != nil {
 		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+	if v.Role != models.RoleOwner {
+		writeError(w, http.StatusForbidden, "Seul le propriétaire du véhicule peut consulter ou modifier le contrat d'acquisition")
 		return
 	}
 	if err := h.repo.DeleteVehicleOwnership(r.Context(), vehicleID); err != nil && !errors.Is(err, database.ErrNotFound) {

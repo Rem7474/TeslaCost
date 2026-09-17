@@ -661,12 +661,22 @@ onMounted(() => {
         </p>
       </div>
       <button
+        v-if="vehicleStore.canEdit"
         @click="openCreateModal()"
         class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20 transition-all self-start sm:self-auto"
       >
         <Plus class="w-4 h-4" />
         Nouveau covoiturage
       </button>
+    </div>
+
+    <!-- Viewer mode banner -->
+    <div
+      v-if="!vehicleStore.canEdit"
+      class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center gap-3 text-xs text-slate-400"
+    >
+      <Users class="w-4 h-4 text-slate-400 shrink-0" />
+      <span>Vous consultez ce véhicule en mode <strong>Lecteur seul</strong>. La création et modification de covoiturages sont désactivées.</span>
     </div>
 
     <!-- KPI Summary Grid -->
@@ -745,6 +755,7 @@ onMounted(() => {
         </p>
       </div>
       <button
+        v-if="vehicleStore.canEdit"
         @click="openCreateModal()"
         class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl inline-flex items-center gap-2 shadow-lg shadow-rose-600/20"
       >
@@ -756,7 +767,10 @@ onMounted(() => {
     <!-- Trips List -->
     <div v-else class="space-y-4">
       <!-- Batch Selection & Actions Toolbar -->
-      <div class="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 px-4 py-3 rounded-2xl shadow-sm">
+      <div
+        v-if="vehicleStore.canEdit"
+        class="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 px-4 py-3 rounded-2xl shadow-sm"
+      >
         <div class="flex items-center gap-3">
           <button
             type="button"
@@ -805,6 +819,7 @@ onMounted(() => {
           <div class="flex items-start gap-3 min-w-0 flex-1">
             <!-- Select Checkbox -->
             <button
+              v-if="vehicleStore.canEdit"
               type="button"
               @click="toggleTripSelection(trip.id)"
               class="mt-1 text-slate-400 hover:text-rose-400 transition-colors shrink-0"
@@ -835,7 +850,7 @@ onMounted(() => {
               </div>
             </div>
           </div>
-          <div class="flex items-center gap-1 sm:gap-2 shrink-0 self-end sm:self-auto">
+          <div v-if="vehicleStore.canEdit" class="flex items-center gap-1 sm:gap-2 shrink-0 self-end sm:self-auto">
             <button
               @click="handleRecalculateSingle(trip)"
               :disabled="recalculating"

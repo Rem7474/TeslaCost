@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/teslacost/teslacost/internal/database"
-	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
@@ -29,12 +28,10 @@ func NewTireHandler(repo *database.Repository, tireWearService *services.TireWea
 }
 
 func (h *TireHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer)
+	if v == nil {
 		return
 	}
 
@@ -72,11 +69,9 @@ type CreateTireRequest struct {
 }
 
 func (h *TireHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -168,11 +163,9 @@ type BatchCreateTiresRequest struct {
 }
 
 func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -205,7 +198,6 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 	if season == "" {
 		season = models.TireSeasonSummer
 	}
-
 	initialDepth := req.InitialDepthMm
 	if initialDepth <= 0 {
 		initialDepth = 8.0
@@ -214,7 +206,6 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 	if minDepth <= 0 {
 		minDepth = 1.6
 	}
-
 	lifespan := req.EstimatedLifespanKm
 	if lifespan <= 0 {
 		lifespan = 40000
@@ -289,11 +280,9 @@ type QuickRotateRequest struct {
 }
 
 func (h *TireHandler) QuickRotate(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -328,12 +317,10 @@ type UpdateTireRequest struct {
 }
 
 func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	tireID := chi.URLParam(r, "tireId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -405,13 +392,11 @@ func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TireHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	tireID := chi.URLParam(r, "tireId")
 
-	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer)
+	if v == nil {
 		return
 	}
 
@@ -477,12 +462,10 @@ func isMountedPosition(pos models.TirePosition) bool {
 }
 
 func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	tireID := chi.URLParam(r, "tireId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -519,13 +502,11 @@ func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TireHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	tireID := chi.URLParam(r, "tireId")
 	sessionID := chi.URLParam(r, "sessionId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -563,13 +544,11 @@ func (h *TireHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TireHandler) DeleteSession(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	tireID := chi.URLParam(r, "tireId")
 	sessionID := chi.URLParam(r, "sessionId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -589,12 +568,10 @@ type AddTireLogRequest struct {
 }
 
 func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	tireID := chi.URLParam(r, "tireId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 	if err := h.repo.EnsureTireOwned(r.Context(), vehicleID, tireID); err != nil {
@@ -651,11 +628,9 @@ type RotationRequest struct {
 }
 
 func (h *TireHandler) Rotate(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -771,10 +746,8 @@ func buildTirePatch(req *BatchUpdateTiresRequest) (database.TirePatch, error) {
 
 // BatchUpdate edits several tires at once (e.g. a set of four bought and mounted together).
 func (h *TireHandler) BatchUpdate(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -797,10 +770,8 @@ func (h *TireHandler) BatchUpdate(w http.ResponseWriter, r *http.Request) {
 
 // Delete permanently removes a tire entered by mistake, with its history.
 func (h *TireHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 	if err := h.repo.DeleteTire(r.Context(), vehicleID, chi.URLParam(r, "tireId")); err != nil {
@@ -817,10 +788,8 @@ type DisposeTireRequest struct {
 
 // Dispose retires a worn out or damaged tire while keeping its history and cost.
 func (h *TireHandler) Dispose(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 	var req DisposeTireRequest
@@ -852,10 +821,8 @@ func (h *TireHandler) Dispose(w http.ResponseWriter, r *http.Request) {
 
 // UpdateLog corrects a tread depth measurement.
 func (h *TireHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 	var req AddTireLogRequest
@@ -882,10 +849,8 @@ func (h *TireHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
 
 // DeleteLog deletes a tread depth measurement.
 func (h *TireHandler) DeleteLog(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 	if err := h.repo.DeleteTireLog(r.Context(), vehicleID, chi.URLParam(r, "tireId"), chi.URLParam(r, "logId")); err != nil {

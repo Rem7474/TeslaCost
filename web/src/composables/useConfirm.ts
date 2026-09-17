@@ -5,7 +5,7 @@ export interface ConfirmOptions {
   message: string
   confirmText?: string
   cancelText?: string
-  type?: 'danger' | 'warning' | 'info'
+  type?: 'danger' | 'warning' | 'info' | 'success'
   isAlert?: boolean
 }
 
@@ -49,7 +49,7 @@ export function useConfirm() {
     })
   }
 
-  function showAlert(message: string, title?: string, type: 'info' | 'warning' | 'danger' = 'info'): Promise<void> {
+  function showAlert(message: string, title?: string, type: 'info' | 'warning' | 'danger' | 'success' = 'info'): Promise<void> {
     options.value = {
       title: title || (type === 'danger' ? 'Erreur' : 'Information'),
       message,
