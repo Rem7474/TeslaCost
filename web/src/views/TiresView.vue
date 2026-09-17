@@ -44,6 +44,7 @@ const loading = ref(false)
 
 // Active tab: 'chassis' (Montés) or 'storage' (Au garage)
 const activeTab = ref<'chassis' | 'storage' | 'disposed'>('chassis')
+const chassisSubView = ref<'cards' | 'timeline'>('cards')
 
 // Modals
 const showAddTireModal = ref(false)
@@ -51,8 +52,27 @@ const showHistoryModal = ref(false)
 const showSessionModal = ref(false)
 const showBatchSessionModal = ref(false)
 const showDuplicateSessionModal = ref(false)
+const showCopyHistoryModal = ref(false)
+const showBatchDisposeModal = ref(false)
 const showLogModal = ref(false)
 const showPackSwapModal = ref(false)
+
+// Copy full history across tires
+const copyHistorySourceTire = ref<any | null>(null)
+const copyHistoryTargetTireIds = ref<string[]>([])
+const copyHistoryOptions = ref({
+  copy_sessions: true,
+  copy_logs: true,
+  adapt_position: true,
+})
+const copyingHistory = ref(false)
+
+// Batch dispose
+const batchDisposeForm = ref({
+  date: new Date().toISOString().substring(0, 10),
+  odometer: '' as number | string,
+})
+const disposingBatch = ref(false)
 
 // Selected tire for history / session
 const selectedTire = ref<any | null>(null)
@@ -250,14 +270,37 @@ async function handleSaveTireEdit() {
   }
 }
 
+function getLastDismountInfo(tireId: string) {
+  const tireEntry = tires.value.find((t) => t.tire.id === tireId)
+  const sessions = tireEntry?.sessions || []
+  const dismountedSessions = sessions
+    .filter((s: any) => s.dismounted_date)
+    .sort((a: any, b: any) => new Date(b.dismounted_date).getTime() - new Date(a.dismounted_date).getTime())
+  if (dismountedSessions.length > 0) {
+    const s = dismountedSessions[0]
+    return {
+      date: new Date(s.dismounted_date).toISOString().substring(0, 10),
+      odometer: s.dismounted_odometer || null,
+    }
+  }
+  return null
+}
+
 // Dispose (worn out, damaged, sold) keeps history and cost; delete removes an erroneous entry
 const showDisposeModal = ref(false)
 const disposeForm = ref({ date: new Date().toISOString().substring(0, 10), odometer: 0 as number | string })
 
-function openDisposeModal() {
+function openDisposeModal(tireToDispose?: any) {
+  if (tireToDispose) {
+    selectedTire.value = tireToDispose.tire || tireToDispose
+  }
+  const t = selectedTire.value
+  const isMounted = t && ['FL', 'FR', 'RL', 'RR'].includes(t.current_position)
+  const lastDismount = t ? getLastDismountInfo(t.id) : null
+
   disposeForm.value = {
-    date: new Date().toISOString().substring(0, 10),
-    odometer: Math.round(vehicleStore.activeVehicle?.current_odometer || 0),
+    date: (!isMounted && lastDismount?.date) ? lastDismount.date : new Date().toISOString().substring(0, 10),
+    odometer: isMounted ? Math.round(vehicleStore.activeVehicle?.current_odometer || 0) : (lastDismount?.odometer || ''),
   }
   showDisposeModal.value = true
 }
@@ -271,11 +314,139 @@ async function handleDisposeTire() {
     })
     showDisposeModal.value = false
     showHistoryModal.value = false
+    selectedTireIds.value = selectedTireIds.value.filter((id) => id !== selectedTire.value.id)
     await loadTires()
   } catch (err: any) {
     alert(`Erreur : ${err.message}`)
   }
 }
+
+function openBatchDisposeModal() {
+  if (!selectedTireIds.value.length) return
+  const selectedEntries = tires.value.filter((t) => selectedTireIds.value.includes(t.tire.id))
+  const anyMounted = selectedEntries.some((t) => ['FL', 'FR', 'RL', 'RR'].includes(t.tire.current_position))
+
+  let defaultDate = new Date().toISOString().substring(0, 10)
+  if (!anyMounted) {
+    let latestTimestamp = 0
+    for (const entry of selectedEntries) {
+      const info = getLastDismountInfo(entry.tire.id)
+      if (info?.date) {
+        const ts = new Date(info.date).getTime()
+        if (ts > latestTimestamp) {
+          latestTimestamp = ts
+          defaultDate = info.date
+        }
+      }
+    }
+  }
+
+  batchDisposeForm.value = {
+    date: defaultDate,
+    odometer: anyMounted ? Math.round(vehicleStore.activeVehicle?.current_odometer || 0) : '',
+  }
+  showBatchDisposeModal.value = true
+}
+
+async function handleBatchDisposeSubmit() {
+  if (!vehicleStore.activeVehicle || !selectedTireIds.value.length) return
+  disposingBatch.value = true
+  try {
+    await api.batchDisposeTires(vehicleStore.activeVehicle.id, {
+      tire_ids: selectedTireIds.value,
+      date: new Date(batchDisposeForm.value.date).toISOString(),
+      odometer: batchDisposeForm.value.odometer !== '' ? Number(batchDisposeForm.value.odometer) : null,
+    })
+    showBatchDisposeModal.value = false
+    showAlert(`${selectedTireIds.value.length} pneu(s) mis au rebut avec succès.`, 'Mise au rebut', 'success')
+    selectedTireIds.value = []
+    await loadTires()
+  } catch (err: any) {
+    showAlert(`Erreur lors de la mise au rebut : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    disposingBatch.value = false
+  }
+}
+
+function openCopyHistoryModal(sourceTire?: any) {
+  copyHistorySourceTire.value = sourceTire?.tire || sourceTire || selectedTire.value
+  if (!copyHistorySourceTire.value) return
+
+  const otherTires = tires.value.filter((t) => t.tire.id !== copyHistorySourceTire.value.id)
+  const sameFamily = otherTires.filter(
+    (t) => t.tire.brand === copyHistorySourceTire.value.brand && t.tire.model === copyHistorySourceTire.value.model
+  )
+  copyHistoryTargetTireIds.value = sameFamily.length > 0 ? sameFamily.map((t) => t.tire.id) : otherTires.map((t) => t.tire.id)
+  copyHistoryOptions.value = {
+    copy_sessions: true,
+    copy_logs: true,
+    adapt_position: true,
+  }
+  showCopyHistoryModal.value = true
+}
+
+function toggleCopyHistoryTargetTire(id: string) {
+  if (copyHistoryTargetTireIds.value.includes(id)) {
+    copyHistoryTargetTireIds.value = copyHistoryTargetTireIds.value.filter((x) => x !== id)
+  } else {
+    copyHistoryTargetTireIds.value.push(id)
+  }
+}
+
+async function handleCopyHistorySubmit() {
+  if (!vehicleStore.activeVehicle || !copyHistorySourceTire.value || !copyHistoryTargetTireIds.value.length) return
+  copyingHistory.value = true
+  try {
+    await api.copyTireHistory(vehicleStore.activeVehicle.id, copyHistorySourceTire.value.id, {
+      target_tire_ids: copyHistoryTargetTireIds.value,
+      copy_sessions: copyHistoryOptions.value.copy_sessions,
+      copy_logs: copyHistoryOptions.value.copy_logs,
+      adapt_position: copyHistoryOptions.value.adapt_position,
+    })
+    showCopyHistoryModal.value = false
+    showAlert(`Historique copié avec succès vers ${copyHistoryTargetTireIds.value.length} pneu(s).`, 'Succès', 'success')
+    await loadTires()
+    if (showHistoryModal.value && selectedTire.value) {
+      await openHistoryModal({ tire: selectedTire.value })
+    }
+  } catch (err: any) {
+    showAlert(`Erreur lors de la copie d'historique : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    copyingHistory.value = false
+  }
+}
+
+const wheelTimelines = computed(() => {
+  const positions: Array<'FL' | 'FR' | 'RL' | 'RR'> = ['FL', 'FR', 'RL', 'RR']
+  const result: Record<string, any[]> = { FL: [], FR: [], RL: [], RR: [] }
+
+  for (const pos of positions) {
+    const list: any[] = []
+    for (const t of tires.value) {
+      const sessions = t.sessions || []
+      for (const s of sessions) {
+        if (s.position === pos) {
+          list.push({
+            session: s,
+            tire: t.tire,
+            stats: t,
+            isCurrent: !s.dismounted_date && t.tire.current_position === pos,
+          })
+        }
+      }
+    }
+    list.sort((a, b) => new Date(b.session.mounted_date).getTime() - new Date(a.session.mounted_date).getTime())
+    result[pos] = list
+  }
+  return result
+})
+
+const selectedDisposedCount = computed(() => {
+  return tires.value.filter((t) => selectedTireIds.value.includes(t.tire.id) && t.tire.current_position === 'DISPOSED').length
+})
+const canBatchDispose = computed(() => {
+  return selectedTireIds.value.length > 0 && selectedTireIds.value.length > selectedDisposedCount.value
+})
 
 async function handleDeleteTire(t: any) {
   if (!vehicleStore.activeVehicle) return
@@ -923,15 +1094,59 @@ function formatDate(d: string) {
 
     <!-- Batch selection bar -->
     <div v-if="vehicleStore.canEdit" class="flex flex-wrap items-center justify-between gap-2 text-xs">
-      <button type="button" @click="selectMountedTires" class="text-slate-400 hover:text-white flex items-center gap-1.5">
-        <CheckSquare class="w-3.5 h-3.5 text-rose-400" /> Sélectionner les pneus montés
-      </button>
-      <div v-if="selectedTireIds.length" class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-1.5">
+      <div class="flex items-center gap-2 flex-wrap">
+        <button
+          v-if="activeTab === 'chassis'"
+          type="button"
+          @click="selectMountedTires"
+          class="text-slate-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 transition-colors"
+        >
+          <CheckSquare class="w-3.5 h-3.5 text-rose-400" />
+          <span>Sélectionner les 4 montés</span>
+        </button>
+        <button
+          v-else-if="activeTab === 'storage' && storageTires.length"
+          type="button"
+          @click="selectedTireIds = storageTires.map((t) => t.tire.id)"
+          class="text-slate-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 transition-colors"
+        >
+          <CheckSquare class="w-3.5 h-3.5 text-rose-400" />
+          <span>Sélectionner tout le garage ({{ storageTires.length }})</span>
+        </button>
+        <button
+          v-else-if="activeTab === 'disposed' && disposedTires.length"
+          type="button"
+          @click="selectedTireIds = disposedTires.map((t) => t.tire.id)"
+          class="text-slate-400 hover:text-white flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 transition-colors"
+        >
+          <CheckSquare class="w-3.5 h-3.5 text-rose-400" />
+          <span>Sélectionner tous les pneus au rebut ({{ disposedTires.length }})</span>
+        </button>
+        <button
+          v-if="selectedTireIds.length"
+          type="button"
+          @click="selectedTireIds = []"
+          class="text-slate-500 hover:text-slate-300 flex items-center gap-1 px-2 py-1 transition-colors"
+        >
+          Tout désélectionner
+        </button>
+      </div>
+
+      <div v-if="selectedTireIds.length" class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-1.5 shadow-md">
         <span class="text-slate-200 font-semibold">{{ selectedTireIds.length }} pneu(s) sélectionné(s)</span>
-        <button type="button" @click="openTireEdit(selectedTireIds)" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg flex items-center gap-1">
+        <button type="button" @click="openTireEdit(selectedTireIds)" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors">
           <Pencil class="w-3 h-3" /> Modifier par lot
         </button>
-        <button type="button" @click="selectedTireIds = []" class="text-slate-400 hover:text-white" title="Vider la sélection">
+        <button
+          v-if="canBatchDispose"
+          type="button"
+          @click="openBatchDisposeModal()"
+          class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors"
+          title="Mettre au rebut les pneus sélectionnés"
+        >
+          <Archive class="w-3 h-3" /> Mettre au rebut
+        </button>
+        <button type="button" @click="selectedTireIds = []" class="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700/50" title="Vider la sélection">
           <X class="w-3.5 h-3.5" />
         </button>
       </div>
@@ -978,16 +1193,42 @@ function formatDate(d: string) {
 
     <!-- TAB 1: CHASSIS INTERACTIF (PNEUS MONTÉS) -->
     <div v-if="activeTab === 'chassis'" class="space-y-6">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Sub-view switcher: Cards vs Wheel Timeline -->
+      <div class="flex items-center justify-between flex-wrap gap-2">
+        <div class="inline-flex p-1 bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold">
+          <button
+            type="button"
+            @click="chassisSubView = 'cards'"
+            class="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
+            :class="chassisSubView === 'cards' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+          >
+            <Disc class="w-3.5 h-3.5" />
+            <span>Vue 4 roues</span>
+          </button>
+          <button
+            type="button"
+            @click="chassisSubView = 'timeline'"
+            class="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
+            :class="chassisSubView === 'timeline' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+          >
+            <History class="w-3.5 h-3.5" />
+            <span>Timeline par roue</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mode A: Cartes des 4 roues -->
+      <div v-if="chassisSubView === 'cards'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Wheel Card: FL (Avant Gauche) -->
         <div
           v-if="mountedTires.FL"
           @click="openHistoryModal(mountedTires.FL)"
           class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
+          :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(mountedTires.FL.tire.id) }"
         >
           <div class="flex items-start justify-between">
             <div>
-              <label :for="'chassis-select-fl-' + mountedTires.FL.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.FL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+              <label :for="'chassis-select-fl-' + mountedTires.FL.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.FL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une action par lot'">
                 <input
                   :id="'chassis-select-fl-' + mountedTires.FL.tire.id"
                   type="checkbox"
@@ -1071,20 +1312,30 @@ function formatDate(d: string) {
 
           <!-- Actions -->
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <button
-              v-if="vehicleStore.canEdit"
-              @click.stop="openLogModal(mountedTires.FL)"
-              class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
-            >
-              <Ruler class="w-3.5 h-3.5 text-rose-400" />
-              Mesurer gomme
-            </button>
+            <div class="flex items-center gap-3">
+              <button
+                v-if="vehicleStore.canEdit"
+                @click.stop="openLogModal(mountedTires.FL)"
+                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
+              >
+                <Ruler class="w-3.5 h-3.5 text-rose-400" />
+                Mesurer
+              </button>
+              <button
+                type="button"
+                @click.stop="chassisSubView = 'timeline'"
+                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
+                title="Historique des pneus montés sur cette roue"
+              >
+                <History class="w-3.5 h-3.5 text-indigo-400" />
+                Timeline roue
+              </button>
+            </div>
             <button
               @click.stop="openHistoryModal(mountedTires.FL)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
-              <History class="w-3.5 h-3.5" />
-              Historique & Sessions
+              Historique pneu
             </button>
           </div>
         </div>
@@ -1098,10 +1349,11 @@ function formatDate(d: string) {
           v-if="mountedTires.FR"
           @click="openHistoryModal(mountedTires.FR)"
           class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
+          :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(mountedTires.FR.tire.id) }"
         >
           <div class="flex items-start justify-between">
             <div>
-              <label :for="'chassis-select-fr-' + mountedTires.FR.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.FR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+              <label :for="'chassis-select-fr-' + mountedTires.FR.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.FR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une action par lot'">
                 <input
                   :id="'chassis-select-fr-' + mountedTires.FR.tire.id"
                   type="checkbox"
@@ -1182,20 +1434,30 @@ function formatDate(d: string) {
           </div>
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <button
-              v-if="vehicleStore.canEdit"
-              @click.stop="openLogModal(mountedTires.FR)"
-              class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
-            >
-              <Ruler class="w-3.5 h-3.5 text-rose-400" />
-              Mesurer gomme
-            </button>
+            <div class="flex items-center gap-3">
+              <button
+                v-if="vehicleStore.canEdit"
+                @click.stop="openLogModal(mountedTires.FR)"
+                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
+              >
+                <Ruler class="w-3.5 h-3.5 text-rose-400" />
+                Mesurer
+              </button>
+              <button
+                type="button"
+                @click.stop="chassisSubView = 'timeline'"
+                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
+                title="Historique des pneus montés sur cette roue"
+              >
+                <History class="w-3.5 h-3.5 text-indigo-400" />
+                Timeline roue
+              </button>
+            </div>
             <button
               @click.stop="openHistoryModal(mountedTires.FR)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
-              <History class="w-3.5 h-3.5" />
-              Historique & Sessions
+              Historique pneu
             </button>
           </div>
         </div>
@@ -1209,10 +1471,11 @@ function formatDate(d: string) {
           v-if="mountedTires.RL"
           @click="openHistoryModal(mountedTires.RL)"
           class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
+          :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(mountedTires.RL.tire.id) }"
         >
           <div class="flex items-start justify-between">
             <div>
-              <label :for="'chassis-select-rl-' + mountedTires.RL.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.RL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+              <label :for="'chassis-select-rl-' + mountedTires.RL.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.RL.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une action par lot'">
                 <input
                   :id="'chassis-select-rl-' + mountedTires.RL.tire.id"
                   type="checkbox"
@@ -1293,20 +1556,30 @@ function formatDate(d: string) {
           </div>
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <button
-              v-if="vehicleStore.canEdit"
-              @click.stop="openLogModal(mountedTires.RL)"
-              class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
-            >
-              <Ruler class="w-3.5 h-3.5 text-rose-400" />
-              Mesurer gomme
-            </button>
+            <div class="flex items-center gap-3">
+              <button
+                v-if="vehicleStore.canEdit"
+                @click.stop="openLogModal(mountedTires.RL)"
+                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
+              >
+                <Ruler class="w-3.5 h-3.5 text-rose-400" />
+                Mesurer
+              </button>
+              <button
+                type="button"
+                @click.stop="chassisSubView = 'timeline'"
+                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
+                title="Historique des pneus montés sur cette roue"
+              >
+                <History class="w-3.5 h-3.5 text-indigo-400" />
+                Timeline roue
+              </button>
+            </div>
             <button
               @click.stop="openHistoryModal(mountedTires.RL)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
-              <History class="w-3.5 h-3.5" />
-              Historique & Sessions
+              Historique pneu
             </button>
           </div>
         </div>
@@ -1320,10 +1593,11 @@ function formatDate(d: string) {
           v-if="mountedTires.RR"
           @click="openHistoryModal(mountedTires.RR)"
           class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-3xl p-5 space-y-4 shadow-sm transition-all group"
+          :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(mountedTires.RR.tire.id) }"
         >
           <div class="flex items-start justify-between">
             <div>
-              <label :for="'chassis-select-rr-' + mountedTires.RR.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.RR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une modification par lot'">
+              <label :for="'chassis-select-rr-' + mountedTires.RR.tire.id" @click.stop class="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-rose-400 hover:text-rose-300 cursor-pointer" :title="selectedTireIds.includes(mountedTires.RR.tire.id) ? 'Retirer de la sélection' : 'Sélectionner pour une action par lot'">
                 <input
                   :id="'chassis-select-rr-' + mountedTires.RR.tire.id"
                   type="checkbox"
@@ -1404,26 +1678,136 @@ function formatDate(d: string) {
           </div>
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <button
-              v-if="vehicleStore.canEdit"
-              @click.stop="openLogModal(mountedTires.RR)"
-              class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
-            >
-              <Ruler class="w-3.5 h-3.5 text-rose-400" />
-              Mesurer gomme
-            </button>
+            <div class="flex items-center gap-3">
+              <button
+                v-if="vehicleStore.canEdit"
+                @click.stop="openLogModal(mountedTires.RR)"
+                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
+              >
+                <Ruler class="w-3.5 h-3.5 text-rose-400" />
+                Mesurer
+              </button>
+              <button
+                type="button"
+                @click.stop="chassisSubView = 'timeline'"
+                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
+                title="Historique des pneus montés sur cette roue"
+              >
+                <History class="w-3.5 h-3.5 text-indigo-400" />
+                Timeline roue
+              </button>
+            </div>
             <button
               @click.stop="openHistoryModal(mountedTires.RR)"
               class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
             >
-              <History class="w-3.5 h-3.5" />
-              Historique & Sessions
+              Historique pneu
             </button>
           </div>
         </div>
         <div v-else class="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
           <Disc class="w-8 h-8 opacity-30" />
           <span>Aucun pneu monté à l'Arrière Droit (RR)</span>
+        </div>
+      </div>
+
+      <!-- Mode B: Timeline par roue avec historique de chaque pneu -->
+      <div v-else-if="chassisSubView === 'timeline'" class="space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div
+            v-for="pos in (['FL', 'FR', 'RL', 'RR'] as const)"
+            :key="pos"
+            class="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm"
+          >
+            <!-- Wheel Header -->
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center font-black text-xs text-rose-400">
+                  {{ pos }}
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-white">
+                    {{ pos === 'FL' ? 'Avant Gauche' : pos === 'FR' ? 'Avant Droit' : pos === 'RL' ? 'Arrière Gauche' : 'Arrière Droit' }} ({{ pos }})
+                  </h3>
+                  <div class="text-[11px] text-slate-400">
+                    {{ wheelTimelines[pos]?.length || 0 }} cycle(s) de montage enregistré(s)
+                  </div>
+                </div>
+              </div>
+              <span v-if="mountedTires[pos]" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                Pneu actif : {{ mountedTires[pos].tire.brand }}
+              </span>
+              <span v-else class="text-[10px] text-slate-500">
+                Roue vide
+              </span>
+            </div>
+
+            <!-- Timeline nodes -->
+            <div v-if="!wheelTimelines[pos] || wheelTimelines[pos].length === 0" class="p-8 text-center text-xs text-slate-500 bg-slate-950/40 rounded-2xl">
+              Aucun historique pour cet emplacement de roue.
+            </div>
+            <div v-else class="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
+              <div
+                v-for="(item, idx) in wheelTimelines[pos]"
+                :key="item.session.id || idx"
+                class="relative pl-6 pb-2 border-l border-slate-800 last:border-l-0"
+              >
+                <!-- Dot -->
+                <div
+                  class="absolute -left-1.5 top-1 w-3 h-3 rounded-full border-2"
+                  :class="item.isCurrent ? 'bg-emerald-500 border-slate-900 ring-2 ring-emerald-500/40' : item.tire.current_position === 'DISPOSED' ? 'bg-amber-500 border-slate-900' : 'bg-slate-600 border-slate-900'"
+                ></div>
+
+                <div
+                  class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 space-y-2 hover:border-slate-700 transition-colors"
+                  :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(item.tire.id) }"
+                >
+                  <div class="flex items-start justify-between gap-2">
+                    <div>
+                      <div class="flex items-center gap-1.5 text-xs font-bold text-white">
+                        <component :is="getSeasonIcon(item.tire.season).icon" class="w-3.5 h-3.5" :class="getSeasonIcon(item.tire.season).color" />
+                        <span>{{ item.tire.brand }} {{ item.tire.model }}</span>
+                      </div>
+                      <div class="text-[10px] text-slate-400 font-mono">{{ item.tire.dimension }}</div>
+                    </div>
+                    <span
+                      class="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
+                      :class="item.isCurrent ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : item.tire.current_position === 'DISPOSED' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'"
+                    >
+                      {{ item.isCurrent ? '🟢 En cours' : item.tire.current_position === 'DISPOSED' ? 'Au rebut' : 'Démonté' }}
+                    </span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-900/60 p-2 rounded-xl">
+                    <div>
+                      <span class="text-slate-500 block text-[10px]">Montage</span>
+                      <span class="text-slate-200 font-medium">{{ formatDate(item.session.mounted_date) }}</span>
+                      <span class="text-slate-400 text-[10px] block">à {{ Math.round(item.session.mounted_odometer).toLocaleString('fr-FR') }} km</span>
+                    </div>
+                    <div>
+                      <span class="text-slate-500 block text-[10px]">Démontage</span>
+                      <span class="text-slate-200 font-medium">{{ item.session.dismounted_date ? formatDate(item.session.dismounted_date) : 'Actuel' }}</span>
+                      <span class="text-slate-400 text-[10px] block">
+                        {{ item.session.dismounted_odometer ? `à ${Math.round(item.session.dismounted_odometer).toLocaleString('fr-FR')} km` : 'En service' }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between text-xs pt-1">
+                    <span class="font-bold text-rose-400 text-[11px]">+{{ Math.round(item.session.distance_km || 0).toLocaleString('fr-FR') }} km sur cette roue</span>
+                    <button
+                      type="button"
+                      @click="openHistoryModal(item.stats || { tire: item.tire })"
+                      class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
+                    >
+                      <span>Fiche & historique</span>
+                      <ChevronRight class="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1461,6 +1845,7 @@ function formatDate(d: string) {
           v-for="t in storageTires"
           :key="t.tire.id"
           class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 space-y-3 shadow-sm transition-all"
+          :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(t.tire.id) }"
         >
           <div class="flex items-start justify-between">
             <div>
@@ -1469,9 +1854,15 @@ function formatDate(d: string) {
                 <span class="text-slate-300">{{ getSeasonIcon(t.tire.season).label }}</span>
               </div>
               <h4 class="text-sm font-bold text-white mt-1 flex items-center gap-1.5">
-                <button type="button" @click="toggleTireSelection(t.tire.id)" class="text-rose-400" title="Sélectionner pour une modification par lot">
-                  <component :is="selectedTireIds.includes(t.tire.id) ? CheckSquare : Square" class="w-3.5 h-3.5" />
-                </button>
+                <label :for="'storage-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" title="Sélectionner pour une action par lot">
+                  <input
+                    :id="'storage-select-' + t.tire.id"
+                    type="checkbox"
+                    :checked="selectedTireIds.includes(t.tire.id)"
+                    @change="toggleTireSelection(t.tire.id)"
+                    class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                  />
+                </label>
                 {{ t.tire.brand }} {{ t.tire.model }}
               </h4>
               <div class="text-[11px] text-slate-400 font-mono">{{ t.tire.dimension }}</div>
@@ -1500,14 +1891,25 @@ function formatDate(d: string) {
               <History class="w-3.5 h-3.5" />
               Historique
             </button>
-            <button
-              v-if="vehicleStore.canEdit"
-              @click="openLogModal(t)"
-              class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
-            >
-              <Ruler class="w-3.5 h-3.5" />
-              Mesurer
-            </button>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="vehicleStore.canEdit"
+                @click="openDisposeModal(t)"
+                class="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-medium transition-colors"
+                title="Mettre ce pneu au rebut"
+              >
+                <Archive class="w-3.5 h-3.5" />
+                Rebut
+              </button>
+              <button
+                v-if="vehicleStore.canEdit"
+                @click="openLogModal(t)"
+                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
+              >
+                <Ruler class="w-3.5 h-3.5" />
+                Mesurer
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1765,15 +2167,38 @@ function formatDate(d: string) {
 
     <!-- TAB 3: PNEUS MIS AU REBUT -->
     <div v-if="activeTab === 'disposed'" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      <div v-for="t in disposedTires" :key="t.tire.id" class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-2">
-        <h4 class="text-sm font-bold text-slate-300">{{ t.tire.brand }} {{ t.tire.model }}</h4>
-        <div class="text-[11px] text-slate-500 font-mono">{{ t.tire.dimension }}</div>
+      <div
+        v-for="t in disposedTires"
+        :key="t.tire.id"
+        class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-2 transition-all"
+        :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(t.tire.id) }"
+      >
+        <div class="flex items-start justify-between">
+          <div>
+            <h4 class="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+              <label :for="'disposed-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" title="Sélectionner pour une action par lot">
+                <input
+                  :id="'disposed-select-' + t.tire.id"
+                  type="checkbox"
+                  :checked="selectedTireIds.includes(t.tire.id)"
+                  @change="toggleTireSelection(t.tire.id)"
+                  class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+                />
+              </label>
+              {{ t.tire.brand }} {{ t.tire.model }}
+            </h4>
+            <div class="text-[11px] text-slate-500 font-mono">{{ t.tire.dimension }}</div>
+          </div>
+          <span class="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 font-medium">
+            Au rebut
+          </span>
+        </div>
         <div class="text-xs text-slate-400">{{ Math.round(t.total_distance_km).toLocaleString('fr-FR') }} km parcourus • {{ t.tire.purchase_price }} €</div>
         <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
           <button @click="openHistoryModal(t)" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold">
             <History class="w-3.5 h-3.5" /> Historique
           </button>
-          <button @click="handleDeleteTire(t.tire)" class="text-xs text-slate-500 hover:text-rose-400 flex items-center gap-1">
+          <button v-if="vehicleStore.canEdit" @click="handleDeleteTire(t.tire)" class="text-xs text-slate-500 hover:text-rose-400 flex items-center gap-1">
             <Trash2 class="w-3.5 h-3.5" /> Supprimer
           </button>
         </div>
@@ -1801,6 +2226,15 @@ function formatDate(d: string) {
             </div>
           </div>
           <div class="flex items-center gap-1.5">
+            <button
+              v-if="vehicleStore.canEdit"
+              @click="openCopyHistoryModal(selectedTire)"
+              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-indigo-300 rounded-lg transition-colors flex items-center gap-1 text-xs px-2"
+              title="Copier tout l'historique de ce pneu vers d'autres pneus"
+            >
+              <Copy class="w-3.5 h-3.5 text-indigo-400" />
+              <span class="hidden sm:inline">Copier l'historique</span>
+            </button>
             <button @click="openTireEdit([selectedTire.id])" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors" title="Modifier le pneu">
               <Pencil class="w-4 h-4" />
             </button>
@@ -2766,6 +3200,232 @@ function formatDate(d: string) {
           >
             <Copy class="w-4 h-4" />
             <span>{{ duplicatingSession ? 'Duplication...' : `Dupliquer vers ${duplicateTargetTireIds.length} pneu(s)` }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: METTRE AU REBUT UNE SÉLECTION -->
+    <div
+      v-if="showBatchDisposeModal"
+      class="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showBatchDisposeModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <div class="flex items-center gap-2">
+            <Archive class="w-5 h-5 text-amber-500" />
+            <h3 class="text-base font-bold text-white">
+              Mettre au rebut {{ selectedTireIds.length }} pneu(s)
+            </h3>
+          </div>
+          <button @click="showBatchDisposeModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
+          <p class="text-slate-400 leading-relaxed">
+            Mettre ces pneus au rebut les archive définitivement (usure maximale, perforation, vente). Leurs sessions passées et coûts restent conservés dans l'historique et le coût au kilomètre.
+          </p>
+
+          <!-- Selected tires summary -->
+          <div class="space-y-1.5 max-h-40 overflow-y-auto p-2 bg-slate-950/50 rounded-xl border border-slate-800">
+            <div
+              v-for="t in tires.filter(x => selectedTireIds.includes(x.tire.id))"
+              :key="t.tire.id"
+              class="flex items-center justify-between py-1 px-1.5 border-b border-slate-800/50 last:border-0"
+            >
+              <div>
+                <span class="font-bold text-white">{{ t.tire.brand }} {{ t.tire.model }}</span>
+                <span class="text-[10px] text-slate-400 ml-1.5">({{ t.tire.dimension }})</span>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded font-mono bg-slate-800 text-slate-300">
+                {{ ['FL', 'FR', 'RL', 'RR'].includes(t.tire.current_position) ? `Roue ${t.tire.current_position}` : 'Garage' }}
+              </span>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+            <div>
+              <label for="batch-dispose-date" class="block text-slate-300 mb-1 font-semibold">Date de mise au rebut</label>
+              <input
+                id="batch-dispose-date"
+                v-model="batchDisposeForm.date"
+                type="date"
+                class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-amber-500 focus:outline-none"
+              />
+              <p class="text-[10px] text-slate-500 mt-1">Par défaut : date du dernier démontage pour les pneus au garage.</p>
+            </div>
+            <div>
+              <label for="batch-dispose-odo" class="block text-slate-300 mb-1 font-semibold">Kilométrage véhicule</label>
+              <input
+                id="batch-dispose-odo"
+                v-model="batchDisposeForm.odometer"
+                type="number"
+                placeholder="Optionnel pour pneu garage"
+                class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-amber-500 focus:outline-none"
+              />
+              <p class="text-[10px] text-slate-500 mt-1">Odomètre final si démonté à cette date.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showBatchDisposeModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            @click="handleBatchDisposeSubmit()"
+            :disabled="disposingBatch || !batchDisposeForm.date"
+            class="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-amber-600/20 transition-all flex items-center gap-1.5"
+          >
+            <Archive class="w-4 h-4" />
+            <span>{{ disposingBatch ? 'Mise au rebut...' : `Mettre au rebut (${selectedTireIds.length})` }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL: COPIER TOUT L'HISTORIQUE D'UN PNEU -->
+    <div
+      v-if="showCopyHistoryModal && copyHistorySourceTire"
+      class="fixed inset-0 z-[70] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      @click.self="showCopyHistoryModal = false"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+        <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+          <div class="flex items-center gap-2">
+            <Copy class="w-5 h-5 text-indigo-400" />
+            <h3 class="text-base font-bold text-white">
+              Copier l'historique complet
+            </h3>
+          </div>
+          <button @click="showCopyHistoryModal = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+
+        <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
+          <!-- Source recap -->
+          <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
+            <div class="text-[11px] text-indigo-400 font-semibold uppercase tracking-wider">Pneu source à cloner</div>
+            <div class="font-bold text-sm text-white">
+              {{ copyHistorySourceTire.brand }} {{ copyHistorySourceTire.model }}
+            </div>
+            <div class="text-slate-400 font-mono text-[11px]">
+              {{ copyHistorySourceTire.dimension }} — Position : {{ copyHistorySourceTire.current_position === 'STORAGE' ? 'Au garage' : copyHistorySourceTire.current_position === 'DISPOSED' ? 'Au rebut' : 'Roue ' + copyHistorySourceTire.current_position }}
+            </div>
+          </div>
+
+          <!-- Options -->
+          <div class="space-y-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
+            <div class="font-semibold text-slate-300">Données à répliquer :</div>
+            <label class="flex items-start gap-2.5 cursor-pointer text-slate-200">
+              <input
+                type="checkbox"
+                v-model="copyHistoryOptions.copy_sessions"
+                class="rounded accent-indigo-500 w-4 h-4 mt-0.5"
+              />
+              <div>
+                <span class="font-medium text-white">Sessions de montage & démontage</span>
+                <span class="block text-[11px] text-slate-400">Copie les périodes, dates, odomètres et distances parcourues.</span>
+              </div>
+            </label>
+
+            <label class="flex items-start gap-2.5 cursor-pointer text-slate-200">
+              <input
+                type="checkbox"
+                v-model="copyHistoryOptions.adapt_position"
+                :disabled="!copyHistoryOptions.copy_sessions"
+                class="rounded accent-indigo-500 w-4 h-4 mt-0.5"
+              />
+              <div>
+                <span class="font-medium text-white">Adapter la position de montage à chaque pneu cible</span>
+                <span class="block text-[11px] text-slate-400">Si activé, chaque pneu cible utilisera sa propre position (ex: FL, FR, RL, RR) au lieu de reproduire fidèlement la position exacte de la source.</span>
+              </div>
+            </label>
+
+            <label class="flex items-start gap-2.5 cursor-pointer text-slate-200">
+              <input
+                type="checkbox"
+                v-model="copyHistoryOptions.copy_logs"
+                class="rounded accent-indigo-500 w-4 h-4 mt-0.5"
+              />
+              <div>
+                <span class="font-medium text-white">Mesures d'usure et sculptures (logs)</span>
+                <span class="block text-[11px] text-slate-400">Copie les relevés en mm de sculpture effectués au fil du temps.</span>
+              </div>
+            </label>
+          </div>
+
+          <!-- Target tires list -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-semibold text-slate-300">Appliquer aux pneus cibles :</span>
+              <div class="flex items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  @click="copyHistoryTargetTireIds = tires.filter(x => x.tire.id !== copyHistorySourceTire?.id).map(x => x.tire.id)"
+                  class="text-indigo-400 hover:text-indigo-300 font-semibold"
+                >
+                  Tout cocher
+                </button>
+                <span class="text-slate-600">|</span>
+                <button
+                  type="button"
+                  @click="copyHistoryTargetTireIds = []"
+                  class="text-slate-400 hover:text-slate-200"
+                >
+                  Tout décocher
+                </button>
+              </div>
+            </div>
+
+            <div class="space-y-1.5 max-h-48 overflow-y-auto p-1 bg-slate-950/40 rounded-xl border border-slate-800/60">
+              <label
+                v-for="t in tires.filter(x => x.tire.id !== copyHistorySourceTire?.id)"
+                :key="t.tire.id"
+                class="flex items-center gap-2.5 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer text-slate-200"
+              >
+                <input
+                  type="checkbox"
+                  :checked="copyHistoryTargetTireIds.includes(t.tire.id)"
+                  @change="toggleCopyHistoryTargetTire(t.tire.id)"
+                  class="rounded accent-indigo-500 w-4 h-4"
+                />
+                <div class="min-w-0 flex-1">
+                  <div class="font-bold truncate text-white">{{ t.tire.brand }} {{ t.tire.model }}</div>
+                  <div class="text-[10px] text-slate-400 truncate">
+                    {{ t.tire.dimension }} — {{ t.tire.current_position === 'STORAGE' ? 'Au garage' : t.tire.current_position === 'DISPOSED' ? 'Au rebut' : 'Roue ' + t.tire.current_position }}
+                  </div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showCopyHistoryModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            @click="handleCopyHistorySubmit()"
+            :disabled="copyingHistory || copyHistoryTargetTireIds.length === 0"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-1.5"
+          >
+            <Copy class="w-4 h-4" />
+            <span>{{ copyingHistory ? 'Copie en cours...' : `Copier vers ${copyHistoryTargetTireIds.length} pneu(s)` }}</span>
           </button>
         </div>
       </div>
