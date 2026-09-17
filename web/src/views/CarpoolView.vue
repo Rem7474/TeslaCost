@@ -334,7 +334,7 @@ async function estimateFromDrives() {
       if (first) form.value.date = toDateInputString(first.start_time)
     }
   } catch (err: any) {
-    alert(`Erreur d'estimation : ${err.message}`)
+    showAlert(`Erreur d'estimation : ${err.message}`, 'Erreur', 'danger')
   } finally {
     estimating.value = false
   }
@@ -350,7 +350,7 @@ async function toggleDrive(driveId: string) {
 async function estimateManualLeg(index: number) {
   const leg = form.value.legs[index]
   if (!vehicleStore.activeVehicle || !(Number(leg.distance_km) > 0)) {
-    alert("Indiquez d'abord la distance de l'étape")
+    showAlert("Indiquez d'abord la distance de l'étape", 'Champ requis', 'warning')
     return
   }
   estimating.value = true
@@ -363,7 +363,7 @@ async function estimateManualLeg(index: number) {
     leg.maintenance_cost = estimated.maintenance_cost
     leg.insurance_cost = estimated.insurance_cost
   } catch (err: any) {
-    alert(`Erreur d'estimation : ${err.message}`)
+    showAlert(`Erreur d'estimation : ${err.message}`, 'Erreur', 'danger')
   } finally {
     estimating.value = false
   }
@@ -438,7 +438,7 @@ async function openCreateModal(options: { driveIds?: string[]; tripGroupId?: str
         form.value.date = toDateInputString(group.start_time)
       }
     } catch (err: any) {
-      alert(`Erreur d'estimation : ${err.message}`)
+      showAlert(`Erreur d'estimation : ${err.message}`, 'Erreur', 'danger')
     } finally {
       estimating.value = false
     }

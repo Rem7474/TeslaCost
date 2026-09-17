@@ -266,7 +266,7 @@ async function handleSaveTireEdit() {
     await loadTires()
     if (showHistoryModal.value && selectedTire.value) await openHistoryModal({ tire: selectedTire.value })
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -317,7 +317,7 @@ async function handleDisposeTire() {
     selectedTireIds.value = selectedTireIds.value.filter((id) => id !== selectedTire.value.id)
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -613,7 +613,7 @@ async function handlePackSwapSubmit() {
   ].filter(Boolean)
 
   if (selectedIDs.length !== 4) {
-    alert('Veuillez sélectionner 4 pneus distincts du garage pour remplacer les pneus montés.')
+    showAlert('Veuillez sélectionner 4 pneus distincts du garage pour remplacer les pneus montés.', 'Sélection requise', 'warning')
     return
   }
 
@@ -626,7 +626,7 @@ async function handlePackSwapSubmit() {
     showPackSwapModal.value = false
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -641,7 +641,7 @@ function openAddModal() {
 async function handleCreateTires() {
   if (!vehicleStore.activeVehicle) return
   if (!addTireForm.value.brand || !addTireForm.value.model || !addTireForm.value.dimension) {
-    alert('Veuillez renseigner la marque, le modèle et la dimension')
+    showAlert('Veuillez renseigner la marque, le modèle et la dimension', 'Champs requis', 'warning')
     return
   }
 
@@ -684,7 +684,7 @@ async function handleCreateTires() {
     showAddTireModal.value = false
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -700,7 +700,7 @@ async function openHistoryModal(t: any) {
     tireLogs.value = res.logs || []
     showHistoryModal.value = true
   } catch (err: any) {
-    alert(`Erreur de chargement : ${err.message}`)
+    showAlert(`Erreur de chargement : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -769,7 +769,7 @@ async function handleSaveSession() {
     await openHistoryModal({ tire: selectedTire.value })
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -1007,7 +1007,7 @@ async function handleAddLog() {
       await openHistoryModal({ tire: selectedTire.value })
     }
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 

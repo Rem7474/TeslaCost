@@ -323,7 +323,7 @@ async function markNoToll(d: any) {
       total.value = Math.max(0, total.value - 1)
     }
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -382,7 +382,7 @@ async function toggleTripDetails(tg: any) {
     const res = await api.getDrives(vehicleStore.activeVehicle!.id, { tripGroupId: tg.id, limit: 200 })
     tripDrives.value = [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -401,7 +401,7 @@ async function handleSaveTripEdit() {
     showTripEditModal.value = false
     await loadTripGroups()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -409,7 +409,7 @@ async function removeDriveFromTrip(tg: any, driveId: string) {
   if (!vehicleStore.activeVehicle) return
   const remaining = (tg.drive_ids || []).filter((id: string) => id !== driveId)
   if (!remaining.length) {
-    alert('Un voyage doit garder au moins un trajet : supprimez le voyage à la place.')
+    showAlert('Un voyage doit garder au moins un trajet : supprimez le voyage à la place.', 'Action impossible', 'warning')
     return
   }
   try {
@@ -420,7 +420,7 @@ async function removeDriveFromTrip(tg: any, driveId: string) {
     if (updated) await toggleTripDetails(updated)
     loadDrives()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -470,7 +470,7 @@ async function handleAddToTrip() {
     await loadTripGroups()
     loadDrives()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -501,14 +501,14 @@ async function toggleDriveTag(drive: any, tagToToggle: string) {
     await api.updateDriveTags(vehicleStore.activeVehicle.id, drive.id, currentTags)
     drive.tags = currentTags
   } catch (err: any) {
-    alert(`Erreur de mise à jour du tag : ${err.message}`)
+    showAlert(`Erreur de mise à jour du tag : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
 async function handleCreateGroupAndExpense() {
   if (!vehicleStore.activeVehicle || !selectedDriveIds.value.length) return
   if (!groupName.value) {
-    alert('Veuillez donner un nom au groupe de trajets (ex: Voyage Paris-Lyon)')
+    showAlert('Veuillez donner un nom au groupe de trajets (ex: Voyage Paris-Lyon)', 'Champ requis', 'warning')
     return
   }
 
@@ -531,14 +531,14 @@ async function handleCreateGroupAndExpense() {
       })
     }
 
-    alert('Groupe de trajets créé avec succès !')
+    showAlert('Groupe de trajets créé avec succès !', 'Succès', 'success')
     showGroupModal.value = false
     clearSelection()
     groupName.value = ''
     tollAmount.value = ''
     loadDrives()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -576,7 +576,7 @@ async function loadDriveExpenses(driveId: string) {
 async function handleAddTollToDrive() {
   if (!vehicleStore.activeVehicle || !selectedCostDrive.value) return
   if (!inlineTollAmount.value || Number(inlineTollAmount.value) <= 0) {
-    alert('Veuillez entrer un montant valide')
+    showAlert('Veuillez entrer un montant valide', 'Montant invalide', 'warning')
     return
   }
 
@@ -597,7 +597,7 @@ async function handleAddTollToDrive() {
     inlineTollAmount.value = ''
     inlineTollNotes.value = ''
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   } finally {
     addingToll.value = false
   }
@@ -621,7 +621,7 @@ async function handleSaveExpenseEdit(exp: any) {
   if (!vehicleStore.activeVehicle) return
   const amount = Number(expenseEditForm.value.amount)
   if (!amount || amount <= 0) {
-    alert('Veuillez entrer un montant valide')
+    showAlert('Veuillez entrer un montant valide', 'Montant invalide', 'warning')
     return
   }
   try {
@@ -639,7 +639,7 @@ async function handleSaveExpenseEdit(exp: any) {
     editingExpenseId.value = null
     await refreshCostModal()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
