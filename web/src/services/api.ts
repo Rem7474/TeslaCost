@@ -19,6 +19,14 @@ export interface QueuedResult {
   queued: true
 }
 
+export interface AuthConfig {
+  registration_enabled: boolean
+  needs_onboarding: boolean
+  user_count: number
+  oidc_enabled: boolean
+  oidc_provider_name: string
+}
+
 export interface ExpenseDocumentHeader {
   id: string
   vehicle_id: string
@@ -98,6 +106,7 @@ export const api = {
   login: (credentials: any) => request<any>('/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   register: (payload: any) => request<any>('/auth/register', { method: 'POST', body: JSON.stringify(payload) }),
   getMe: () => request<any>('/auth/me'),
+  getAuthConfig: () => request<AuthConfig>('/auth/config'),
 
   // Vehicles
   getVehicles: () => request<any[]>('/vehicles'),

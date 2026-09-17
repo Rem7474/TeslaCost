@@ -24,6 +24,17 @@ type Config struct {
 	SyncIntervalMinutes  int
 	ReportingTimezone    string
 	StorageDir           string // Directory for document file storage (Docker volume mount point)
+
+	// OIDC / OAuth2 SSO (optional — enabled when OIDCIssuerURL is non-empty)
+	OIDCEnabled          bool
+	OIDCIssuerURL        string   // e.g. https://auth.homelab.local/application/o/teslacost/
+	OIDCClientID         string
+	OIDCClientSecret     string
+	OIDCRedirectURL      string   // e.g. https://teslacost.homelab.local/api/auth/oidc/callback
+	OIDCScopes           []string // default: ["openid", "email", "profile"]
+	OIDCProviderName     string   // label shown in the UI, e.g. "Authentik"
+	OIDCAllowedEmails    []string // optional whitelist; empty = allow all
+	OIDCDisableLocalAuth bool     // when true, /login and /register endpoints are disabled
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -84,6 +95,32 @@ func Load() *Config {
 	reportingTimezone := getEnv("APP_TIMEZONE", "Europe/Paris")
 	storageDir := getEnv("STORAGE_DIR", "./data/documents")
 
+	// OIDC configuration
+	oidcIssuerURL := getEnv("OIDC_ISSUER_URL", "")
+	oidcClientID := getEnv("OIDC_CLIENT_ID", "")
+	oidcClientSecret := getEnv("OIDC_CLIENT_SECRET", "")
+	oidcRedirectURL := getEnv("OIDC_REDIRECT_URL", "")
+	oidcProviderName := getEnv("OIDC_PROVIDER_NAME", "SSO")
+	oidcDisableLocalAuth := getEnvBool("OIDC_DISABLE_LOCAL_AUTH", false)
+
+	var oidcScopes []string
+	if scopesRaw := getEnv("OIDC_SCOPES", "openid email profile"); scopesRaw != "" {
+		for _, s := range strings.Split(scopesRaw, " ") {
+			if s = strings.TrimSpace(s); s != "" {
+				oidcScopes = append(oidcScopes, s)
+			}
+		}
+	}
+
+	var oidcAllowedEmails []string
+	if emailsRaw := getEnv("OIDC_ALLOWED_EMAILS", ""); emailsRaw != "" {
+		for _, e := range strings.Split(emailsRaw, ",") {
+			if e = strings.TrimSpace(e); e != "" {
+				oidcAllowedEmails = append(oidcAllowedEmails, e)
+			}
+		}
+	}
+
 	return &Config{
 		Port:                 port,
 		AppBaseURL:           appBaseURL,
@@ -99,6 +136,15 @@ func Load() *Config {
 		SyncIntervalMinutes:  syncIntervalMinutes,
 		ReportingTimezone:    reportingTimezone,
 		StorageDir:           storageDir,
+		OIDCEnabled:          oidcIssuerURL != "",
+		OIDCIssuerURL:        oidcIssuerURL,
+		OIDCClientID:         oidcClientID,
+		OIDCClientSecret:     oidcClientSecret,
+		OIDCRedirectURL:      oidcRedirectURL,
+		OIDCScopes:           oidcScopes,
+		OIDCProviderName:     oidcProviderName,
+		OIDCAllowedEmails:    oidcAllowedEmails,
+		OIDCDisableLocalAuth: oidcDisableLocalAuth,
 	}
 }
 

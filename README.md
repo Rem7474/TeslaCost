@@ -1,55 +1,79 @@
 # TeslaCost 🚗⚡
 
-> Application auto-hébergée open-source de suivi des coûts de possession et d'entretien automobile (TCO), particulièrement optimisée pour les véhicules électriques et compatible avec [TeslaMate](https://github.com/teslamate-org/teslamate) via [`teslamateapi`](https://github.com/tobiasehlert/teslamateapi), tout en étant 100% utilisable de façon autonome.
+> Application auto-hébergée open-source de suivi complet du coût de possession (TCO), de l'entretien, des pneus et du covoiturage automobile, avec synchronisation [TeslaMate](https://github.com/teslamate-org/teslamate) en temps réel ou fonctionnement 100% autonome.
+
+[![CI / CD Pipeline](https://github.com/Rem7474/TeslaCost/actions/workflows/ci.yml/badge.svg)](https://github.com/Rem7474/TeslaCost/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Rem7474_TeslaCost&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Rem7474_TeslaCost)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io-blue?logo=docker)](https://github.com/Rem7474/TeslaCost/pkgs/container/teslacost)
 
 ---
 
-## 🚀 Fonctionnalités principales
+## 🌟 Points forts
 
-1. **Multi-véhicules & Authentification JWT :** Gestion multi-utilisateurs et multi-véhicules avec contrôle d'accès sécurisé.
-2. **Synchronisation TeslaMate API :**
-   - Récupération de l'odomètre en temps réel.
-   - Synchronisation lancée en arrière-plan : l'API répond immédiatement et l'interface suit l'avancement ; une seule synchronisation à la fois par véhicule (manuelle ou planifiée).
-   - Contrôle de continuité de l'odomètre : trous entre trajets consécutifs, odomètre en recul, distance différente du relevé (`GET /api/vehicles/{id}/data-quality`).
-   - Import complet de l'historique des trajets (`/drives`) et des charges (`/charges`), repris automatiquement à la synchronisation suivante en cas d'interruption.
-   - Synchronisation incrémentale relisant les 30 derniers jours pour récupérer les coûts complétés après coup dans TeslaMate.
-   - Une recharge sans tarif TeslaMate est enregistrée « sans coût » (jamais 0 €) et signalée ; son coût peut être saisi manuellement sans être écrasé par les synchronisations.
-   - Saisie des recharges hors TeslaMate (prise d'un tiers, borne non suivie).
-   - Trajets et recharges supprimés dans TeslaMate exclus des calculs (tags et liens conservés, restaurés s'ils réapparaissent). Si plus de 20 % de la période relue disparaît d'un coup, rien n'est retiré et un avertissement est affiché.
-   - Support d'authentification Bearer Token et HTTP Basic Auth.
-   - Chiffrement symétrique au repos AES-256-GCM des identifiants et tokens API dans la base de données.
-3. **Péages, Parkings et Fusion de Trajets :**
-   - Création de groupes de trajets (`TripGroup`) pour fusionner des étapes segmentées par des pauses.
-   - Affectation granulaire des dépenses de voyage (péages d'autoroutes, parkings, ferries) ; une dépense de groupe est répartie entre les étapes au prorata des kilomètres.
-   - Sélection de trajets conservée d'une page à l'autre ; frais d'un trajet ou d'un voyage modifiables et supprimables depuis la fenêtre de coût du trajet.
-   - Onglet « Voyages » : renommer, retirer ou ajouter des trajets, supprimer un voyage en conservant ou non ses frais.
-   - File « À qualifier » : trajets de type autoroutier (≥ 40 km et ≥ 70 km/h de moyenne, ou ≥ 20 km et Vmax > 125 km/h) sans péage renseigné, à compléter ou marquer « sans péage ».
-   - Dépenses en devise étrangère avec taux de conversion vers l'euro saisi à la dépense.
-4. **Gestion du Cycle de Vie des Pneus :**
-   - Fiche produit (marque, modèle, dimensions, saison, prix, dot code).
-   - Position dynamique sur véhicule (`FL`, `FR`, `RL`, `RR`, `STORAGE`, `DISPOSED`).
-   - Relevés millimétriques de la profondeur de sculpture et projection de l'usure kilométrique restante, calculée sur les kilomètres roulés par le pneu (périodes en stockage exclues).
-   - Historique et journal complet des permutations de roues avec odomètre (sessions de montage ouvertes et fermées de façon transactionnelle).
-   - Kilométrage initial conservé pour les pneus achetés d'occasion.
-   - Modification d'un pneu ou par lot (marque, dimensions, prix unitaire ou total réparti au centime, date et odomètre du montage en cours), relevés d'usure modifiables et supprimables.
-   - Mise au rebut (montage clôturé, historique et coût conservés) ou suppression d'une saisie erronée.
-5. **Covoiturage (BlaBlaCar & directs) :**
-   - Un covoiturage est une suite d'étapes : un trajet TeslaMate par étape (énergie mesurée, péages du trajet, usure, entretien et assurance au km) ou des étapes saisies à la main.
-   - Chaque passager a un arrêt de montée, un arrêt de descente et un nombre de places.
-   - Le coût de chaque étape est partagé à parts égales entre les personnes à bord, conducteur compris : la part d'un passager est la somme des étapes parcourues, l'arrondi reste au conducteur. Pour chaque passager, le montant payé est comparé à sa part.
-6. **Saisie hors connexion (PWA) :** les péages, dépenses, recharges et qualifications de trajets saisis sans réseau sont conservés dans le navigateur (IndexedDB) puis envoyés au retour de la connexion. Chaque envoi porte un en-tête `Idempotency-Key` : une requête rejouée après une réponse perdue n'est appliquée qu'une fois.
-7. **Entretien & Coûts Fixes :** Suivi des révisions, assurances, abonnements connectivité, taxes. Une dépense récurrente compte une échéance par période jusqu'à aujourd'hui ou jusqu'à sa date de fin.
-8. **Calculateur de TCO :**
-   - Registre des coûts unique (vue SQL `cost_ledger`) : recharges, péages, dépenses récurrentes générées échéance par échéance, pneus, assurance, achat du véhicule. Totaux, historique mensuel et taux au km en sont tous dérivés.
-   - Montants stockés et calculés en centimes exacts (`NUMERIC` en base, entiers en Go).
-   - Dépenses courantes décaissées (pneus au jour d'achat, achat du véhicule exclu) et coût complet (usure des pneus amortie au kilomètre, décote du véhicule).
-   - Acquisition et financement par véhicule : achat comptant, achat à crédit (échéancier des intérêts calculé mois par mois, frais de dossier, assurance emprunteur), LOA ou LLD (apport, loyers, frais de dossier, dépôt de garantie, frais de restitution, forfait kilométrique et pénalité de dépassement estimée, services inclus, option d'achat et sa levée). Les flux sont générés automatiquement dans le registre des coûts.
-   - Décote linéaire (prix + frais − aides − revente estimée sur la durée de détention), figée sur le prix de revente réel à la fin de détention ; les dépenses récurrentes s'arrêtent à cette date.
-   - Coût complet : apport et frais de location étalés sur la durée du contrat, frais de restitution et dépassement kilométrique provisionnés au fil du contrat.
-   - Coût d'usage au km (énergie + péages), coût complet au km et coût net des recettes de covoiturage, calculés sur la plus grande distance entre les trajets suivis, l'odomètre couvert par les trajets et le kilométrage depuis l'acquisition.
-   - Ventilation énergie / péages & parkings / pneus / entretien & réparations / assurance / financement & location / décote / abonnements, taxes & autres.
-   - Assurance : primes enregistrées en dépense récurrente (aide « prime annuelle → mensualité ») ; le coût d'un trajet en reprend une quote-part calculée sur les primes et les kilomètres réellement parcourus sur 12 mois. Une assurance incluse dans la location n'est pas signalée comme manquante.
-   - Score de complétude pondéré (« TCO consolidé à X % ») : recharges avec coût, kilomètres couverts par des trajets, trajets autoroutiers qualifiés, assurance, acquisition, continuité de l'odomètre, conversion des devises ; chaque manque est détaillé avec un lien pour le corriger.
+- **⚡ Synchronisation TeslaMate résiliente** : récupération de l'odomètre en temps réel, import complet avec reprise sur interruption, relecture des coûts récents et détection des trajets/charges supprimés.
+- **📊 Calculateur TCO au centime près** : registre unique des coûts (`cost_ledger`), gestion du financement (comptant, crédit avec tableau d'amortissement, LOA, LLD), décote réelle et provision de restitution.
+- **🔐 Authentification hybride (JWT local & OIDC SSO)** : support natif d'Authentik, Keycloak, Authelia et Kanidm via Authorization Code Flow sécurisé, JIT provisioning et fallback local.
+- **🔔 Moteur de rappels d'entretien & Webhooks** : alertes d'échéance par date et/ou kilométrage avec connecteurs sortants vers Telegram, Discord, Gotify et Webhook JSON générique.
+- **📁 Gestionnaire de documents & factures** : stockage sécurisé des pièces jointes (PDF, photos) sur volume Docker dédié avec contrôle d'accès applicatif strict.
+- **🛞 Gestion du cycle de vie des pneus** : suivi des sculptures, sessions de permutation transactionnelles, exclusion des périodes de stockage et projection kilométrique restante.
+- **👥 Module de covoiturage équitable** : synchronisation automatique des dates de trajet, recalcul des coûts réels en lot, prix d'électricité pondéré sur les charges récentes et quote-part d'assurance au jour/km.
+- **📱 PWA & Mode hors-connexion** : saisie des dépenses sans réseau avec file d'attente IndexedDB et déduplication par clé d'idempotence.
+
+---
+
+## 🚀 Fonctionnalités détaillées
+
+### 1. Authentification & Sécurité
+- **Authentification locale** : inscription/connexion sécurisée par mot de passe (bcrypt) et émission de tokens JWT HS256.
+- **Support OIDC / OAuth2 (SSO)** : délégation d'authentification à votre IdP homelab (Authentik, Keycloak, Authelia, Kanidm).
+  - Flux standard *Authorization Code Flow* avec vérification anti-CSRF (`state`) et anti-rejeu (`nonce` chiffré SHA-256).
+  - Just-In-Time (JIT) provisioning : création automatique du compte ou liaison avec un compte local existant partageant le même email.
+  - Whitelist optionnelle (`OIDC_ALLOWED_EMAILS`) et désactivation possible de l'authentification locale (`OIDC_DISABLE_LOCAL_AUTH`).
+- **Chiffrement au repos** : chiffrement symétrique AES-256-GCM des identifiants et tokens de connexion TeslaMate dans PostgreSQL.
+
+### 2. Synchronisation TeslaMate API
+- **Odomètre temps réel** : actualisation en direct de l'odomètre du véhicule dès que TeslaMate le remonte.
+- **Tâches en arrière-plan** : synchronisation non bloquante avec suivi de progression et exclusion mutuelle par véhicule.
+- **Reprise après coupure** : importation de l'historique des trajets (`/drives`) et recharges (`/charges`) reprenant automatiquement là où elle s'est arrêtée.
+- **Relecture glissante (30 jours)** : mise à jour automatique des coûts de recharge complétés a posteriori dans TeslaMate.
+- **Recharges manuelles & sans coût** : signalement clair des recharges sans tarif (jamais 0 € imposé) et saisie possible des recharges hors suivi (ex: prise domestique chez un tiers).
+- **Contrôle d'intégrité** : vérification de continuité de l'odomètre (trous, reculs, écarts de distance) et seuil de sécurité sur la suppression massive de données.
+
+### 3. Calculateur de TCO & Financement Automobile
+- **Registre des coûts unifié (`cost_ledger`)** : centralisation des recharges, péages, dépenses d'entretien, primes d'assurance, amortissement des pneus et coût d'acquisition.
+- **Modes d'acquisition supportés** :
+  - *Comptant* : décote linéaire basée sur l'estimation de revente ou le montant de vente réel à la cession du véhicule.
+  - *Crédit classique* : tableau d'amortissement mois par mois, dissociation capital / intérêts, frais de dossier et assurance emprunteur.
+  - *LOA & LLD* : prise en compte de l'apport initial, des loyers mensuels, du dépôt de garantie, du forfait kilométrique contractuel et provision mensuelle pour dépassement ou frais de remise en état.
+- **Indicateurs financiers avancés** : coût d'usage au km (énergie + péages), coût complet au km, coût net des recettes de covoiturage et score de complétude du TCO.
+
+### 4. Rappels d'entretien & Notifications Homelab
+- **Double condition de déclenchement** : surveillance combinée de la date d'échéance et/ou du seuil kilométrique calculé sur l'odomètre réel.
+- **Seuils d'anticipation configurables** : notification préalable avant le dépassement critique (ex: avertir 500 km ou 15 jours avant).
+- **Connecteurs de notification webhook** :
+  - **Discord** : envoi de messages avec embed enrichi (couleurs de statut, champs organisés).
+  - **Telegram** : messages formatés Markdown via bot HTTP.
+  - **Gotify** : notifications push auto-hébergées avec gestion des priorités.
+  - **JSON Générique** : intégration directe avec Home Assistant, Node-RED ou n8n.
+
+### 5. Archivage & Gestion des Documents
+- **Stockage sur volume filesystem** : migration des pièces jointes (factures d'entretien, justificatifs) hors de PostgreSQL vers un volume dédié (`/data/documents`).
+- **Sécurité des fichiers** : isolation non-root (`teslacost`), aucun accès HTTP statique direct, contrôle strict par token JWT et prévention contre les attaques de type path-traversal.
+
+### 6. Gestion du Cycle de Vie des Pneus
+- **Fiches complètes** : marque, modèle, dimensions, indice de charge/vitesse, saison (été/hiver/4 saisons), prix d'achat et code DOT.
+- **Suivi des sculptures** : relevés d'usure millimétriques par pneu avec projection automatique de l'usure kilométrique restante (les périodes passées en stockage sont automatiquement exclues du calcul).
+- **Sessions de permutation** : montages et démontages groupés sur les essieux (`FL`, `FR`, `RL`, `RR`, `STORAGE`, `DISPOSED`) avec historique chronologique.
+
+### 7. Module de Covoiturage (BlaBlaCar & Directs)
+- **Découpage en étapes** : association avec les trajets réels TeslaMate ou saisie manuelle.
+- **Synchronisation des dates & recalcul en lot** : réajustement automatique de la date du covoiturage sur les trajets réels et recalcul immédiat des parts de chaque passager.
+- **Énergie & assurance au plus juste** : calcul du tarif de l'électricité basé sur la moyenne pondérée des charges récentes (fenêtre de 5 jours) et prorata exact de l'assurance au kilomètre parcouru dans la journée.
+
+### 8. Recherche & Navigation des Trajets
+- **Filtres temporels** : sélection par mois, année, période personnalisée ou affichage complet.
+- **Recherche plein texte** : filtrage par adresses de départ et d'arrivée.
+- **File de qualification** : détection automatique des trajets autoroutiers nécessitant la qualification ou la vérification d'un péage.
 
 ---
 
@@ -59,79 +83,204 @@
 TeslaCost/
 ├── cmd/
 │   └── server/
-│       └── main.go                 # Point d'entrée de l'application
+│       └── main.go                 # Point d'entrée de l'application & routage Chi
 ├── internal/
-│   ├── config/                     # Configuration d'environnement
-│   ├── crypto/                     # Chiffrement AES-256-GCM des secrets
-│   ├── database/                   # Pool de connexions pgxpool
-│   ├── models/                     # Entités Go fortement typées
-│   ├── teslamate/                  # Client Go teslamateapi & DTOs
-│   ├── auth/                       # Hachage bcrypt & JWT
-│   ├── handlers/                   # Contrôleurs HTTP Chi
-│   ├── services/                   # Métier TCO, usure pneus, fusion trajets
-│   └── middleware/                 # CORS, authentification, logs
-├── migrations/                     # Schémas PostgreSQL versionnés (up/down)
-├── web/                            # Frontend Vue 3 + Vite + Tailwind CSS (PWA)
-├── docker-compose.yml              # Stack de développement locale
-├── Dockerfile                      # Multi-stage build (Vue + Go embed)
-├── Makefile                        # Raccourcis de développement
-└── .env.example                    # Exemple de configuration d'environnement
+│   ├── auth/                       # Hachage bcrypt, tokens JWT et service client OIDC
+│   ├── config/                     # Chargement et validation des variables d'environnement
+│   ├── crypto/                     # Chiffrement symétrique AES-256-GCM
+│   ├── database/                   # Pool pgx, migrations SQL et couche repository
+│   ├── handlers/                   # Contrôleurs HTTP REST Chi
+│   ├── middleware/                 # Authentification JWT, CORS, logger
+│   ├── models/                     # Modèles de données Go fortement typés
+│   ├── services/                   # Moteur TCO, usure pneus, covoiturage, notifications
+│   ├── storage/                    # Service de stockage des documents sur volume Docker
+│   └── teslamate/                  # Client de communication avec teslamateapi
+├── migrations/                     # Schémas et migrations SQL PostgreSQL versionnés
+├── web/                            # Frontend SPA Vue 3 + Vite + Tailwind CSS + PWA
+├── docker-compose.yml              # Configuration de la stack conteneurisée
+├── Dockerfile                      # Build multi-stage (Vue 3 + binaire statique Go)
+└── .env.example                    # Modèle des variables de configuration
 ```
 
 ---
 
-## 🛠️ Démarrage Rapide
+## 🛠️ Déploiement & Installation
 
-### 1. Prérequis
-- [Docker](https://www.docker.com/) & Docker Compose
-- *Optionnel pour le dev local :* Go 1.25+ et Node.js 20+
+### Option 1 : Docker Compose (Recommandé)
 
-### 2. Configuration
-Copiez le fichier d'exemple :
-```bash
-cp .env.example .env
+1. **Créez un répertoire et téléchargez les fichiers de configuration :**
+   ```bash
+   mkdir teslacost && cd teslacost
+   curl -O https://raw.githubusercontent.com/Rem7474/TeslaCost/main/docker-compose.yml
+   curl -o .env https://raw.githubusercontent.com/Rem7474/TeslaCost/main/.env.example
+   ```
+
+2. **Générez votre clé de chiffrement et configurez `.env` :**
+   ```bash
+   # Générer une clé de chiffrement AES-256 de 32 octets (64 caractères hexadécimaux) :
+   openssl rand -hex 32
+   ```
+   Renseignez vos clés dans le fichier `.env` :
+   - `APP_ENCRYPTION_KEY` : la clé de chiffrement générée
+   - `DB_PASSWORD` : mot de passe de la base de données
+   - `JWT_SECRET` : secret de signature des sessions
+   - *(Optionnel)* La section OIDC / SSO si vous déléguez l'authentification à votre IdP
+
+3. **Lancez la stack :**
+   ```bash
+   docker compose up -d
+   ```
+
+L'application est disponible sur **`http://localhost:8080`**.
+
+<details>
+<summary>📋 Voir le contenu direct de <code>docker-compose.yml</code></summary>
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: teslacost-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-teslacost}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
+      POSTGRES_DB: ${DB_NAME:-teslacost}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-teslacost} -d ${DB_NAME:-teslacost}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/rem7474/teslacost:latest
+    pull_policy: missing
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    container_name: teslacost-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-teslacost}
+      DB_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
+      DB_NAME: ${DB_NAME:-teslacost}
+      DB_SSLMODE: disable
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
+      # OIDC / SSO (optionnel)
+      # OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      # OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
+      # OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-SSO}
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - teslacost_documents:/data/documents
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
+    driver: local
+  teslacost_documents:
+    driver: local
 ```
 
-### 3. Lancer la stack de développement
-```bash
-docker compose up -d
-```
-PostgreSQL démarre avec initialisation automatique du schéma SQL (`migrations/000001_init_schema.up.sql`), et l'API Go est accessible sur `http://localhost:8080`.
+</details>
 
-Vérification de l'API :
-```bash
-curl http://localhost:8080/api/health
-```
+---
 
-### 4. Utiliser l'image Docker pré-compilée (GHCR)
 
-L'image Docker officielle multi-architecture (`linux/amd64`, `linux/arm64`) est publiée sur **GitHub Container Registry** à chaque release :
+### Option 2 : Image Docker officielle (GHCR)
+
+L'image Docker multi-architecture (`linux/amd64`, `linux/arm64`) est publiée automatiquement sur GitHub Container Registry :
 
 ```bash
 docker pull ghcr.io/rem7474/teslacost:latest
 ```
 
-Exemple de déploiement autonome :
+Exemple d'exécution autonome avec un PostgreSQL externe :
+
 ```bash
 docker run -d \
   --name teslacost \
   -p 8080:8080 \
-  -e DATABASE_URL="postgres://user:password@db-host:5432/teslacost?sslmode=disable" \
-  -e JWT_SECRET="votre_clef_secrete_jwt" \
-  -e ENCRYPTION_KEY="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" \
+  -v teslacost_docs:/data/documents \
+  -e DATABASE_URL="postgres://user:password@postgres-host:5432/teslacost?sslmode=disable" \
+  -e JWT_SECRET="votre_clef_secrete_jwt_robuste" \
+  -e ENCRYPTION_KEY="clef_hexadecimale_de_64_caracteres_exactement" \
+  -e APP_TIMEZONE="Europe/Paris" \
   ghcr.io/rem7474/teslacost:latest
 ```
 
-### 5. Lancer les tests
+---
+
+## ⚙️ Variables d'Environnement
+
+| Variable | Description | Valeur par défaut |
+|---|---|---|
+| `PORT` | Port d'écoute du serveur HTTP | `8080` |
+| `APP_ENV` | Environnement d'exécution (`production`, `development`) | `production` |
+| `DATABASE_URL` | Chaîne de connexion PostgreSQL (`postgres://...`) | *Obligatoire* |
+| `JWT_SECRET` | Secret de signature des jetons JWT | *Obligatoire* |
+| `JWT_EXPIRATION_HOURS` | Durée de validité des sessions utilisateurs (heures) | `72` |
+| `ENCRYPTION_KEY` | Clé hexadécimale AES-256 de 64 caractères | *Obligatoire* |
+| `APP_TIMEZONE` | Fuseau horaire de calcul et reporting | `Europe/Paris` |
+| `STORAGE_DIR` | Répertoire de stockage des documents sur le volume | `/data/documents` |
+| `DISABLE_REGISTRATION` | Désactiver la création libre de compte local | `false` |
+| `INITIAL_ADMIN_EMAIL` | Email de l'administrateur pré-initialisé | *Optionnel* |
+| `INITIAL_ADMIN_PASSWORD` | Mot de passe de l'administrateur pré-initialisé | *Optionnel* |
+| `CORS_ALLOWED_ORIGINS` | Origines autorisées (séparées par virgule) | `http://localhost:8080` |
+
+### Configuration OIDC / SSO (Optionnel)
+
+| Variable | Description | Exemple |
+|---|---|---|
+| `OIDC_ISSUER_URL` | URL de l'émetteur IdP (OpenID Discovery) | `https://auth.homelab.local/application/o/teslacost/` |
+| `OIDC_CLIENT_ID` | Identifiant du client OAuth2 | `teslacost` |
+| `OIDC_CLIENT_SECRET` | Secret du client OAuth2 | `secret_fourni_par_votre_idp` |
+| `OIDC_REDIRECT_URL` | URL de redirection callback enregistrée | `https://teslacost.homelab.local/api/auth/oidc/callback` |
+| `OIDC_PROVIDER_NAME` | Nom du fournisseur affiché sur l'écran de connexion | `Authentik` / `Keycloak` |
+| `OIDC_SCOPES` | Scopes OIDC demandés (séparés par un espace) | `openid email profile` |
+| `OIDC_ALLOWED_EMAILS` | Whitelist des adresses autorisées (séparées par virgule) | `admin@domaine.fr,moi@domaine.fr` |
+| `OIDC_DISABLE_LOCAL_AUTH` | Désactiver le formulaire de connexion/inscription local | `false` |
+
+---
+
+## 🧪 Développement & Tests
+
 ```bash
+# Lancer les tests unitaires du backend
 go test -v ./...
-```
 
-Les tests d'intégration (requêtes SQL, migrations, TCO) nécessitent une base PostgreSQL jetable ; son schéma `public` est supprimé et recréé :
-```bash
+# Lancer les tests d'intégration avec une base de données temporaire
 docker run -d --name teslacost-test-pg -e POSTGRES_USER=teslacost -e POSTGRES_PASSWORD=test -e POSTGRES_DB=teslacost_test -p 55432:5432 postgres:14-alpine
-TEST_DATABASE_URL="postgres://teslacost:test@localhost:55432/teslacost_test?sslmode=disable" go test ./internal/services/
+TEST_DATABASE_URL="postgres://teslacost:test@localhost:55432/teslacost_test?sslmode=disable" go test -v ./internal/services/
+
+# Compiler le frontend Vue 3
+cd web && npm install && npm run build
 ```
 
-### 6. Migrations de base de données
-Les migrations embarquées (`migrations/*.up.sql`) sont appliquées au démarrage, chacune dans une transaction, et enregistrées dans la table `schema_migrations`. Le serveur refuse de démarrer si une migration échoue.
+---
+
+## 📄 Licence
+
+Ce projet est distribué sous licence [MIT](LICENSE).

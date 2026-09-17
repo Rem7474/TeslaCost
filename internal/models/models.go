@@ -40,7 +40,10 @@ const (
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
-	PasswordHash string    `json:"-"`
+	PasswordHash *string   `json:"-"`                      // nullable: OIDC accounts have no local password
+	OIDCSubject  *string   `json:"-"`
+	OIDCProvider *string   `json:"-"`
+	DisplayName  *string   `json:"display_name,omitempty"` // from IdP "name" claim
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

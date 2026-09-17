@@ -10,6 +10,7 @@ import CarpoolView from '@/views/CarpoolView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import OnboardingView from '@/views/OnboardingView.vue'
+import OIDCCallbackView from '@/views/OIDCCallbackView.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -66,6 +67,12 @@ const router = createRouter({
       component: OnboardingView,
     },
     {
+      // OIDC SSO callback — receives ?token= from the API after IdP auth
+      path: '/oidc-callback',
+      name: 'oidc-callback',
+      component: OIDCCallbackView,
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },
@@ -103,7 +110,10 @@ router.beforeEach(async (to, _from, next) => {
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next({ name: 'login' })
-  } else if ((to.name === 'login' || to.name === 'register' || to.name === 'onboarding') && authStore.isAuthenticated) {
+  } else if (
+    (to.name === 'login' || to.name === 'register' || to.name === 'onboarding') &&
+    authStore.isAuthenticated
+  ) {
     next({ name: 'dashboard' })
   } else {
     next()
