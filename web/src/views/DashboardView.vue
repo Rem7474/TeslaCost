@@ -644,14 +644,7 @@ function renderCharts() {
           tooltip: {
             callbacks: {
               label: (context) => {
-                const monthItem = filteredList[context.dataIndex]
                 const val = Number(context.raw || 0).toFixed(2)
-                if (context.dataset.label?.startsWith('Énergie') && monthItem && monthItem.smoothed_energy > 0) {
-                  return `${context.dataset.label} : ${val} € (dont ${monthItem.smoothed_energy.toFixed(2)} € estimés avant TeslaMate)`
-                }
-                if (context.dataset.label?.startsWith('Financement') && monthItem && monthItem.financing_amortized > 0 && Math.abs(monthItem.financing_amortized - (monthItem.financing || 0)) > 0.01) {
-                  return `${context.dataset.label} : ${val} € (${monthItem.financing_amortized.toFixed(2)} € lissé pour le coût/km)`
-                }
                 return `${context.dataset.label} : ${val} €`
               },
               footer: (items) => {
@@ -745,28 +738,11 @@ function renderCharts() {
           tooltip: {
             callbacks: {
               label: (context) => {
-                const monthItem = filteredMileageList[context.dataIndex]
                 if (context.dataset.yAxisID === 'yDistance') {
                   const dist = Number(context.raw).toLocaleString('fr-FR')
-                  if (monthItem && monthItem.smoothed_km > 0) {
-                    return `Distance : ${dist} km (dont ${Math.round(monthItem.smoothed_km).toLocaleString('fr-FR')} km lissés)`
-                  }
                   return `Distance : ${dist} km`
                 }
                 const costPerKm = Number(context.raw).toFixed(3)
-                const extras: string[] = []
-                if (monthItem && monthItem.tires_amortized > 0) {
-                  extras.push(`${monthItem.tires_amortized.toFixed(2)} € pneus lissés`)
-                }
-                if (monthItem && monthItem.maintenance_amortized > 0) {
-                  extras.push(`${monthItem.maintenance_amortized.toFixed(2)} € entretien lissé`)
-                }
-                if (monthItem && monthItem.financing_amortized > 0 && Math.abs(monthItem.financing_amortized - (monthItem.financing || 0)) > 0.01) {
-                  extras.push(`${monthItem.financing_amortized.toFixed(2)} € financement lissé`)
-                }
-                if (extras.length > 0) {
-                  return `Coût de revient : ${costPerKm} €/km (dont ${extras.join(', ')})`
-                }
                 return `Coût de revient : ${costPerKm} €/km`
               },
             },
