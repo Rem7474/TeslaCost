@@ -349,3 +349,37 @@ func (h *CarpoolHandler) Estimate(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, estimate)
 }
+
+type RecalculateCarpoolsRequest struct {
+	TripIDs []string `json:"trip_ids"`
+}
+
+func (h *CarpoolHandler) Recalculate(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
+		writeError(w, http.StatusNotFound, "Vehicle not found")
+		return
+	}
+
+	var req RecalculateCarpoolsRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Invalid request payload")
+			return
+		}
+	}
+
+	trips, err := h.carpoolService.RecalculateTrips(r.Context(), vehicleID, req.TripIDs)
+	if err != nil {
+		writeRepoError(w, err, "Failed to recalculate carpool trips")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"updated_count": len(trips),
+		"trips":         trips,
+	})
+}
+

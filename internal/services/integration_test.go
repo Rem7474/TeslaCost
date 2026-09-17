@@ -755,6 +755,9 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 	if len(est.Legs) != 3 || *est.Legs[0].StartLabel != "Annecy" || *est.Legs[2].EndLabel != "Valence" {
 		t.Fatalf("expected 3 chronological legs with place labels, got %+v", est.Legs)
 	}
+	if est.StartDate == nil || !est.StartDate.Truncate(time.Microsecond).Equal(base.Truncate(time.Microsecond)) {
+		t.Fatalf("expected est.StartDate %v, got %v", base, est.StartDate)
+	}
 	if est.Legs[0].TollsCost != 1000 || est.Legs[1].TollsCost != 1200 || est.Legs[2].TollsCost != 1800 || est.TollsCost != 4000 {
 		t.Fatalf("expected the group toll split 10/12/18 € across legs, got %d %d %d", est.Legs[0].TollsCost, est.Legs[1].TollsCost, est.Legs[2].TollsCost)
 	}
@@ -790,6 +793,23 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 		t.Fatalf("unexpected occupancy: %d / %d", loaded.Legs[0].PassengerSeats, loaded.Legs[2].PassengerSeats)
 	}
 
+	// Recalculate carpool trips: add an extra toll and recalculate
+	extraToll := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 2000, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, extraToll, []string{drives[0].ID}, "Tunnel"); err != nil {
+		t.Fatal(err)
+	}
+	recalculated, err := svc.RecalculateTrip(ctx, v.ID, loaded.ID)
+	if err != nil {
+		t.Fatalf("failed to recalculate trip: %v", err)
+	}
+	// Initial total toll was 4000, now 4000 + 2000 = 6000
+	if recalculated.TollsCost != 6000 {
+		t.Fatalf("expected recalculated tolls cost to be 6000, got %d", recalculated.TollsCost)
+	}
+	if recalculated.TotalRevenue != 3500 {
+		t.Fatalf("passenger revenue must remain untouched, got %d", recalculated.TotalRevenue)
+	}
+
 	// Invalid stops and foreign drives are rejected
 	var vErr *database.ValidationError
 	bad := []models.CarpoolPassenger{{PassengerName: "Zoé", Seats: 1, BoardStopIndex: 2, AlightStopIndex: 4}}
@@ -799,6 +819,215 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 	foreign := &models.CarpoolTrip{VehicleID: other.ID, Title: "x", Date: base}
 	if err := repo.CreateCarpoolTrip(ctx, foreign, est.Legs, nil); !errors.Is(err, database.ErrForeignReference) {
 		t.Fatalf("expected foreign drives to be rejected, got %v", err)
+	}
+}
+
+func TestCarpoolElectricityRecentCharges5Days(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "elec_test@example.com")
+	svc := NewCarpoolService(db.Pool, repo)
+
+	now := time.Date(2026, 6, 15, 12, 0, 0, 0, time.UTC)
+	cost1 := money.Cents(1000) // 10 EUR
+	cost2 := money.Cents(2000) // 20 EUR
+
+	// Charge 1: 1 day before 'now', 50 kWh, 10 EUR (0.20 €/kWh)
+	c1 := &models.ChargeLog{
+		VehicleID: v.ID,
+		Date:      now.Add(-24 * time.Hour),
+		KwhAdded:  50,
+		Cost:      &cost1,
+		Currency:  "EUR",
+	}
+	if err := repo.CreateManualCharge(ctx, c1); err != nil {
+		t.Fatal(err)
+	}
+
+	// Charge 2: 3 days before Charge 1 (within 5-day window), 50 kWh, 20 EUR (0.40 €/kWh)
+	c2 := &models.ChargeLog{
+		VehicleID: v.ID,
+		Date:      c1.Date.Add(-3 * 24 * time.Hour),
+		KwhAdded:  50,
+		Cost:      &cost2,
+		Currency:  "EUR",
+	}
+	if err := repo.CreateManualCharge(ctx, c2); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1. Both charges are within 5 days of each other: weighted average (10 + 20) / (50 + 50) = 0.30 €/kWh
+	rates, err := svc.GetVehicleUnitRatesAt(ctx, v.ID, &now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rates.ElectricitySource != RateSourceRecentCharges {
+		t.Fatalf("expected RECENT_CHARGES, got %s", rates.ElectricitySource)
+	}
+	if rates.ElectricityPerKwh != 0.30 {
+		t.Fatalf("expected 0.30 €/kWh weighted average, got %f", rates.ElectricityPerKwh)
+	}
+
+	// 2. Now move Charge 2 to 7 days before Charge 1 (> 5 days apart)
+	if _, err := db.Pool.Exec(ctx, `UPDATE charge_logs SET date = $1 WHERE id = $2`, c1.Date.Add(-7*24*time.Hour), c2.ID); err != nil {
+		t.Fatal(err)
+	}
+	rates2, err := svc.GetVehicleUnitRatesAt(ctx, v.ID, &now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rates2.ElectricitySource != RateSourceRecentCharges {
+		t.Fatalf("expected RECENT_CHARGES, got %s", rates2.ElectricitySource)
+	}
+	// Only Charge 1 should be used: 10 EUR / 50 kWh = 0.20 €/kWh
+	if rates2.ElectricityPerKwh != 0.20 {
+		t.Fatalf("expected 0.20 €/kWh (only latest charge), got %f", rates2.ElectricityPerKwh)
+	}
+}
+
+func TestCarpoolDailyInsuranceAllocation(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "ins_test@example.com")
+	svc := NewCarpoolService(db.Pool, repo)
+
+	// 1. Annual insurance of 365.25 EUR (36525 cents) -> 1.00 EUR/day (100 cents/day)
+	day1 := time.Date(2026, 6, 15, 8, 0, 0, 0, time.UTC)
+	day2 := time.Date(2026, 6, 16, 9, 0, 0, 0, time.UTC)
+	interval := 12
+	if err := repo.CreateMaintenanceExpense(ctx, &models.MaintenanceExpense{
+		VehicleID:                v.ID,
+		Category:                 "INSURANCE",
+		Amount:                   36525,
+		Currency:                 "EUR",
+		Date:                     day1.AddDate(0, -1, 0),
+		IsRecurring:              true,
+		RecurrenceIntervalMonths: &interval,
+		Description:              "Assurance annuelle",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Day 1 drives:
+	// d1: carpool leg 1 (40 km)
+	// d2: carpool leg 2 (60 km)
+	// d3: personal commute (100 km)
+	// Total on Day 1 = 200 km
+	d1 := mustDrive(t, repo, v.ID, 201, day1, 10000, 40)
+	d2 := mustDrive(t, repo, v.ID, 202, day1.Add(4*time.Hour), 10040, 60)
+	mustDrive(t, repo, v.ID, 203, day1.Add(8*time.Hour), 10100, 100)
+
+	// Day 2 drive:
+	// d4: 50 km (only drive on Day 2 -> total Day 2 = 50 km)
+	d4 := mustDrive(t, repo, v.ID, 204, day2, 10200, 50)
+
+	// 2. Estimate Day 1 carpool with [d1, d2]
+	est1, err := svc.EstimateCosts(ctx, v.ID, nil, nil, []string{d1.ID, d2.ID}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if est1.DailyInsuranceCost == nil || *est1.DailyInsuranceCost != 100 {
+		t.Fatalf("expected DailyInsuranceCost to be 100 cents (1 EUR), got %v", est1.DailyInsuranceCost)
+	}
+	if len(est1.Legs) != 2 {
+		t.Fatalf("expected 2 legs, got %d", len(est1.Legs))
+	}
+	// Leg 1: 40 km / 200 km * 1.00 EUR = 0.20 EUR = 20 cents
+	if est1.Legs[0].InsuranceCost != 20 {
+		t.Fatalf("expected Leg 1 insurance 20 cents, got %d", est1.Legs[0].InsuranceCost)
+	}
+	// Leg 2: 60 km / 200 km * 1.00 EUR = 0.30 EUR = 30 cents
+	if est1.Legs[1].InsuranceCost != 30 {
+		t.Fatalf("expected Leg 2 insurance 30 cents, got %d", est1.Legs[1].InsuranceCost)
+	}
+	// Total insurance for trip = 50 cents (50% of the day's insurance)
+	if est1.InsuranceCost != 50 {
+		t.Fatalf("expected Total trip insurance 50 cents, got %d", est1.InsuranceCost)
+	}
+	// Effective insurance rate: 50 cents / 100 km = 0.005 EUR/km
+	if est1.InsuranceRatePerKm != 0.005 {
+		t.Fatalf("expected InsuranceRatePerKm 0.005, got %f", est1.InsuranceRatePerKm)
+	}
+
+	// 3. Estimate Day 2 carpool with [d4] (only drive of the day)
+	est2, err := svc.EstimateCosts(ctx, v.ID, nil, nil, []string{d4.ID}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Leg 1: 50 km / 50 km * 1.00 EUR = 1.00 EUR = 100 cents (100% of the day)
+	if est2.Legs[0].InsuranceCost != 100 || est2.InsuranceCost != 100 {
+		t.Fatalf("expected Day 2 insurance 100 cents, got %d (leg: %d)", est2.InsuranceCost, est2.Legs[0].InsuranceCost)
+	}
+
+	// 4. Multi-day carpool trip [d1 (day 1), d4 (day 2)]
+	estMulti, err := svc.EstimateCosts(ctx, v.ID, nil, nil, []string{d1.ID, d4.ID}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if estMulti.Legs[0].InsuranceCost != 20 {
+		t.Fatalf("expected multi-day leg 1 insurance 20 cents, got %d", estMulti.Legs[0].InsuranceCost)
+	}
+	if estMulti.Legs[1].InsuranceCost != 100 {
+		t.Fatalf("expected multi-day leg 2 insurance 100 cents, got %d", estMulti.Legs[1].InsuranceCost)
+	}
+	if estMulti.InsuranceCost != 120 {
+		t.Fatalf("expected multi-day total insurance 120 cents, got %d", estMulti.InsuranceCost)
+	}
+
+	// 5. Create trip and verify RecalculateTrip after driving more personal km on Day 1
+	trip := &models.CarpoolTrip{
+		VehicleID: v.ID,
+		Title:     "Covoit Day 1",
+		Date:      day1,
+	}
+	if err := repo.CreateCarpoolTrip(ctx, trip, est1.Legs, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	// Personal drive of 200 km added on Day 1: total Day 1 is now 400 km
+	mustDrive(t, repo, v.ID, 205, day1.Add(10*time.Hour), 10300, 200)
+
+	recalculated, err := svc.RecalculateTrip(ctx, v.ID, trip.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Leg 1: 40 km / 400 km * 1.00 EUR = 0.10 EUR = 10 cents
+	if recalculated.Legs[0].InsuranceCost != 10 {
+		t.Fatalf("expected recalculated leg 1 insurance 10 cents, got %d", recalculated.Legs[0].InsuranceCost)
+	}
+	// Leg 2: 60 km / 400 km * 1.00 EUR = 0.15 EUR = 15 cents
+	if recalculated.Legs[1].InsuranceCost != 15 {
+		t.Fatalf("expected recalculated leg 2 insurance 15 cents, got %d", recalculated.Legs[1].InsuranceCost)
+	}
+	if recalculated.InsuranceCost != 25 {
+		t.Fatalf("expected recalculated total insurance 25 cents, got %d", recalculated.InsuranceCost)
+	}
+
+	// 6. Lease with insurance included
+	leaseV := mustVehicle(t, repo, "lease_ins@example.com")
+	leaseStart := day1.AddDate(-1, 0, 0)
+	price := money.Cents(4000000)
+	leaseDuration := 36
+	if err := repo.SaveVehicleOwnership(ctx, &models.VehicleOwnership{
+		VehicleID:              leaseV.ID,
+		AcquisitionType:        models.AcquisitionLLD,
+		StartDate:              leaseStart,
+		PurchasePrice:          &price,
+		LeaseDurationMonths:    &leaseDuration,
+		LeaseIncludesInsurance: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	leaseDrive := mustDrive(t, repo, leaseV.ID, 301, day1, 1000, 100)
+	leaseEst, err := svc.EstimateCosts(ctx, leaseV.ID, nil, nil, []string{leaseDrive.ID}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if leaseEst.InsuranceSource != RateSourceIncluded {
+		t.Fatalf("expected INCLUDED_IN_LEASE, got %s", leaseEst.InsuranceSource)
+	}
+	if leaseEst.InsuranceCost != 0 || leaseEst.Legs[0].InsuranceCost != 0 {
+		t.Fatalf("expected 0 insurance cost when included in lease, got %d", leaseEst.InsuranceCost)
 	}
 }
 

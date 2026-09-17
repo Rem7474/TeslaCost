@@ -199,6 +199,7 @@ func main() {
 				// Carpooling / BlaBlaCar
 				r.Get("/{vehicleId}/carpools", carpoolHandler.List)
 				r.Post("/{vehicleId}/carpools", carpoolHandler.Create)
+				r.Post("/{vehicleId}/carpools/recalculate", carpoolHandler.Recalculate)
 				r.Get("/{vehicleId}/carpools/estimate", carpoolHandler.Estimate)
 				r.Get("/{vehicleId}/carpools/{id}", carpoolHandler.Get)
 				r.Put("/{vehicleId}/carpools/{id}", carpoolHandler.Update)

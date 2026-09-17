@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -28,6 +29,7 @@ func NewCarpoolService(pool *pgxpool.Pool, repo *database.Repository) *CarpoolSe
 
 // Rate sources exposed to the UI so that estimates are never mistaken for measured costs.
 const (
+	RateSourceRecentCharges = "RECENT_CHARGES"
 	RateSourceHistory       = "HISTORY"
 	RateSourceMountedTires  = "MOUNTED_TIRES"
 	RateSourceDefault       = "DEFAULT"
@@ -60,6 +62,7 @@ type UnitRates struct {
 	InsuranceSource     string // RECORDED_EXPENSES | INCLUDED_IN_LEASE | INSUFFICIENT_DISTANCE | NONE
 	InsuranceWindowCost *money.Cents
 	InsuranceWindowKm   *float64
+	DailyInsuranceCost  money.Cents
 }
 
 // DefaultUnitRates returns the fallback assumptions, all flagged as defaults.
@@ -91,6 +94,13 @@ func DriveEnergyKwh(distanceKm float64, energyKwh, consumptionKwh100km *float64)
 // GetVehicleUnitRates calculates real cost rates based on vehicle history, with flagged fallbacks.
 // Insurance follows the same source priority as the TCO: recorded expenses first, then vehicle settings.
 func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID string) (*UnitRates, error) {
+	return s.GetVehicleUnitRatesAt(ctx, vehicleID, nil)
+}
+
+// GetVehicleUnitRatesAt calculates real cost rates referencing a specific point in time (e.g. trip date).
+// Electricity is estimated using the weighted average of the last 2 charges prior to ref if spaced by <= 5 days (or the single last charge),
+// falling back to the vehicle's historical average if no recent charges exist.
+func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID string, refTime *time.Time) (*UnitRates, error) {
 	rates := DefaultUnitRates()
 
 	var totalDistance, lastYearDistance float64
@@ -103,20 +113,74 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		return nil, err
 	}
 
-	// Electricity rate (€/kWh), only over charges whose cost is known
-	var pricedCost money.Cents
-	var pricedKwh float64
-	if err := s.pool.QueryRow(ctx, `
-		SELECT COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0),
-		       COALESCE(SUM(kwh_added), 0)
-		FROM charge_logs
-		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL);
-	`, vehicleID).Scan(&pricedCost, &pricedKwh); err != nil {
-		return nil, err
+	ref := time.Now()
+	if refTime != nil && !refTime.IsZero() {
+		ref = *refTime
 	}
-	if pricedKwh > 0 && pricedCost > 0 {
-		rates.ElectricityPerKwh = pricedCost.Float() / pricedKwh
-		rates.ElectricitySource = RateSourceHistory
+
+	// 1. Electricity rate (€/kWh): try the last 2 priced charges prior to or at ref
+	rows, err := s.pool.Query(ctx, `
+		SELECT date, kwh_added,
+		       COALESCE(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END, 0)
+		FROM charge_logs
+		WHERE vehicle_id = $1
+		  AND deleted_upstream_at IS NULL
+		  AND cost IS NOT NULL
+		  AND cost > 0
+		  AND (currency = 'EUR' OR fx_rate IS NOT NULL)
+		  AND date <= $2
+		ORDER BY date DESC
+		LIMIT 2;
+	`, vehicleID, ref)
+	if err == nil {
+		type chargeSample struct {
+			date time.Time
+			kwh  float64
+			cost money.Cents
+		}
+		var recent []chargeSample
+		for rows.Next() {
+			var cs chargeSample
+			if err := rows.Scan(&cs.date, &cs.kwh, &cs.cost); err == nil && cs.kwh > 0 && cs.cost > 0 {
+				recent = append(recent, cs)
+			}
+		}
+		rows.Close()
+
+		const maxChargeAge = 30 * 24 * time.Hour
+		const maxChargeInterval = 5 * 24 * time.Hour
+
+		if len(recent) > 0 && ref.Sub(recent[0].date) <= maxChargeAge {
+			if len(recent) >= 2 && recent[0].date.Sub(recent[1].date) <= maxChargeInterval {
+				totalCost := recent[0].cost + recent[1].cost
+				totalKwh := recent[0].kwh + recent[1].kwh
+				if totalKwh > 0 {
+					rates.ElectricityPerKwh = totalCost.Float() / totalKwh
+					rates.ElectricitySource = RateSourceRecentCharges
+				}
+			} else {
+				rates.ElectricityPerKwh = recent[0].cost.Float() / recent[0].kwh
+				rates.ElectricitySource = RateSourceRecentCharges
+			}
+		}
+	}
+
+	// 2. Fallback to all priced charges history if no recent charge was found
+	if rates.ElectricitySource == RateSourceDefault {
+		var pricedCost money.Cents
+		var pricedKwh float64
+		if err := s.pool.QueryRow(ctx, `
+			SELECT COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0),
+			       COALESCE(SUM(kwh_added), 0)
+			FROM charge_logs
+			WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL);
+		`, vehicleID).Scan(&pricedCost, &pricedKwh); err != nil {
+			return nil, err
+		}
+		if pricedKwh > 0 && pricedCost > 0 {
+			rates.ElectricityPerKwh = pricedCost.Float() / pricedKwh
+			rates.ElectricitySource = RateSourceHistory
+		}
 	}
 
 	// Tires rate (€/km): mounted tires purchase price over their remaining expected life
@@ -159,18 +223,43 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 	if err := s.pool.QueryRow(ctx, `
 		WITH premiums AS (
 			SELECT entry_date, amount_eur FROM cost_ledger
-			WHERE vehicle_id = $1 AND category = 'INSURANCE' AND entry_date <= NOW()
+			WHERE vehicle_id = $1 AND category = 'INSURANCE' AND entry_date <= $2
 		),
 		window_start AS (
-			SELECT GREATEST(NOW() - INTERVAL '365 days', MIN(entry_date)) AS start FROM premiums
+			SELECT GREATEST($2 - INTERVAL '365 days', MIN(entry_date)) AS start FROM premiums
 		)
 		SELECT (SELECT start FROM window_start),
 		       COALESCE((SELECT SUM(amount_eur) FROM premiums WHERE entry_date >= (SELECT start FROM window_start)), 0),
 		       COALESCE((SELECT SUM(distance_km) FROM drives
 		                 WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
-		                   AND start_time >= (SELECT start FROM window_start)), 0);
-	`, vehicleID).Scan(&windowStart, &insuranceCost, &windowKm); err != nil {
+		                   AND start_time >= (SELECT start FROM window_start)
+		                   AND start_time <= $2), 0);
+	`, vehicleID, ref).Scan(&windowStart, &insuranceCost, &windowKm); err != nil {
 		return nil, err
+	}
+
+	var annualizedMaint money.Cents
+	_ = s.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(
+			CASE
+				WHEN is_recurring AND COALESCE(recurrence_interval_months, 0) > 0
+				THEN ROUND(amount * 12.0 / recurrence_interval_months)
+				ELSE amount
+			END
+		), 0)
+		FROM maintenance_expenses
+		WHERE vehicle_id = $1 AND category = 'INSURANCE'
+		  AND (currency = 'EUR' OR fx_rate IS NOT NULL)
+		  AND date <= $2
+		  AND (recurrence_end_date IS NULL OR recurrence_end_date >= $2);
+	`, vehicleID, ref).Scan(&annualizedMaint)
+
+	annualInsurance := annualizedMaint
+	if insuranceCost > annualInsurance {
+		annualInsurance = insuranceCost
+	}
+	if annualInsurance > 0 {
+		rates.DailyInsuranceCost = money.FromFloat(annualInsurance.Float() / 365.25)
 	}
 
 	// Services included in a running lease contract
@@ -178,8 +267,7 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return nil, err
 	}
-	now := time.Now()
-	if ownership != nil && ownership.InLeasePhase(now) {
+	if ownership != nil && ownership.InLeasePhase(ref) {
 		if ownership.LeaseIncludesMaintenance {
 			rates.MaintenancePerKm, rates.MaintenanceSource = 0, RateSourceIncluded
 		}
@@ -188,18 +276,24 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 		}
 	}
 
-	switch {
-	case windowStart != nil && insuranceCost > 0 && windowKm >= minInsuranceWindowKm:
-		rates.InsurancePerKm = insuranceCost.Float() / windowKm
-		rates.InsuranceSource = InsuranceSourceRecordedExpenses
-		rates.InsuranceWindowCost = &insuranceCost
-		rates.InsuranceWindowKm = &windowKm
-	case windowStart != nil && insuranceCost > 0:
-		rates.InsuranceSource = InsuranceSourceInsufficientKm
-		rates.InsuranceWindowCost = &insuranceCost
-		rates.InsuranceWindowKm = &windowKm
-	case ownership != nil && ownership.InLeasePhase(now) && ownership.LeaseIncludesInsurance:
+	if ownership != nil && ownership.InLeasePhase(ref) && ownership.LeaseIncludesInsurance {
 		rates.InsuranceSource = InsuranceSourceIncluded
+		rates.InsurancePerKm = 0
+		rates.DailyInsuranceCost = 0
+	} else {
+		switch {
+		case windowStart != nil && insuranceCost > 0 && windowKm >= minInsuranceWindowKm:
+			rates.InsurancePerKm = insuranceCost.Float() / windowKm
+			rates.InsuranceSource = InsuranceSourceRecordedExpenses
+			rates.InsuranceWindowCost = &insuranceCost
+			rates.InsuranceWindowKm = &windowKm
+		case (windowStart != nil && insuranceCost > 0) || annualInsurance > 0:
+			rates.InsuranceSource = InsuranceSourceInsufficientKm
+			if insuranceCost > 0 {
+				rates.InsuranceWindowCost = &insuranceCost
+				rates.InsuranceWindowKm = &windowKm
+			}
+		}
 	}
 
 	rates.ElectricityPerKwh = round3(rates.ElectricityPerKwh)
@@ -211,12 +305,8 @@ func (s *CarpoolService) GetVehicleUnitRates(ctx context.Context, vehicleID stri
 
 // EstimateCosts calculates suggested cost components for a trip.
 func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, driveID, tripGroupID *string, driveIDs []string, manualDistanceKm float64) (*models.CarpoolCostEstimate, error) {
-	rates, err := s.GetVehicleUnitRates(ctx, vehicleID)
-	if err != nil {
-		return nil, err
-	}
-
 	var drives []models.Drive
+	var err error
 	switch {
 	case driveID != nil && *driveID != "":
 		d, err := s.repo.GetDriveByID(ctx, *driveID, vehicleID)
@@ -243,6 +333,20 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 
 	// One leg per drive, in chronological order
 	sort.Slice(drives, func(i, j int) bool { return drives[i].StartTime.Before(drives[j].StartTime) })
+
+	var refTime *time.Time
+	if len(drives) > 0 {
+		t := drives[len(drives)-1].StartTime
+		if !drives[len(drives)-1].EndTime.IsZero() {
+			t = drives[len(drives)-1].EndTime
+		}
+		refTime = &t
+	}
+
+	rates, err := s.GetVehicleUnitRatesAt(ctx, vehicleID, refTime)
+	if err != nil {
+		return nil, err
+	}
 	legs := make([]models.CarpoolLeg, 0, len(drives))
 	energySource := EnergySourceMeasured
 	costLeg := func(distance, kwh float64) models.CarpoolLeg {
@@ -255,11 +359,27 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		}
 	}
 
+	dailyKmMap := make(map[string]float64)
+	dayCarpoolKm := make(map[string]float64)
 	if len(drives) > 0 {
 		ids := make([]string, len(drives))
+		dateSet := make(map[string]struct{})
 		for i, d := range drives {
 			ids[i] = d.ID
+			dateStr := d.StartTime.UTC().Format("2006-01-02")
+			dateSet[dateStr] = struct{}{}
+			dayCarpoolKm[dateStr] += d.DistanceKm
 		}
+		dates := make([]string, 0, len(dateSet))
+		for dStr := range dateSet {
+			dates = append(dates, dStr)
+		}
+		dailyDistances, err := s.getDailyDistances(ctx, vehicleID, dates)
+		if err != nil {
+			return nil, err
+		}
+		dailyKmMap = dailyDistances
+
 		// Tolls allocated to each drive (a trip group toll is split by distance)
 		tolls, err := s.repo.GetTollExpensesForDrives(ctx, vehicleID, ids)
 		if err != nil {
@@ -276,6 +396,19 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 			leg.StartLabel = placeLabel(d.StartAddress)
 			leg.EndLabel = placeLabel(d.EndAddress)
 			leg.TollsCost = tolls[d.ID]
+
+			// Daily insurance allocation:
+			// Daily Insurance / Total km driven that day * Leg km
+			if rates.InsuranceSource == InsuranceSourceIncluded {
+				leg.InsuranceCost = 0
+			} else if rates.DailyInsuranceCost > 0 {
+				dateStr := d.StartTime.UTC().Format("2006-01-02")
+				totalDayKm := math.Max(dailyKmMap[dateStr], dayCarpoolKm[dateStr])
+				if totalDayKm > 0 {
+					leg.InsuranceCost = money.FromFloat(rates.DailyInsuranceCost.Float() * (d.DistanceKm / totalDayKm))
+				}
+			}
+
 			legs = append(legs, leg)
 		}
 	} else {
@@ -289,6 +422,7 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		TiresRatePerKm:        rates.TiresPerKm,
 		MaintenanceRatePerKm:  rates.MaintenancePerKm,
 		InsuranceRatePerKm:    rates.InsurancePerKm,
+		DailyInsuranceCost:    &rates.DailyInsuranceCost,
 		InsuranceSource:       rates.InsuranceSource,
 		InsuranceWindowCost:   rates.InsuranceWindowCost,
 		InsuranceWindowKm:     rates.InsuranceWindowKm,
@@ -297,6 +431,9 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		TiresRateSource:       rates.TiresSource,
 		MaintenanceRateSource: rates.MaintenanceSource,
 		Legs:                  legs,
+	}
+	if len(drives) > 0 {
+		est.StartDate = &drives[0].StartTime
 	}
 	for i := range legs {
 		legs[i].OrderIndex = i
@@ -309,8 +446,42 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		est.InsuranceCost += legs[i].InsuranceCost
 	}
 	est.DistanceKm = round1(est.DistanceKm)
+	if len(drives) > 0 && est.DistanceKm > 0 && rates.DailyInsuranceCost > 0 {
+		est.InsuranceRatePerKm = round3(est.InsuranceCost.Float() / est.DistanceKm)
+	}
 	est.TotalCost = est.ElectricityCost + est.TollsCost + est.TiresCost + est.MaintenanceCost + est.InsuranceCost
 	return est, nil
+}
+
+// getDailyDistances returns a map of date string "YYYY-MM-DD" (UTC) to total km driven by the vehicle on that date.
+func (s *CarpoolService) getDailyDistances(ctx context.Context, vehicleID string, dates []string) (map[string]float64, error) {
+	if len(dates) == 0 {
+		return make(map[string]float64), nil
+	}
+	rows, err := s.pool.Query(ctx, `
+		SELECT (start_time AT TIME ZONE 'UTC')::date::text,
+		       COALESCE(SUM(distance_km), 0)
+		FROM drives
+		WHERE vehicle_id = $1
+		  AND deleted_upstream_at IS NULL
+		  AND (start_time AT TIME ZONE 'UTC')::date::text = ANY($2)
+		GROUP BY 1;
+	`, vehicleID, dates)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	res := make(map[string]float64, len(dates))
+	for rows.Next() {
+		var dStr string
+		var totalKm float64
+		if err := rows.Scan(&dStr, &totalKm); err != nil {
+			return nil, err
+		}
+		res[dStr] = totalKm
+	}
+	return res, rows.Err()
 }
 
 // placeLabel shortens a TeslaMate address to its first part (place or street) for stop names.
@@ -326,4 +497,94 @@ func placeLabel(address *string) *string {
 		label = string(r[:150])
 	}
 	return &label
+}
+
+// RecalculateTrip recalculates the costs of a carpool trip using latest vehicle unit rates and recorded tolls.
+func (s *CarpoolService) RecalculateTrip(ctx context.Context, vehicleID string, tripID string) (*models.CarpoolTripWithPassengers, error) {
+	trip, err := s.repo.GetCarpoolTrip(ctx, tripID, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+
+	var driveIDs []string
+	for _, l := range trip.Legs {
+		if l.DriveID != nil && *l.DriveID != "" {
+			driveIDs = append(driveIDs, *l.DriveID)
+		}
+	}
+
+	var est *models.CarpoolCostEstimate
+	if len(driveIDs) > 0 {
+		est, err = s.EstimateCosts(ctx, vehicleID, trip.DriveID, trip.TripGroupID, driveIDs, 0)
+		if err != nil {
+			return nil, err
+		}
+	} else if trip.DistanceKm > 0 {
+		est, err = s.EstimateCosts(ctx, vehicleID, nil, nil, nil, trip.DistanceKm)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if est != nil {
+		if len(driveIDs) > 0 {
+			estByDriveID := make(map[string]models.CarpoolLeg, len(est.Legs))
+			for _, el := range est.Legs {
+				if el.DriveID != nil {
+					estByDriveID[*el.DriveID] = el
+				}
+			}
+			for i := range trip.Legs {
+				if trip.Legs[i].DriveID != nil {
+					if el, ok := estByDriveID[*trip.Legs[i].DriveID]; ok {
+						trip.Legs[i].ElectricityCost = el.ElectricityCost
+						trip.Legs[i].TollsCost = el.TollsCost
+						trip.Legs[i].TiresCost = el.TiresCost
+						trip.Legs[i].MaintenanceCost = el.MaintenanceCost
+						trip.Legs[i].InsuranceCost = el.InsuranceCost
+					}
+				}
+			}
+		} else if len(est.Legs) == 1 && len(trip.Legs) == 1 {
+			trip.Legs[0].ElectricityCost = est.Legs[0].ElectricityCost
+			trip.Legs[0].TiresCost = est.Legs[0].TiresCost
+			trip.Legs[0].MaintenanceCost = est.Legs[0].MaintenanceCost
+			trip.Legs[0].InsuranceCost = est.Legs[0].InsuranceCost
+		}
+
+		if est.StartDate != nil {
+			trip.Date = *est.StartDate
+		}
+	}
+
+	if err := s.repo.UpdateCarpoolTrip(ctx, &trip.CarpoolTrip, trip.Legs, trip.Passengers); err != nil {
+		return nil, err
+	}
+
+	trip.DriverCostShare, trip.PassengersCostShare = AllocateCarpoolCosts(trip.Legs, trip.Passengers)
+	return trip, nil
+}
+
+// RecalculateTrips recalculates multiple carpool trips for a vehicle. If tripIDs is empty, all trips are recalculated.
+func (s *CarpoolService) RecalculateTrips(ctx context.Context, vehicleID string, tripIDs []string) ([]models.CarpoolTripWithPassengers, error) {
+	if len(tripIDs) == 0 {
+		allTrips, err := s.repo.ListCarpoolTrips(ctx, vehicleID)
+		if err != nil {
+			return nil, err
+		}
+		tripIDs = make([]string, len(allTrips))
+		for i, t := range allTrips {
+			tripIDs[i] = t.ID
+		}
+	}
+
+	results := make([]models.CarpoolTripWithPassengers, 0, len(tripIDs))
+	for _, id := range tripIDs {
+		t, err := s.RecalculateTrip(ctx, vehicleID, id)
+		if err != nil {
+			return nil, fmt.Errorf("trip %s: %w", id, err)
+		}
+		results = append(results, *t)
+	}
+	return results, nil
 }
