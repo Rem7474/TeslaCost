@@ -2,6 +2,8 @@
 
 Suivi des actions issues de l'audit du 2026-09-17. Statuts : `⬜ à faire` / `🔄 en cours` / `✅ fait` / `⏭️ reporté`.
 
+PR de suivi : [#42 — fix(ops): production-readiness quick wins + top-5 blocking actions](https://github.com/Rem7474/TeslaCost/pull/42).
+
 ## Quick wins
 
 | # | Action | Fichier(s) | Statut | Notes |
