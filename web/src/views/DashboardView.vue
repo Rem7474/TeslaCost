@@ -1351,6 +1351,7 @@ function renderCharts() {
               <Activity class="w-4 h-4 text-indigo-400" />
               <span>Kilométrage Mensuel & Coût de Revient au Km (€/km)</span>
             </h3>
+            <p class="text-xs text-slate-400 mt-0.5">Cliquer sur une barre du graphique pour ouvrir le détail chiffré du mois.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
             <button
@@ -1391,22 +1392,6 @@ function renderCharts() {
 
         <div class="h-64 sm:h-72">
           <canvas ref="mileageChartRef"></canvas>
-        </div>
-
-        <!-- Quick Month Selection Pills -->
-        <div v-if="filteredMileageCosts.length" class="flex items-center gap-1.5 overflow-x-auto pt-1 text-xs no-scrollbar">
-          <span class="text-slate-500 text-[11px] shrink-0 mr-1">Mois :</span>
-          <button
-            v-for="m in filteredMileageCosts"
-            :key="m.month"
-            type="button"
-            @click="openMonthDetail(m)"
-            class="px-2.5 py-1 bg-slate-800/80 hover:bg-indigo-600/30 hover:text-indigo-300 hover:border-indigo-500/50 border border-slate-700/60 rounded-lg text-slate-300 text-[11px] font-medium shrink-0 flex items-center gap-1.5 transition-colors group"
-            title="Cliquer pour afficher le détail chiffré et le diagramme de ce mois"
-          >
-            <span>{{ formatMonthName(m.month) }}</span>
-            <span class="text-[10px] font-bold text-emerald-400 group-hover:text-emerald-300">{{ (m.cost_per_km || 0).toFixed(3) }} €/km</span>
-          </button>
         </div>
       </div>
 
