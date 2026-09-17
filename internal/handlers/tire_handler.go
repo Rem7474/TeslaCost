@@ -859,3 +859,74 @@ func (h *TireHandler) DeleteLog(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
+
+type BatchDisposeTiresRequest struct {
+	TireIDs  []string `json:"tire_ids"`
+	Date     string   `json:"date"`
+	Odometer *float64 `json:"odometer"`
+}
+
+func (h *TireHandler) BatchDispose(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+		return
+	}
+	var req BatchDisposeTiresRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if len(req.TireIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "tire_ids requis")
+		return
+	}
+	at := time.Now().UTC()
+	if req.Date != "" {
+		parsed, err := parseDate(req.Date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		at = parsed
+	}
+	if req.Odometer != nil {
+		if err := validateQuantity(*req.Odometer, 2_000_000); err != nil {
+			writeError(w, http.StatusBadRequest, "odomètre invalide")
+			return
+		}
+	}
+	if err := h.repo.BatchDisposeTires(r.Context(), vehicleID, req.TireIDs, at, req.Odometer); err != nil {
+		writeRepoError(w, err, "Failed to batch dispose tires")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+type CopyTireHistoryRequest struct {
+	TargetTireIDs []string `json:"target_tire_ids"`
+	CopySessions  bool     `json:"copy_sessions"`
+	CopyLogs      bool     `json:"copy_logs"`
+	AdaptPosition bool     `json:"adapt_position"`
+}
+
+func (h *TireHandler) CopyHistory(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+		return
+	}
+	var req CopyTireHistoryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if len(req.TargetTireIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "Au moins un pneu cible requis (target_tire_ids)")
+		return
+	}
+	sourceTireID := chi.URLParam(r, "tireId")
+	if err := h.repo.CopyTireHistory(r.Context(), vehicleID, sourceTireID, req.TargetTireIDs, req.CopySessions, req.CopyLogs, req.AdaptPosition); err != nil {
+		writeRepoError(w, err, "Failed to copy tire history")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}

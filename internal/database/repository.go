@@ -1574,6 +1574,187 @@ func (r *Repository) DisposeTire(ctx context.Context, vehicleID, tireID string, 
 	return tx.Commit(ctx)
 }
 
+// BatchDisposeTires retires multiple tires in a single transaction.
+func (r *Repository) BatchDisposeTires(ctx context.Context, vehicleID string, tireIDs []string, at time.Time, odometer *float64) error {
+	if len(tireIDs) == 0 {
+		return nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	current, err := lockVehicleTires(ctx, tx, vehicleID)
+	if err != nil {
+		return err
+	}
+
+	for _, tireID := range tireIDs {
+		t, ok := current[tireID]
+		if !ok {
+			return ErrNotFound
+		}
+		if isMountedPosition(t.CurrentPosition) {
+			if odometer == nil {
+				return validationErrorf("l'odomètre de démontage est requis pour le pneu monté %s", t.Brand)
+			}
+			if t.MountedOdometer != nil && *odometer < *t.MountedOdometer {
+				return validationErrorf("l'odomètre (%.0f km) est inférieur à l'odomètre de montage (%.0f km) pour %s", *odometer, *t.MountedOdometer, t.Brand)
+			}
+			if _, err := tx.Exec(ctx, `
+				UPDATE tire_mount_sessions
+				SET dismounted_date = $1, dismounted_odometer = $2,
+				    distance_km = GREATEST($2 - mounted_odometer, 0), updated_at = NOW()
+				WHERE tire_id = $3 AND dismounted_date IS NULL;
+			`, at, *odometer, tireID); err != nil {
+				return err
+			}
+		}
+		if _, err := tx.Exec(ctx, `UPDATE tires SET current_position = 'DISPOSED', updated_at = NOW() WHERE id = $1;`, tireID); err != nil {
+			return err
+		}
+		if err := recalcTireDistance(ctx, tx, tireID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
+// CopyTireHistory duplicates all sessions and/or tread logs from a source tire to one or more target tires.
+func (r *Repository) CopyTireHistory(ctx context.Context, vehicleID, sourceTireID string, targetTireIDs []string, copySessions, copyLogs, adaptPosition bool) error {
+	if len(targetTireIDs) == 0 {
+		return nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	current, err := lockVehicleTires(ctx, tx, vehicleID)
+	if err != nil {
+		return err
+	}
+	source, ok := current[sourceTireID]
+	if !ok {
+		return ErrNotFound
+	}
+	_ = source
+
+	// Fetch sessions of source tire
+	type sessionRow struct {
+		position           models.TirePosition
+		mountedDate        time.Time
+		mountedOdometer    float64
+		dismountedDate     *time.Time
+		dismountedOdometer *float64
+		distanceKm         float64
+		notes              *string
+	}
+	var sourceSessions []sessionRow
+	if copySessions {
+		rows, err := tx.Query(ctx, `
+			SELECT position, mounted_date, mounted_odometer, dismounted_date, dismounted_odometer, distance_km, notes
+			FROM tire_mount_sessions
+			WHERE tire_id = $1 AND vehicle_id = $2
+			ORDER BY mounted_date ASC;
+		`, sourceTireID, vehicleID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var s sessionRow
+			if err := rows.Scan(&s.position, &s.mountedDate, &s.mountedOdometer, &s.dismountedDate, &s.dismountedOdometer, &s.distanceKm, &s.notes); err != nil {
+				rows.Close()
+				return err
+			}
+			sourceSessions = append(sourceSessions, s)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+
+	// Fetch logs of source tire
+	type logRow struct {
+		date     time.Time
+		odometer float64
+		depthMm  float64
+		notes    *string
+	}
+	var sourceLogs []logRow
+	if copyLogs {
+		rows, err := tx.Query(ctx, `
+			SELECT date, odometer, depth_mm, notes
+			FROM tire_logs
+			WHERE tire_id = $1
+			ORDER BY date ASC;
+		`, sourceTireID)
+		if err != nil {
+			return err
+		}
+		for rows.Next() {
+			var l logRow
+			if err := rows.Scan(&l.date, &l.odometer, &l.depthMm, &l.notes); err != nil {
+				rows.Close()
+				return err
+			}
+			sourceLogs = append(sourceLogs, l)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+	}
+
+	for _, targetID := range targetTireIDs {
+		if targetID == sourceTireID {
+			continue
+		}
+		target, ok := current[targetID]
+		if !ok {
+			return ErrNotFound
+		}
+
+		if copySessions {
+			for _, s := range sourceSessions {
+				pos := s.position
+				if adaptPosition && isMountedPosition(target.CurrentPosition) {
+					pos = target.CurrentPosition
+				}
+				if _, err := tx.Exec(ctx, `
+					INSERT INTO tire_mount_sessions (
+						tire_id, vehicle_id, position, mounted_date, mounted_odometer,
+						dismounted_date, dismounted_odometer, distance_km, notes, created_at, updated_at
+					) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW());
+				`, targetID, vehicleID, pos, s.mountedDate, s.mountedOdometer, s.dismountedDate, s.dismountedOdometer, s.distanceKm, s.notes); err != nil {
+					return err
+				}
+			}
+		}
+
+		if copyLogs {
+			for _, l := range sourceLogs {
+				if _, err := tx.Exec(ctx, `
+					INSERT INTO tire_logs (tire_id, date, odometer, depth_mm, notes, created_at)
+					VALUES ($1, $2, $3, $4, $5, NOW());
+				`, targetID, l.date, l.odometer, l.depthMm, l.notes); err != nil {
+					return err
+				}
+			}
+		}
+
+		if err := recalcTireDistance(ctx, tx, targetID); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 // UpdateTireLog corrects a tread depth measurement.
 func (r *Repository) UpdateTireLog(ctx context.Context, vehicleID string, l *models.TireLog) error {
 	tag, err := r.pool.Exec(ctx, `

@@ -267,6 +267,10 @@ export const api = {
     request<any>(`/vehicles/${vehicleId}/tires/${tireId}`, { method: 'DELETE' }),
   disposeTire: (vehicleId: string, tireId: string, data: { date: string; odometer?: number | null }) =>
     request<any>(`/vehicles/${vehicleId}/tires/${tireId}/dispose`, { method: 'POST', body: JSON.stringify(data) }),
+  batchDisposeTires: (vehicleId: string, data: { tire_ids: string[]; date: string; odometer?: number | null }) =>
+    request<any>(`/vehicles/${vehicleId}/tires/batch-dispose`, { method: 'POST', body: JSON.stringify(data) }),
+  copyTireHistory: (vehicleId: string, tireId: string, data: { target_tire_ids: string[]; copy_sessions?: boolean; copy_logs?: boolean; adapt_position?: boolean }) =>
+    request<any>(`/vehicles/${vehicleId}/tires/${tireId}/copy-history`, { method: 'POST', body: JSON.stringify(data) }),
   updateTireLog: (vehicleId: string, tireId: string, logId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/tires/${tireId}/logs/${logId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteTireLog: (vehicleId: string, tireId: string, logId: string) =>
