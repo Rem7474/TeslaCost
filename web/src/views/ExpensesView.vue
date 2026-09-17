@@ -5,6 +5,8 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api, type ExpenseDocumentHeader, type MaintenanceReminder, type VehicleWebhook } from '@/services/api'
 import AppDatePicker from '@/components/AppDatePicker.vue'
+import AppDropzone from '@/components/AppDropzone.vue'
+import DocumentPreviewModal from '@/components/expenses/DocumentPreviewModal.vue'
 import {
   Receipt,
   Plus,
@@ -657,6 +659,22 @@ async function onFileInputChange(event: Event, form: any) {
   }
 }
 
+async function onDropzoneDirectUpload(file: File | null, form: any) {
+  if (!file || !vehicleStore.activeVehicle) return
+  isUploadingDocument.value = true
+  try {
+    const doc = await api.uploadDocument(vehicleStore.activeVehicle.id, file)
+    documents.value.unshift(doc)
+    form.document_id = doc.id
+    form.document_filename = doc.filename
+    showAlert(`Fichier « ${doc.filename} » téléversé et rattaché`, 'Succès', 'success')
+  } catch (err: any) {
+    showAlert(`Erreur lors du téléversement : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    isUploadingDocument.value = false
+  }
+}
+
 interface DocumentPreviewState {
   url: string
   filename: string
@@ -1256,55 +1274,78 @@ async function handleDeleteWebhook() {
       <span>Vous consultez ce véhicule en mode <strong>Lecteur seul</strong>. Les ajouts et modifications sont désactivés.</span>
     </div>
 
-    <!-- Sub-tabs -->
-    <div class="flex items-center gap-2 border-b border-slate-800 pb-2 overflow-x-auto">
-      <button
-        @click="activeTab = 'TOLLS'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
-        :class="activeTab === 'TOLLS' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-slate-400 hover:text-white'"
-      >
-        <Receipt class="w-4 h-4" />
-        Péages & Parkings
-      </button>
-      <button
-        @click="activeTab = 'MAINTENANCE'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
-        :class="activeTab === 'MAINTENANCE' ? 'bg-pink-500/20 text-pink-400 border border-pink-500/30' : 'text-slate-400 hover:text-white'"
-      >
-        <Wrench class="w-4 h-4" />
-        Entretien & Coûts Fixes
-      </button>
-      <button
-        @click="activeTab = 'REMINDERS'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0 relative"
-        :class="activeTab === 'REMINDERS' ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'text-slate-400 hover:text-white'"
-      >
-        <Bell class="w-4 h-4" />
-        Rappels d'Entretien
-        <span
-          v-if="urgentRemindersCount > 0"
-          class="px-1.5 py-0.2 text-[10px] font-bold rounded-full"
-          :class="overdueReminders.length > 0 ? 'bg-rose-500 text-white' : 'bg-amber-500 text-slate-950'"
-        >
-          {{ urgentRemindersCount }}
-        </span>
-      </button>
-      <button
-        @click="activeTab = 'CHARGES'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
-        :class="activeTab === 'CHARGES' ? 'bg-sky-500/20 text-sky-400 border border-sky-500/30' : 'text-slate-400 hover:text-white'"
-      >
-        <Zap class="w-4 h-4" />
-        Recharges Électriques
-      </button>
-      <button
-        @click="activeTab = 'DOCUMENTS'"
-        class="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-colors shrink-0"
-        :class="activeTab === 'DOCUMENTS' ? 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30' : 'text-slate-400 hover:text-white'"
-      >
-        <Paperclip class="w-4 h-4" />
-        Justificatifs & Factures
-      </button>
+    <!-- Segmented Navigation: Frais de Route vs Flotte & Entretien -->
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Groupe 1: Route & Trajets -->
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1 select-none flex items-center gap-1.5">
+            <Navigation class="w-3 h-3 text-amber-400" />
+            <span class="hidden sm:inline">Route & Trajets</span>
+          </span>
+          <button
+            @click="activeTab = 'TOLLS'"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0"
+            :class="activeTab === 'TOLLS' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
+          >
+            <Receipt class="w-3.5 h-3.5" />
+            <span>Péages</span>
+          </button>
+          <button
+            @click="activeTab = 'CHARGES'"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0"
+            :class="activeTab === 'CHARGES' ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
+          >
+            <Zap class="w-3.5 h-3.5" />
+            <span>Recharges</span>
+            <span v-if="chargesWithoutCost > 0" class="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              {{ chargesWithoutCost }}
+            </span>
+          </button>
+        </div>
+
+        <!-- Groupe 2: Flotte & Entretien -->
+        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1 select-none flex items-center gap-1.5">
+            <Wrench class="w-3 h-3 text-pink-400" />
+            <span class="hidden sm:inline">Flotte & Véhicule</span>
+          </span>
+          <button
+            @click="activeTab = 'MAINTENANCE'"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0"
+            :class="activeTab === 'MAINTENANCE' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
+          >
+            <Wrench class="w-3.5 h-3.5" />
+            <span>Entretiens</span>
+          </button>
+          <button
+            @click="activeTab = 'REMINDERS'"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0 relative"
+            :class="activeTab === 'REMINDERS' ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
+          >
+            <Bell class="w-3.5 h-3.5" />
+            <span>Rappels</span>
+            <span
+              v-if="urgentRemindersCount > 0"
+              class="px-1.5 py-0.2 text-[10px] font-bold rounded-full"
+              :class="overdueReminders.length > 0 ? 'bg-rose-500 text-white' : 'bg-amber-500 text-slate-950'"
+            >
+              {{ urgentRemindersCount }}
+            </span>
+          </button>
+          <button
+            @click="activeTab = 'DOCUMENTS'"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0"
+            :class="activeTab === 'DOCUMENTS' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
+          >
+            <Paperclip class="w-3.5 h-3.5" />
+            <span>Justificatifs</span>
+            <span v-if="documents.length > 0" class="px-1.5 py-0.2 text-[10px] font-medium rounded-full bg-slate-800 text-slate-400">
+              {{ documents.length }}
+            </span>
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Content: Tolls -->
@@ -2054,36 +2095,31 @@ async function handleDeleteWebhook() {
               </div>
             </div>
 
-            <div v-else class="space-y-2">
-              <div class="flex flex-col sm:flex-row gap-2">
-                <div class="flex-1" v-if="documents.length > 0">
-                  <label for="toll-existing-doc" class="sr-only">Choisir une facture existante</label>
-                  <select
-                    id="toll-existing-doc"
-                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
-                    @change="(e: any) => onSelectExistingDoc(e.target.value, tollForm)"
-                  >
-                    <option value="">-- Associer une facture existante --</option>
-                    <option v-for="d in documents" :key="d.id" :value="d.id">
-                      {{ d.filename }} ({{ formatDate(d.created_at) }})
-                    </option>
-                  </select>
-                </div>
-                <label class="cursor-pointer px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
-                  <UploadCloud class="w-3.5 h-3.5" />
-                  <span>{{ isUploadingDocument ? 'Téléversement...' : 'Nouveau fichier' }}</span>
-                  <input
-                    type="file"
-                    accept=".pdf,image/png,image/jpeg,image/webp"
-                    class="hidden"
-                    :disabled="isUploadingDocument"
-                    @change="(e: any) => onFileInputChange(e, tollForm)"
-                  />
-                </label>
+            <div v-else class="space-y-2.5">
+              <div v-if="documents.length > 0">
+                <label for="toll-existing-doc" class="block text-[11px] text-slate-400 mb-1">Rattacher une facture existante</label>
+                <select
+                  id="toll-existing-doc"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
+                  @change="(e: any) => onSelectExistingDoc(e.target.value, tollForm)"
+                >
+                  <option value="">-- Sélectionner un justificatif existant --</option>
+                  <option v-for="d in documents" :key="d.id" :value="d.id">
+                    {{ d.filename }} ({{ formatDate(d.created_at) }})
+                  </option>
+                </select>
               </div>
-              <p class="text-[10px] text-slate-400">
-                PDF ou image. Plusieurs péages peuvent être rattachés à la même facture mensuelle.
-              </p>
+
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</label>
+                <AppDropzone
+                  :model-value="null"
+                  :disabled="isUploadingDocument"
+                  label="Déposez la facture ici ou cliquez pour parcourir"
+                  helperText="PDF ou image (téléversé et lié automatiquement au péage)"
+                  @update:model-value="(f) => onDropzoneDirectUpload(f, tollForm)"
+                />
+              </div>
             </div>
           </div>
         </form>
@@ -2343,36 +2379,31 @@ async function handleDeleteWebhook() {
               </div>
             </div>
 
-            <div v-else class="space-y-2">
-              <div class="flex flex-col sm:flex-row gap-2">
-                <div class="flex-1" v-if="documents.length > 0">
-                  <label for="maint-existing-doc" class="sr-only">Choisir une facture existante</label>
-                  <select
-                    id="maint-existing-doc"
-                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
-                    @change="(e: any) => onSelectExistingDoc(e.target.value, maintForm)"
-                  >
-                    <option value="">-- Associer une facture existante --</option>
-                    <option v-for="d in documents" :key="d.id" :value="d.id">
-                      {{ d.filename }} ({{ formatDate(d.created_at) }})
-                    </option>
-                  </select>
-                </div>
-                <label class="cursor-pointer px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
-                  <UploadCloud class="w-3.5 h-3.5" />
-                  <span>{{ isUploadingDocument ? 'Téléversement...' : 'Nouveau fichier' }}</span>
-                  <input
-                    type="file"
-                    accept=".pdf,image/png,image/jpeg,image/webp"
-                    class="hidden"
-                    :disabled="isUploadingDocument"
-                    @change="(e: any) => onFileInputChange(e, maintForm)"
-                  />
-                </label>
+            <div v-else class="space-y-2.5">
+              <div v-if="documents.length > 0">
+                <label for="maint-existing-doc" class="block text-[11px] text-slate-400 mb-1">Rattacher une facture existante</label>
+                <select
+                  id="maint-existing-doc"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
+                  @change="(e: any) => onSelectExistingDoc(e.target.value, maintForm)"
+                >
+                  <option value="">-- Sélectionner un justificatif existant --</option>
+                  <option v-for="d in documents" :key="d.id" :value="d.id">
+                    {{ d.filename }} ({{ formatDate(d.created_at) }})
+                  </option>
+                </select>
               </div>
-              <p class="text-[10px] text-slate-400">
-                PDF ou image (facture atelier, justificatif d'assurance, etc.).
-              </p>
+
+              <div>
+                <label class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</label>
+                <AppDropzone
+                  :model-value="null"
+                  :disabled="isUploadingDocument"
+                  label="Déposez la facture ici ou cliquez pour parcourir"
+                  helperText="PDF ou image (téléversé et rattaché automatiquement à cette dépense)"
+                  @update:model-value="(f) => onDropzoneDirectUpload(f, maintForm)"
+                />
+              </div>
             </div>
           </div>
         </form>
@@ -2552,14 +2583,12 @@ async function handleDeleteWebhook() {
 
         <form id="standalone-doc-form" @submit.prevent="handleUploadStandaloneDocument" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
           <div>
-            <label for="standalone-doc-file" class="block text-xs font-semibold text-slate-300 mb-1">Fichier (PDF, PNG, JPEG, WEBP, max 15 Mo)</label>
-            <input
-              id="standalone-doc-file"
-              type="file"
-              accept=".pdf,image/png,image/jpeg,image/webp"
-              required
-              @change="onUploadDocFileSelect"
-              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white file:mr-3 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+            <label class="block text-xs font-semibold text-slate-300 mb-1.5">Fichier justificatif</label>
+            <AppDropzone
+              v-model="uploadDocFile"
+              :disabled="isUploadingDocument"
+              label="Glissez votre facture ou cliquez pour parcourir"
+              helperText="Formats acceptés : PDF, PNG, JPG, WEBP (max. 15 Mo)"
             />
           </div>
 
@@ -2979,101 +3008,7 @@ async function handleDeleteWebhook() {
       </div>
     </div>
 
-    <!-- Modal: Document In-App Preview -->
-    <div
-      v-if="previewDoc"
-      class="fixed inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 overflow-hidden"
-      @click.self="closeDocPreview"
-    >
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-5xl h-[92vh] sm:h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-        <!-- Header -->
-        <div class="px-4 sm:px-6 py-3.5 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95 gap-3">
-          <div class="flex items-center gap-2.5 min-w-0">
-            <div class="w-8 h-8 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-              <FileText v-if="previewDoc.isPdf" class="w-4 h-4 text-indigo-400" />
-              <ImageIcon v-else-if="previewDoc.isImage" class="w-4 h-4 text-emerald-400" />
-              <Paperclip v-else class="w-4 h-4 text-slate-400" />
-            </div>
-            <div class="min-w-0">
-              <h3 class="text-sm font-bold text-white truncate" :title="previewDoc.filename">
-                {{ previewDoc.filename }}
-              </h3>
-              <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
-                <span v-if="previewDoc.isPdf" class="text-indigo-400 font-semibold">Document PDF</span>
-                <span v-else-if="previewDoc.isImage" class="text-emerald-400 font-semibold">Image</span>
-                <span v-else class="text-slate-400 font-semibold">Fichier</span>
-              </p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-1.5 shrink-0">
-            <!-- Download Button -->
-            <button
-              @click="downloadFromPreview"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
-              title="Télécharger le fichier"
-            >
-              <Download class="w-3.5 h-3.5 text-indigo-400" />
-              <span class="hidden sm:inline">Télécharger</span>
-            </button>
-
-            <!-- Open in New Tab Button -->
-            <button
-              @click="openInNewTab"
-              class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
-              title="Ouvrir dans un nouvel onglet"
-            >
-              <ExternalLink class="w-3.5 h-3.5 text-slate-400" />
-              <span class="hidden md:inline">Nouvel onglet</span>
-            </button>
-
-            <!-- Close Button -->
-            <button
-              @click="closeDocPreview"
-              class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors ml-1"
-              title="Fermer"
-            >
-              <X class="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-
-        <!-- Preview Body -->
-        <div class="flex-1 bg-slate-950/70 overflow-hidden flex items-center justify-center min-h-0 relative">
-          <!-- PDF preview -->
-          <iframe
-            v-if="previewDoc.isPdf"
-            :src="previewDoc.url"
-            class="w-full h-full border-0 bg-white"
-            :title="previewDoc.filename"
-          />
-
-          <!-- Image preview -->
-          <div
-            v-else-if="previewDoc.isImage"
-            class="w-full h-full p-4 flex items-center justify-center overflow-auto"
-          >
-            <img
-              :src="previewDoc.url"
-              :alt="previewDoc.filename"
-              class="max-w-full max-h-full object-contain rounded-lg shadow-lg"
-            />
-          </div>
-
-          <!-- Unsupported preview fallback -->
-          <div v-else class="p-8 text-center space-y-3">
-            <FileText class="w-12 h-12 text-slate-500 mx-auto" />
-            <p class="text-sm text-slate-300">Ce format de fichier ne supporte pas l'aperçu direct dans le navigateur.</p>
-            <button
-              @click="downloadFromPreview"
-              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-2 transition-colors"
-            >
-              <Download class="w-4 h-4" />
-              Télécharger pour consulter
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- Modal: Document In-App Preview (Modular Component) -->
+    <DocumentPreviewModal :preview-doc="previewDoc" @close="closeDocPreview" />
   </div>
 </template>

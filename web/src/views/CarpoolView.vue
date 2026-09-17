@@ -28,6 +28,8 @@ import {
   Calculator,
   Lock,
   RotateCw,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-vue-next'
 
 interface LegForm {
@@ -90,6 +92,11 @@ const recentDrives = ref<any[]>([])
 const selectedDriveIds = ref<string[]>([])
 const titleTouched = ref(false)
 const currentRates = ref<any>(null)
+const expandedPassengerIndex = ref<number | null>(null)
+
+function togglePassengerMath(index: number) {
+  expandedPassengerIndex.value = expandedPassengerIndex.value === index ? null : index
+}
 
 // Batch selection state
 const selectedTripIds = ref<string[]>([])
@@ -392,6 +399,7 @@ function resetForm() {
   editingTripId.value = null
   titleTouched.value = false
   currentRates.value = null
+  expandedPassengerIndex.value = null
   selectedDriveIds.value = []
   sourceMode.value = 'DRIVES'
   form.value = {
@@ -1231,11 +1239,83 @@ onMounted(() => {
                 </span>
               </span>
               <span class="flex items-center gap-3">
+                <button
+                  type="button"
+                  @click="togglePassengerMath(index)"
+                  class="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1 transition-colors"
+                  :title="expandedPassengerIndex === index ? 'Masquer le détail du calcul' : 'Comprendre comment cette part est calculée'"
+                >
+                  <Calculator class="w-3.5 h-3.5" />
+                  <span>{{ expandedPassengerIndex === index ? 'Masquer le calcul' : 'Détail du calcul' }}</span>
+                  <ChevronUp v-if="expandedPassengerIndex === index" class="w-3.5 h-3.5" />
+                  <ChevronDown v-else class="w-3.5 h-3.5" />
+                </button>
                 <button type="button" @click="applyFairPrice(index)" class="text-indigo-400 hover:text-indigo-300 font-semibold">Appliquer la part équitable</button>
                 <button v-if="form.passengers.length > 1" type="button" @click="removePassenger(index)" class="text-slate-500 hover:text-rose-400" title="Retirer ce passager">
                   <Trash2 class="w-3.5 h-3.5" />
                 </button>
               </span>
+            </div>
+
+            <!-- Mathematical Breakdown Card -->
+            <div
+              v-if="expandedPassengerIndex === index"
+              class="mt-3 pt-3 border-t border-slate-800 space-y-2.5 bg-slate-950/70 p-3 rounded-xl"
+            >
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-slate-200 flex items-center gap-1.5">
+                  <Calculator class="w-3.5 h-3.5 text-indigo-400" />
+                  Formule de calcul par tronçon — {{ p.passenger_name || `Passager ${index + 1}` }}
+                </span>
+                <span class="text-[11px] text-slate-400 font-medium">
+                  {{ p.seats }} place{{ p.seats > 1 ? 's' : '' }} réservée{{ p.seats > 1 ? 's' : '' }}
+                </span>
+              </div>
+
+              <div class="space-y-2">
+                <div
+                  v-for="(leg, legIdx) in form.legs"
+                  :key="legIdx"
+                  class="text-[11px] p-2.5 rounded-lg border transition-colors"
+                  :class="p.board_stop_index <= legIdx && legIdx < p.alight_stop_index
+                    ? 'bg-slate-900/90 border-indigo-500/30 text-slate-200'
+                    : 'bg-slate-900/30 border-slate-800/50 text-slate-500 opacity-60'"
+                >
+                  <div class="flex items-center justify-between font-semibold">
+                    <span class="flex items-center gap-1.5">
+                      <span class="w-4 h-4 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-mono text-slate-300">
+                        {{ legIdx + 1 }}
+                      </span>
+                      <span>{{ stops[legIdx] }} → {{ stops[legIdx + 1] }}</span>
+                      <span v-if="Number(leg.distance_km)" class="text-slate-400 font-normal">({{ leg.distance_km }} km)</span>
+                    </span>
+                    <span v-if="p.board_stop_index <= legIdx && legIdx < p.alight_stop_index" class="text-indigo-300 font-bold">
+                      {{ fmt(euros((live.legDetails[legIdx]?.perPerson || 0) * (Number(p.seats) || 1))) }} €
+                    </span>
+                    <span v-else class="text-slate-500 italic text-[10px]">
+                      Non emprunté
+                    </span>
+                  </div>
+
+                  <div v-if="p.board_stop_index <= legIdx && legIdx < p.alight_stop_index" class="mt-1.5 pl-5.5 text-[10px] text-slate-400 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                    <span>Coût réel du tronçon : <strong class="text-slate-200">{{ fmt(euros(live.legDetails[legIdx]?.total || 0)) }} €</strong></span>
+                    <span>•</span>
+                    <span>Occupants : <strong class="text-slate-200">1 conducteur + {{ live.legDetails[legIdx]?.seats || 0 }} passager(s) = {{ 1 + (live.legDetails[legIdx]?.seats || 0) }}</strong></span>
+                    <span>•</span>
+                    <span class="text-indigo-300/90">
+                      Calcul : {{ fmt(euros(live.legDetails[legIdx]?.total || 0)) }} € ÷ {{ 1 + (live.legDetails[legIdx]?.seats || 0) }} pers.{{ p.seats > 1 ? ` × ${p.seats} pl.` : '' }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                <span class="text-slate-400">Total part équitable due :</span>
+                <div class="text-right">
+                  <span class="font-bold text-emerald-400 text-sm">{{ fmt(euros(live.shares[index] || 0)) }} €</span>
+                  <span class="text-[10px] text-slate-500 block">Somme exacte des tronçons où ce passager est à bord</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
