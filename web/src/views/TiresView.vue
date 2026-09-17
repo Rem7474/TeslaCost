@@ -368,6 +368,20 @@ async function handleBatchDisposeSubmit() {
   }
 }
 
+function getTireSelectLabel(t: any): string {
+  if (!t || !t.tire) return ''
+  const pos = t.tire.current_position === 'STORAGE'
+    ? 'Au garage'
+    : t.tire.current_position === 'DISPOSED'
+    ? 'Au rebut'
+    : 'Roue ' + t.tire.current_position
+  const km = Math.round(t.total_distance_km ?? t.tire.accumulated_distance_km ?? 0)
+  const sessionCount = t.sessions?.length ?? 0
+  const sessionLabel = sessionCount > 1 ? `${sessionCount} sessions` : `${sessionCount} session`
+  const dot = t.tire.dot_code ? ` • DOT ${t.tire.dot_code}` : ''
+  return `${t.tire.brand} ${t.tire.model} (${t.tire.dimension}) — ${pos} • ${km.toLocaleString('fr-FR')} km • ${sessionLabel}${dot}`
+}
+
 function updateCopyHistoryTargets() {
   if (!copyHistorySourceTire.value) return
   const otherTires = tires.value.filter((t) => t.tire.id !== copyHistorySourceTire.value.id)
@@ -2488,7 +2502,7 @@ function formatDate(d: string) {
               >
                 <option value="">-- Choisir un pneu --</option>
                 <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
-                  {{ t.tire.brand }} {{ t.tire.model }} ({{ t.tire.season }})
+                  {{ getTireSelectLabel(t) }}
                 </option>
               </select>
             </div>
@@ -2501,7 +2515,7 @@ function formatDate(d: string) {
               >
                 <option value="">-- Choisir un pneu --</option>
                 <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
-                  {{ t.tire.brand }} {{ t.tire.model }} ({{ t.tire.season }})
+                  {{ getTireSelectLabel(t) }}
                 </option>
               </select>
             </div>
@@ -2514,7 +2528,7 @@ function formatDate(d: string) {
               >
                 <option value="">-- Choisir un pneu --</option>
                 <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
-                  {{ t.tire.brand }} {{ t.tire.model }} ({{ t.tire.season }})
+                  {{ getTireSelectLabel(t) }}
                 </option>
               </select>
             </div>
@@ -2527,7 +2541,7 @@ function formatDate(d: string) {
               >
                 <option value="">-- Choisir un pneu --</option>
                 <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
-                  {{ t.tire.brand }} {{ t.tire.model }} ({{ t.tire.season }})
+                  {{ getTireSelectLabel(t) }}
                 </option>
               </select>
             </div>
@@ -3076,7 +3090,7 @@ function formatDate(d: string) {
               class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
               <option v-for="t in tires" :key="t.tire.id" :value="t.tire.id">
-                {{ t.tire.brand }} {{ t.tire.model }} ({{ t.tire.dimension }}) — {{ t.tire.current_position === 'STORAGE' ? 'Au garage' : t.tire.current_position === 'DISPOSED' ? 'Au rebut' : 'Roue ' + t.tire.current_position }}
+                {{ getTireSelectLabel(t) }}
               </option>
             </select>
           </div>
@@ -3158,9 +3172,15 @@ function formatDate(d: string) {
                   class="rounded accent-indigo-500 w-4 h-4"
                 />
                 <div class="min-w-0 flex-1">
-                  <div class="font-bold truncate text-white">{{ t.tire.brand }} {{ t.tire.model }}</div>
+                  <div class="font-bold truncate text-white flex items-center justify-between gap-2">
+                    <span class="truncate">{{ t.tire.brand }} {{ t.tire.model }}</span>
+                    <span class="text-[10px] font-normal text-indigo-300 shrink-0">
+                      {{ Math.round(t.total_distance_km ?? t.tire.accumulated_distance_km ?? 0).toLocaleString('fr-FR') }} km • {{ (t.sessions?.length || 0) }} {{ (t.sessions?.length || 0) > 1 ? 'sessions' : 'session' }}
+                    </span>
+                  </div>
                   <div class="text-[10px] text-slate-400 truncate">
                     {{ t.tire.dimension }} — {{ t.tire.current_position === 'STORAGE' ? 'Au garage' : t.tire.current_position === 'DISPOSED' ? 'Au rebut' : 'Roue ' + t.tire.current_position }}
+                    <span v-if="t.tire.dot_code" class="text-slate-500">• DOT {{ t.tire.dot_code }}</span>
                   </div>
                 </div>
               </label>
