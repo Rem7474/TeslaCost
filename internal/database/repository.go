@@ -376,7 +376,7 @@ func (r *Repository) UpdateVehiclePreTeslaMateEnergy(ctx context.Context, vehicl
 	query := `
 		UPDATE vehicles
 		SET pre_teslamate_kwh_100km = $1, pre_teslamate_eur_per_kwh = $2, updated_at = NOW()
-		WHERE id = $3 AND (user_id = $4 OR EXISTS (
+		WHERE id::text = $3 AND (user_id::text = $4 OR EXISTS (
 			SELECT 1 FROM vehicle_members vm WHERE vm.vehicle_id = vehicles.id AND vm.user_id::text = $4 AND vm.role IN ('OWNER', 'EDITOR')
 		));
 	`
@@ -403,7 +403,7 @@ func (r *Repository) UpdateVehicleOdometer(ctx context.Context, vehicleID string
 func (r *Repository) DeleteVehicle(ctx context.Context, id, userID string) error {
 	query := `
 		DELETE FROM vehicles 
-		WHERE id = $1 AND (user_id = $2 OR EXISTS (
+		WHERE id::text = $1 AND (user_id::text = $2 OR EXISTS (
 			SELECT 1 FROM vehicle_members vm WHERE vm.vehicle_id = vehicles.id AND vm.user_id::text = $2 AND vm.role = 'OWNER'
 		));
 	`
@@ -3249,7 +3249,7 @@ func (r *Repository) GetExpenseDocumentByID(ctx context.Context, id, vehicleID, 
 		SELECT d.id, d.user_id, d.vehicle_id, d.filename, d.mime_type, d.file_size, d.storage_path, d.description, d.created_at, d.updated_at
 		FROM expense_documents d
 		JOIN vehicles v ON v.id = d.vehicle_id
-		WHERE d.id::text = $1 AND d.vehicle_id = $2 AND (v.user_id = $3 OR EXISTS (
+		WHERE d.id::text = $1 AND d.vehicle_id::text = $2 AND (v.user_id::text = $3 OR EXISTS (
 			SELECT 1 FROM vehicle_members vm WHERE vm.vehicle_id = v.id AND vm.user_id::text = $3
 		));
 	`
@@ -3279,7 +3279,7 @@ func (r *Repository) ListExpenseDocuments(ctx context.Context, vehicleID, userID
 			d.created_at
 		FROM expense_documents d
 		JOIN vehicles v ON v.id = d.vehicle_id
-		WHERE d.vehicle_id = $1 AND (v.user_id = $2 OR EXISTS (
+		WHERE d.vehicle_id::text = $1 AND (v.user_id::text = $2 OR EXISTS (
 			SELECT 1 FROM vehicle_members vm WHERE vm.vehicle_id = v.id AND vm.user_id::text = $2
 		))
 		ORDER BY d.created_at DESC;
@@ -3309,7 +3309,7 @@ func (r *Repository) DeleteExpenseDocument(ctx context.Context, id, vehicleID, u
 	query := `
 		DELETE FROM expense_documents d
 		USING vehicles v
-		WHERE d.vehicle_id = v.id AND d.id::text = $1 AND d.vehicle_id = $2 AND (v.user_id = $3 OR EXISTS (
+		WHERE d.vehicle_id = v.id AND d.id::text = $1 AND d.vehicle_id::text = $2 AND (v.user_id::text = $3 OR EXISTS (
 			SELECT 1 FROM vehicle_members vm WHERE vm.vehicle_id = v.id AND vm.user_id::text = $3 AND vm.role IN ('OWNER', 'EDITOR')
 		));
 	`
