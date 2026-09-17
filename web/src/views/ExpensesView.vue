@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api, type ExpenseDocumentHeader, type MaintenanceReminder, type VehicleWebhook } from '@/services/api'
+import AppDatePicker from '@/components/AppDatePicker.vue'
 import {
   Receipt,
   Plus,
@@ -42,7 +43,25 @@ const router = useRouter()
 const route = useRoute()
 const vehicleStore = useVehicleStore()
 const { showConfirm, showAlert } = useConfirm()
-const activeTab = ref<'TOLLS' | 'MAINTENANCE' | 'REMINDERS' | 'CHARGES' | 'DOCUMENTS'>('TOLLS')
+
+const validTabs = ['TOLLS', 'MAINTENANCE', 'REMINDERS', 'CHARGES', 'DOCUMENTS'] as const
+type TabType = typeof validTabs[number]
+
+const initialTab = (route.query.tab as string)?.toUpperCase()
+const activeTab = ref<TabType>(validTabs.includes(initialTab as TabType) ? (initialTab as TabType) : 'TOLLS')
+
+watch(activeTab, (newTab) => {
+  if (route.query.tab !== newTab) {
+    router.replace({ query: { ...route.query, tab: newTab } })
+  }
+})
+
+watch(() => route.query.tab, (qTab) => {
+  const upper = (qTab as string)?.toUpperCase()
+  if (upper && validTabs.includes(upper as TabType) && activeTab.value !== upper) {
+    activeTab.value = upper as TabType
+  }
+})
 
 const driveExpenses = ref<any[]>([])
 const maintenanceExpenses = ref<any[]>([])
@@ -1992,7 +2011,7 @@ async function handleDeleteWebhook() {
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label for="expense-toll-date" class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
-              <input id="expense-toll-date" v-model="tollForm.date" type="datetime-local" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              <AppDatePicker id="expense-toll-date" v-model="tollForm.date" enable-time-picker size="xs" />
             </div>
             <div>
               <label for="expense-toll-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes / Description</label>
@@ -2147,7 +2166,7 @@ async function handleDeleteWebhook() {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="expense-maint-date" class="block text-xs font-semibold text-slate-300 mb-1">Date</label>
-              <input id="expense-maint-date" v-model="maintForm.date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <AppDatePicker id="expense-maint-date" v-model="maintForm.date" required size="sm" />
             </div>
             <div>
               <label for="maint-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
@@ -2284,7 +2303,7 @@ async function handleDeleteWebhook() {
               </div>
               <div>
                 <label for="maint-form-recurrence-end-date" class="block text-xs font-semibold text-slate-300 mb-1">Fin (optionnelle)</label>
-                <input id="maint-form-recurrence-end-date" v-model="maintForm.recurrence_end_date" type="date" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <AppDatePicker id="maint-form-recurrence-end-date" v-model="maintForm.recurrence_end_date" size="sm" :clearable="true" />
               </div>
             </div>
           </div>
@@ -2396,7 +2415,7 @@ async function handleDeleteWebhook() {
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label for="charge-form-date" class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
-                <input id="charge-form-date" v-model="chargeForm.date" type="datetime-local" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+                <AppDatePicker id="charge-form-date" v-model="chargeForm.date" enable-time-picker required size="xs" />
               </div>
               <div>
                 <label for="charge-form-kwh-added" class="block text-xs font-semibold text-slate-300 mb-1">Énergie ajoutée (kWh)</label>
@@ -2681,11 +2700,11 @@ async function handleDeleteWebhook() {
               </div>
               <div>
                 <label for="reminder-form-last-date" class="block text-xs font-semibold text-slate-300 mb-1">Date dernier entretien</label>
-                <input
+                <AppDatePicker
                   id="reminder-form-last-date"
                   v-model="reminderForm.last_service_date"
-                  type="date"
-                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                  size="sm"
+                  :clearable="true"
                 />
               </div>
             </div>
@@ -2771,12 +2790,11 @@ async function handleDeleteWebhook() {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="complete-form-date" class="block text-xs font-semibold text-slate-300 mb-1">Date d'intervention</label>
-              <input
+              <AppDatePicker
                 id="complete-form-date"
                 v-model="completeForm.service_date"
-                type="date"
                 required
-                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
+                size="sm"
               />
             </div>
             <div>

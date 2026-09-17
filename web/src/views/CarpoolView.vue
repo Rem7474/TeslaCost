@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import AppDatePicker from '@/components/AppDatePicker.vue'
 import {
   Users,
   Plus,
@@ -1053,18 +1054,11 @@ onMounted(() => {
                 Date du trajet
               </span>
             </div>
-            <input
+            <AppDatePicker
               id="carpool-date"
               v-model="form.date"
-              type="date"
               :disabled="isDateDisabled"
-              :title="isDateDisabled ? 'La date est automatiquement fixée selon le(s) trajet(s) sélectionné(s)' : ''"
-              class="w-full text-sm rounded-xl px-3 py-2 border transition-colors"
-              :class="
-                isDateDisabled
-                  ? 'bg-slate-900/90 border-slate-800 text-slate-400 cursor-not-allowed select-none opacity-80'
-                  : 'bg-slate-800 text-slate-100 border-slate-700 focus:outline-none focus:border-rose-500'
-              "
+              required
             />
           </div>
         </div>

@@ -48,7 +48,7 @@ function onVehicleChange(event: Event) {
           <select id="topbar-active-vehicle"
             :value="vehicleStore.activeVehicle?.id"
             @change="onVehicleChange"
-            class="bg-slate-800 text-slate-100 text-sm font-semibold rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500 transition-colors max-w-[130px] sm:max-w-[200px] md:max-w-xs truncate"
+            class="bg-slate-800 text-slate-100 text-sm font-semibold rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500 transition-colors max-w-[170px] sm:max-w-[220px] md:max-w-xs truncate"
           >
             <option v-for="v in vehicleStore.vehicles" :key="v.id" :value="v.id">
               {{ v.name }}
@@ -57,9 +57,9 @@ function onVehicleChange(event: Event) {
           </select>
 
           <!-- Odometer pill -->
-          <div class="hidden sm:flex items-center gap-1.5 bg-slate-800/80 px-2.5 py-1 rounded-lg text-xs text-slate-300 border border-slate-700/50">
-            <Gauge class="w-3.5 h-3.5 text-rose-400" />
-            <span>{{ Math.round(vehicleStore.activeVehicle?.current_odometer || 0).toLocaleString('fr-FR') }} km</span>
+          <div class="flex items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-lg text-xs text-slate-300 border border-slate-700/50">
+            <Gauge class="w-3.5 h-3.5 text-rose-400 shrink-0" />
+            <span class="truncate max-w-[90px] sm:max-w-none">{{ Math.round(vehicleStore.activeVehicle?.current_odometer || 0).toLocaleString('fr-FR') }} km</span>
           </div>
         </div>
 

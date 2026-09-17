@@ -4,6 +4,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import AppDatePicker from '@/components/AppDatePicker.vue'
 import {
   Car,
   Plus,
@@ -925,7 +926,7 @@ function clearCardTestResult(id: string) {
             </div>
               <div>
                 <label for="own-start-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ isLease ? 'Début du contrat' : 'Date d\'achat' }}</label>
-                <input id="own-start-date" v-model="ownershipForm.start_date" type="date" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+                <AppDatePicker id="own-start-date" v-model="ownershipForm.start_date" required size="sm" />
               </div>
               <div>
                 <label for="own-start-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre au début (km)</label>
@@ -1046,7 +1047,7 @@ function clearCardTestResult(id: string) {
             <div v-if="ownershipForm.acquisition_type === 'LOA'" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label for="own-option-date" class="block text-xs font-semibold text-slate-300 mb-1">Option levée le (vide si non levée)</label>
-                <input id="own-option-date" v-model="ownershipForm.option_exercised_date" type="date"  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+                <AppDatePicker id="own-option-date" v-model="ownershipForm.option_exercised_date" size="sm" :clearable="true" />
               </div>
             </div>
           </div>
@@ -1073,7 +1074,7 @@ function clearCardTestResult(id: string) {
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label for="own-end-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ isLease && !ownershipForm.option_exercised_date ? 'Restitué le' : 'Vendu le' }}</label>
-                <input id="own-end-date" v-model="ownershipForm.end_date" type="date"  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+                <AppDatePicker id="own-end-date" v-model="ownershipForm.end_date" size="sm" :clearable="true" />
               </div>
               <div v-if="isOwnedPhase">
                 <label for="own-sale-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix de revente (€)</label>
@@ -1149,12 +1150,11 @@ function clearCardTestResult(id: string) {
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label for="checkpoint-date" class="block text-xs font-semibold text-slate-300 mb-1">Date du relevé</label>
-              <input
+              <AppDatePicker
                 id="checkpoint-date"
                 v-model="checkpointForm.date"
-                type="date"
                 required
-                class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
+                size="sm"
               />
             </div>
             <div>

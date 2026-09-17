@@ -1,4 +1,74 @@
 @import "tailwindcss";
+@import "@vuepic/vue-datepicker/dist/main.css";
+
+.dp--theme-dark {
+  --dp-background-color: #1e293b;
+  --dp-text-color: #f1f5f9;
+  --dp-hover-color: #334155;
+  --dp-hover-text-color: #ffffff;
+  --dp-hover-icon-color: #94a3b8;
+  --dp-primary-color: #e11d48;
+  --dp-primary-disabled-color: #9f1239;
+  --dp-primary-text-color: #ffffff;
+  --dp-secondary-color: #64748b;
+  --dp-border-color: #334155;
+  --dp-menu-border-color: #334155;
+  --dp-border-color-hover: #475569;
+  --dp-border-color-focus: #e11d48;
+  --dp-disabled-color: #0f172a;
+  --dp-disabled-color-text: #475569;
+  --dp-scroll-bar-background: #0f172a;
+  --dp-scroll-bar-color: #334155;
+  --dp-border-radius: 0.75rem;
+  --dp-cell-border-radius: 0.5rem;
+  --dp-font-family: inherit;
+}
+
+.dp__input {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  border-radius: 0.75rem !important;
+  color: #f1f5f9 !important;
+  font-size: 0.875rem !important;
+  line-height: 1.25rem !important;
+  padding-top: 0.5rem !important;
+  padding-bottom: 0.5rem !important;
+  padding-left: 2.25rem !important;
+  padding-right: 0.75rem !important;
+  transition: border-color 0.15s ease-in-out !important;
+  cursor: pointer !important;
+}
+
+.dp__input:hover {
+  border-color: #475569 !important;
+}
+
+.dp__input:focus {
+  border-color: #e11d48 !important;
+  outline: none !important;
+}
+
+.dp__input:disabled {
+  cursor: not-allowed !important;
+  opacity: 0.7 !important;
+}
+
+.dp__input_icon {
+  color: #94a3b8 !important;
+  padding-left: 0.75rem !important;
+  cursor: pointer !important;
+}
+
+.dp__clear_icon {
+  color: #94a3b8 !important;
+  padding-right: 0.5rem !important;
+  cursor: pointer !important;
+}
+
+.dp__menu {
+  box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5) !important;
+  border: 1px solid #334155 !important;
+}
 
 @layer base {
   :root {

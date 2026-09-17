@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import AppDatePicker from '@/components/AppDatePicker.vue'
 import {
   Navigation as NavIcon,
   Tag,
@@ -795,22 +796,24 @@ function formatDate(dateStr: string) {
 
           <!-- Custom Date Range (when periodMode === 'CUSTOM') -->
           <div v-if="periodMode === 'CUSTOM'" class="flex items-center gap-2 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800/80 text-xs">
-            <label for="drives-filter-from" class="text-slate-400">Du</label>
-            <input
-              id="drives-filter-from"
-              type="date"
-              v-model="customFrom"
-              @change="onCustomDateChange"
-              class="bg-slate-900 text-white text-xs px-2 py-1 rounded-lg border border-slate-800 outline-none focus:border-rose-500"
-            />
-            <label for="drives-filter-to" class="text-slate-400">Au</label>
-            <input
-              id="drives-filter-to"
-              type="date"
-              v-model="customTo"
-              @change="onCustomDateChange"
-              class="bg-slate-900 text-white text-xs px-2 py-1 rounded-lg border border-slate-800 outline-none focus:border-rose-500"
-            />
+            <label for="drives-filter-from" class="text-slate-400 shrink-0">Du</label>
+            <div class="w-36">
+              <AppDatePicker
+                id="drives-filter-from"
+                v-model="customFrom"
+                size="xs"
+                @change="onCustomDateChange"
+              />
+            </div>
+            <label for="drives-filter-to" class="text-slate-400 shrink-0">Au</label>
+            <div class="w-36">
+              <AppDatePicker
+                id="drives-filter-to"
+                v-model="customTo"
+                size="xs"
+                @change="onCustomDateChange"
+              />
+            </div>
           </div>
         </div>
 

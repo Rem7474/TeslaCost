@@ -3,6 +3,7 @@ import { ref, onMounted, computed, watch } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import AppDatePicker from '@/components/AppDatePicker.vue'
 import {
   Disc,
   Plus,
@@ -1674,10 +1675,11 @@ function formatDate(d: string) {
         <div class="grid grid-cols-3 gap-3">
           <div>
             <label for="tire-add-tire-purchase-date" class="block text-[11px] text-slate-400 mb-1">Date d'achat</label>
-            <input id="tire-add-tire-purchase-date"
+            <AppDatePicker
+              id="tire-add-tire-purchase-date"
               v-model="addTireForm.purchase_date"
-              type="date"
-              class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-2.5 py-1.5 border border-slate-700"
+              size="xs"
+              :clearable="true"
             />
           </div>
           <div>
@@ -2065,10 +2067,11 @@ function formatDate(d: string) {
           <div class="grid grid-cols-2 gap-2">
             <div>
               <label for="tire-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">Date de montage</label>
-              <input id="tire-session-mounted-date"
+              <AppDatePicker
+                id="tire-session-mounted-date"
                 v-model="sessionForm.mounted_date"
-                type="date"
-                class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
+                size="xs"
+                :clearable="true"
               />
             </div>
             <div>
@@ -2092,10 +2095,11 @@ function formatDate(d: string) {
           <div v-if="sessionForm.is_dismounted" class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
             <div>
               <label for="tire-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">Date démontage</label>
-              <input id="tire-session-dismounted-date"
+              <AppDatePicker
+                id="tire-session-dismounted-date"
                 v-model="sessionForm.dismounted_date"
-                type="date"
-                class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
+                size="xs"
+                :clearable="true"
               />
             </div>
             <div>
@@ -2188,7 +2192,7 @@ function formatDate(d: string) {
           </div>
           <div>
             <label for="tire-new-log-date" class="block text-slate-400 mb-1 font-semibold">Date du relevé</label>
-            <input id="tire-new-log-date" v-model="newLogForm.date" type="date" class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700" />
+            <AppDatePicker id="tire-new-log-date" v-model="newLogForm.date" size="sm" required />
           </div>
           <div>
             <label for="tire-new-log-notes" class="block text-slate-400 mb-1 font-semibold">Notes (optionnel)</label>
@@ -2367,7 +2371,13 @@ function formatDate(d: string) {
             </div>
             <div>
               <label for="tire-edit-purchase-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date d'achat</label>
-              <input id="tire-edit-purchase-date" v-model="tireEditForm.purchase_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+              <AppDatePicker
+                id="tire-edit-purchase-date"
+                v-model="tireEditForm.purchase_date"
+                :placeholder="tireEditIds.length > 1 ? 'Inchangé' : 'Sélectionner une date'"
+                size="xs"
+                :clearable="true"
+              />
             </div>
             <div>
               <label for="tire-edit-dot" class="block text-[11px] text-slate-400 mb-1 font-semibold">Code DOT</label>
@@ -2410,7 +2420,13 @@ function formatDate(d: string) {
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label for="tire-edit-mounted-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date de montage</label>
-                <input id="tire-edit-mounted-date" v-model="tireEditForm.mounted_date" type="date"  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+                <AppDatePicker
+                  id="tire-edit-mounted-date"
+                  v-model="tireEditForm.mounted_date"
+                  :placeholder="tireEditIds.length > 1 ? 'Inchangé' : 'Sélectionner une date'"
+                  size="xs"
+                  :clearable="true"
+                />
               </div>
               <div>
                 <label for="tire-edit-mounted-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au montage (km)</label>
@@ -2454,7 +2470,12 @@ function formatDate(d: string) {
           </p>
           <div>
             <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date</label>
-            <input id="tire-dispose-date" v-model="disposeForm.date" type="date" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+            <AppDatePicker
+              id="tire-dispose-date"
+              v-model="disposeForm.date"
+              required
+              size="xs"
+            />
           </div>
           <div v-if="['FL', 'FR', 'RL', 'RR'].includes(selectedTire.current_position)">
             <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au démontage (km)</label>
@@ -2534,11 +2555,11 @@ function formatDate(d: string) {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="batch-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">Date de montage</label>
-              <input
+              <AppDatePicker
                 id="batch-session-mounted-date"
                 v-model="batchSessionForm.mounted_date"
-                type="date"
-                class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+                size="sm"
+                :clearable="true"
               />
             </div>
             <div>
@@ -2556,11 +2577,11 @@ function formatDate(d: string) {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="batch-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">Date démontage</label>
-              <input
+              <AppDatePicker
                 id="batch-session-dismounted-date"
                 v-model="batchSessionForm.dismounted_date"
-                type="date"
-                class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
+                size="sm"
+                :clearable="true"
               />
             </div>
             <div>
