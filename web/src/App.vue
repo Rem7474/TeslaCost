@@ -42,7 +42,7 @@ onMounted(async () => {
         <!-- Attente de l'initialisation du store véhicule pour éviter un affichage vide au refresh -->
         <div v-if="!vehicleStore.isInitialized" class="flex flex-col items-center justify-center py-28 space-y-4">
           <div class="w-9 h-9 border-3 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
-          <p class="text-xs font-medium text-slate-400">Chargement de votre Tesla...</p>
+          <p class="text-xs font-medium text-slate-400">Chargement de votre véhicule...</p>
         </div>
         <router-view v-else />
       </main>
