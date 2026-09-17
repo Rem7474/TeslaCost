@@ -110,13 +110,26 @@ func main() {
 
 	// Public Health Check Endpoint
 	healthHandler := func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		dbStatus := "connected"
-		if dbPool == nil {
-			dbStatus = "disconnected"
+		dbStatus := "disconnected"
+		if dbPool != nil {
+			pingCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+			defer cancel()
+			if err := dbPool.Pool.Ping(pingCtx); err == nil {
+				dbStatus = "connected"
+			}
 		}
+
+		status := "healthy"
+		httpStatus := http.StatusOK
+		if dbStatus != "connected" {
+			status = "unhealthy"
+			httpStatus = http.StatusServiceUnavailable
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(httpStatus)
 		json.NewEncoder(w).Encode(map[string]any{
-			"status":    "healthy",
+			"status":    status,
 			"database":  dbStatus,
 			"timestamp": time.Now().UTC().Format(time.RFC3339),
 			"version":   AppVersion,
@@ -323,6 +336,11 @@ func main() {
 	}
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				log.Fatalf("[panic] recovered in HTTP server goroutine: %v", r)
+			}
+		}()
 		log.Printf("TeslaCost API & Web listening on port %s (Base URL: %s)", cfg.Port, cfg.AppBaseURL)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Server error: %v", err)

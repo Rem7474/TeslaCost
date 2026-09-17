@@ -70,4 +70,8 @@ USER teslacost
 # Declare the document volume so Docker knows to persist it.
 VOLUME ["/data/documents"]
 
+# Uses busybox wget (bundled with alpine) so no extra package is needed.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD wget -q --spider http://127.0.0.1:8080/api/health || exit 1
+
 CMD ["/app/teslacost"]

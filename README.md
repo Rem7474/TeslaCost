@@ -147,7 +147,8 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
       POSTGRES_DB: ${DB_NAME:-teslacost}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Bound to localhost only by default; override DB_PORT_BIND for external access.
+      - "${DB_PORT_BIND:-127.0.0.1:5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -155,9 +156,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   api:
-    image: ghcr.io/rem7474/teslacost:latest
+    # Pin TESLACOST_VERSION (e.g. "v1.17.0") in your .env for reproducible deployments.
+    image: ghcr.io/rem7474/teslacost:${TESLACOST_VERSION:-latest}
     pull_policy: missing
     build:
       context: .
@@ -168,6 +175,17 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       PORT: 8080
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}

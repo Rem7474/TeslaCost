@@ -9,6 +9,15 @@ import (
 	"github.com/teslacost/teslacost/internal/models"
 )
 
+// recoverPanic logs and swallows a panic recovered from a background goroutine so that
+// an unexpected error in a single background job (e.g. a malformed TeslaMate response)
+// cannot crash the whole server process.
+func recoverPanic(tag string) {
+	if r := recover(); r != nil {
+		log.Printf("[panic] recovered in %s: %v", tag, r)
+	}
+}
+
 // Sync job statuses.
 const (
 	SyncJobRunning   = "RUNNING"
@@ -95,6 +104,7 @@ func (s *SyncService) StartSync(v models.Vehicle) (job *SyncJob, started bool) {
 		return job, false
 	}
 	go func() {
+		defer recoverPanic("sync.StartSync")
 		ctx, cancel := context.WithTimeout(context.Background(), manualSyncTimeout)
 		defer cancel()
 		res, err := s.SyncVehicle(ctx, &v)

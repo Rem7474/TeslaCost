@@ -225,9 +225,12 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 			v.CurrentOdometer = odometer
 			if s.notifications != nil {
 				go func(veh models.Vehicle, odo float64) {
+					defer recoverPanic("sync.notifications")
 					notifyCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 					defer cancel()
-					_ = s.notifications.CheckAndNotify(notifyCtx, &veh, odo)
+					if err := s.notifications.CheckAndNotify(notifyCtx, &veh, odo); err != nil {
+						log.Printf("[notification] CheckAndNotify failed for vehicle %s: %v", veh.ID, err)
+					}
 				}(*v, odometer)
 			}
 		} else if odometer > 0 && odometer+1 < v.CurrentOdometer {
@@ -639,6 +642,14 @@ func (s *SyncService) runBackgroundSyncCycle(ctx context.Context) {
 	}
 
 	for _, v := range vehicles {
-		s.runScheduledSync(ctx, v)
+		s.runScheduledSyncSafe(ctx, v)
 	}
+}
+
+// runScheduledSyncSafe runs a single vehicle's scheduled sync, recovering from any panic
+// so that one vehicle failing unexpectedly does not take down the whole background worker
+// (and, by extension, the server process) for every other vehicle.
+func (s *SyncService) runScheduledSyncSafe(ctx context.Context, v models.Vehicle) {
+	defer recoverPanic(fmt.Sprintf("sync.scheduled(%s)", v.ID))
+	s.runScheduledSync(ctx, v)
 }
