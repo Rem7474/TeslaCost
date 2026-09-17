@@ -1416,7 +1416,9 @@ function clearCardTestResult(id: string) {
             <form @submit.prevent="handleAddMember" class="space-y-3">
               <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
                 <div class="sm:col-span-7">
+                  <label for="new-member-email" class="sr-only">Email du membre</label>
                   <input
+                    id="new-member-email"
                     v-model="newMemberEmail"
                     type="email"
                     required
@@ -1425,7 +1427,9 @@ function clearCardTestResult(id: string) {
                   />
                 </div>
                 <div class="sm:col-span-5">
+                  <label for="new-member-role" class="sr-only">Rôle du membre</label>
                   <select
+                    id="new-member-role"
                     v-model="newMemberRole"
                     class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-violet-500"
                   >
@@ -1510,7 +1514,9 @@ function clearCardTestResult(id: string) {
                 <div class="flex items-center gap-2 shrink-0">
                   <!-- If current user is OWNER and this member is not OWNER: allow role change or removal -->
                   <template v-if="membersVehicle?.role === 'OWNER' && m.role !== 'OWNER'">
+                    <label :for="'member-role-' + m.user_id" class="sr-only">Rôle du membre {{ m.user_email }}</label>
                     <select
+                      :id="'member-role-' + m.user_id"
                       :value="m.role"
                       :disabled="updatingMemberId === m.user_id"
                       @change="handleUpdateMemberRole(m, ($event.target as HTMLSelectElement).value)"
