@@ -160,6 +160,7 @@ func main() {
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
 		checkpointHandler := handlers.NewCheckpointHandler(repo)
 		reminderHandler := handlers.NewReminderHandler(repo, notificationService)
+		vehicleMemberHandler := handlers.NewVehicleMemberHandler(repo)
 
 		// Public Auth
 		r.Route("/api/auth", func(r chi.Router) {
@@ -195,6 +196,12 @@ func main() {
 				r.Put("/{id}/pre-teslamate-energy", vehicleHandler.UpdatePreTeslaMateEnergy)
 				r.Get("/{id}/odometer-at", vehicleHandler.GetOdometerAtDate)
 				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
+
+				// Shared Vehicle Members
+				r.Get("/{id}/members", vehicleMemberHandler.ListMembers)
+				r.Post("/{id}/members", vehicleMemberHandler.AddMember)
+				r.Put("/{id}/members/{memberId}", vehicleMemberHandler.UpdateMemberRole)
+				r.Delete("/{id}/members/{memberId}", vehicleMemberHandler.RemoveMember)
 
 				// Odometer Checkpoints
 				r.Get("/{vehicleId}/odometer-checkpoints", checkpointHandler.List)

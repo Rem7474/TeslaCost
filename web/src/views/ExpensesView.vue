@@ -923,6 +923,7 @@ function applyReminderPreset(preset: ReminderPreset) {
 
 const overdueReminders = computed(() => reminders.value.filter((r) => r.status === 'OVERDUE'))
 const dueSoonReminders = computed(() => reminders.value.filter((r) => r.status === 'DUE_SOON'))
+const okReminders = computed(() => reminders.value.filter((r) => r.status === 'OK'))
 const urgentRemindersCount = computed(() => overdueReminders.value.length + dueSoonReminders.value.length)
 
 async function loadReminders() {
@@ -1045,8 +1046,8 @@ async function handleCompleteReminder() {
   if (!vehicleStore.activeVehicle || !completingReminder.value) return
   try {
     const payload = {
-      service_date: new Date(completeForm.value.service_date).toISOString(),
-      service_odometer: completeForm.value.service_odometer !== '' ? Number(completeForm.value.service_odometer) : null,
+      completed_date: completeForm.value.service_date,
+      completed_odometer: completeForm.value.service_odometer !== '' ? Number(completeForm.value.service_odometer) : undefined,
     }
     await api.completeReminder(vehicleStore.activeVehicle.id, completingReminder.value.id, payload)
 
@@ -1173,7 +1174,7 @@ async function handleDeleteWebhook() {
         <p class="text-sm text-slate-400">Péages, parkings, entretien récurrent, assurance et recharges</p>
       </div>
 
-      <div class="flex items-center gap-2">
+      <div v-if="vehicleStore.canEdit" class="flex items-center gap-2">
         <button
           v-if="activeTab === 'TOLLS'"
           @click="openAddTollModal"
@@ -1225,6 +1226,15 @@ async function handleDeleteWebhook() {
           Ajouter un justificatif
         </button>
       </div>
+    </div>
+
+    <!-- Viewer mode banner -->
+    <div
+      v-if="!vehicleStore.canEdit"
+      class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center gap-3 text-xs text-slate-400"
+    >
+      <Eye class="w-4 h-4 text-slate-400 shrink-0" />
+      <span>Vous consultez ce véhicule en mode <strong>Lecteur seul</strong>. Les ajouts et modifications sont désactivés.</span>
     </div>
 
     <!-- Sub-tabs -->
@@ -1318,7 +1328,7 @@ async function handleDeleteWebhook() {
             <div class="text-lg font-extrabold text-amber-400">
               {{ e.amount.toFixed(2) }} {{ e.currency }}
             </div>
-            <div class="flex items-center gap-1.5">
+            <div v-if="vehicleStore.canEdit" class="flex items-center gap-1.5">
               <button
                 v-if="e.drive_id || e.trip_group_id"
                 @click="router.push({ path: '/carpools', query: e.drive_id ? { new_drive_id: e.drive_id } : { new_trip_group_id: e.trip_group_id } })"
@@ -1399,7 +1409,7 @@ async function handleDeleteWebhook() {
             <div class="text-lg font-extrabold text-pink-400">
               {{ m.amount.toFixed(2) }} {{ m.currency }}
             </div>
-            <div class="flex items-center gap-1.5">
+            <div v-if="vehicleStore.canEdit" class="flex items-center gap-1.5">
               <button
                 @click="openEditMaintModal(m)"
                 class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-pink-400 rounded-xl transition-colors border border-slate-700/60"
@@ -1444,6 +1454,7 @@ async function handleDeleteWebhook() {
           </div>
         </div>
         <button
+          v-if="vehicleStore.canEdit"
           @click="openWebhookModal"
           class="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 shrink-0 transition-colors self-start sm:self-auto"
         >
@@ -1494,7 +1505,7 @@ async function handleDeleteWebhook() {
           </p>
         </div>
 
-        <div class="pt-2">
+        <div v-if="vehicleStore.canEdit" class="pt-2">
           <p class="text-xs font-semibold text-slate-300 mb-3">Ajouter un rappel type en 1 clic :</p>
           <div class="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
             <button
@@ -1510,7 +1521,7 @@ async function handleDeleteWebhook() {
           </div>
         </div>
 
-        <div class="pt-2">
+        <div v-if="vehicleStore.canEdit" class="pt-2">
           <button
             @click="openAddReminderModal"
             class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-2 shadow-lg shadow-violet-600/20"
@@ -1623,7 +1634,7 @@ async function handleDeleteWebhook() {
               </span>
             </div>
 
-            <div class="flex items-center gap-1.5">
+            <div v-if="vehicleStore.canEdit" class="flex items-center gap-1.5">
               <button
                 @click="openCompleteReminder(r)"
                 class="px-2.5 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-semibold rounded-xl border border-emerald-500/30 flex items-center gap-1.5 transition-colors"
@@ -1729,7 +1740,7 @@ async function handleDeleteWebhook() {
                 <AlertTriangle class="w-3.5 h-3.5" /> Coût manquant
               </span>
             </div>
-            <div class="flex items-center gap-1.5">
+            <div v-if="vehicleStore.canEdit" class="flex items-center gap-1.5">
               <button
                 @click="openEditChargeModal(c)"
                 class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-sky-400 rounded-xl transition-colors border border-slate-700/60"
@@ -1781,6 +1792,7 @@ async function handleDeleteWebhook() {
       <div v-else-if="!documents.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 space-y-3">
         <p>Aucun justificatif ou facture téléversé pour ce véhicule.</p>
         <button
+          v-if="vehicleStore.canEdit"
           @click="openUploadDocumentModal"
           class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-2 shadow-lg shadow-indigo-600/20"
         >
@@ -1846,6 +1858,7 @@ async function handleDeleteWebhook() {
             </div>
 
             <button
+              v-if="vehicleStore.canEdit"
               @click="handleDeleteDocument(d)"
               class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
               title="Supprimer ce document"

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, nextTick, ref } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
-import { Trash2, AlertTriangle, Info, X } from 'lucide-vue-next'
+import { Trash2, AlertTriangle, Info, CheckCircle2, X } from 'lucide-vue-next'
 
 const { isOpen, options, onConfirm, onCancel } = useConfirm()
 const confirmBtnRef = ref<HTMLButtonElement | null>(null)
@@ -74,6 +74,7 @@ onUnmounted(() => {
                 'bg-rose-500': options.type === 'danger',
                 'bg-amber-500': options.type === 'warning',
                 'bg-indigo-500': options.type === 'info',
+                'bg-emerald-500': options.type === 'success',
               }"
             />
 
@@ -86,10 +87,12 @@ onUnmounted(() => {
                     'bg-rose-500/10 text-rose-400 border-rose-500/20': options.type === 'danger',
                     'bg-amber-500/10 text-amber-400 border-amber-500/20': options.type === 'warning',
                     'bg-indigo-500/10 text-indigo-400 border-indigo-500/20': options.type === 'info',
+                    'bg-emerald-500/10 text-emerald-400 border-emerald-500/20': options.type === 'success',
                   }"
                 >
                   <Trash2 v-if="options.type === 'danger'" class="w-5 h-5" />
                   <AlertTriangle v-else-if="options.type === 'warning'" class="w-5 h-5" />
+                  <CheckCircle2 v-else-if="options.type === 'success'" class="w-5 h-5" />
                   <Info v-else class="w-5 h-5" />
                 </div>
                 <div>
@@ -134,6 +137,7 @@ onUnmounted(() => {
                   'bg-rose-600 hover:bg-rose-500 shadow-rose-600/30': options.type === 'danger',
                   'bg-amber-600 hover:bg-amber-500 shadow-amber-600/30': options.type === 'warning',
                   'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/30': options.type === 'info',
+                  'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30': options.type === 'success',
                 }"
               >
                 {{ options.confirmText || 'Confirmer' }}

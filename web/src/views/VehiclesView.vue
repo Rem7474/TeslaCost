@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
+import { useAuthStore } from '@/stores/auth'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import {
@@ -16,9 +17,15 @@ import {
   Link2,
   FileText,
   Zap,
+  Users,
+  UserPlus,
+  ShieldCheck,
+  Eye,
+  LogOut,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
+const authStore = useAuthStore()
 const { showConfirm, showAlert } = useConfirm()
 const showModal = ref(false)
 const isEditing = ref(false)
@@ -64,6 +71,93 @@ const ACQUISITION_LABELS: Record<string, string> = {
   LOAN: 'Achat à crédit',
   LOA: 'LOA (location avec option d\'achat)',
   LLD: 'LLD (location longue durée)',
+}
+
+// Shared Vehicle Members state
+const showMembersModal = ref(false)
+const membersVehicle = ref<any | null>(null)
+const members = ref<any[]>([])
+const loadingMembers = ref(false)
+const newMemberEmail = ref('')
+const newMemberRole = ref<'EDITOR' | 'VIEWER'>('EDITOR')
+const addingMember = ref(false)
+const updatingMemberId = ref<string | null>(null)
+
+async function openMembersModal(v: any) {
+  membersVehicle.value = v
+  newMemberEmail.value = ''
+  newMemberRole.value = 'EDITOR'
+  showMembersModal.value = true
+  await loadMembers(v.id)
+}
+
+async function loadMembers(vehicleId: string) {
+  loadingMembers.value = true
+  try {
+    members.value = await api.getVehicleMembers(vehicleId)
+  } catch (err: any) {
+    showAlert(`Erreur lors du chargement des membres : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    loadingMembers.value = false
+  }
+}
+
+async function handleAddMember() {
+  if (!membersVehicle.value || !newMemberEmail.value.trim()) return
+  addingMember.value = true
+  try {
+    await api.addVehicleMember(membersVehicle.value.id, {
+      email: newMemberEmail.value.trim(),
+      role: newMemberRole.value,
+    })
+    newMemberEmail.value = ''
+    await loadMembers(membersVehicle.value.id)
+    showAlert('Membre ajouté avec succès !', 'Succès', 'info')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    addingMember.value = false
+  }
+}
+
+async function handleUpdateMemberRole(m: any, newRole: string) {
+  if (!membersVehicle.value || m.role === newRole) return
+  updatingMemberId.value = m.user_id
+  try {
+    await api.updateVehicleMemberRole(membersVehicle.value.id, m.user_id, { role: newRole })
+    await loadMembers(membersVehicle.value.id)
+    showAlert('Rôle mis à jour avec succès !', 'Succès', 'info')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    updatingMemberId.value = null
+  }
+}
+
+async function handleRemoveMember(m: any) {
+  if (!membersVehicle.value) return
+  const isSelf = authStore.user?.id === m.user_id
+  const ok = await showConfirm({
+    title: isSelf ? 'Quitter le véhicule partagé' : 'Retirer l\'accès au véhicule',
+    message: isSelf
+      ? `Êtes-vous sûr de vouloir quitter le véhicule ${membersVehicle.value.name} ? Vous n'aurez plus accès à ses données.`
+      : `Retirer l'accès de ${m.user_email} à ce véhicule ?`,
+    confirmText: isSelf ? 'Quitter' : 'Retirer',
+    type: 'danger',
+  })
+  if (!ok) return
+  try {
+    await api.removeVehicleMember(membersVehicle.value.id, m.user_id)
+    if (isSelf) {
+      showMembersModal.value = false
+      await vehicleStore.fetchVehicles()
+    } else {
+      await loadMembers(membersVehicle.value.id)
+    }
+    showAlert(isSelf ? 'Vous avez quitté le véhicule' : 'Accès révoqué avec succès', 'Succès', 'info')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
 }
 
 function emptyOwnership() {
@@ -112,6 +206,7 @@ async function loadOwnerships() {
   const entries = await Promise.all(
     vehicleStore.vehicles.map(async (v) => {
       try {
+        if (v.role && v.role !== 'OWNER') return [v.id, null] as const
         return [v.id, await api.getOwnership(v.id)] as const
       } catch {
         return [v.id, null] as const
@@ -489,12 +584,25 @@ function clearCardTestResult(id: string) {
               <Car class="w-6 h-6" />
             </div>
             <div>
-              <h3 class="text-base font-bold text-white">{{ v.name }}</h3>
+              <div class="flex items-center gap-2">
+                <h3 class="text-base font-bold text-white">{{ v.name }}</h3>
+                <span
+                  v-if="v.role"
+                  class="px-2 py-0.5 text-[10px] font-semibold rounded-full uppercase tracking-wider"
+                  :class="{
+                    'bg-amber-500/10 text-amber-400 border border-amber-500/20': v.role === 'OWNER',
+                    'bg-sky-500/10 text-sky-400 border border-sky-500/20': v.role === 'EDITOR',
+                    'bg-slate-700/50 text-slate-400 border border-slate-600/30': v.role === 'VIEWER',
+                  }"
+                >
+                  {{ v.role === 'OWNER' ? 'Propriétaire' : v.role === 'EDITOR' ? 'Co-conducteur' : 'Lecteur' }}
+                </span>
+              </div>
               <p v-if="v.vin" class="text-xs text-slate-400 font-mono">{{ v.vin }}</p>
             </div>
           </div>
 
-          <div class="flex items-center gap-1">
+          <div v-if="v.role === 'OWNER'" class="flex items-center gap-1">
             <button
               @click="openEditModal(v)"
               class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
@@ -522,7 +630,7 @@ function clearCardTestResult(id: string) {
             </p>
           </div>
 
-          <div>
+          <div v-if="v.role === 'OWNER'">
             <span class="text-slate-400">Acquisition</span>
             <p v-if="ownerships[v.id]" class="text-xs font-semibold text-indigo-300 mt-1">
               {{ ownershipSummary(ownerships[v.id]) }}
@@ -531,6 +639,12 @@ function clearCardTestResult(id: string) {
               </span>
             </p>
             <p v-else class="text-xs text-amber-400/90 mt-1">Non renseignée</p>
+          </div>
+          <div v-else>
+            <span class="text-slate-400">Accès véhicule</span>
+            <p class="text-xs font-semibold text-slate-300 mt-1">
+              {{ v.role === 'EDITOR' ? 'Éditeur (Co-conducteur)' : 'Lecteur seul' }}
+            </p>
           </div>
 
           <div>
@@ -548,13 +662,15 @@ function clearCardTestResult(id: string) {
               "
             >
               {{
-                cardTestResults[v.id]?.success
-                  ? 'En ligne'
-                  : cardTestResults[v.id]?.error
-                  ? 'Erreur de connexion'
-                  : v.teslamate_api_url
-                  ? 'Configurée'
-                  : 'Non configurée'
+                v.role === 'OWNER'
+                  ? (cardTestResults[v.id]?.success
+                    ? 'En ligne'
+                    : cardTestResults[v.id]?.error
+                    ? 'Erreur de connexion'
+                    : v.teslamate_api_url
+                    ? 'Configurée'
+                    : 'Non configurée')
+                  : 'Gérée par l\'administrateur'
               }}
             </p>
           </div>
@@ -572,6 +688,15 @@ function clearCardTestResult(id: string) {
         <!-- Actions -->
         <div class="mt-4 pt-3 flex items-center justify-between gap-2 flex-wrap">
           <button
+            @click="openMembersModal(v)"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
+            title="Gérer les accès et co-conducteurs"
+          >
+            <Users class="w-3.5 h-3.5 text-violet-400" />
+            <span>Partage & Accès</span>
+          </button>
+          <button
+            v-if="v.role === 'OWNER'"
             @click="openOwnershipModal(v)"
             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
           >
@@ -587,7 +712,7 @@ function clearCardTestResult(id: string) {
             <span>Relevés kilométriques</span>
           </button>
           <button
-            v-if="v.teslamate_api_url"
+            v-if="v.role === 'OWNER' && v.teslamate_api_url"
             @click="testCardConnection(v.id)"
             :disabled="cardTestResults[v.id]?.loading"
             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
@@ -1240,6 +1365,199 @@ function clearCardTestResult(id: string) {
           <button
             type="button"
             @click="showCheckpointsModal = false"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
+          >
+            Fermer
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Members Modal (Partage & Accès) -->
+    <div
+      v-if="showMembersModal"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+    >
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+        <!-- Header -->
+        <div class="px-5 py-4 border-b border-slate-800 flex items-center justify-between shrink-0">
+          <div class="flex items-center gap-3">
+            <div class="p-2 bg-violet-500/10 text-violet-400 rounded-xl">
+              <Users class="w-5 h-5" />
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white">Partage & Accès</h3>
+              <p class="text-xs text-slate-400">{{ membersVehicle?.name }}</p>
+            </div>
+          </div>
+          <button
+            @click="showMembersModal = false"
+            class="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+          >
+            <X class="w-4 h-4" />
+          </button>
+        </div>
+
+        <!-- Body -->
+        <div class="p-5 overflow-y-auto space-y-6 text-xs">
+          <!-- Add Member Section (Owners only) -->
+          <div
+            v-if="membersVehicle?.role === 'OWNER'"
+            class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-3"
+          >
+            <div class="flex items-center gap-2">
+              <UserPlus class="w-4 h-4 text-violet-400" />
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">Ajouter un membre</h4>
+            </div>
+            <p class="text-[11px] text-slate-400">
+              Invitez un co-conducteur ou un membre de votre foyer. L'utilisateur doit déjà posséder un compte sur l'application.
+            </p>
+
+            <form @submit.prevent="handleAddMember" class="space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                <div class="sm:col-span-7">
+                  <label for="new-member-email" class="sr-only">Email du membre</label>
+                  <input
+                    id="new-member-email"
+                    v-model="newMemberEmail"
+                    type="email"
+                    required
+                    placeholder="email@exemple.com"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
+                  />
+                </div>
+                <div class="sm:col-span-5">
+                  <label for="new-member-role" class="sr-only">Rôle du membre</label>
+                  <select
+                    id="new-member-role"
+                    v-model="newMemberRole"
+                    class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-violet-500"
+                  >
+                    <option value="EDITOR">Co-conducteur (Éditeur)</option>
+                    <option value="VIEWER">Lecteur seul</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between gap-3 pt-1">
+                <p class="text-[10px] text-slate-500 leading-tight">
+                  <ShieldCheck class="w-3 h-3 text-emerald-400 inline mr-0.5 -mt-0.5" />
+                  Vos clés API TeslaMate et données de financement restent invisibles pour les membres.
+                </p>
+                <button
+                  type="submit"
+                  :disabled="addingMember || !newMemberEmail.trim()"
+                  class="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shrink-0 transition-colors shadow-lg shadow-violet-600/20"
+                >
+                  <RefreshCw v-if="addingMember" class="w-3.5 h-3.5 animate-spin" />
+                  <UserPlus v-else class="w-3.5 h-3.5" />
+                  <span>Ajouter</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Members List -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 class="text-xs font-bold text-white uppercase tracking-wider">Membres autorisés</h4>
+              <span class="text-xs text-slate-400">{{ members.length }} membre(s)</span>
+            </div>
+
+            <div v-if="loadingMembers" class="py-8 text-center text-xs text-slate-400">
+              Chargement des accès...
+            </div>
+
+            <div v-else-if="members.length === 0" class="py-6 text-center text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800">
+              Aucun membre trouvé.
+            </div>
+
+            <div v-else class="space-y-2">
+              <div
+                v-for="m in members"
+                :key="m.user_id"
+                class="bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex items-center justify-between gap-3"
+              >
+                <div class="flex items-center gap-3 min-w-0">
+                  <div
+                    class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0"
+                    :class="m.role === 'OWNER' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-slate-800 text-slate-300'"
+                  >
+                    {{ (m.user_email || '?').charAt(0).toUpperCase() }}
+                  </div>
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="text-xs font-semibold text-white truncate">{{ m.user_email }}</span>
+                      <span
+                        v-if="m.user_id === authStore.user?.id"
+                        class="text-[10px] px-1.5 py-0.2 bg-slate-800 text-slate-400 rounded"
+                      >
+                        Vous
+                      </span>
+                    </div>
+                    <div class="flex items-center gap-1.5 mt-0.5">
+                      <span
+                        class="text-[10px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider"
+                        :class="{
+                          'bg-amber-500/10 text-amber-400 border border-amber-500/20': m.role === 'OWNER',
+                          'bg-sky-500/10 text-sky-400 border border-sky-500/20': m.role === 'EDITOR',
+                          'bg-slate-800 text-slate-400 border border-slate-700': m.role === 'VIEWER',
+                        }"
+                      >
+                        {{ m.role === 'OWNER' ? 'Propriétaire' : m.role === 'EDITOR' ? 'Co-conducteur' : 'Lecteur' }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Member Management Actions -->
+                <div class="flex items-center gap-2 shrink-0">
+                  <!-- If current user is OWNER and this member is not OWNER: allow role change or removal -->
+                  <template v-if="membersVehicle?.role === 'OWNER' && m.role !== 'OWNER'">
+                    <label :for="'member-role-' + m.user_id" class="sr-only">Rôle du membre {{ m.user_email }}</label>
+                    <select
+                      :id="'member-role-' + m.user_id"
+                      :value="m.role"
+                      :disabled="updatingMemberId === m.user_id"
+                      @change="handleUpdateMemberRole(m, ($event.target as HTMLSelectElement).value)"
+                      class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
+                    >
+                      <option value="EDITOR">Co-conducteur</option>
+                      <option value="VIEWER">Lecteur</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      @click="handleRemoveMember(m)"
+                      class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                      title="Retirer l'accès"
+                    >
+                      <Trash2 class="w-4 h-4" />
+                    </button>
+                  </template>
+
+                  <!-- If current user is non-owner and viewing themselves: allow leaving -->
+                  <template v-else-if="membersVehicle?.role !== 'OWNER' && m.user_id === authStore.user?.id">
+                    <button
+                      type="button"
+                      @click="handleRemoveMember(m)"
+                      class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors border border-rose-500/20"
+                    >
+                      <LogOut class="w-3.5 h-3.5" />
+                      <span>Quitter</span>
+                    </button>
+                  </template>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="px-5 py-3.5 border-t border-slate-800 flex justify-end shrink-0 bg-slate-900/95">
+          <button
+            type="button"
+            @click="showMembersModal = false"
             class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
           >
             Fermer

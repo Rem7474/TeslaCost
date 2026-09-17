@@ -866,7 +866,7 @@ function formatDate(d: string) {
       </div>
 
       <!-- Action Buttons -->
-      <div class="flex items-center gap-2 flex-wrap">
+      <div v-if="vehicleStore.canEdit" class="flex items-center gap-2 flex-wrap">
         <button
           @click="openPackSwapModal()"
           :disabled="storageTires.length === 0"
@@ -887,8 +887,17 @@ function formatDate(d: string) {
       </div>
     </div>
 
+    <!-- Viewer mode banner -->
+    <div
+      v-if="!vehicleStore.canEdit"
+      class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center gap-3 text-xs text-slate-400"
+    >
+      <Disc class="w-4 h-4 text-slate-400 shrink-0" />
+      <span>Vous consultez ce véhicule en mode <strong>Lecteur seul</strong>. Les modifications de pneumatiques, permutations et relevés sont désactivés.</span>
+    </div>
+
     <!-- Quick Permutations Bar -->
-    <div class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+    <div v-if="vehicleStore.canEdit" class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
       <div class="flex items-center gap-2 text-slate-300 font-semibold">
         <RefreshCw class="w-4 h-4 text-rose-400" />
         <span>Permutations rapides du véhicule en 1 clic :</span>
@@ -912,7 +921,7 @@ function formatDate(d: string) {
     </div>
 
     <!-- Batch selection bar -->
-    <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+    <div v-if="vehicleStore.canEdit" class="flex flex-wrap items-center justify-between gap-2 text-xs">
       <button type="button" @click="selectMountedTires" class="text-slate-400 hover:text-white flex items-center gap-1.5">
         <CheckSquare class="w-3.5 h-3.5 text-rose-400" /> Sélectionner les pneus montés
       </button>
@@ -1052,6 +1061,7 @@ function formatDate(d: string) {
           <!-- Actions -->
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
+              v-if="vehicleStore.canEdit"
               @click="openLogModal(mountedTires.FL)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
@@ -1152,6 +1162,7 @@ function formatDate(d: string) {
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
+              v-if="vehicleStore.canEdit"
               @click="openLogModal(mountedTires.FR)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
@@ -1252,6 +1263,7 @@ function formatDate(d: string) {
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
+              v-if="vehicleStore.canEdit"
               @click="openLogModal(mountedTires.RL)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
@@ -1352,6 +1364,7 @@ function formatDate(d: string) {
 
           <div class="flex items-center justify-between pt-2 border-t border-slate-800">
             <button
+              v-if="vehicleStore.canEdit"
               @click="openLogModal(mountedTires.RR)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 font-medium transition-colors"
             >
@@ -1392,6 +1405,7 @@ function formatDate(d: string) {
             <span class="text-xs text-slate-300 font-semibold">{{ storageTires.length }} pneu(s) stocké(s) au garage</span>
           </div>
           <button
+            v-if="vehicleStore.canEdit"
             @click="openBatchSessionModal()"
             class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors"
             title="Enregistrer une session passée sur un lot de pneus du garage"
@@ -1446,6 +1460,7 @@ function formatDate(d: string) {
               Historique
             </button>
             <button
+              v-if="vehicleStore.canEdit"
               @click="openLogModal(t)"
               class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
             >

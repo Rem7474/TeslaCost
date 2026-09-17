@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/teslacost/teslacost/internal/database"
-	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/services"
@@ -57,12 +56,10 @@ func NewDriveHandler(repo *database.Repository, carpoolService *services.Carpool
 }
 
 func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	// Ensure vehicle belongs to user
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	// Ensure vehicle belongs to user with at least VIEWER role
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -164,12 +161,10 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DriveHandler) GetDriveExpenses(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	driveID := chi.URLParam(r, "driveId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -190,12 +185,10 @@ type UpdateTagsRequest struct {
 }
 
 func (h *DriveHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	driveID := chi.URLParam(r, "driveId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -226,12 +219,10 @@ type TollReviewRequest struct {
 
 // SetTollReview marks a drive as reviewed without toll (or reopens it).
 func (h *DriveHandler) SetTollReview(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	driveID := chi.URLParam(r, "driveId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -256,11 +247,9 @@ type CreateTripGroupRequest struct {
 }
 
 func (h *DriveHandler) CreateTripGroup(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
@@ -295,11 +284,9 @@ func (h *DriveHandler) CreateTripGroup(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DriveHandler) ListTripGroups(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
 		return
 	}
 
@@ -323,10 +310,8 @@ type UpdateTripGroupRequest struct {
 
 // UpdateTripGroup renames a trip group and optionally replaces its drives.
 func (h *DriveHandler) UpdateTripGroup(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 	var req UpdateTripGroupRequest
@@ -348,10 +333,8 @@ func (h *DriveHandler) UpdateTripGroup(w http.ResponseWriter, r *http.Request) {
 
 // DeleteTripGroup deletes a trip group; ?delete_expenses=true also deletes the expenses attached to it.
 func (h *DriveHandler) DeleteTripGroup(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 	deleteExpenses := r.URL.Query().Get("delete_expenses") == "true"

@@ -128,6 +128,15 @@ export const api = {
     request<{ odometer: number; source: string }>(`/vehicles/${vehicleId}/odometer-at?date=${encodeURIComponent(date)}`),
   getDataQuality: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/data-quality`),
 
+  // Vehicle Members
+  getVehicleMembers: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/members`),
+  addVehicleMember: (vehicleId: string, payload: { email: string; role: string }) =>
+    request<any>(`/vehicles/${vehicleId}/members`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateVehicleMemberRole: (vehicleId: string, memberId: string, payload: { role: string }) =>
+    request<any>(`/vehicles/${vehicleId}/members/${memberId}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  removeVehicleMember: (vehicleId: string, memberId: string) =>
+    request<any>(`/vehicles/${vehicleId}/members/${memberId}`, { method: 'DELETE' }),
+
   // Odometer Checkpoints
   getOdometerCheckpoints: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/odometer-checkpoints`),
   createOdometerCheckpoint: (vehicleId: string, data: any) =>

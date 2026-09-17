@@ -942,10 +942,11 @@ function formatDate(dateStr: string) {
     <div v-else class="space-y-3">
       <!-- Select all toggle & Total info -->
       <div class="flex items-center justify-between text-xs text-slate-400 px-2">
-        <button @click="selectAll" class="flex items-center gap-2 hover:text-slate-200 transition-colors">
+        <button v-if="vehicleStore.canEdit" @click="selectAll" class="flex items-center gap-2 hover:text-slate-200 transition-colors">
           <component :is="allPageSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
           <span>{{ allPageSelected ? 'Désélectionner la page' : 'Sélectionner la page' }}</span>
         </button>
+        <span v-else></span>
         <span>Page {{ page }} sur {{ totalPages }}</span>
       </div>
 
@@ -958,7 +959,7 @@ function formatDate(dateStr: string) {
       >
         <div class="flex items-start gap-3 min-w-0 flex-1">
           <!-- Selection checkbox -->
-          <button @click="toggleSelectDrive(d)" class="mt-1 text-slate-500 hover:text-rose-400 transition-colors shrink-0">
+          <button v-if="vehicleStore.canEdit" @click="toggleSelectDrive(d)" class="mt-1 text-slate-500 hover:text-rose-400 transition-colors shrink-0">
             <component :is="selectedDriveIds.includes(d.id) ? CheckSquare : Square" class="w-5 h-5 text-rose-400" />
           </button>
 
@@ -990,7 +991,7 @@ function formatDate(dateStr: string) {
         <!-- Right Side: Cost Badge & Actions -->
         <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0">
           <!-- Toll qualification: 2 taps -->
-          <div v-if="needsTollQualification(d)" class="flex items-center gap-1">
+          <div v-if="vehicleStore.canEdit && needsTollQualification(d)" class="flex items-center gap-1">
             <button
               @click="openTollEntry(d)"
               class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 flex items-center gap-1"
@@ -1027,7 +1028,7 @@ function formatDate(dateStr: string) {
           </button>
 
           <!-- Tags -->
-          <div class="flex items-center gap-1">
+          <div v-if="vehicleStore.canEdit" class="flex items-center gap-1">
             <button
               @click="toggleDriveTag(d, 'Pro')"
               class="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all"
@@ -1051,9 +1052,24 @@ function formatDate(dateStr: string) {
               Perso
             </button>
           </div>
+          <div v-else-if="d.tags?.length" class="flex items-center gap-1">
+            <span
+              v-if="d.tags.includes('Pro')"
+              class="px-2.5 py-1 text-xs font-semibold rounded-lg border bg-blue-500/20 text-blue-400 border-blue-500/40"
+            >
+              Pro
+            </span>
+            <span
+              v-if="d.tags.includes('Perso')"
+              class="px-2.5 py-1 text-xs font-semibold rounded-lg border bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+            >
+              Perso
+            </span>
+          </div>
 
           <!-- Quick Carpool Button -->
           <button
+            v-if="vehicleStore.canEdit"
             @click="router.push({ path: '/carpools', query: { new_drive_id: d.id } })"
             class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40 flex items-center gap-1.5 transition-all"
             title="Créer un covoiturage depuis ce trajet"
@@ -1188,19 +1204,21 @@ function formatDate(dateStr: string) {
             <button @click="toggleTripDetails(tg)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700/60">
               {{ expandedTripId === tg.id ? 'Masquer' : 'Trajets' }}
             </button>
-            <button
-              @click="router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })"
-              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60"
-              title="Covoiturer ce voyage"
-            >
-              <Users class="w-3.5 h-3.5" />
-            </button>
-            <button @click="openTripEdit(tg)" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl border border-slate-700/60" title="Renommer">
-              <Pencil class="w-3.5 h-3.5" />
-            </button>
-            <button @click="handleDeleteTrip(tg)" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60" title="Supprimer le voyage">
-              <Trash2 class="w-3.5 h-3.5" />
-            </button>
+            <template v-if="vehicleStore.canEdit">
+              <button
+                @click="router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })"
+                class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60"
+                title="Covoiturer ce voyage"
+              >
+                <Users class="w-3.5 h-3.5" />
+              </button>
+              <button @click="openTripEdit(tg)" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl border border-slate-700/60" title="Renommer">
+                <Pencil class="w-3.5 h-3.5" />
+              </button>
+              <button @click="handleDeleteTrip(tg)" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60" title="Supprimer le voyage">
+                <Trash2 class="w-3.5 h-3.5" />
+              </button>
+            </template>
           </div>
         </div>
         <div v-if="expandedTripId === tg.id" class="space-y-1.5 border-t border-slate-800 pt-2">
@@ -1209,7 +1227,7 @@ function formatDate(dateStr: string) {
               {{ formatDate(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}
               <span class="text-slate-500">({{ d.distance_km }} km)</span>
             </span>
-            <button @click="removeDriveFromTrip(tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0" title="Retirer ce trajet du voyage">
+            <button v-if="vehicleStore.canEdit" @click="removeDriveFromTrip(tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0" title="Retirer ce trajet du voyage">
               <X class="w-3.5 h-3.5" />
             </button>
           </div>

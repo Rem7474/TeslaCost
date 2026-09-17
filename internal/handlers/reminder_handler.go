@@ -10,7 +10,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/teslacost/teslacost/internal/database"
-	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/services"
 )
@@ -40,12 +39,9 @@ type ReminderPayload struct {
 }
 
 func (h *ReminderHandler) List(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer)
+	if veh == nil {
 		return
 	}
 
@@ -105,12 +101,9 @@ func (h *ReminderHandler) buildReminder(req ReminderPayload, vehicleID, reminder
 }
 
 func (h *ReminderHandler) Create(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
-
-	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if veh == nil {
 		return
 	}
 
@@ -136,13 +129,11 @@ func (h *ReminderHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReminderHandler) Update(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	reminderID := chi.URLParam(r, "reminderId")
 
-	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if veh == nil {
 		return
 	}
 
@@ -173,13 +164,11 @@ type CompletePayload struct {
 }
 
 func (h *ReminderHandler) Complete(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	reminderID := chi.URLParam(r, "reminderId")
 
-	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if veh == nil {
 		return
 	}
 
@@ -216,12 +205,10 @@ func (h *ReminderHandler) Complete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReminderHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 	reminderID := chi.URLParam(r, "reminderId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); veh == nil {
 		return
 	}
 
@@ -236,11 +223,9 @@ func (h *ReminderHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // Webhook endpoints
 
 func (h *ReminderHandler) GetWebhook(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); veh == nil {
 		return
 	}
 
@@ -260,11 +245,9 @@ type WebhookPayload struct {
 }
 
 func (h *ReminderHandler) SaveWebhook(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); veh == nil {
 		return
 	}
 
@@ -301,11 +284,9 @@ func (h *ReminderHandler) SaveWebhook(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReminderHandler) DeleteWebhook(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	if veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); veh == nil {
 		return
 	}
 
@@ -318,12 +299,10 @@ func (h *ReminderHandler) DeleteWebhook(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ReminderHandler) TestWebhook(w http.ResponseWriter, r *http.Request) {
-	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
 
-	veh, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+	veh := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if veh == nil {
 		return
 	}
 
