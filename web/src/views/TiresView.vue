@@ -266,7 +266,7 @@ async function handleSaveTireEdit() {
     await loadTires()
     if (showHistoryModal.value && selectedTire.value) await openHistoryModal({ tire: selectedTire.value })
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -317,7 +317,7 @@ async function handleDisposeTire() {
     selectedTireIds.value = selectedTireIds.value.filter((id) => id !== selectedTire.value.id)
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -368,15 +368,36 @@ async function handleBatchDisposeSubmit() {
   }
 }
 
-function openCopyHistoryModal(sourceTire?: any) {
-  copyHistorySourceTire.value = sourceTire?.tire || sourceTire || selectedTire.value
+function updateCopyHistoryTargets() {
   if (!copyHistorySourceTire.value) return
-
   const otherTires = tires.value.filter((t) => t.tire.id !== copyHistorySourceTire.value.id)
   const sameFamily = otherTires.filter(
     (t) => t.tire.brand === copyHistorySourceTire.value.brand && t.tire.model === copyHistorySourceTire.value.model
   )
   copyHistoryTargetTireIds.value = sameFamily.length > 0 ? sameFamily.map((t) => t.tire.id) : otherTires.map((t) => t.tire.id)
+}
+
+function onSourceTireChange(sourceId: string) {
+  const found = tires.value.find((t) => t.tire.id === sourceId)
+  if (found) {
+    copyHistorySourceTire.value = found.tire
+    updateCopyHistoryTargets()
+  }
+}
+
+function openCopyHistoryModal(sourceTire?: any) {
+  const resolved = sourceTire?.tire || sourceTire
+  if (resolved) {
+    copyHistorySourceTire.value = resolved
+  } else if (selectedTireIds.value.length === 1) {
+    const s = tires.value.find((t) => t.tire.id === selectedTireIds.value[0])
+    copyHistorySourceTire.value = s?.tire || tires.value[0]?.tire || null
+  } else {
+    copyHistorySourceTire.value = storageTires.value[0]?.tire || tires.value[0]?.tire || null
+  }
+  if (!copyHistorySourceTire.value) return
+
+  updateCopyHistoryTargets()
   copyHistoryOptions.value = {
     copy_sessions: true,
     copy_logs: true,
@@ -592,7 +613,7 @@ async function handlePackSwapSubmit() {
   ].filter(Boolean)
 
   if (selectedIDs.length !== 4) {
-    alert('Veuillez sélectionner 4 pneus distincts du garage pour remplacer les pneus montés.')
+    showAlert('Veuillez sélectionner 4 pneus distincts du garage pour remplacer les pneus montés.', 'Sélection requise', 'warning')
     return
   }
 
@@ -605,7 +626,7 @@ async function handlePackSwapSubmit() {
     showPackSwapModal.value = false
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -620,7 +641,7 @@ function openAddModal() {
 async function handleCreateTires() {
   if (!vehicleStore.activeVehicle) return
   if (!addTireForm.value.brand || !addTireForm.value.model || !addTireForm.value.dimension) {
-    alert('Veuillez renseigner la marque, le modèle et la dimension')
+    showAlert('Veuillez renseigner la marque, le modèle et la dimension', 'Champs requis', 'warning')
     return
   }
 
@@ -663,7 +684,7 @@ async function handleCreateTires() {
     showAddTireModal.value = false
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -679,7 +700,7 @@ async function openHistoryModal(t: any) {
     tireLogs.value = res.logs || []
     showHistoryModal.value = true
   } catch (err: any) {
-    alert(`Erreur de chargement : ${err.message}`)
+    showAlert(`Erreur de chargement : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -748,7 +769,7 @@ async function handleSaveSession() {
     await openHistoryModal({ tire: selectedTire.value })
     await loadTires()
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -986,7 +1007,7 @@ async function handleAddLog() {
       await openHistoryModal({ tire: selectedTire.value })
     }
   } catch (err: any) {
-    alert(`Erreur : ${err.message}`)
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   }
 }
 
@@ -1250,48 +1271,14 @@ function formatDate(d: string) {
           </div>
 
           <!-- Metrics Row -->
-          <div class="grid grid-cols-3 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
-            <div>
-              <div class="text-[10px] text-slate-500 uppercase">Sculpture</div>
-              <div class="text-sm font-bold text-white">{{ mountedTires.FL.current_depth_mm }} mm</div>
-              <div class="text-[10px] text-slate-400">Témoin: {{ mountedTires.FL.min_legal_depth_mm }} mm</div>
-            </div>
+          <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Total parcouru</div>
               <div class="text-sm font-bold text-slate-200">{{ Math.round(mountedTires.FL.total_distance_km).toLocaleString('fr-FR') }} km</div>
-              <div class="text-[10px] text-slate-400">Vie: {{ mountedTires.FL.life_progress_pct }}%</div>
             </div>
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Coût / km</div>
               <div class="text-sm font-bold text-amber-400">{{ Number(mountedTires.FL.cost_per_km).toFixed(4) }} €</div>
-              <div class="text-[10px] text-slate-400">/ pneu</div>
-            </div>
-          </div>
-
-          <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.FL.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
-            <div class="flex items-center justify-between">
-              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                <Zap class="w-3 h-3 text-amber-400" />
-                Télémétrie TeslaMate
-              </span>
-              <span
-                class="px-2 py-0.5 rounded text-[10px] font-bold border"
-                :class="
-                  mountedTires.FL.driving_style === 'SPORT'
-                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    : mountedTires.FL.driving_style === 'ECO'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                "
-              >
-                {{ mountedTires.FL.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.FL.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.FL.driving_stress_index }})
-              </span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
-              <div>Accél : <strong class="text-white">+{{ mountedTires.FL.avg_power_max_kw }} kW</strong></div>
-              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.FL.avg_power_min_kw }} kW</strong></div>
-              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.FL.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
             </div>
           </div>
 
@@ -1308,35 +1295,6 @@ function formatDate(d: string) {
                 :style="{ width: `${Math.min(100, mountedTires.FL.life_progress_pct)}%` }"
               ></div>
             </div>
-          </div>
-
-          <!-- Actions -->
-          <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <div class="flex items-center gap-3">
-              <button
-                v-if="vehicleStore.canEdit"
-                @click.stop="openLogModal(mountedTires.FL)"
-                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
-              >
-                <Ruler class="w-3.5 h-3.5 text-rose-400" />
-                Mesurer
-              </button>
-              <button
-                type="button"
-                @click.stop="chassisSubView = 'timeline'"
-                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
-                title="Historique des pneus montés sur cette roue"
-              >
-                <History class="w-3.5 h-3.5 text-indigo-400" />
-                Timeline roue
-              </button>
-            </div>
-            <button
-              @click.stop="openHistoryModal(mountedTires.FL)"
-              class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
-            >
-              Historique pneu
-            </button>
           </div>
         </div>
         <div v-else class="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
@@ -1374,48 +1332,15 @@ function formatDate(d: string) {
             </span>
           </div>
 
-          <div class="grid grid-cols-3 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
-            <div>
-              <div class="text-[10px] text-slate-500 uppercase">Sculpture</div>
-              <div class="text-sm font-bold text-white">{{ mountedTires.FR.current_depth_mm }} mm</div>
-              <div class="text-[10px] text-slate-400">Témoin: {{ mountedTires.FR.min_legal_depth_mm }} mm</div>
-            </div>
+          <!-- Metrics Row -->
+          <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Total parcouru</div>
               <div class="text-sm font-bold text-slate-200">{{ Math.round(mountedTires.FR.total_distance_km).toLocaleString('fr-FR') }} km</div>
-              <div class="text-[10px] text-slate-400">Vie: {{ mountedTires.FR.life_progress_pct }}%</div>
             </div>
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Coût / km</div>
               <div class="text-sm font-bold text-amber-400">{{ Number(mountedTires.FR.cost_per_km).toFixed(4) }} €</div>
-              <div class="text-[10px] text-slate-400">/ pneu</div>
-            </div>
-          </div>
-
-          <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.FR.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
-            <div class="flex items-center justify-between">
-              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                <Zap class="w-3 h-3 text-amber-400" />
-                Télémétrie TeslaMate
-              </span>
-              <span
-                class="px-2 py-0.5 rounded text-[10px] font-bold border"
-                :class="
-                  mountedTires.FR.driving_style === 'SPORT'
-                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    : mountedTires.FR.driving_style === 'ECO'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                "
-              >
-                {{ mountedTires.FR.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.FR.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.FR.driving_stress_index }})
-              </span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
-              <div>Accél : <strong class="text-white">+{{ mountedTires.FR.avg_power_max_kw }} kW</strong></div>
-              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.FR.avg_power_min_kw }} kW</strong></div>
-              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.FR.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
             </div>
           </div>
 
@@ -1431,34 +1356,6 @@ function formatDate(d: string) {
                 :style="{ width: `${Math.min(100, mountedTires.FR.life_progress_pct)}%` }"
               ></div>
             </div>
-          </div>
-
-          <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <div class="flex items-center gap-3">
-              <button
-                v-if="vehicleStore.canEdit"
-                @click.stop="openLogModal(mountedTires.FR)"
-                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
-              >
-                <Ruler class="w-3.5 h-3.5 text-rose-400" />
-                Mesurer
-              </button>
-              <button
-                type="button"
-                @click.stop="chassisSubView = 'timeline'"
-                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
-                title="Historique des pneus montés sur cette roue"
-              >
-                <History class="w-3.5 h-3.5 text-indigo-400" />
-                Timeline roue
-              </button>
-            </div>
-            <button
-              @click.stop="openHistoryModal(mountedTires.FR)"
-              class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
-            >
-              Historique pneu
-            </button>
           </div>
         </div>
         <div v-else class="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
@@ -1496,48 +1393,15 @@ function formatDate(d: string) {
             </span>
           </div>
 
-          <div class="grid grid-cols-3 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
-            <div>
-              <div class="text-[10px] text-slate-500 uppercase">Sculpture</div>
-              <div class="text-sm font-bold text-white">{{ mountedTires.RL.current_depth_mm }} mm</div>
-              <div class="text-[10px] text-slate-400">Témoin: {{ mountedTires.RL.min_legal_depth_mm }} mm</div>
-            </div>
+          <!-- Metrics Row -->
+          <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Total parcouru</div>
               <div class="text-sm font-bold text-slate-200">{{ Math.round(mountedTires.RL.total_distance_km).toLocaleString('fr-FR') }} km</div>
-              <div class="text-[10px] text-slate-400">Vie: {{ mountedTires.RL.life_progress_pct }}%</div>
             </div>
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Coût / km</div>
               <div class="text-sm font-bold text-amber-400">{{ Number(mountedTires.RL.cost_per_km).toFixed(4) }} €</div>
-              <div class="text-[10px] text-slate-400">/ pneu</div>
-            </div>
-          </div>
-
-          <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.RL.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
-            <div class="flex items-center justify-between">
-              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                <Zap class="w-3 h-3 text-amber-400" />
-                Télémétrie TeslaMate
-              </span>
-              <span
-                class="px-2 py-0.5 rounded text-[10px] font-bold border"
-                :class="
-                  mountedTires.RL.driving_style === 'SPORT'
-                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    : mountedTires.RL.driving_style === 'ECO'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                "
-              >
-                {{ mountedTires.RL.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.RL.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.RL.driving_stress_index }})
-              </span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
-              <div>Accél : <strong class="text-white">+{{ mountedTires.RL.avg_power_max_kw }} kW</strong></div>
-              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.RL.avg_power_min_kw }} kW</strong></div>
-              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.RL.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
             </div>
           </div>
 
@@ -1553,34 +1417,6 @@ function formatDate(d: string) {
                 :style="{ width: `${Math.min(100, mountedTires.RL.life_progress_pct)}%` }"
               ></div>
             </div>
-          </div>
-
-          <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <div class="flex items-center gap-3">
-              <button
-                v-if="vehicleStore.canEdit"
-                @click.stop="openLogModal(mountedTires.RL)"
-                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
-              >
-                <Ruler class="w-3.5 h-3.5 text-rose-400" />
-                Mesurer
-              </button>
-              <button
-                type="button"
-                @click.stop="chassisSubView = 'timeline'"
-                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
-                title="Historique des pneus montés sur cette roue"
-              >
-                <History class="w-3.5 h-3.5 text-indigo-400" />
-                Timeline roue
-              </button>
-            </div>
-            <button
-              @click.stop="openHistoryModal(mountedTires.RL)"
-              class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
-            >
-              Historique pneu
-            </button>
           </div>
         </div>
         <div v-else class="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
@@ -1618,48 +1454,15 @@ function formatDate(d: string) {
             </span>
           </div>
 
-          <div class="grid grid-cols-3 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
-            <div>
-              <div class="text-[10px] text-slate-500 uppercase">Sculpture</div>
-              <div class="text-sm font-bold text-white">{{ mountedTires.RR.current_depth_mm }} mm</div>
-              <div class="text-[10px] text-slate-400">Témoin: {{ mountedTires.RR.min_legal_depth_mm }} mm</div>
-            </div>
+          <!-- Metrics Row -->
+          <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Total parcouru</div>
               <div class="text-sm font-bold text-slate-200">{{ Math.round(mountedTires.RR.total_distance_km).toLocaleString('fr-FR') }} km</div>
-              <div class="text-[10px] text-slate-400">Vie: {{ mountedTires.RR.life_progress_pct }}%</div>
             </div>
             <div>
               <div class="text-[10px] text-slate-500 uppercase">Coût / km</div>
               <div class="text-sm font-bold text-amber-400">{{ Number(mountedTires.RR.cost_per_km).toFixed(4) }} €</div>
-              <div class="text-[10px] text-slate-400">/ pneu</div>
-            </div>
-          </div>
-
-          <!-- TeslaMate Telemetry & Stress Index -->
-          <div v-if="mountedTires.RR.driving_stress_index > 0" class="bg-slate-950/40 rounded-xl p-2.5 border border-slate-800/60 text-xs space-y-1.5">
-            <div class="flex items-center justify-between">
-              <span class="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
-                <Zap class="w-3 h-3 text-amber-400" />
-                Télémétrie TeslaMate
-              </span>
-              <span
-                class="px-2 py-0.5 rounded text-[10px] font-bold border"
-                :class="
-                  mountedTires.RR.driving_style === 'SPORT'
-                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/20'
-                    : mountedTires.RR.driving_style === 'ECO'
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                    : 'bg-sky-500/10 text-sky-400 border-sky-500/20'
-                "
-              >
-                {{ mountedTires.RR.driving_style === 'SPORT' ? 'Contrainte Sport' : mountedTires.RR.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (x{{ mountedTires.RR.driving_stress_index }})
-              </span>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-1 text-[11px] text-slate-400">
-              <div>Accél : <strong class="text-white">+{{ mountedTires.RR.avg_power_max_kw }} kW</strong></div>
-              <div>Regen : <strong class="text-emerald-400">{{ mountedTires.RR.avg_power_min_kw }} kW</strong></div>
-              <div>Vie ajustée : <strong class="text-indigo-300">{{ (mountedTires.RR.dynamic_lifespan_km || 40000).toLocaleString('fr-FR') }} km</strong></div>
             </div>
           </div>
 
@@ -1675,34 +1478,6 @@ function formatDate(d: string) {
                 :style="{ width: `${Math.min(100, mountedTires.RR.life_progress_pct)}%` }"
               ></div>
             </div>
-          </div>
-
-          <div class="flex items-center justify-between pt-2 border-t border-slate-800">
-            <div class="flex items-center gap-3">
-              <button
-                v-if="vehicleStore.canEdit"
-                @click.stop="openLogModal(mountedTires.RR)"
-                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
-              >
-                <Ruler class="w-3.5 h-3.5 text-rose-400" />
-                Mesurer
-              </button>
-              <button
-                type="button"
-                @click.stop="chassisSubView = 'timeline'"
-                class="text-xs text-slate-400 hover:text-indigo-300 flex items-center gap-1 font-medium transition-colors"
-                title="Historique des pneus montés sur cette roue"
-              >
-                <History class="w-3.5 h-3.5 text-indigo-400" />
-                Timeline roue
-              </button>
-            </div>
-            <button
-              @click.stop="openHistoryModal(mountedTires.RR)"
-              class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
-            >
-              Historique pneu
-            </button>
           </div>
         </div>
         <div v-else class="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
@@ -1829,22 +1604,34 @@ function formatDate(d: string) {
             <Package class="w-4 h-4 text-slate-400" />
             <span class="text-xs text-slate-300 font-semibold">{{ storageTires.length }} pneu(s) stocké(s) au garage</span>
           </div>
-          <button
-            v-if="vehicleStore.canEdit"
-            @click="openBatchSessionModal()"
-            class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors"
-            title="Enregistrer une session passée sur un lot de pneus du garage"
-          >
-            <History class="w-3.5 h-3.5 text-rose-400" />
-            <span>Ajouter une session passée sur un lot</span>
-          </button>
+          <div class="flex items-center gap-2 flex-wrap">
+            <button
+              v-if="vehicleStore.canEdit"
+              @click="openCopyHistoryModal()"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors"
+              title="Copier tout l'historique d'un pneu vers d'autres pneus"
+            >
+              <Copy class="w-3.5 h-3.5 text-indigo-400" />
+              <span>Copier l'historique d'un pneu</span>
+            </button>
+            <button
+              v-if="vehicleStore.canEdit"
+              @click="openBatchSessionModal()"
+              class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors"
+              title="Enregistrer une session passée sur un lot de pneus du garage"
+            >
+              <History class="w-3.5 h-3.5 text-rose-400" />
+              <span>Ajouter une session passée sur un lot</span>
+            </button>
+          </div>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div
           v-for="t in storageTires"
           :key="t.tire.id"
-          class="bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl p-4 space-y-3 shadow-sm transition-all"
+          @click="openHistoryModal(t)"
+          class="bg-slate-900 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-2xl p-4 space-y-3 shadow-sm transition-all group"
           :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(t.tire.id) }"
         >
           <div class="flex items-start justify-between">
@@ -1853,7 +1640,7 @@ function formatDate(d: string) {
                 <component :is="getSeasonIcon(t.tire.season).icon" class="w-3.5 h-3.5" :class="getSeasonIcon(t.tire.season).color" />
                 <span class="text-slate-300">{{ getSeasonIcon(t.tire.season).label }}</span>
               </div>
-              <h4 class="text-sm font-bold text-white mt-1 flex items-center gap-1.5">
+              <h4 class="text-sm font-bold text-white group-hover:text-rose-300 transition-colors mt-1 flex items-center gap-1.5">
                 <label :for="'storage-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" title="Sélectionner pour une action par lot">
                   <input
                     :id="'storage-select-' + t.tire.id"
@@ -1874,41 +1661,22 @@ function formatDate(d: string) {
 
           <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-center text-xs">
             <div>
-              <div class="text-[10px] text-slate-500">Kilométrage total</div>
+              <div class="text-[10px] text-slate-500">Total parcouru</div>
               <div class="font-bold text-white">{{ Math.round(t.total_distance_km).toLocaleString('fr-FR') }} km</div>
             </div>
             <div>
-              <div class="text-[10px] text-slate-500">Sculpture actuelle</div>
-              <div class="font-bold text-emerald-400">{{ t.current_depth_mm }} mm</div>
+              <div class="text-[10px] text-slate-500">Usure estimée</div>
+              <div class="font-bold" :class="t.life_progress_pct > 80 ? 'text-rose-400' : 'text-emerald-400'">{{ t.life_progress_pct }}%</div>
             </div>
           </div>
 
-          <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-            <button
-              @click="openHistoryModal(t)"
-              class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
-            >
-              <History class="w-3.5 h-3.5" />
-              Historique
-            </button>
-            <div class="flex items-center gap-2">
-              <button
-                v-if="vehicleStore.canEdit"
-                @click="openDisposeModal(t)"
-                class="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1 font-medium transition-colors"
-                title="Mettre ce pneu au rebut"
-              >
-                <Archive class="w-3.5 h-3.5" />
-                Rebut
-              </button>
-              <button
-                v-if="vehicleStore.canEdit"
-                @click="openLogModal(t)"
-                class="text-xs text-slate-400 hover:text-white flex items-center gap-1 font-medium transition-colors"
-              >
-                <Ruler class="w-3.5 h-3.5" />
-                Mesurer
-              </button>
+          <div class="space-y-1">
+            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div
+                class="h-full rounded-full transition-all"
+                :class="t.life_progress_pct > 80 ? 'bg-rose-500' : 'bg-emerald-500'"
+                :style="{ width: `${Math.min(100, t.life_progress_pct)}%` }"
+              ></div>
             </div>
           </div>
         </div>
@@ -2170,12 +1938,13 @@ function formatDate(d: string) {
       <div
         v-for="t in disposedTires"
         :key="t.tire.id"
-        class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 space-y-2 transition-all"
+        @click="openHistoryModal(t)"
+        class="bg-slate-900/60 border border-slate-800 hover:border-rose-500/40 cursor-pointer rounded-2xl p-4 space-y-2 transition-all group"
         :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(t.tire.id) }"
       >
         <div class="flex items-start justify-between">
           <div>
-            <h4 class="text-sm font-bold text-slate-300 flex items-center gap-1.5">
+            <h4 class="text-sm font-bold text-slate-300 group-hover:text-rose-300 transition-colors flex items-center gap-1.5">
               <label :for="'disposed-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" title="Sélectionner pour une action par lot">
                 <input
                   :id="'disposed-select-' + t.tire.id"
@@ -2193,14 +1962,8 @@ function formatDate(d: string) {
             Au rebut
           </span>
         </div>
-        <div class="text-xs text-slate-400">{{ Math.round(t.total_distance_km).toLocaleString('fr-FR') }} km parcourus • {{ t.tire.purchase_price }} €</div>
-        <div class="flex items-center justify-between pt-2 border-t border-slate-800/80">
-          <button @click="openHistoryModal(t)" class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold">
-            <History class="w-3.5 h-3.5" /> Historique
-          </button>
-          <button v-if="vehicleStore.canEdit" @click="handleDeleteTire(t.tire)" class="text-xs text-slate-500 hover:text-rose-400 flex items-center gap-1">
-            <Trash2 class="w-3.5 h-3.5" /> Supprimer
-          </button>
+        <div class="text-xs text-slate-400">
+          {{ Math.round(t.total_distance_km).toLocaleString('fr-FR') }} km parcourus • Usure : {{ t.life_progress_pct }}% • {{ t.tire.purchase_price }} €
         </div>
       </div>
     </div>
@@ -2226,15 +1989,6 @@ function formatDate(d: string) {
             </div>
           </div>
           <div class="flex items-center gap-1.5">
-            <button
-              v-if="vehicleStore.canEdit"
-              @click="openCopyHistoryModal(selectedTire)"
-              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-indigo-300 rounded-lg transition-colors flex items-center gap-1 text-xs px-2"
-              title="Copier tout l'historique de ce pneu vers d'autres pneus"
-            >
-              <Copy class="w-3.5 h-3.5 text-indigo-400" />
-              <span class="hidden sm:inline">Copier l'historique</span>
-            </button>
             <button @click="openTireEdit([selectedTire.id])" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors" title="Modifier le pneu">
               <Pencil class="w-4 h-4" />
             </button>
@@ -3312,15 +3066,19 @@ function formatDate(d: string) {
         </div>
 
         <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
-          <!-- Source recap -->
-          <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
-            <div class="text-[11px] text-indigo-400 font-semibold uppercase tracking-wider">Pneu source à cloner</div>
-            <div class="font-bold text-sm text-white">
-              {{ copyHistorySourceTire.brand }} {{ copyHistorySourceTire.model }}
-            </div>
-            <div class="text-slate-400 font-mono text-[11px]">
-              {{ copyHistorySourceTire.dimension }} — Position : {{ copyHistorySourceTire.current_position === 'STORAGE' ? 'Au garage' : copyHistorySourceTire.current_position === 'DISPOSED' ? 'Au rebut' : 'Roue ' + copyHistorySourceTire.current_position }}
-            </div>
+          <!-- Source selection -->
+          <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
+            <label for="copy-history-source-select" class="text-[11px] text-indigo-400 font-semibold uppercase tracking-wider block">Pneu source à cloner</label>
+            <select
+              id="copy-history-source-select"
+              :value="copyHistorySourceTire.id"
+              @change="onSourceTireChange(($event.target as HTMLSelectElement).value)"
+              class="w-full bg-slate-900 border border-slate-700 text-white rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              <option v-for="t in tires" :key="t.tire.id" :value="t.tire.id">
+                {{ t.tire.brand }} {{ t.tire.model }} ({{ t.tire.dimension }}) — {{ t.tire.current_position === 'STORAGE' ? 'Au garage' : t.tire.current_position === 'DISPOSED' ? 'Au rebut' : 'Roue ' + t.tire.current_position }}
+              </option>
+            </select>
           </div>
 
           <!-- Options -->
