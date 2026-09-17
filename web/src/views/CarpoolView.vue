@@ -773,14 +773,18 @@ onMounted(() => {
         class="flex flex-wrap items-center justify-between gap-3 bg-slate-900 border border-slate-800 px-4 py-3 rounded-2xl shadow-sm"
       >
         <div class="flex items-center gap-3">
-          <button
-            type="button"
-            @click="toggleSelectAll"
-            class="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+          <label
+            v-if="vehicleStore.canEdit"
+            class="flex items-center gap-2 text-xs font-semibold text-slate-300 hover:text-white cursor-pointer select-none"
           >
-            <component :is="isAllSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400 shrink-0" />
+            <input
+              type="checkbox"
+              :checked="isAllSelected"
+              @change="toggleSelectAll"
+              class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer shrink-0"
+            />
             <span>{{ isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }} ({{ trips.length }})</span>
-          </button>
+          </label>
           <span v-if="selectedTripIds.length > 0" class="text-xs text-rose-400 font-semibold bg-rose-500/10 border border-rose-500/20 px-2.5 py-0.5 rounded-lg">
             {{ selectedTripIds.length }} sélectionné{{ selectedTripIds.length > 1 ? 's' : '' }}
           </span>
@@ -819,19 +823,14 @@ onMounted(() => {
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
           <div class="flex items-start gap-3 min-w-0 flex-1">
             <!-- Select Checkbox -->
-            <button
+            <input
               v-if="vehicleStore.canEdit"
-              type="button"
-              @click="toggleTripSelection(trip.id)"
-              class="mt-1 text-slate-400 hover:text-rose-400 transition-colors shrink-0"
-              :title="selectedTripIds.includes(trip.id) ? 'Désélectionner ce covoiturage' : 'Sélectionner ce covoiturage'"
-            >
-              <component
-                :is="selectedTripIds.includes(trip.id) ? CheckSquare : Square"
-                class="w-4 h-4"
-                :class="selectedTripIds.includes(trip.id) ? 'text-rose-400' : 'text-slate-500'"
-              />
-            </button>
+              type="checkbox"
+              :checked="selectedTripIds.includes(trip.id)"
+              @change="toggleTripSelection(trip.id)"
+              class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer mt-1 shrink-0"
+              title="Sélectionner ce covoiturage"
+            />
 
             <div class="space-y-1 min-w-0 flex-1">
               <div class="flex items-center gap-2.5 flex-wrap min-w-0">
