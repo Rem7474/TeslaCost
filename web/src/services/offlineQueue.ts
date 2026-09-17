@@ -20,7 +20,7 @@ function openDb(): Promise<IDBDatabase> {
       req.result.createObjectStore(STORE, { keyPath: 'id' })
     }
     req.onsuccess = () => resolve(req.result)
-    req.onerror = () => reject(req.error)
+    req.onerror = () => reject(req.error instanceof Error ? req.error : new Error(String(req.error || 'IndexedDB request failed')))
   })
 }
 
@@ -31,8 +31,8 @@ async function withStore<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore
       const tx = db.transaction(STORE, mode)
       const req = fn(tx.objectStore(STORE))
       tx.oncomplete = () => resolve(req.result)
-      tx.onerror = () => reject(tx.error)
-      tx.onabort = () => reject(tx.error)
+      tx.onerror = () => reject(tx.error instanceof Error ? tx.error : new Error(String(tx.error || 'IndexedDB transaction failed')))
+      tx.onabort = () => reject(tx.error instanceof Error ? tx.error : new Error(String(tx.error || 'IndexedDB transaction aborted')))
     })
   } finally {
     db.close()

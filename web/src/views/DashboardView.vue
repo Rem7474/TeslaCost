@@ -270,8 +270,8 @@ function formatMonthName(monthStr: string) {
   if (!monthStr) return ''
   const parts = monthStr.split('-')
   if (parts.length < 2) return monthStr
-  const year = parseInt(parts[0], 10)
-  const month = parseInt(parts[1], 10) - 1
+  const year = Number.parseInt(parts[0], 10)
+  const month = Number.parseInt(parts[1], 10) - 1
   const d = new Date(year, month, 1)
   const formatted = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
   return formatted.charAt(0).toUpperCase() + formatted.slice(1)
