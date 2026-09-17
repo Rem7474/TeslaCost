@@ -63,7 +63,7 @@ func (h *CheckpointHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	list, err := h.repo.ListOdometerCheckpoints(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list checkpoints")
+		writeRepoError(w, r, err, "Failed to list checkpoints")
 		return
 	}
 	if list == nil {
@@ -96,7 +96,7 @@ func (h *CheckpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateOdometerCheckpoint(r.Context(), c); err != nil {
-		writeRepoError(w, err, "Failed to create checkpoint")
+		writeRepoError(w, r, err, "Failed to create checkpoint")
 		return
 	}
 
@@ -129,7 +129,7 @@ func (h *CheckpointHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateOdometerCheckpoint(r.Context(), c); err != nil {
-		writeRepoError(w, err, "Failed to update checkpoint")
+		writeRepoError(w, r, err, "Failed to update checkpoint")
 		return
 	}
 
@@ -148,7 +148,7 @@ func (h *CheckpointHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.DeleteOdometerCheckpoint(r.Context(), vehicleID, checkpointID); err != nil {
-		writeRepoError(w, err, "Failed to delete checkpoint")
+		writeRepoError(w, r, err, "Failed to delete checkpoint")
 		return
 	}
 

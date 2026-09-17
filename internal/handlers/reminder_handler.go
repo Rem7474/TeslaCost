@@ -47,7 +47,7 @@ func (h *ReminderHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	reminders, err := h.repo.ListMaintenanceReminders(r.Context(), vehicleID, veh.CurrentOdometer)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list maintenance reminders")
+		writeRepoError(w, r, err, "Failed to list maintenance reminders")
 		return
 	}
 	if reminders == nil {
@@ -120,7 +120,7 @@ func (h *ReminderHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CreateMaintenanceReminder(r.Context(), rem); err != nil {
-		writeRepoError(w, err, "Failed to create maintenance reminder")
+		writeRepoError(w, r, err, "Failed to create maintenance reminder")
 		return
 	}
 
@@ -150,7 +150,7 @@ func (h *ReminderHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateMaintenanceReminder(r.Context(), rem); err != nil {
-		writeRepoError(w, err, "Failed to update maintenance reminder")
+		writeRepoError(w, r, err, "Failed to update maintenance reminder")
 		return
 	}
 
@@ -191,13 +191,13 @@ func (h *ReminderHandler) Complete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.CompleteMaintenanceReminder(r.Context(), vehicleID, reminderID, completedDate, completedOdo); err != nil {
-		writeRepoError(w, err, "Failed to complete maintenance reminder")
+		writeRepoError(w, r, err, "Failed to complete maintenance reminder")
 		return
 	}
 
 	rem, err := h.repo.GetMaintenanceReminderByID(r.Context(), vehicleID, reminderID, veh.CurrentOdometer)
 	if err != nil {
-		writeRepoError(w, err, "Failed to fetch updated reminder")
+		writeRepoError(w, r, err, "Failed to fetch updated reminder")
 		return
 	}
 
@@ -213,7 +213,7 @@ func (h *ReminderHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.DeleteMaintenanceReminder(r.Context(), vehicleID, reminderID); err != nil {
-		writeRepoError(w, err, "Failed to delete maintenance reminder")
+		writeRepoError(w, r, err, "Failed to delete maintenance reminder")
 		return
 	}
 
@@ -231,7 +231,7 @@ func (h *ReminderHandler) GetWebhook(w http.ResponseWriter, r *http.Request) {
 
 	webhook, err := h.repo.GetVehicleWebhook(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to fetch vehicle webhook")
+		writeRepoError(w, r, err, "Failed to fetch vehicle webhook")
 		return
 	}
 
@@ -276,7 +276,7 @@ func (h *ReminderHandler) SaveWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpsertVehicleWebhook(r.Context(), webhook); err != nil {
-		writeRepoError(w, err, "Failed to save vehicle webhook")
+		writeRepoError(w, r, err, "Failed to save vehicle webhook")
 		return
 	}
 
@@ -291,7 +291,7 @@ func (h *ReminderHandler) DeleteWebhook(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.repo.DeleteVehicleWebhook(r.Context(), vehicleID); err != nil {
-		writeRepoError(w, err, "Failed to delete vehicle webhook")
+		writeRepoError(w, r, err, "Failed to delete vehicle webhook")
 		return
 	}
 

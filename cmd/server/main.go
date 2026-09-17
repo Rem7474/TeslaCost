@@ -17,6 +17,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
+	"github.com/go-chi/httprate"
 
 	"github.com/teslacost/teslacost/internal/auth"
 	"github.com/teslacost/teslacost/internal/config"
@@ -31,6 +32,29 @@ import (
 
 // AppVersion is the application version, injected at build time via -ldflags "-X main.AppVersion=...".
 var AppVersion = "1.17.0"
+
+// requestIDHandler wraps a slog.Handler to attach the chi request ID (if any is present on the
+// context) to every log record. This is what lets a "request_id" field emitted by a *Context
+// slog call (e.g. slog.ErrorContext in writeRepoError) be correlated with the chi access log
+// line for the same request.
+type requestIDHandler struct {
+	slog.Handler
+}
+
+func (h requestIDHandler) Handle(ctx context.Context, r slog.Record) error {
+	if reqID := chiMiddleware.GetReqID(ctx); reqID != "" {
+		r.AddAttrs(slog.String("request_id", reqID))
+	}
+	return h.Handler.Handle(ctx, r)
+}
+
+func (h requestIDHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return requestIDHandler{h.Handler.WithAttrs(attrs)}
+}
+
+func (h requestIDHandler) WithGroup(name string) slog.Handler {
+	return requestIDHandler{h.Handler.WithGroup(name)}
+}
 
 // configureLogging sets the process-wide slog default: JSON output in production (log
 // aggregators, jq-friendly), human-readable text otherwise. Level defaults to Info in
@@ -54,7 +78,7 @@ func configureLogging(cfg *config.Config) {
 	} else {
 		handler = slog.NewTextHandler(os.Stdout, opts)
 	}
-	slog.SetDefault(slog.New(handler))
+	slog.SetDefault(slog.New(requestIDHandler{handler}))
 }
 
 func main() {
@@ -229,8 +253,11 @@ func main() {
 		// Public Auth
 		r.Route("/api/auth", func(r chi.Router) {
 			r.Get("/config", authHandler.GetConfig)
-			r.Post("/register", authHandler.Register)
-			r.Post("/login", authHandler.Login)
+			// Rate limited by IP: these are the credential-guessing surface (password brute
+			// force, account enumeration via registration). 10 attempts/minute is generous for
+			// a legitimate user retrying a typo but blocks automated guessing.
+			r.With(httprate.LimitByIP(10, time.Minute)).Post("/register", authHandler.Register)
+			r.With(httprate.LimitByIP(10, time.Minute)).Post("/login", authHandler.Login)
 			r.Post("/refresh", authHandler.RefreshToken)
 			r.Post("/logout", authHandler.Logout)
 			// OIDC Authorization Code Flow endpoints (public — no JWT required)

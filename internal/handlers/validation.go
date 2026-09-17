@@ -35,7 +35,9 @@ var driveExpenseTypes = map[string]bool{
 }
 
 // writeRepoError maps repository errors to HTTP responses without leaking internal details.
-func writeRepoError(w http.ResponseWriter, err error, fallback string) {
+// The 500 case is logged with the request ID (via the context-aware requestIDHandler set up
+// in main.go) so it can be correlated with the corresponding chi access log line.
+func writeRepoError(w http.ResponseWriter, r *http.Request, err error, fallback string) {
 	var validationErr *database.ValidationError
 	switch {
 	case errors.As(err, &validationErr):
@@ -45,7 +47,7 @@ func writeRepoError(w http.ResponseWriter, err error, fallback string) {
 	case errors.Is(err, database.ErrForeignReference):
 		writeError(w, http.StatusBadRequest, "Référence invalide : trajet, groupe ou pneu inexistant pour ce véhicule")
 	default:
-		slog.Error(fallback, "component", "api", "error", err)
+		slog.ErrorContext(r.Context(), fallback, "component", "api", "error", err)
 		writeError(w, http.StatusInternalServerError, fallback)
 	}
 }

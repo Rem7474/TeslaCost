@@ -233,7 +233,7 @@ func (h *VehicleHandler) GetOwnership(w http.ResponseWriter, r *http.Request) {
 	}
 	o, err := h.repo.GetVehicleOwnership(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to load ownership")
+		writeRepoError(w, r, err, "Failed to load ownership")
 		return
 	}
 	writeJSON(w, http.StatusOK, o)
@@ -264,7 +264,7 @@ func (h *VehicleHandler) SaveOwnership(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.repo.SaveVehicleOwnership(r.Context(), o); err != nil {
-		writeRepoError(w, err, "Failed to save ownership")
+		writeRepoError(w, r, err, "Failed to save ownership")
 		return
 	}
 	writeJSON(w, http.StatusOK, o)
@@ -284,7 +284,7 @@ func (h *VehicleHandler) DeleteOwnership(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := h.repo.DeleteVehicleOwnership(r.Context(), vehicleID); err != nil && !errors.Is(err, database.ErrNotFound) {
-		writeRepoError(w, err, "Failed to delete ownership")
+		writeRepoError(w, r, err, "Failed to delete ownership")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})

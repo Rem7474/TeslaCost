@@ -103,7 +103,7 @@ func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := h.repo.SaveDriveExpense(r.Context(), exp, req.DriveIDs, expenseGroupName(req.Notes)); err != nil {
-		writeRepoError(w, err, "Failed to record expense")
+		writeRepoError(w, r, err, "Failed to record expense")
 		return
 	}
 
@@ -118,7 +118,7 @@ func (h *ExpenseHandler) ListDriveExpenses(w http.ResponseWriter, r *http.Reques
 
 	list, err := h.repo.ListDriveExpenses(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list expenses")
+		writeRepoError(w, r, err, "Failed to list expenses")
 		return
 	}
 	if list == nil {
@@ -149,7 +149,7 @@ func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Reque
 	exp.ID = expenseID
 
 	if err := h.repo.SaveDriveExpense(r.Context(), exp, req.DriveIDs, expenseGroupName(req.Notes)); err != nil {
-		writeRepoError(w, err, "Failed to update expense")
+		writeRepoError(w, r, err, "Failed to update expense")
 		return
 	}
 
@@ -164,7 +164,7 @@ func (h *ExpenseHandler) DeleteDriveExpense(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := h.repo.DeleteDriveExpense(r.Context(), vehicleID, expenseID); err != nil {
-		writeRepoError(w, err, "Failed to delete expense")
+		writeRepoError(w, r, err, "Failed to delete expense")
 		return
 	}
 
@@ -307,7 +307,7 @@ func (h *ExpenseHandler) CreateMaintenance(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.repo.CreateMaintenanceExpense(r.Context(), m); err != nil {
-		writeRepoError(w, err, "Failed to record maintenance expense")
+		writeRepoError(w, r, err, "Failed to record maintenance expense")
 		return
 	}
 
@@ -322,7 +322,7 @@ func (h *ExpenseHandler) ListMaintenance(w http.ResponseWriter, r *http.Request)
 
 	list, err := h.repo.ListMaintenanceExpenses(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list maintenance expenses")
+		writeRepoError(w, r, err, "Failed to list maintenance expenses")
 		return
 	}
 	if list == nil {
@@ -359,7 +359,7 @@ func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.repo.UpdateMaintenanceExpense(r.Context(), m); err != nil {
-		writeRepoError(w, err, "Failed to update maintenance expense")
+		writeRepoError(w, r, err, "Failed to update maintenance expense")
 		return
 	}
 
@@ -374,7 +374,7 @@ func (h *ExpenseHandler) DeleteMaintenance(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.repo.DeleteMaintenanceExpense(r.Context(), vehicleID, maintID); err != nil {
-		writeRepoError(w, err, "Failed to delete maintenance expense")
+		writeRepoError(w, r, err, "Failed to delete maintenance expense")
 		return
 	}
 
@@ -400,7 +400,7 @@ func (h *ExpenseHandler) ListCharges(w http.ResponseWriter, r *http.Request) {
 
 	charges, total, err := h.repo.ListCharges(r.Context(), vehicleID, missingCostOnly, limit, offset)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list charges")
+		writeRepoError(w, r, err, "Failed to list charges")
 		return
 	}
 	if charges == nil {
@@ -408,7 +408,7 @@ func (h *ExpenseHandler) ListCharges(w http.ResponseWriter, r *http.Request) {
 	}
 	missingCount, err := h.repo.CountChargesWithoutCost(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list charges")
+		writeRepoError(w, r, err, "Failed to list charges")
 		return
 	}
 
@@ -503,7 +503,7 @@ func (h *ExpenseHandler) CreateManualCharge(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := h.repo.CreateManualCharge(r.Context(), c); err != nil {
-		writeRepoError(w, err, "Failed to record charge")
+		writeRepoError(w, r, err, "Failed to record charge")
 		return
 	}
 	writeJSON(w, http.StatusCreated, c)
@@ -533,7 +533,7 @@ func (h *ExpenseHandler) UpdateCharge(w http.ResponseWriter, r *http.Request) {
 	c.ID = chargeID
 
 	if err := h.repo.UpdateCharge(r.Context(), c); err != nil {
-		writeRepoError(w, err, "Failed to update charge")
+		writeRepoError(w, r, err, "Failed to update charge")
 		return
 	}
 	writeJSON(w, http.StatusOK, c)
@@ -547,7 +547,7 @@ func (h *ExpenseHandler) DeleteManualCharge(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := h.repo.DeleteManualCharge(r.Context(), vehicleID, chargeID); err != nil {
-		writeRepoError(w, err, "Failed to delete charge")
+		writeRepoError(w, r, err, "Failed to delete charge")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
@@ -636,7 +636,7 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.repo.SaveExpenseDocument(r.Context(), doc); err != nil {
-		writeRepoError(w, err, "Failed to save document")
+		writeRepoError(w, r, err, "Failed to save document")
 		return
 	}
 
@@ -684,7 +684,7 @@ func (h *ExpenseHandler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 
 	docs, err := h.repo.ListExpenseDocuments(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to list documents")
+		writeRepoError(w, r, err, "Failed to list documents")
 		return
 	}
 	if docs == nil {
@@ -707,7 +707,7 @@ func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request
 
 	doc, err := h.repo.GetExpenseDocumentByID(r.Context(), docID, vehicleID, userID)
 	if err != nil {
-		writeRepoError(w, err, "Document not found")
+		writeRepoError(w, r, err, "Document not found")
 		return
 	}
 
@@ -768,12 +768,12 @@ func (h *ExpenseHandler) DeleteDocument(w http.ResponseWriter, r *http.Request) 
 	// Fetch first to get the storage path before deletion.
 	doc, err := h.repo.GetExpenseDocumentByID(r.Context(), docID, vehicleID, userID)
 	if err != nil {
-		writeRepoError(w, err, "Document not found")
+		writeRepoError(w, r, err, "Document not found")
 		return
 	}
 
 	if err := h.repo.DeleteExpenseDocument(r.Context(), docID, vehicleID, userID); err != nil {
-		writeRepoError(w, err, "Failed to delete document")
+		writeRepoError(w, r, err, "Failed to delete document")
 		return
 	}
 

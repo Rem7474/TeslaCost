@@ -33,7 +33,7 @@ func (h *TCOHandler) GetTCO(w http.ResponseWriter, r *http.Request) {
 
 	summary, err := h.tcoService.ComputeVehicleTCO(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to compute TCO")
+		writeRepoError(w, r, err, "Failed to compute TCO")
 		return
 	}
 
@@ -52,12 +52,12 @@ func (h *TCOHandler) GetDataQuality(w http.ResponseWriter, r *http.Request) {
 
 	issues, err := h.repo.ListDataQualityIssues(r.Context(), vehicleID, 100)
 	if err != nil {
-		writeRepoError(w, err, "Failed to check data quality")
+		writeRepoError(w, r, err, "Failed to check data quality")
 		return
 	}
 	gaps, gapKm, anomalies, err := h.repo.DataQualitySummary(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, err, "Failed to check data quality")
+		writeRepoError(w, r, err, "Failed to check data quality")
 		return
 	}
 

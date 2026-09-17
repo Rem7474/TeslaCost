@@ -30,6 +30,7 @@
   - Just-In-Time (JIT) provisioning : création automatique du compte ou liaison avec un compte local existant partageant le même email.
   - Whitelist optionnelle (`OIDC_ALLOWED_EMAILS`) et désactivation possible de l'authentification locale (`OIDC_DISABLE_LOCAL_AUTH`).
 - **Chiffrement au repos** : chiffrement symétrique AES-256-GCM des identifiants et tokens de connexion TeslaMate dans PostgreSQL.
+- **Rate limiting** : `/api/auth/login` et `/api/auth/register` sont limités à 10 tentatives/minute par IP pour ralentir le brute force et l'énumération de comptes.
 
 ### 2. Synchronisation TeslaMate API
 - **Odomètre temps réel** : actualisation en direct de l'odomètre du véhicule dès que TeslaMate le remonte.
