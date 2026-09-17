@@ -6,6 +6,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
+import { downloadCsv } from '@/utils/csv'
 import {
   Navigation as NavIcon,
   Tag,
@@ -274,14 +275,7 @@ function exportSelectedDrives() {
     (d.costs?.cost_per_km || 0).toFixed(3),
     `"${(d.tags || []).join(', ')}"`,
   ])
-  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `trajets_export_${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadCsv(`trajets_export_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows)
 }
 
 // View mode: drives list or trip groups ("voyages")

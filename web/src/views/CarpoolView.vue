@@ -6,6 +6,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
+import { downloadCsv } from '@/utils/csv'
 import {
   Users,
   Plus,
@@ -144,14 +145,7 @@ function exportSelectedCarpools() {
     (t.net_cost || 0).toFixed(2),
     t.total_cost > 0 ? Math.min(100, Math.round((t.total_revenue / t.total_cost) * 100)) : 0,
   ])
-  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `covoiturages_export_${new Date().toISOString().slice(0, 10)}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
+  downloadCsv(`covoiturages_export_${new Date().toISOString().slice(0, 10)}.csv`, headers, rows)
 }
 
 function toDateInputString(dateVal: string | Date | null | undefined): string {
