@@ -2,11 +2,13 @@
 import { computed } from 'vue'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import { fr } from 'date-fns/locale'
+import { format } from 'date-fns'
 
 const props = withDefaults(
   defineProps<{
-    modelValue?: string | Date | null
+    modelValue?: string | Date | null | { month: number; year: number }
     enableTimePicker?: boolean
+    monthPicker?: boolean
     placeholder?: string
     disabled?: boolean
     required?: boolean
@@ -17,7 +19,8 @@ const props = withDefaults(
   {
     modelValue: '',
     enableTimePicker: false,
-    placeholder: 'Sélectionner une date',
+    monthPicker: false,
+    placeholder: '',
     disabled: false,
     required: false,
     clearable: undefined,
@@ -34,10 +37,39 @@ const emit = defineEmits<{
 const internalValue = computed({
   get: () => {
     if (!props.modelValue) return null
+    if (props.monthPicker && typeof props.modelValue === 'string') {
+      const parts = props.modelValue.split('-')
+      if (parts.length === 2) {
+        const y = Number(parts[0])
+        const m = Number(parts[1])
+        if (!Number.isNaN(y) && !Number.isNaN(m)) {
+          return { year: y, month: m - 1 }
+        }
+      }
+    }
     return props.modelValue
   },
-  set: (val) => {
-    const stringVal = val ? String(val) : ''
+  set: (val: any) => {
+    if (!val) {
+      emit('update:modelValue', '')
+      emit('change', '')
+      return
+    }
+    if (props.monthPicker) {
+      if (typeof val === 'object' && 'year' in val && 'month' in val) {
+        const str = `${val.year}-${String(val.month + 1).padStart(2, '0')}`
+        emit('update:modelValue', str)
+        emit('change', str)
+        return
+      }
+      if (val instanceof Date && !Number.isNaN(val.getTime())) {
+        const str = `${val.getFullYear()}-${String(val.getMonth() + 1).padStart(2, '0')}`
+        emit('update:modelValue', str)
+        emit('change', str)
+        return
+      }
+    }
+    const stringVal = String(val)
     emit('update:modelValue', stringVal)
     emit('change', stringVal)
   },
@@ -48,18 +80,38 @@ const isClearable = computed(() => {
   return !props.required
 })
 
-const modelType = computed(() => {
-  return props.enableTimePicker ? "yyyy-MM-dd'T'HH:mm" : 'yyyy-MM-dd'
-})
+const timeConfig = computed(() => ({
+  enableTimePicker: props.enableTimePicker,
+}))
 
 const displayFormat = computed(() => {
+  if (props.monthPicker) return 'MMMM yyyy'
   return props.enableTimePicker ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy'
 })
 
-const effectivePlaceholder = computed(() => {
-  if (props.placeholder && props.placeholder !== 'Sélectionner une date') {
-    return props.placeholder
+const formatsConfig = computed(() => {
+  if (props.monthPicker) {
+    return {
+      input: (d: Date) => {
+        const str = format(d, 'MMMM yyyy', { locale: fr })
+        return str.charAt(0).toUpperCase() + str.slice(1)
+      },
+      preview: (d: Date) => {
+        const str = format(d, 'MMMM yyyy', { locale: fr })
+        return str.charAt(0).toUpperCase() + str.slice(1)
+      },
+    }
   }
+  const fmt = props.enableTimePicker ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy'
+  return {
+    input: fmt,
+    preview: fmt,
+  }
+})
+
+const effectivePlaceholder = computed(() => {
+  if (props.placeholder) return props.placeholder
+  if (props.monthPicker) return 'Sélectionner un mois'
   return props.enableTimePicker ? 'JJ/MM/AAAA HH:mm' : 'JJ/MM/AAAA'
 })
 
@@ -78,11 +130,13 @@ const actionRowConfig = computed(() => ({
       v-model="internalValue"
       :dark="true"
       :locale="fr"
-      :enable-time-picker="enableTimePicker"
+      :month-picker="monthPicker"
+      :time-config="timeConfig"
       :auto-apply="!enableTimePicker"
       :close-on-auto-apply="!enableTimePicker"
-      :model-type="modelType"
+      :model-type="monthPicker ? undefined : (enableTimePicker ? 'yyyy-MM-dd\'T\'HH:mm' : 'yyyy-MM-dd')"
       :format="displayFormat"
+      :formats="formatsConfig"
       :placeholder="effectivePlaceholder"
       :disabled="disabled"
       :clearable="isClearable"
@@ -95,6 +149,27 @@ const actionRowConfig = computed(() => ({
 <style scoped>
 .app-datepicker-wrapper {
   width: 100%;
+}
+
+.is-disabled {
+  pointer-events: none;
+}
+
+.is-disabled :deep(.dp__input),
+.is-disabled :deep(.dp--input),
+:deep(.dp--disabled) {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  border-color: #1e293b !important;
+  color: #64748b !important;
+  cursor: not-allowed !important;
+  opacity: 0.6 !important;
+  box-shadow: none !important;
+}
+
+.is-disabled :deep(.dp__input_icon),
+.is-disabled :deep(.dp--input-icon),
+:deep(.dp--disabled .dp__input_icon) {
+  color: #475569 !important;
 }
 
 .size-xs :deep(.dp__input) {

@@ -48,9 +48,13 @@
   outline: none !important;
 }
 
-.dp__input:disabled {
+.dp__input:disabled,
+.dp--disabled {
+  background-color: rgba(15, 23, 42, 0.9) !important;
+  border-color: #1e293b !important;
+  color: #64748b !important;
   cursor: not-allowed !important;
-  opacity: 0.7 !important;
+  opacity: 0.6 !important;
 }
 
 .dp__input_icon {
