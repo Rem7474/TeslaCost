@@ -58,7 +58,7 @@ func (h *AuthHandler) setRefreshTokenCookie(w http.ResponseWriter, token string,
 		Expires:  expiresAt,
 		MaxAge:   int(time.Until(expiresAt).Seconds()),
 		HttpOnly: true,
-		Secure:   h.cfg.CookieSecure,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
@@ -71,7 +71,7 @@ func (h *AuthHandler) clearRefreshTokenCookie(w http.ResponseWriter) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   h.cfg.CookieSecure,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
@@ -358,7 +358,7 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Expires:  expire,
 		HttpOnly: true,
-		Secure:   h.cfg.CookieSecure,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
@@ -367,7 +367,7 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    noncePlain,
 		Expires:  expire,
 		HttpOnly: true,
-		Secure:   h.cfg.CookieSecure,
+		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
