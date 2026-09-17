@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
+import { fr } from 'date-fns/locale'
 
 const props = withDefaults(
   defineProps<{
@@ -54,6 +55,20 @@ const modelType = computed(() => {
 const displayFormat = computed(() => {
   return props.enableTimePicker ? 'dd/MM/yyyy HH:mm' : 'dd/MM/yyyy'
 })
+
+const effectivePlaceholder = computed(() => {
+  if (props.placeholder && props.placeholder !== 'Sélectionner une date') {
+    return props.placeholder
+  }
+  return props.enableTimePicker ? 'JJ/MM/AAAA HH:mm' : 'JJ/MM/AAAA'
+})
+
+const actionRowConfig = computed(() => ({
+  showNow: true,
+  nowBtnLabel: "Aujourd'hui",
+  selectBtnLabel: 'Valider',
+  cancelBtnLabel: 'Annuler',
+}))
 </script>
 
 <template>
@@ -62,20 +77,17 @@ const displayFormat = computed(() => {
       :uid="id"
       v-model="internalValue"
       :dark="true"
-      locale="fr"
+      :locale="fr"
       :enable-time-picker="enableTimePicker"
       :auto-apply="!enableTimePicker"
       :close-on-auto-apply="!enableTimePicker"
       :model-type="modelType"
       :format="displayFormat"
-      :placeholder="placeholder"
+      :placeholder="effectivePlaceholder"
       :disabled="disabled"
       :clearable="isClearable"
       teleport="body"
-      select-text="Valider"
-      cancel-text="Annuler"
-      now-button-label="Aujourd'hui"
-      :show-now-button="true"
+      :action-row="actionRowConfig"
     />
   </div>
 </template>
@@ -90,6 +102,12 @@ const displayFormat = computed(() => {
   line-height: 1rem !important;
   padding-top: 0.375rem !important;
   padding-bottom: 0.375rem !important;
+  padding-left: 1.85rem !important;
+  padding-right: 0.375rem !important;
+}
+
+.size-xs :deep(.dp__input_icon) {
+  padding-left: 0.5rem !important;
 }
 
 .size-sm :deep(.dp__input) {
