@@ -108,27 +108,103 @@ TeslaCost/
 
 ### Option 1 : Docker Compose (Recommandé)
 
-1. Clonez le dépôt et copiez le fichier d'environnement :
+> **Inutile de cloner le dépôt !** Vous avez uniquement besoin du fichier `docker-compose.yml` et de votre configuration `.env`.
+
+1. **Préparez un répertoire et téléchargez les deux fichiers :**
    ```bash
-   git clone https://github.com/Rem7474/TeslaCost.git
-   cd TeslaCost
-   cp .env.example .env
+   mkdir teslacost && cd teslacost
+   curl -O https://raw.githubusercontent.com/Rem7474/TeslaCost/main/docker-compose.yml
+   curl -o .env https://raw.githubusercontent.com/Rem7474/TeslaCost/main/.env.example
    ```
 
-2. Éditez `.env` pour configurer vos clés de sécurité et vos paramètres :
+2. **Générez votre clé de chiffrement et configurez `.env` :**
    ```bash
-   # Générer une clé de chiffrement AES-256 de 32 octets en hexadécimal :
+   # Générer une clé de chiffrement AES-256 de 32 octets (64 caractères hexadécimaux) :
    openssl rand -hex 32
    ```
+   Éditez le fichier `.env` pour définir :
+   - `APP_ENCRYPTION_KEY` : la clé générée ci-dessus
+   - `DB_PASSWORD` : le mot de passe de votre base PostgreSQL
+   - `JWT_SECRET` : votre secret de signature de session
+   - *(Optionnel)* La section OIDC / SSO si vous utilisez Authentik, Keycloak ou Authelia
 
-3. Lancez la stack :
+3. **Lancez la stack :**
    ```bash
    docker compose up -d
    ```
 
-L'application est disponible sur `http://localhost:8080`.
+L'application et son interface web sont immédiatement disponibles sur **`http://localhost:8080`**.
+
+<details>
+<summary>📋 Voir le contenu direct de <code>docker-compose.yml</code> (si vous préférez le créer manuellement)</summary>
+
+```yaml
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: teslacost-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER:-teslacost}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
+      POSTGRES_DB: ${DB_NAME:-teslacost}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-teslacost} -d ${DB_NAME:-teslacost}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/rem7474/teslacost:latest
+    container_name: teslacost-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PORT: 8080
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8080}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-teslacost}
+      DB_PASSWORD: ${DB_PASSWORD:-teslacost_dev_secret}
+      DB_NAME: ${DB_NAME:-teslacost}
+      DB_SSLMODE: disable
+      APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY}
+      JWT_SECRET: ${JWT_SECRET}
+      DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
+      # OIDC / SSO (optionnel)
+      # OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      # OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      # OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      # OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
+      # OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-SSO}
+    ports:
+      - "${PORT:-8080}:8080"
+    volumes:
+      - teslacost_documents:/data/documents
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres_data:
+    driver: local
+  teslacost_documents:
+    driver: local
+```
+
+</details>
 
 ---
+
 
 ### Option 2 : Image Docker officielle (GHCR)
 
