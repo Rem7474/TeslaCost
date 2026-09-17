@@ -4,6 +4,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import AppDatePicker from '@/components/AppDatePicker.vue'
+import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import {
   Disc,
   Plus,
@@ -554,6 +555,13 @@ async function loadTires() {
     loading.value = false
   }
 }
+
+watch(
+  () => [vehicleStore.activeVehicle?.id, activeTab.value],
+  () => {
+    selectedTireIds.value = []
+  }
+)
 
 watch(
   () => [vehicleStore.activeVehicle?.id, vehicleStore.lastSyncTimestamp],
@@ -1113,7 +1121,35 @@ function formatDate(d: string) {
       </div>
     </div>
 
-    <!-- Batch selection bar -->
+    <!-- Sticky Bulk Selection Bar -->
+    <BulkSelectionBar
+      v-if="vehicleStore.canEdit"
+      :count="selectedTireIds.length"
+      item-label="pneu"
+      @clear="selectedTireIds = []"
+    >
+      <button
+        type="button"
+        @click="openTireEdit(selectedTireIds)"
+        class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
+      >
+        <Pencil class="w-3 h-3" />
+        <span>Modifier par lot</span>
+      </button>
+
+      <button
+        v-if="canBatchDispose"
+        type="button"
+        @click="openBatchDisposeModal()"
+        class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
+        title="Mettre au rebut les pneus sélectionnés"
+      >
+        <Archive class="w-3 h-3" />
+        <span>Mettre au rebut</span>
+      </button>
+    </BulkSelectionBar>
+
+    <!-- Quick batch selector buttons bar -->
     <div v-if="vehicleStore.canEdit" class="flex flex-wrap items-center justify-between gap-2 text-xs">
       <div class="flex items-center gap-2 flex-wrap">
         <button
@@ -1150,25 +1186,6 @@ function formatDate(d: string) {
           class="text-slate-500 hover:text-slate-300 flex items-center gap-1 px-2 py-1 transition-colors"
         >
           Tout désélectionner
-        </button>
-      </div>
-
-      <div v-if="selectedTireIds.length" class="flex items-center gap-2 bg-slate-800/90 border border-slate-700 rounded-xl px-3 py-1.5 shadow-md">
-        <span class="text-slate-200 font-semibold">{{ selectedTireIds.length }} pneu(s) sélectionné(s)</span>
-        <button type="button" @click="openTireEdit(selectedTireIds)" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors">
-          <Pencil class="w-3 h-3" /> Modifier par lot
-        </button>
-        <button
-          v-if="canBatchDispose"
-          type="button"
-          @click="openBatchDisposeModal()"
-          class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors"
-          title="Mettre au rebut les pneus sélectionnés"
-        >
-          <Archive class="w-3 h-3" /> Mettre au rebut
-        </button>
-        <button type="button" @click="selectedTireIds = []" class="text-slate-400 hover:text-white p-1 rounded hover:bg-slate-700/50" title="Vider la sélection">
-          <X class="w-3.5 h-3.5" />
         </button>
       </div>
     </div>

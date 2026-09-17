@@ -5,6 +5,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import AppDatePicker from '@/components/AppDatePicker.vue'
+import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import {
   Navigation as NavIcon,
   Tag,
@@ -37,6 +38,7 @@ import {
   Search,
   Calendar,
   RotateCcw,
+  Download,
 } from 'lucide-vue-next'
 
 const router = useRouter()
@@ -213,8 +215,73 @@ const selectedList = computed(() =>
 const selectedOffPage = computed(() => selectedDriveIds.value.filter((id) => !drives.value.some((d) => d.id === id)).length)
 const allPageSelected = computed(() => drives.value.length > 0 && drives.value.every((d) => selectedDrives.value[d.id]))
 
+// Unified selection summary metrics (same as a Voyage)
+const selectedSummaryMetrics = computed(() => {
+  if (!selectedList.value.length) return ''
+  const totalKm = selectedList.value.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
+  const totalKwh = selectedList.value.reduce((s, d) => s + (Number(d.costs?.electricity_kwh) || 0), 0)
+  const totalCost = selectedList.value.reduce((s, d) => s + (Number(d.costs?.total_cost) || 0), 0)
+  return `${Math.round(totalKm).toLocaleString('fr-FR')} km • ${Math.round(totalKwh)} kWh • ${totalCost.toFixed(2)} €`
+})
+
 function clearSelection() {
   selectedDrives.value = {}
+}
+
+// Batch tagging
+async function handleBatchTag(tag: 'Pro' | 'Perso' | null) {
+  if (!vehicleStore.activeVehicle || !selectedDriveIds.value.length) return
+  const ids = [...selectedDriveIds.value]
+  try {
+    for (const id of ids) {
+      const d = selectedDrives.value[id] || drives.value.find((x) => x.id === id)
+      let currentTags = [...(d?.tags || [])]
+      if (tag === 'Pro') {
+        currentTags = currentTags.filter((t) => t !== 'Perso')
+        if (!currentTags.includes('Pro')) currentTags.push('Pro')
+      } else if (tag === 'Perso') {
+        currentTags = currentTags.filter((t) => t !== 'Pro')
+        if (!currentTags.includes('Perso')) currentTags.push('Perso')
+      } else {
+        // Clear Pro & Perso
+        currentTags = currentTags.filter((t) => t !== 'Pro' && t !== 'Perso')
+      }
+      await api.updateDriveTags(vehicleStore.activeVehicle.id, id, currentTags)
+      if (d) d.tags = currentTags
+      const listed = drives.value.find((x) => x.id === id)
+      if (listed) listed.tags = currentTags
+    }
+    showAlert(`Tags mis à jour pour ${ids.length} trajet(s).`, 'Succès', 'success')
+  } catch (err: any) {
+    showAlert(`Erreur lors du taggage par lot : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+
+// Export selected drives to CSV
+function exportSelectedDrives() {
+  if (!selectedList.value.length) return
+  const headers = ['ID', 'Date', 'Depart', 'Arrivee', 'Distance_km', 'Duree_min', 'Conso_kWh_100km', 'Energie_kWh', 'Cout_Total_EUR', 'Cout_km_EUR', 'Tags']
+  const rows = selectedList.value.map((d) => [
+    d.id,
+    d.start_time ? new Date(d.start_time).toISOString().slice(0, 16) : '',
+    `"${(d.start_address || '').replace(/"/g, '""')}"`,
+    `"${(d.end_address || '').replace(/"/g, '""')}"`,
+    d.distance_km || 0,
+    d.duration_min || 0,
+    d.consumption_kwh_100km || 0,
+    d.costs?.electricity_kwh || 0,
+    (d.costs?.total_cost || 0).toFixed(2),
+    (d.costs?.cost_per_km || 0).toFixed(3),
+    `"${(d.tags || []).join(', ')}"`,
+  ])
+  const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n')
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `trajets_export_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }
 
 // View mode: drives list or trip groups ("voyages")
@@ -550,6 +617,75 @@ async function handleCarpoolSelectedDrives() {
   router.push({ path: '/carpools', query: { new_drive_ids: ids.join(',') } })
 }
 
+async function openTripCostModal(tg: any) {
+  if (!vehicleStore.activeVehicle) return
+  loadingExpenses.value = true
+  try {
+    const res = await api.getDrives(vehicleStore.activeVehicle.id, { tripGroupId: tg.id, limit: 200 })
+    const tgDrives = [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    
+    // Aggregated drive costs
+    const totalKm = tgDrives.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
+    const totalDuration = tgDrives.reduce((s, d) => s + (Number(d.duration_min) || 0), 0)
+    const totalKwh = tgDrives.reduce((s, d) => s + (Number(d.costs?.electricity_kwh) || 0), 0)
+    const elecCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.electricity_cost) || 0), 0)
+    const tiresCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.tires_cost) || 0), 0)
+    const maintCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.maintenance_cost) || 0), 0)
+    const insurCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.insurance_cost) || 0), 0)
+    const tollsCost = Number(tg.expenses_total || 0)
+    const totalCost = elecCost + tiresCost + maintCost + insurCost + tollsCost
+    const costPerKm = totalKm > 0 ? totalCost / totalKm : 0
+
+    const firstDrive = tgDrives[0]
+    const lastDrive = tgDrives[tgDrives.length - 1]
+
+    selectedCostDrive.value = {
+      id: tg.id,
+      is_trip_group: true,
+      start_time: tg.start_time || firstDrive?.start_time || tg.created_at,
+      start_address: firstDrive ? (firstDrive.start_address || 'Départ').split(',')[0] : 'Départ',
+      end_address: lastDrive ? (lastDrive.end_address || 'Arrivée').split(',')[0] : 'Arrivée',
+      distance_km: Math.round(totalKm),
+      duration_min: totalDuration,
+      tags: [],
+      trip_group_name: tg.name,
+      drives_count: tgDrives.length,
+      costs: {
+        electricity_kwh: Math.round(totalKwh),
+        electricity_rate: totalKwh > 0 ? elecCost / totalKwh : 0.22,
+        electricity_cost: elecCost,
+        tires_rate: totalKm > 0 ? tiresCost / totalKm : 0.02,
+        tires_cost: tiresCost,
+        maintenance_rate: totalKm > 0 ? maintCost / totalKm : 0.015,
+        maintenance_cost: maintCost,
+        insurance_rate: totalKm > 0 ? insurCost / totalKm : 0,
+        insurance_cost: insurCost,
+        tolls_cost: tollsCost,
+        total_cost: totalCost,
+        cost_per_km: costPerKm,
+        has_estimates: tgDrives.some((d) => d.costs?.has_estimates),
+      }
+    }
+
+    // Load group expenses from its drives
+    const expPromises = tgDrives.map((d: any) => api.getDriveExpensesForDrive(vehicleStore.activeVehicle!.id, d.id).catch(() => []))
+    const expResults = await Promise.all(expPromises)
+    const allExp = expResults.flat()
+    const uniqueExpMap = new Map()
+    for (const e of allExp) {
+      if (!uniqueExpMap.has(e.id)) uniqueExpMap.set(e.id, e)
+    }
+    driveExpenses.value = Array.from(uniqueExpMap.values())
+    showCostModal.value = true
+    showAddTollInline.value = false
+    editingExpenseId.value = null
+  } catch (err: any) {
+    showAlert(`Erreur lors du chargement des détails : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    loadingExpenses.value = false
+  }
+}
+
 async function openCostModal(drive: any) {
   selectedCostDrive.value = drive
   showCostModal.value = true
@@ -863,55 +999,73 @@ function formatDate(dateStr: string) {
       </div>
     </div>
 
-    <!-- Multi-selection Action Bar -->
-    <div
-      v-if="selectedDriveIds.length"
-      class="sticky top-16 z-30 bg-slate-800/95 backdrop-blur-md border border-slate-700 p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-2xl"
+    <!-- Sticky Bulk Selection Bar -->
+    <BulkSelectionBar
+      v-if="vehicleStore.canEdit"
+      :count="selectedDriveIds.length"
+      item-label="trajet"
+      :off-screen-count="selectedOffPage"
+      :metrics-summary="selectedSummaryMetrics"
+      @clear="clearSelection"
     >
-      <div class="flex items-center gap-2 text-sm text-slate-200">
-        <span class="px-2.5 py-0.5 bg-rose-500/20 text-rose-400 font-bold rounded-lg border border-rose-500/30">
-          {{ selectedDriveIds.length }}
-        </span>
-        <span>trajet(s) sélectionné(s)</span>
-        <span v-if="selectedOffPage" class="text-xs text-slate-400">dont {{ selectedOffPage }} sur d'autres pages ou filtres</span>
-      </div>
+      <!-- Direct Carpool button for single or multi-drives -->
+      <button
+        type="button"
+        @click="handleCarpoolSelectedDrives"
+        class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-rose-600/25 transition-all"
+      >
+        <Users class="w-3.5 h-3.5" />
+        <span>{{ selectedDriveIds.length > 1 ? `Covoiturer (${selectedDriveIds.length})` : 'Covoiturer' }}</span>
+      </button>
 
-      <div class="flex items-center gap-2">
-        <!-- Direct Carpool button for single or multi-drives -->
-        <button
-          @click="handleCarpoolSelectedDrives"
-          class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/25 transition-all"
-        >
-          <Users class="w-4 h-4" />
-          <span>{{ selectedDriveIds.length > 1 ? `Covoiturer la sélection (${selectedDriveIds.length} étapes)` : 'Covoiturer ce trajet' }}</span>
-        </button>
+      <!-- Fusion Voyage Group -->
+      <button
+        type="button"
+        @click="showGroupModal = true"
+        class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
+      >
+        <Layers class="w-3.5 h-3.5" />
+        <span>Fusionner & Péage</span>
+      </button>
 
-        <!-- Fusion Voyage Group -->
-        <button
-          @click="showGroupModal = true"
-          class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
-        >
-          <Layers class="w-3.5 h-3.5" />
-          <span>Fusionner & Péage</span>
-        </button>
+      <!-- Batch Tag actions -->
+      <button
+        type="button"
+        @click="handleBatchTag('Pro')"
+        class="px-2.5 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-semibold rounded-xl flex items-center gap-1 transition-colors"
+        title="Marquer la sélection comme trajets Pro"
+      >
+        <span>Pro</span>
+      </button>
 
-        <button
-          @click="openAddToTrip"
-          class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
-        >
-          <Plus class="w-3.5 h-3.5" />
-          <span>Ajouter à un voyage</span>
-        </button>
+      <button
+        type="button"
+        @click="handleBatchTag('Perso')"
+        class="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold rounded-xl flex items-center gap-1 transition-colors"
+        title="Marquer la sélection comme trajets Perso"
+      >
+        <span>Perso</span>
+      </button>
 
-        <button
-          @click="clearSelection"
-          class="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-xl transition-colors"
-          title="Annuler la sélection"
-        >
-          <X class="w-4 h-4" />
-        </button>
-      </div>
-    </div>
+      <button
+        type="button"
+        @click="exportSelectedDrives"
+        class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
+        title="Exporter la sélection en CSV"
+      >
+        <Download class="w-3.5 h-3.5 text-slate-300" />
+        <span>Export</span>
+      </button>
+
+      <button
+        type="button"
+        @click="openAddToTrip"
+        class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
+      >
+        <Plus class="w-3.5 h-3.5" />
+        <span>Ajouter voyage</span>
+      </button>
+    </BulkSelectionBar>
 
     <template v-if="viewMode === 'DRIVES'">
     <!-- SKELETON LOADING STATE -->
@@ -965,7 +1119,8 @@ function formatDate(dateStr: string) {
       <div
         v-for="d in drives"
         :key="d.id"
-        class="bg-slate-900 border border-slate-800 hover:border-slate-700/90 p-4 rounded-2xl transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+        @click="openCostModal(d)"
+        class="bg-slate-900 border border-slate-800 hover:border-slate-700/90 p-4 rounded-2xl transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer group"
         :class="{ 'border-rose-500/40 bg-slate-800/40 shadow-lg shadow-rose-950/20': selectedDriveIds.includes(d.id) }"
       >
         <div class="flex items-start gap-3 min-w-0 flex-1">
@@ -973,6 +1128,7 @@ function formatDate(dateStr: string) {
           <label
             v-if="vehicleStore.canEdit"
             :for="'drive-select-' + d.id"
+            @click.stop
             class="mt-1 shrink-0 flex items-center cursor-pointer"
             title="Sélectionner ce trajet"
           >
@@ -999,6 +1155,19 @@ function formatDate(dateStr: string) {
               <span v-if="d.consumption_kwh_100km" class="text-xs text-sky-400 font-mono shrink-0">
                 {{ d.consumption_kwh_100km }} kWh/100km
               </span>
+              <!-- Clean tag pills -->
+              <span
+                v-if="d.tags?.includes('Pro')"
+                class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40 shrink-0"
+              >
+                Pro
+              </span>
+              <span
+                v-if="d.tags?.includes('Perso')"
+                class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shrink-0"
+              >
+                Perso
+              </span>
             </div>
 
             <!-- Route Address -->
@@ -1012,7 +1181,7 @@ function formatDate(dateStr: string) {
         </div>
 
         <!-- Right Side: Cost Badge & Actions -->
-        <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0">
+        <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0" @click.stop>
           <!-- Toll qualification: 2 taps -->
           <div v-if="vehicleStore.canEdit && needsTollQualification(d)" class="flex items-center gap-1">
             <button
@@ -1031,13 +1200,12 @@ function formatDate(dateStr: string) {
             </button>
           </div>
 
-          <!-- Real Cost Badge (Clickable for full breakdown) -->
-          <button
-            @click="openCostModal(d)"
-            class="px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/70 hover:border-emerald-500/40 rounded-xl flex items-center gap-2 transition-all text-left shadow-sm group"
-            title="Cliquez pour voir la décomposition détaillée par poste de dépense"
+          <!-- Real Cost Badge -->
+          <div
+            class="px-3 py-1.5 bg-slate-800/80 border border-slate-700/70 rounded-xl flex items-center gap-2 text-left shadow-sm"
+            title="Coût de revient réel calculé pour ce trajet"
           >
-            <div class="p-1 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500/20">
+            <div class="p-1 rounded-lg bg-emerald-500/10 text-emerald-400">
               <Coins class="w-3.5 h-3.5" />
             </div>
             <div>
@@ -1048,46 +1216,6 @@ function formatDate(dateStr: string) {
                 </span>
               </div>
             </div>
-          </button>
-
-          <!-- Tags -->
-          <div v-if="vehicleStore.canEdit" class="flex items-center gap-1">
-            <button
-              @click="toggleDriveTag(d, 'Pro')"
-              class="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all"
-              :class="
-                d.tags?.includes('Pro')
-                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-sm shadow-blue-500/20'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-              "
-            >
-              Pro
-            </button>
-            <button
-              @click="toggleDriveTag(d, 'Perso')"
-              class="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all"
-              :class="
-                d.tags?.includes('Perso')
-                  ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm shadow-emerald-500/20'
-                  : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
-              "
-            >
-              Perso
-            </button>
-          </div>
-          <div v-else-if="d.tags?.length" class="flex items-center gap-1">
-            <span
-              v-if="d.tags.includes('Pro')"
-              class="px-2.5 py-1 text-xs font-semibold rounded-lg border bg-blue-500/20 text-blue-400 border-blue-500/40"
-            >
-              Pro
-            </span>
-            <span
-              v-if="d.tags.includes('Perso')"
-              class="px-2.5 py-1 text-xs font-semibold rounded-lg border bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-            >
-              Perso
-            </span>
           </div>
 
           <!-- Quick Carpool Button -->
@@ -1210,52 +1338,111 @@ function formatDate(dateStr: string) {
         Aucun voyage. Sélectionnez plusieurs trajets puis « Fusionner & Péage » pour en créer un.
       </div>
       <template v-else>
-      <div v-for="tg in tripGroups" :key="tg.id" class="bg-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div
+        v-for="tg in tripGroups"
+        :key="tg.id"
+        @click="openTripCostModal(tg)"
+        class="bg-slate-900 border border-slate-800 hover:border-slate-700/90 p-4 rounded-2xl transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4 cursor-pointer group"
+      >
+        <div class="flex items-start gap-3 min-w-0 flex-1">
+          <!-- Icon indicator -->
+          <div class="mt-1 p-2 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
+            <Layers class="w-4 h-4" />
+          </div>
+
+          <!-- Voyage Details (matching Drive details structure) -->
           <div class="min-w-0 flex-1">
-            <div class="text-sm font-bold text-white flex items-center gap-2">
-              <Layers class="w-4 h-4 text-indigo-400 shrink-0" /> <span class="truncate">{{ tg.name }}</span>
+            <div class="flex items-center gap-2 flex-wrap mb-1.5">
+              <span class="text-xs font-semibold text-slate-400 shrink-0">{{ formatTripDates(tg) }}</span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-800 text-slate-200 border border-slate-700/60 shrink-0">
+                {{ Math.round(tg.distance_km).toLocaleString('fr-FR') }} km
+              </span>
+              <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 shrink-0">
+                {{ tg.drive_ids.length }} étape(s)
+              </span>
+              <span v-if="tg.carpool_count" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/30 shrink-0">
+                {{ tg.carpool_count }} covoit
+              </span>
             </div>
-            <p class="text-xs text-slate-400 mt-0.5">
-              {{ formatTripDates(tg) }} • {{ tg.drive_ids.length }} trajet(s) • {{ Math.round(tg.distance_km).toLocaleString('fr-FR') }} km
-              <template v-if="tg.expense_count"> • {{ tg.expense_count }} frais ({{ Number(tg.expenses_total).toFixed(2) }} €)</template>
-              <template v-if="tg.carpool_count"> • {{ tg.carpool_count }} covoiturage(s)</template>
-            </p>
-            <p v-if="tg.notes" class="text-xs text-slate-500 mt-0.5 truncate">{{ tg.notes }}</p>
-          </div>
-          <div class="flex items-center gap-1.5 shrink-0 self-end sm:self-auto">
-            <button @click="toggleTripDetails(tg)" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl border border-slate-700/60">
-              {{ expandedTripId === tg.id ? 'Masquer' : 'Trajets' }}
-            </button>
-            <template v-if="vehicleStore.canEdit">
-              <button
-                @click="router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })"
-                class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60"
-                title="Covoiturer ce voyage"
-              >
-                <Users class="w-3.5 h-3.5" />
-              </button>
-              <button @click="openTripEdit(tg)" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-xl border border-slate-700/60" title="Renommer">
-                <Pencil class="w-3.5 h-3.5" />
-              </button>
-              <button @click="handleDeleteTrip(tg)" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl border border-slate-700/60" title="Supprimer le voyage">
-                <Trash2 class="w-3.5 h-3.5" />
-              </button>
-            </template>
+
+            <!-- Voyage Title & Notes (matching Route address line) -->
+            <div class="text-sm text-slate-200 flex items-center gap-2 flex-wrap min-w-0">
+              <span class="font-bold text-white truncate max-w-sm sm:max-w-md" :title="tg.name">{{ tg.name }}</span>
+              <span v-if="tg.notes" class="text-xs text-slate-500 truncate max-w-xs">• {{ tg.notes }}</span>
+            </div>
           </div>
         </div>
-        <div v-if="expandedTripId === tg.id" class="space-y-1.5 border-t border-slate-800 pt-2">
-          <div v-for="d in tripDrives" :key="d.id" class="flex items-center justify-between gap-3 text-xs text-slate-300 bg-slate-800/40 rounded-lg px-2.5 py-1.5 min-w-0">
-            <span class="truncate min-w-0 flex-1">
-              {{ formatDate(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}
-              <span class="text-slate-500">({{ d.distance_km }} km)</span>
-            </span>
-            <button v-if="vehicleStore.canEdit" @click="removeDriveFromTrip(tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0" title="Retirer ce trajet du voyage">
-              <X class="w-3.5 h-3.5" />
-            </button>
+
+        <!-- Right Side: Cost Badge & Actions (matching Drive right-side) -->
+        <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0" @click.stop>
+          <!-- Real Cost Badge -->
+          <div
+            class="px-3 py-1.5 bg-slate-800/80 border border-slate-700/70 rounded-xl flex items-center gap-2 text-left shadow-sm"
+            title="Coût consolidé du voyage (cliquez sur la ligne pour le détail)"
+          >
+            <div class="p-1 rounded-lg bg-emerald-500/10 text-emerald-400">
+              <Coins class="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
+                <span>{{ Number(tg.expenses_total || 0) > 0 ? `${Number(tg.expenses_total).toFixed(2)} € frais` : 'Détail coûts' }}</span>
+                <span v-if="tg.distance_km > 0 && tg.expenses_total" class="text-[10px] font-normal text-emerald-400 font-mono">
+                  {{ (Number(tg.expenses_total) / tg.distance_km).toFixed(3) }} €/km
+                </span>
+              </div>
+            </div>
           </div>
-          <p v-if="!tripDrives.length" class="text-xs text-slate-500">Chargement des trajets...</p>
+
+          <!-- Details toggle button -->
+          <button
+            @click="toggleTripDetails(tg)"
+            class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-white transition-colors"
+          >
+            {{ expandedTripId === tg.id ? 'Masquer' : 'Étapes' }}
+          </button>
+
+          <!-- Quick Carpool Button -->
+          <button
+            v-if="vehicleStore.canEdit"
+            @click="router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })"
+            class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40 flex items-center gap-1.5 transition-all"
+            title="Covoiturer ce voyage"
+          >
+            <Users class="w-3.5 h-3.5 text-rose-500" />
+            <span class="hidden md:inline">Covoiturer</span>
+          </button>
+
+          <!-- Edit & Delete -->
+          <template v-if="vehicleStore.canEdit">
+            <button
+              @click="openTripEdit(tg)"
+              class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-lg border border-slate-700/60 transition-colors"
+              title="Renommer le voyage"
+            >
+              <Pencil class="w-3.5 h-3.5" />
+            </button>
+            <button
+              @click="handleDeleteTrip(tg)"
+              class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg border border-slate-700/60 transition-colors"
+              title="Supprimer le voyage"
+            >
+              <Trash2 class="w-3.5 h-3.5" />
+            </button>
+          </template>
         </div>
+      </div>
+      <!-- Expanded drives drawer -->
+      <div v-if="expandedTripId === tg.id" class="space-y-1.5 bg-slate-950/40 border border-slate-800/80 rounded-2xl p-3 -mt-1 ml-4 mr-4">
+        <div v-for="d in tripDrives" :key="d.id" class="flex items-center justify-between gap-3 text-xs text-slate-300 bg-slate-800/40 rounded-lg px-2.5 py-1.5 min-w-0">
+          <span class="truncate min-w-0 flex-1">
+            {{ formatDate(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}
+            <span class="text-slate-500">({{ d.distance_km }} km)</span>
+          </span>
+          <button v-if="vehicleStore.canEdit" @click="removeDriveFromTrip(tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0 p-1" title="Retirer ce trajet du voyage">
+            <X class="w-3.5 h-3.5" />
+          </button>
+        </div>
+        <p v-if="!tripDrives.length" class="text-xs text-slate-500">Chargement des trajets...</p>
       </div>
       </template>
     </div>
@@ -1270,11 +1457,13 @@ function formatDate(dateStr: string) {
         <!-- Header -->
         <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
           <div class="flex items-center gap-2.5 min-w-0 pr-2">
-            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl shrink-0">
-              <Coins class="w-5 h-5" />
+            <div class="p-2 rounded-xl shrink-0" :class="selectedCostDrive.is_trip_group ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'">
+              <component :is="selectedCostDrive.is_trip_group ? Layers : Coins" class="w-5 h-5" />
             </div>
             <div class="min-w-0 truncate">
-              <h3 class="text-base font-bold text-white truncate">Coût Réel du Trajet</h3>
+              <h3 class="text-base font-bold text-white truncate">
+                {{ selectedCostDrive.is_trip_group ? `Voyage : ${selectedCostDrive.trip_group_name}` : 'Coût Réel du Trajet' }}
+              </h3>
               <p class="text-xs text-slate-400">{{ formatDate(selectedCostDrive.start_time) }}</p>
             </div>
           </div>
@@ -1294,12 +1483,43 @@ function formatDate(dateStr: string) {
             <span class="text-slate-500">→</span>
             <span class="truncate">{{ selectedCostDrive.end_address || 'Arrivée' }}</span>
           </div>
-          <div class="flex items-center gap-3 text-xs text-slate-300">
+          <div class="flex items-center gap-3 text-xs text-slate-300 flex-wrap">
             <span class="font-bold text-rose-400">{{ selectedCostDrive.distance_km }} km</span>
             <span v-if="selectedCostDrive.duration_min" class="text-slate-400">• {{ selectedCostDrive.duration_min }} min</span>
+            <span v-if="selectedCostDrive.drives_count" class="text-indigo-400 font-semibold">• {{ selectedCostDrive.drives_count }} étapes</span>
             <span v-if="selectedCostDrive.speed_avg" class="text-slate-400">• {{ Math.round(selectedCostDrive.speed_avg) }} km/h moy</span>
-            <span v-if="selectedCostDrive.speed_max" class="text-slate-400">• {{ selectedCostDrive.speed_max }} km/h max</span>
             <span v-if="selectedCostDrive.costs?.electricity_kwh" class="text-sky-400 font-mono">• {{ selectedCostDrive.costs.electricity_kwh }} kWh</span>
+          </div>
+
+          <!-- Tag qualification (only for individual drives) -->
+          <div v-if="!selectedCostDrive.is_trip_group && vehicleStore.canEdit" class="pt-2 border-t border-slate-700/60 flex items-center justify-between gap-2">
+            <span class="text-xs text-slate-400">Classification :</span>
+            <div class="flex items-center gap-1.5">
+              <button
+                type="button"
+                @click="toggleDriveTag(selectedCostDrive, 'Pro')"
+                class="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all"
+                :class="
+                  selectedCostDrive.tags?.includes('Pro')
+                    ? 'bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-sm'
+                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                "
+              >
+                Pro
+              </button>
+              <button
+                type="button"
+                @click="toggleDriveTag(selectedCostDrive, 'Perso')"
+                class="px-2.5 py-1 text-xs font-semibold rounded-lg border transition-all"
+                :class="
+                  selectedCostDrive.tags?.includes('Perso')
+                    ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm'
+                    : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-white'
+                "
+              >
+                Perso
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1567,7 +1787,7 @@ function formatDate(dateStr: string) {
             Fermer
           </button>
           <button
-            @click="showCostModal = false; router.push({ path: '/carpools', query: { new_drive_id: selectedCostDrive.id } })"
+            @click="showCostModal = false; router.push({ path: '/carpools', query: selectedCostDrive.is_trip_group ? { new_trip_group_id: selectedCostDrive.id } : { new_drive_id: selectedCostDrive.id } })"
             class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/25 transition-all"
           >
             <Users class="w-4 h-4" />
