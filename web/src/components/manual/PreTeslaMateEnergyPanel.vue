@@ -1,0 +1,189 @@
+<script setup lang="ts">
+import { ref, computed, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { Zap, CheckCircle2 } from 'lucide-vue-next'
+import { useConfirm } from '@/composables/useConfirm'
+import { useVehicleStore } from '@/stores/vehicle'
+import { api } from '@/services/api'
+
+const props = defineProps<{
+  vehicle: any
+  canEdit: boolean
+}>()
+
+const router = useRouter()
+const vehicleStore = useVehicleStore()
+const { showAlert } = useConfirm()
+
+const form = ref<{ kwh_100km: number | null; eur_per_kwh: number | null }>({ kwh_100km: null, eur_per_kwh: null })
+const saving = ref(false)
+const tco = ref<any | null>(null)
+
+const preview = computed(() => {
+  const kwh100 = Number(form.value.kwh_100km)
+  const rate = Number(form.value.eur_per_kwh)
+  if (!kwh100 || !rate || kwh100 <= 0 || rate <= 0) return null
+  const distance = tco.value?.pre_teslamate_distance_km ?? (tco.value?.completeness?.untracked_distance_km || 0)
+  if (distance <= 0) return null
+  const kwh = (distance * kwh100) / 100
+  return { distance, kwh, cost: kwh * rate }
+})
+
+function syncForm() {
+  form.value = {
+    kwh_100km: props.vehicle?.pre_teslamate_kwh_100km ?? null,
+    eur_per_kwh: props.vehicle?.pre_teslamate_eur_per_kwh ?? null,
+  }
+}
+
+async function loadTco() {
+  tco.value = await api.getTCO(props.vehicle.id).catch(() => null)
+}
+
+async function save() {
+  const kwh100 = form.value.kwh_100km != null ? Number(form.value.kwh_100km) : null
+  const rate = form.value.eur_per_kwh != null ? Number(form.value.eur_per_kwh) : null
+  if (kwh100 !== null && (kwh100 <= 0 || kwh100 > 100)) {
+    showAlert('Consommation moyenne invalide (doit être comprise entre 1 et 100 kWh/100km)', 'Champ invalide', 'warning')
+    return
+  }
+  if (rate !== null && (rate <= 0 || rate > 10)) {
+    showAlert('Tarif électricité invalide (doit être compris entre 0.01 et 10 €/kWh)', 'Champ invalide', 'warning')
+    return
+  }
+  saving.value = true
+  try {
+    await api.updatePreTeslaMateEnergy(props.vehicle.id, {
+      pre_teslamate_kwh_100km: kwh100,
+      pre_teslamate_eur_per_kwh: rate,
+    })
+    await vehicleStore.fetchVehicles()
+    await loadTco()
+    vehicleStore.lastSyncTimestamp = Date.now()
+    showAlert('Coûts de recharge avant TeslaMate enregistrés avec succès !', 'Succès', 'info')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function clear() {
+  form.value = { kwh_100km: null, eur_per_kwh: null }
+  await save()
+}
+
+watch(() => props.vehicle?.id, () => {
+  syncForm()
+  loadTco()
+})
+onMounted(() => {
+  syncForm()
+  loadTco()
+})
+</script>
+
+<template>
+  <div class="space-y-5">
+    <div class="bg-gradient-to-br from-sky-950/40 to-slate-950/60 border border-sky-500/20 rounded-xl p-4 space-y-4">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="p-2 bg-sky-500/10 text-sky-400 rounded-lg">
+            <Zap class="w-4 h-4" />
+          </div>
+          <div>
+            <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Coûts de recharge avant TeslaMate</h4>
+            <p class="text-[11px] text-slate-400">Complétez automatiquement l'énergie et le coût des kilomètres non suivis</p>
+          </div>
+        </div>
+        <span
+          v-if="vehicle?.pre_teslamate_kwh_100km && vehicle?.pre_teslamate_eur_per_kwh"
+          class="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1"
+        >
+          <CheckCircle2 class="w-3 h-3" /> Actif
+        </span>
+        <span v-else class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Non configuré</span>
+      </div>
+
+      <form class="space-y-3" @submit.prevent="save">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="pre-tm-kwh" class="block text-xs font-semibold text-slate-300 mb-1">Consommation moyenne (kWh/100km)</label>
+            <input
+              id="pre-tm-kwh"
+              v-model.number="form.kwh_100km"
+              type="number"
+              step="0.1"
+              min="1"
+              max="100"
+              placeholder="ex: 16.5"
+              :disabled="!canEdit"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 disabled:opacity-50"
+            />
+          </div>
+          <div>
+            <label for="pre-tm-rate" class="block text-xs font-semibold text-slate-300 mb-1">Tarif de l'électricité (€/kWh)</label>
+            <input
+              id="pre-tm-rate"
+              v-model.number="form.eur_per_kwh"
+              type="number"
+              step="0.0001"
+              min="0.01"
+              max="5"
+              placeholder="ex: 0.22"
+              :disabled="!canEdit"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 disabled:opacity-50"
+            />
+          </div>
+        </div>
+
+        <div v-if="preview" class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1">
+          <div class="text-slate-300 font-semibold flex items-center justify-between">
+            <span>Estimation sur {{ Math.round(preview.distance).toLocaleString('fr-FR') }} km lissés :</span>
+            <span class="text-sky-400 font-bold font-mono">
+              ≈ {{ preview.cost.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+            </span>
+          </div>
+          <p class="text-slate-400 text-[11px]">
+            Volume estimé :
+            <strong class="text-slate-200 font-mono">{{ Math.round(preview.kwh).toLocaleString('fr-FR') }} kWh</strong>
+            ({{ (preview.cost / (preview.distance || 1)).toFixed(3) }} €/km)
+            distribués au prorata dans chaque mois lissé.
+          </p>
+        </div>
+
+        <div v-if="canEdit" class="flex items-center justify-between pt-1">
+          <button
+            v-if="vehicle?.pre_teslamate_kwh_100km || vehicle?.pre_teslamate_eur_per_kwh"
+            type="button"
+            class="text-xs text-slate-400 hover:text-rose-400 transition-colors"
+            @click="clear"
+          >
+            Réinitialiser (désactiver)
+          </button>
+          <span v-else></span>
+
+          <button
+            type="submit"
+            :disabled="saving"
+            class="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-lg shadow-sky-600/20"
+          >
+            <Zap class="w-3.5 h-3.5" />
+            <span>{{ saving ? 'Enregistrement...' : 'Enregistrer la recharge avant TM' }}</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs text-slate-300">
+      <span>Une recharge faite hors TeslaMate (borne publique, prise externe) se saisit avec son coût dans les dépenses.</span>
+      <button
+        type="button"
+        class="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-xl"
+        @click="router.push('/expenses?tab=CHARGES')"
+      >
+        Recharges hors TeslaMate
+      </button>
+    </div>
+  </div>
+</template>

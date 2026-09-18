@@ -44,7 +44,7 @@ func TestCompletenessScoreCombustionVehicle(t *testing.T) {
 	for _, d := range dims {
 		byKey[d.Key] = d
 	}
-	if byKey["energy"].Label != "Pleins de carburant enregistrés" || byKey["distance"].Label != "Kilomètres couverts par des pleins" {
+	if byKey["energy"].Label != "Pleins de carburant enregistrés" || byKey["distance"].Label != "Kilomètres couverts par des relevés et des pleins" {
 		t.Errorf("combustion labels: %+v / %+v", byKey["energy"], byKey["distance"])
 	}
 

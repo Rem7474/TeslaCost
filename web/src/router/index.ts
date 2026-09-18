@@ -8,6 +8,7 @@ import ExpensesView from '@/views/ExpensesView.vue'
 import VehiclesView from '@/views/VehiclesView.vue'
 import CarpoolView from '@/views/CarpoolView.vue'
 import ComparisonView from '@/views/ComparisonView.vue'
+import ManualTrackingView from '@/views/ManualTrackingView.vue'
 import LoginView from '@/views/LoginView.vue'
 import RegisterView from '@/views/RegisterView.vue'
 import OnboardingView from '@/views/OnboardingView.vue'
@@ -32,6 +33,12 @@ const router = createRouter({
       path: '/carpools',
       name: 'carpools',
       component: CarpoolView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/manual',
+      name: 'manual',
+      component: ManualTrackingView,
       meta: { requiresAuth: true },
     },
     {

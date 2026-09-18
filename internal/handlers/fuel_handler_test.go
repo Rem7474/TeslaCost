@@ -22,7 +22,7 @@ func TestBuildFuelLog(t *testing.T) {
 	}{
 		{
 			name: "amount only",
-			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: 12000, Amount: cents(75)},
+			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000), Amount: cents(75)},
 			check: func(t *testing.T, f *models.FuelLog) {
 				if f.Amount != money.FromFloat(75) || f.Liters != nil || f.PricePerLiter != nil || !f.IsFullTank {
 					t.Errorf("unexpected: %+v", f)
@@ -31,7 +31,7 @@ func TestBuildFuelLog(t *testing.T) {
 		},
 		{
 			name: "amount and liters derive the price",
-			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: 12000, Amount: cents(75), Liters: f64(40)},
+			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000), Amount: cents(75), Liters: f64(40)},
 			check: func(t *testing.T, f *models.FuelLog) {
 				if f.PricePerLiter == nil || *f.PricePerLiter != 1.875 {
 					t.Errorf("price = %v, want 1.875", f.PricePerLiter)
@@ -40,7 +40,7 @@ func TestBuildFuelLog(t *testing.T) {
 		},
 		{
 			name: "liters and price derive the amount",
-			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: 12000, Liters: f64(40), PricePerLiter: f64(1.8), IsFullTank: &falseV},
+			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000), Liters: f64(40), PricePerLiter: f64(1.8), IsFullTank: &falseV},
 			check: func(t *testing.T, f *models.FuelLog) {
 				if f.Amount != money.FromFloat(72) || f.IsFullTank {
 					t.Errorf("unexpected: %+v", f)
@@ -49,24 +49,24 @@ func TestBuildFuelLog(t *testing.T) {
 		},
 		{
 			name: "amount and price derive the liters",
-			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: 12000, Amount: cents(72), PricePerLiter: f64(1.8)},
+			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000), Amount: cents(72), PricePerLiter: f64(1.8)},
 			check: func(t *testing.T, f *models.FuelLog) {
 				if f.Liters == nil || *f.Liters != 40 {
 					t.Errorf("liters = %v, want 40", f.Liters)
 				}
 			},
 		},
-		{name: "no amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: 12000}, wantErr: "Montant"},
-		{name: "liters without price or amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: 12000, Liters: f64(40)}, wantErr: "Montant"},
-		{name: "bad date", req: SaveFuelLogRequest{Date: "nope", Odometer: 12000, Amount: cents(50)}, wantErr: "Date"},
-		{name: "negative odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: -1, Amount: cents(50)}, wantErr: "Kilométrage"},
-		{name: "huge odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: 3_000_000, Amount: cents(50)}, wantErr: "Kilométrage"},
-		{name: "too many liters", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: 1, Amount: cents(50), Liters: f64(900)}, wantErr: "Quantité"},
-		{name: "absurd price", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: 1, Amount: cents(50), PricePerLiter: f64(50)}, wantErr: "Prix au litre"},
-		{name: "unknown fuel", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: 1, Amount: cents(50), FuelType: strPtr("KEROSENE")}, wantErr: "Carburant"},
+		{name: "no amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000)}, wantErr: "Montant"},
+		{name: "liters without price or amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000), Liters: f64(40)}, wantErr: "Montant"},
+		{name: "bad date", req: SaveFuelLogRequest{Date: "nope", Odometer: f64(12000), Amount: cents(50)}, wantErr: "Date"},
+		{name: "negative odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(-1), Amount: cents(50)}, wantErr: "Kilométrage"},
+		{name: "huge odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(3_000_000), Amount: cents(50)}, wantErr: "Kilométrage"},
+		{name: "too many liters", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), Liters: f64(900)}, wantErr: "Quantité"},
+		{name: "absurd price", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), PricePerLiter: f64(50)}, wantErr: "Prix au litre"},
+		{name: "unknown fuel", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), FuelType: strPtr("KEROSENE")}, wantErr: "Carburant"},
 		{
 			name: "known fuel and trimmed notes",
-			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: 1, Amount: cents(50), FuelType: strPtr("DIESEL"), Notes: strPtr("  Leclerc ")},
+			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), FuelType: strPtr("DIESEL"), Notes: strPtr("  Leclerc ")},
 			check: func(t *testing.T, f *models.FuelLog) {
 				if *f.FuelType != "DIESEL" || *f.Notes != "Leclerc" {
 					t.Errorf("unexpected: %+v", f)
@@ -95,11 +95,11 @@ func TestBuildFuelLog(t *testing.T) {
 
 func strPtr(s string) *string { return &s }
 
-func TestCheckFuelOdometerOrder(t *testing.T) {
+func TestCheckOdometerOrder(t *testing.T) {
 	day := func(d int) time.Time { return time.Date(2026, 3, d, 0, 0, 0, 0, time.UTC) }
-	others := []models.FuelLog{
-		{ID: "a", Date: day(1), Odometer: 10000},
-		{ID: "b", Date: day(10), Odometer: 10800},
+	others := []models.OdometerPoint{
+		{ID: "a", Kind: models.OdometerPointReading, Date: day(1), Odometer: 10000},
+		{ID: "b", Kind: models.OdometerPointFuel, Date: day(10), Odometer: 10800},
 	}
 	tests := []struct {
 		name    string
@@ -111,14 +111,14 @@ func TestCheckFuelOdometerOrder(t *testing.T) {
 		{"between the two", "", day(5), 10400, ""},
 		{"same day as a neighbour is not compared", "", day(10), 10500, ""},
 		{"after the last with a higher odometer", "", day(20), 11000, ""},
-		{"lower than an older fill-up", "", day(5), 9000, "plus ancien"},
-		{"higher than a newer fill-up", "", day(5), 11000, "plus récent"},
-		{"editing a fill-up ignores itself", "b", day(10), 10500, ""},
+		{"lower than an older point", "", day(5), 9000, "plus ancien"},
+		{"higher than a newer point", "", day(5), 11000, "plus récent"},
+		{"editing a point ignores itself", "b", day(10), 10500, ""},
 		{"editing still checks the others", "b", day(10), 9000, "plus ancien"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := checkFuelOdometerOrder(others, tt.id, tt.date, tt.odo)
+			err := checkOdometerOrder(others, tt.id, tt.date, tt.odo)
 			if tt.wantErr == "" {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
@@ -129,6 +129,19 @@ func TestCheckFuelOdometerOrder(t *testing.T) {
 				t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestBuildFuelLogWithoutMileage(t *testing.T) {
+	f, err := buildFuelLog("veh", &SaveFuelLogRequest{Date: "2026-03-01", Amount: cents(60), Liters: f64(35)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.Odometer != nil {
+		t.Errorf("a fill-up without mileage must keep a nil odometer, got %v", *f.Odometer)
+	}
+	if _, err := buildFuelLog("veh", &SaveFuelLogRequest{Date: "2026-03-01", Amount: cents(60), Odometer: f64(-5)}); err == nil {
+		t.Error("an entered mileage is still validated")
 	}
 }
 

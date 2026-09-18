@@ -33,16 +33,34 @@ func (r *Repository) ListOdometerCheckpoints(ctx context.Context, vehicleID stri
 
 // CreateOdometerCheckpoint records a new odometer checkpoint.
 func (r *Repository) CreateOdometerCheckpoint(ctx context.Context, c *models.OdometerCheckpoint) error {
-	return r.pool.QueryRow(ctx, `
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if err := tx.QueryRow(ctx, `
 		INSERT INTO odometer_checkpoints (vehicle_id, date, odometer, notes)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, created_at, updated_at;
-	`, c.VehicleID, c.Date, c.Odometer, c.Notes).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt)
+	`, c.VehicleID, c.Date, c.Odometer, c.Notes).Scan(&c.ID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+		return err
+	}
+	if err := syncOdometerFromManualPoints(ctx, tx, c.VehicleID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // UpdateOdometerCheckpoint updates an existing odometer checkpoint.
 func (r *Repository) UpdateOdometerCheckpoint(ctx context.Context, c *models.OdometerCheckpoint) error {
-	tag, err := r.pool.Exec(ctx, `
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
 		UPDATE odometer_checkpoints
 		SET date = $3, odometer = $4, notes = $5, updated_at = NOW()
 		WHERE id = $1 AND vehicle_id = $2;
@@ -53,7 +71,10 @@ func (r *Repository) UpdateOdometerCheckpoint(ctx context.Context, c *models.Odo
 	if tag.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if err := syncOdometerFromManualPoints(ctx, tx, c.VehicleID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 // DeleteOdometerCheckpoint deletes an odometer checkpoint.

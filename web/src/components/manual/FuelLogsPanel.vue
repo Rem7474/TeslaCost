@@ -81,9 +81,6 @@ async function load() {
 function openAdd() {
   editingId.value = null
   form.value = emptyForm()
-  // Suggest the last known mileage as a starting point
-  const last = stats.value?.logs?.[stats.value.logs.length - 1]
-  if (last) form.value.odometer = Math.round(last.odometer)
   formError.value = ''
   showForm.value = true
 }
@@ -92,7 +89,7 @@ function openEdit(log: any) {
   editingId.value = log.id
   form.value = {
     date: String(log.date).substring(0, 10),
-    odometer: log.odometer,
+    odometer: log.odometer ?? null,
     amount: log.amount,
     liters: log.liters ?? null,
     price_per_liter: log.price_per_liter ?? null,
@@ -104,11 +101,15 @@ function openEdit(log: any) {
   showForm.value = true
 }
 
+function hasOdometer(v: unknown): boolean {
+  return v !== null && v !== undefined && String(v) !== ''
+}
+
 function payload() {
   const f = form.value
   return {
     date: f.date,
-    odometer: Number(f.odometer),
+    odometer: hasOdometer(f.odometer) ? Number(f.odometer) : undefined,
     amount: f.amount ? Number(f.amount) : undefined,
     liters: f.liters ? Number(f.liters) : undefined,
     price_per_liter: f.price_per_liter ? Number(f.price_per_liter) : undefined,
@@ -122,10 +123,6 @@ async function save() {
   formError.value = ''
   if (!form.value.date) {
     formError.value = 'Indiquez la date du plein.'
-    return
-  }
-  if (form.value.odometer === null || form.value.odometer === undefined || Number.isNaN(Number(form.value.odometer))) {
-    formError.value = 'Indiquez le kilométrage au compteur.'
     return
   }
   saving.value = true
@@ -199,7 +196,11 @@ onMounted(load)
       </div>
     </div>
     <p v-if="stats && stats.unmeasurable_segments > 0" class="text-[11px] text-amber-400">
-      {{ stats.unmeasurable_segments }} intervalle(s) entre pleins complets sans consommation : litres manquants ou kilométrage identique.
+      {{ stats.unmeasurable_segments }} intervalle(s) entre pleins complets sans consommation : litres manquants, kilométrage identique ou non estimable.
+    </p>
+    <p v-if="stats && stats.fill_ups_without_mileage > 0" class="text-[11px] text-slate-500">
+      {{ stats.fill_ups_without_mileage }} plein(s) sans kilométrage : estimé(s) à partir des relevés kilométriques quand ils encadrent la date.
+      <template v-if="stats.estimated_segments > 0">La consommation de {{ stats.estimated_segments }} intervalle(s) est donc approximative (≈).</template>
     </p>
     <p v-if="stats && stats.fill_ups > 0 && !stats.consumption_l_100km && stats.unmeasurable_segments === 0" class="text-[11px] text-slate-500">
       La consommation se calcule entre deux pleins complets avec les litres renseignés.
@@ -213,14 +214,16 @@ onMounted(load)
       <li v-for="log in logs" :key="log.id" class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between gap-3">
         <div class="min-w-0">
           <div class="text-sm font-semibold text-white flex flex-wrap items-center gap-2">
-            {{ fmtDate(log.date) }} · {{ Math.round(log.odometer).toLocaleString('fr-FR') }} km
+            {{ fmtDate(log.date) }}
+            <template v-if="log.odometer != null"> · {{ Math.round(log.odometer).toLocaleString('fr-FR') }} km</template>
+            <template v-else-if="log.odometer_estimated != null"> · ≈ {{ Math.round(log.odometer_estimated).toLocaleString('fr-FR') }} km <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">estimé</span></template>
             <span v-if="!log.is_full_tank" class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">partiel</span>
           </div>
           <div class="text-xs text-slate-400 mt-0.5">
             {{ fmtEur(log.amount) }}
             <template v-if="log.liters"> · {{ fmtNum(log.liters, 2) }} L</template>
             <template v-if="log.price_per_liter"> · {{ fmtNum(log.price_per_liter, 3) }} €/L</template>
-            <template v-if="log.consumption_l_100km"> · <span class="text-emerald-300">{{ fmtNum(log.consumption_l_100km, 2) }} L/100</span></template>
+            <template v-if="log.consumption_l_100km"> · <span class="text-emerald-300">{{ log.segment_estimated ? '≈ ' : '' }}{{ fmtNum(log.consumption_l_100km, 2) }} L/100</span></template>
             <template v-if="log.cost_per_km"> · {{ fmtNum(log.cost_per_km, 3) }} €/km</template>
           </div>
         </div>
@@ -251,8 +254,8 @@ onMounted(load)
             <AppDatePicker id="fuel-date" v-model="form.date" required size="sm" />
           </div>
           <div>
-            <label for="fuel-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage (km)</label>
-            <input id="fuel-odometer" v-model.number="form.odometer" type="number" min="0" step="1" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="fuel-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage (km, optionnel)</label>
+            <input id="fuel-odometer" v-model.number="form.odometer" type="number" min="0" step="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>
 
@@ -272,6 +275,9 @@ onMounted(load)
         </div>
         <p class="text-[11px] text-slate-500 -mt-1.5">
           Indiquez le montant, ou les litres et le prix au litre. {{ derivedHint }}
+        </p>
+        <p v-if="!hasOdometer(form.odometer)" class="text-[11px] text-slate-500 -mt-2">
+          Sans kilométrage, il est estimé à partir de vos relevés kilométriques.
         </p>
 
         <div class="grid grid-cols-2 gap-3 items-end">

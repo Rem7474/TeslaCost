@@ -51,6 +51,20 @@ func decodeCheckpointRequest(r *http.Request) (time.Time, float64, *string, erro
 	return d, req.Odometer, notes, nil
 }
 
+// checkConsistency rejects a reading that contradicts the other manual readings and fill-ups; id is empty on creation.
+func (h *CheckpointHandler) checkConsistency(w http.ResponseWriter, r *http.Request, vehicleID, id string, date time.Time, odometer float64) bool {
+	points, err := h.repo.ListManualOdometerPoints(r.Context(), vehicleID)
+	if err != nil {
+		writeRepoError(w, r, err, "Failed to check odometer points")
+		return false
+	}
+	if err := checkOdometerOrder(points, id, date, odometer); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return false
+	}
+	return true
+}
+
 func (h *CheckpointHandler) List(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
 	if vehicleID == "" {
@@ -88,6 +102,10 @@ func (h *CheckpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.checkConsistency(w, r, vehicleID, "", d, odometer) {
+		return
+	}
+
 	c := &models.OdometerCheckpoint{
 		VehicleID: vehicleID,
 		Date:      d,
@@ -117,6 +135,10 @@ func (h *CheckpointHandler) Update(w http.ResponseWriter, r *http.Request) {
 	d, odometer, notes, err := decodeCheckpointRequest(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if !h.checkConsistency(w, r, vehicleID, checkpointID, d, odometer) {
 		return
 	}
 
