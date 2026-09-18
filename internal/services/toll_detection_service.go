@@ -63,7 +63,7 @@ func (s *TollDetectionService) DetectTolls(ctx context.Context, vehicle *models.
 	}
 
 	matches := tolldata.DetectCrossings(trace, s.dataset.Stations, tolldata.DefaultThresholdMeters)
-	segments := tolldata.BuildSegments(matches, s.dataset.NetworkByStation)
+	segments := s.dataset.BuildSegments(matches)
 
 	td := &models.TollDetection{
 		DriveID:   drive.ID,
@@ -81,11 +81,12 @@ func toModelSegments(segments []tolldata.Segment) []models.TollSegment {
 	out := make([]models.TollSegment, len(segments))
 	for i, s := range segments {
 		out[i] = models.TollSegment{
-			Network:  s.Network,
-			Operator: s.Operator,
-			Type:     s.Type,
-			Entry:    s.Entry,
-			Exit:     s.Exit,
+			Network:        s.Network,
+			Operator:       s.Operator,
+			Type:           s.Type,
+			Entry:          s.Entry,
+			Exit:           s.Exit,
+			EstimatedPrice: s.EstimatedPrice,
 		}
 	}
 	return out

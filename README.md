@@ -304,3 +304,5 @@ cd web && npm install && npm run build
 ## 📄 Licence
 
 Ce projet est distribué sous licence [MIT](LICENSE).
+
+Les données de péage utilisées pour la détection et l'estimation de coût (`internal/tolldata`) proviennent de [OpenTollData](https://github.com/louis2038/OpenTollData), sous licence [ODbL-1.0](https://opendatacommons.org/licenses/odbl/1-0/).

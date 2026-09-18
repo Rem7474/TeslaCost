@@ -5,5 +5,5 @@ package tolldata
 
 import "embed"
 
-//go:embed data/opentolldata_network_desc.json
+//go:embed data/opentolldata_network.json
 var FS embed.FS

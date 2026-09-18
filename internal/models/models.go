@@ -161,11 +161,12 @@ func (d Drive) IsHighway() bool {
 // entry/exit pair, a single open barrier, or a closed-network entry with no exit found
 // on this drive's trace (end of trace, GPS gap, ...).
 type TollSegment struct {
-	Network  string  `json:"network,omitempty"` // OpenTollData network_name (closed networks only)
-	Operator string  `json:"operator,omitempty"`
-	Type     string  `json:"type"` // "open" or "close"
-	Entry    string  `json:"entry"`
-	Exit     *string `json:"exit,omitempty"`
+	Network        string       `json:"network,omitempty"` // OpenTollData network_name (closed networks only)
+	Operator       string       `json:"operator,omitempty"`
+	Type           string       `json:"type"` // "open" or "close"
+	Entry          string       `json:"entry"`
+	Exit           *string      `json:"exit,omitempty"`
+	EstimatedPrice *money.Cents `json:"estimated_price,omitempty"` // class 1 (light vehicle) estimate
 }
 
 // TollDetection is the result of matching a drive's GPS trace against the toll station
