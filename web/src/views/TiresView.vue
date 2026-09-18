@@ -5,6 +5,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
+import TireOdometerTimeline from '@/components/tires/TireOdometerTimeline.vue'
 import {
   Disc,
   Plus,
@@ -28,7 +29,6 @@ import {
   Package,
   Wrench,
   Check,
-  ChevronRight,
   Zap,
   Pencil,
   Archive,
@@ -45,7 +45,6 @@ const loading = ref(false)
 
 // Active tab: 'chassis' (Montés) or 'storage' (Au garage)
 const activeTab = ref<'chassis' | 'storage' | 'disposed'>('chassis')
-const chassisSubView = ref<'cards' | 'timeline'>('cards')
 
 // Modals
 const showAddTireModal = ref(false)
@@ -480,31 +479,6 @@ async function handleCopyHistorySubmit() {
   }
 }
 
-const wheelTimelines = computed(() => {
-  const positions: Array<'FL' | 'FR' | 'RL' | 'RR'> = ['FL', 'FR', 'RL', 'RR']
-  const result: Record<string, any[]> = { FL: [], FR: [], RL: [], RR: [] }
-
-  for (const pos of positions) {
-    const list: any[] = []
-    for (const t of tires.value) {
-      const sessions = t.sessions || []
-      for (const s of sessions) {
-        if (s.position === pos) {
-          list.push({
-            session: s,
-            tire: t.tire,
-            stats: t,
-            isCurrent: !s.dismounted_date && t.tire.current_position === pos,
-          })
-        }
-      }
-    }
-    list.sort((a, b) => new Date(b.session.mounted_date).getTime() - new Date(a.session.mounted_date).getTime())
-    result[pos] = list
-  }
-  return result
-})
-
 const selectedDisposedCount = computed(() => {
   return tires.value.filter((t) => selectedTireIds.value.includes(t.tire.id) && t.tire.current_position === 'DISPOSED').length
 })
@@ -739,6 +713,11 @@ async function handleCreateTires() {
 }
 
 // History & Timeline Modal
+function openTimelineTire(tireId: string) {
+  const t = tires.value.find((x) => x.tire.id === tireId)
+  if (t) openHistoryModal(t)
+}
+
 async function openHistoryModal(t: any) {
   selectedTire.value = t.tire
   selectedTireStats.value = t
@@ -1245,32 +1224,14 @@ function formatDate(d: string) {
 
     <!-- TAB 1: CHASSIS INTERACTIF (PNEUS MONTÉS) -->
     <div v-if="activeTab === 'chassis'" class="space-y-6">
-      <!-- Sub-view switcher: Cards vs Wheel Timeline -->
-      <div class="flex items-center justify-between flex-wrap gap-2">
-        <div class="inline-flex p-1 bg-slate-900 border border-slate-800 rounded-xl text-xs font-semibold">
-          <button
-            type="button"
-            @click="chassisSubView = 'cards'"
-            class="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
-            :class="chassisSubView === 'cards' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30' : 'text-slate-400 hover:text-white'"
-          >
-            <Disc class="w-3.5 h-3.5" />
-            <span>Vue 4 roues</span>
-          </button>
-          <button
-            type="button"
-            @click="chassisSubView = 'timeline'"
-            class="px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all"
-            :class="chassisSubView === 'timeline' ? 'bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30' : 'text-slate-400 hover:text-white'"
-          >
-            <History class="w-3.5 h-3.5" />
-            <span>Timeline par roue</span>
-          </button>
-        </div>
-      </div>
+      <TireOdometerTimeline
+        :tires="tires"
+        :current-odometer="vehicleStore.activeVehicle?.current_odometer || 0"
+        @select-tire="openTimelineTire"
+      />
 
-      <!-- Mode A: Cartes des 4 roues -->
-      <div v-if="chassisSubView === 'cards'" class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Cartes des 4 roues -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <!-- Wheel Card: FL (Avant Gauche) -->
         <div
           v-if="mountedTires.FL"
@@ -1514,106 +1475,6 @@ function formatDate(d: string) {
         <div v-else class="bg-slate-900/40 border border-dashed border-slate-800 rounded-3xl p-8 text-center text-slate-500 flex flex-col items-center justify-center space-y-2">
           <Disc class="w-8 h-8 opacity-30" />
           <span>Aucun pneu monté à l'Arrière Droit (RR)</span>
-        </div>
-      </div>
-
-      <!-- Mode B: Timeline par roue avec historique de chaque pneu -->
-      <div v-else-if="chassisSubView === 'timeline'" class="space-y-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div
-            v-for="pos in (['FL', 'FR', 'RL', 'RR'] as const)"
-            :key="pos"
-            class="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm"
-          >
-            <!-- Wheel Header -->
-            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center font-black text-xs text-rose-400">
-                  {{ pos }}
-                </div>
-                <div>
-                  <h3 class="text-sm font-bold text-white">
-                    {{ pos === 'FL' ? 'Avant Gauche' : pos === 'FR' ? 'Avant Droit' : pos === 'RL' ? 'Arrière Gauche' : 'Arrière Droit' }} ({{ pos }})
-                  </h3>
-                  <div class="text-[11px] text-slate-400">
-                    {{ wheelTimelines[pos]?.length || 0 }} cycle(s) de montage enregistré(s)
-                  </div>
-                </div>
-              </div>
-              <span v-if="mountedTires[pos]" class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Pneu actif : {{ mountedTires[pos].tire.brand }}
-              </span>
-              <span v-else class="text-[10px] text-slate-500">
-                Roue vide
-              </span>
-            </div>
-
-            <!-- Timeline nodes -->
-            <div v-if="!wheelTimelines[pos] || wheelTimelines[pos].length === 0" class="p-8 text-center text-xs text-slate-500 bg-slate-950/40 rounded-2xl">
-              Aucun historique pour cet emplacement de roue.
-            </div>
-            <div v-else class="space-y-3 max-h-[32rem] overflow-y-auto pr-1">
-              <div
-                v-for="(item, idx) in wheelTimelines[pos]"
-                :key="item.session.id || idx"
-                class="relative pl-6 pb-2 border-l border-slate-800 last:border-l-0"
-              >
-                <!-- Dot -->
-                <div
-                  class="absolute -left-1.5 top-1 w-3 h-3 rounded-full border-2"
-                  :class="item.isCurrent ? 'bg-emerald-500 border-slate-900 ring-2 ring-emerald-500/40' : item.tire.current_position === 'DISPOSED' ? 'bg-amber-500 border-slate-900' : 'bg-slate-600 border-slate-900'"
-                ></div>
-
-                <div
-                  class="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 space-y-2 hover:border-slate-700 transition-colors"
-                  :class="{ 'ring-2 ring-rose-500/50 border-rose-500/60': selectedTireIds.includes(item.tire.id) }"
-                >
-                  <div class="flex items-start justify-between gap-2">
-                    <div>
-                      <div class="flex items-center gap-1.5 text-xs font-bold text-white">
-                        <component :is="getSeasonIcon(item.tire.season).icon" class="w-3.5 h-3.5" :class="getSeasonIcon(item.tire.season).color" />
-                        <span>{{ item.tire.brand }} {{ item.tire.model }}</span>
-                      </div>
-                      <div class="text-[10px] text-slate-400 font-mono">{{ item.tire.dimension }}</div>
-                    </div>
-                    <span
-                      class="text-[10px] font-bold px-2 py-0.5 rounded-full border shrink-0"
-                      :class="item.isCurrent ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : item.tire.current_position === 'DISPOSED' ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'"
-                    >
-                      {{ item.isCurrent ? '🟢 En cours' : item.tire.current_position === 'DISPOSED' ? 'Au rebut' : 'Démonté' }}
-                    </span>
-                  </div>
-
-                  <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-900/60 p-2 rounded-xl">
-                    <div>
-                      <span class="text-slate-500 block text-[10px]">Montage</span>
-                      <span class="text-slate-200 font-medium">{{ formatDate(item.session.mounted_date) }}</span>
-                      <span class="text-slate-400 text-[10px] block">à {{ Math.round(item.session.mounted_odometer).toLocaleString('fr-FR') }} km</span>
-                    </div>
-                    <div>
-                      <span class="text-slate-500 block text-[10px]">Démontage</span>
-                      <span class="text-slate-200 font-medium">{{ item.session.dismounted_date ? formatDate(item.session.dismounted_date) : 'Actuel' }}</span>
-                      <span class="text-slate-400 text-[10px] block">
-                        {{ item.session.dismounted_odometer ? `à ${Math.round(item.session.dismounted_odometer).toLocaleString('fr-FR')} km` : 'En service' }}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div class="flex items-center justify-between text-xs pt-1">
-                    <span class="font-bold text-rose-400 text-[11px]">+{{ Math.round(item.session.distance_km || 0).toLocaleString('fr-FR') }} km sur cette roue</span>
-                    <button
-                      type="button"
-                      @click="openHistoryModal(item.stats || { tire: item.tire })"
-                      class="text-xs text-rose-400 hover:text-rose-300 flex items-center gap-1 font-semibold transition-colors"
-                    >
-                      <span>Fiche & historique</span>
-                      <ChevronRight class="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
