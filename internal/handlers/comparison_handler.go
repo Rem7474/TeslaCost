@@ -142,8 +142,15 @@ func (h *ComparisonHandler) decodeAndCheck(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return nil, false
 	}
-	if req.VehicleID != nil && requireVehicleAccess(w, r, h.repo, *req.VehicleID, models.RoleViewer) == nil {
-		return nil, false
+	if req.VehicleID != nil {
+		v := requireVehicleAccess(w, r, h.repo, *req.VehicleID, models.RoleViewer)
+		if v == nil {
+			return nil, false
+		}
+		if v.Powertrain == models.PowertrainICE {
+			writeError(w, http.StatusBadRequest, "Le comparatif « véhicule suivi » s'appuie sur un véhicule électrique ; utilisez le mode projection")
+			return nil, false
+		}
 	}
 	return &req, true
 }

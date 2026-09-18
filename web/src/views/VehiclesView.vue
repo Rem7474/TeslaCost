@@ -43,6 +43,7 @@ const editingId = ref<string | null>(null)
 
 const form = ref({
   name: 'Tesla Model 3',
+  powertrain: 'EV',
   vin: '',
   current_odometer: 0,
   teslamate_car_id: 1,
@@ -531,6 +532,7 @@ function openCreateModal() {
   modalTestResult.value = null
   form.value = {
     name: 'Tesla Model 3',
+    powertrain: 'EV',
     vin: '',
     current_odometer: 0,
     teslamate_car_id: 1,
@@ -551,6 +553,7 @@ function openEditModal(v: any) {
   modalTestResult.value = null
   form.value = {
     name: v.name,
+    powertrain: v.powertrain || 'EV',
     vin: v.vin || '',
     current_odometer: v.current_odometer ? Math.round(v.current_odometer) : 0,
     teslamate_car_id: v.teslamate_car_id || 1,
@@ -732,7 +735,11 @@ function clearCardTestResult(id: string) {
             </p>
           </div>
 
-          <div>
+          <div v-if="v.powertrain === 'ICE'">
+            <span class="text-slate-400">Motorisation</span>
+            <p class="text-sm font-semibold mt-0.5 text-amber-300">Thermique · pleins saisis à la main</p>
+          </div>
+          <div v-if="v.powertrain !== 'ICE'">
             <span class="text-slate-400">Connexion TeslaMate</span>
             <p
               class="text-sm font-semibold mt-0.5"
@@ -760,7 +767,7 @@ function clearCardTestResult(id: string) {
             </p>
           </div>
 
-          <div>
+          <div v-if="v.powertrain !== 'ICE'">
             <span class="text-slate-400">Recharge avant TM</span>
             <p v-if="v.pre_teslamate_kwh_100km && v.pre_teslamate_eur_per_kwh" class="text-xs font-semibold text-sky-400 flex items-center gap-1 mt-1">
               <Zap class="w-3.5 h-3.5 text-sky-400" />
@@ -862,13 +869,21 @@ function clearCardTestResult(id: string) {
             <input id="vehicle-name" v-model="form.name" required placeholder="ex: Tesla Model Y LR" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
+          <div>
+            <label for="vehicle-powertrain" class="block text-xs font-semibold text-slate-300 mb-1">Motorisation</label>
+            <select id="vehicle-powertrain" v-model="form.powertrain" :disabled="isEditing" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white disabled:opacity-50">
+              <option value="EV">Électrique (suivi TeslaMate possible)</option>
+              <option value="ICE">Thermique (saisie manuelle des pleins)</option>
+            </select>
+          </div>
+
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1">VIN (optionnel)</label>
               <input id="vehicle-vin" v-model="form.vin" placeholder="5YJ3E1EB..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre initial (km)</label>
+              <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ form.powertrain === 'ICE' ? 'Kilométrage actuel (km)' : 'Odomètre initial (km)' }}</label>
               <input
                 id="vehicle-current-odometer"
                 v-model.number="form.current_odometer"
@@ -881,7 +896,7 @@ function clearCardTestResult(id: string) {
           </div>
 
           <!-- Pre-TeslaMate energy section -->
-          <div class="pt-2 border-t border-slate-800 space-y-3">
+          <div v-if="form.powertrain !== 'ICE'" class="pt-2 border-t border-slate-800 space-y-3">
             <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Recharge avant TeslaMate (Optionnel)</h4>
             <div class="grid grid-cols-2 gap-3">
               <div>
@@ -896,7 +911,7 @@ function clearCardTestResult(id: string) {
           </div>
 
           <!-- TeslaMate API Section -->
-          <div class="pt-2 border-t border-slate-800 space-y-3">
+          <div v-if="form.powertrain !== 'ICE'" class="pt-2 border-t border-slate-800 space-y-3">
             <h4 class="text-xs font-bold text-rose-400 uppercase tracking-wider">Connexion TeslaMateApi (Optionnelle)</h4>
 
             <div>

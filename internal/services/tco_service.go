@@ -109,6 +109,8 @@ type completenessInputs struct {
 	unconvertedEntries  int
 	drivesWithOdometer  int
 	odometerAnomalies   int
+	ice                 bool // Combustion vehicle: energy and distance come from fuel fill-ups
+	iceFillUps          int
 }
 
 func ratio(part, total float64) float64 {
@@ -131,17 +133,29 @@ func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
 	if in.basisKm > 0 {
 		distance = ratio(in.trackedKm, in.basisKm)
 	}
+	energyLabel, energyScore := "Recharges avec coût (kWh)", ratio(in.kwhPriced, in.kwhAdded)
+	distanceLabel := "Kilomètres couverts par des trajets"
+	if in.ice {
+		energyLabel, energyScore = "Pleins de carburant enregistrés", boolScore(in.iceFillUps > 0)
+		distanceLabel = "Kilomètres couverts par des pleins"
+	}
+	tollsScore := 1 - ratio(float64(in.unqualifiedDrives), float64(in.highwayDrives))
+	odometerScore := 1 - ratio(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))
+	if in.ice {
+		// No trips to qualify and no trip odometer to check on a combustion vehicle
+		tollsScore, odometerScore = 1, 1
+	}
 	dims := []struct {
 		key, label string
 		weight     float64
 		score      float64
 	}{
-		{"energy", "Recharges avec coût (kWh)", 0.30, ratio(in.kwhPriced, in.kwhAdded)},
-		{"distance", "Kilomètres couverts par des trajets", 0.20, distance},
-		{"tolls", "Trajets autoroutiers qualifiés", 0.15, 1 - ratio(float64(in.unqualifiedDrives), float64(in.highwayDrives))},
+		{"energy", energyLabel, 0.30, energyScore},
+		{"distance", distanceLabel, 0.20, distance},
+		{"tolls", "Trajets autoroutiers qualifiés", 0.15, tollsScore},
 		{"insurance", "Assurance renseignée", 0.10, boolScore(in.insurancePresent)},
 		{"acquisition", "Acquisition et décote renseignées", 0.10, boolScore(in.acquisitionComplete)},
-		{"odometer", "Continuité de l'odomètre", 0.10, 1 - ratio(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))},
+		{"odometer", "Continuité de l'odomètre", 0.10, odometerScore},
 		{"currency", "Dépenses converties en euros", 0.05, 1 - ratio(float64(in.unconvertedEntries), float64(in.pricedEntries+in.unconvertedEntries))},
 	}
 	var total float64
@@ -203,6 +217,12 @@ type TCOSummary struct {
 	EnergyCostPerKm float64     `json:"energy_cost_per_km"`
 	TotalKwhAdded   float64     `json:"total_kwh_added"`
 	AvgCostPerKwh   float64     `json:"avg_cost_per_kwh"`
+
+	Powertrain        string   `json:"powertrain"` // EV | ICE
+	FuelFillUps       int      `json:"fuel_fill_ups,omitempty"`
+	TotalLiters       float64  `json:"total_liters,omitempty"`
+	AvgCostPerLiter   float64  `json:"avg_cost_per_liter,omitempty"`
+	ConsumptionL100km *float64 `json:"consumption_l_100km,omitempty"` // Measured between full tanks
 
 	PreTeslaMateDistanceKm float64     `json:"pre_teslamate_distance_km,omitempty"`
 	PreTeslaMateKwh        float64     `json:"pre_teslamate_kwh,omitempty"`
@@ -280,9 +300,12 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	}
 	var currentOdometer float64
 	var preKwh100km, preEurPerKwh *float64
-	if err := s.pool.QueryRow(ctx, `SELECT current_odometer, pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh FROM vehicles WHERE id = $1;`, vehicleID).Scan(&currentOdometer, &preKwh100km, &preEurPerKwh); err != nil {
+	var powertrain string
+	if err := s.pool.QueryRow(ctx, `SELECT current_odometer, pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh, powertrain FROM vehicles WHERE id = $1;`, vehicleID).Scan(&currentOdometer, &preKwh100km, &preEurPerKwh, &powertrain); err != nil {
 		return nil, fmt.Errorf("vehicle: %w", err)
 	}
+	isICE := powertrain == models.PowertrainICE
+	sum.Powertrain = powertrain
 	sum.PreTeslaMateKwh100km = preKwh100km
 	sum.PreTeslaMateEurPerKwh = preEurPerKwh
 
@@ -302,12 +325,25 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		return nil, fmt.Errorf("distance: %w", err)
 	}
 	basisKm := math.Max(trackedKm, odometerSpan)
+	var fuelStats FuelStats
+	var fuelSpanKm float64
+	if isICE {
+		fuelLogs, err := s.repo.ListFuelLogs(ctx, vehicleID)
+		if err != nil {
+			return nil, fmt.Errorf("fuel logs: %w", err)
+		}
+		fuelStats = ComputeFuelStats(fuelLogs)
+		if n := len(fuelStats.Logs); n >= 2 {
+			fuelSpanKm = fuelStats.Logs[n-1].Odometer - fuelStats.Logs[0].Odometer
+			basisKm = math.Max(basisKm, fuelSpanKm)
+		}
+	}
 	kmSinceStart := trackedSinceStart
 	if ownership != nil && ownership.StartOdometer != nil && currentOdometer > *ownership.StartOdometer {
 		kmSinceStart = math.Max(kmSinceStart, currentOdometer-*ownership.StartOdometer)
 		basisKm = math.Max(basisKm, kmSinceStart)
 	}
-	if untracked := basisKm - trackedKm; untracked > 50 && untracked > 0.01*basisKm {
+	if untracked := basisKm - trackedKm; !isICE && untracked > 50 && untracked > 0.01*basisKm {
 		comp.UntrackedDistanceKm = round1(untracked)
 	}
 	owned := ComputeOwnershipCosts(ownership, now, kmSinceStart)
@@ -351,6 +387,16 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	if comp.ChargesWithoutCost > 0 {
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
 			"%d recharge(s) sans coût (%.0f kWh) : coût énergétique sous-estimé", comp.ChargesWithoutCost, comp.KwhWithoutCost))
+	}
+
+	if isICE {
+		sum.FuelFillUps = fuelStats.FillUps
+		sum.TotalLiters = fuelStats.TotalLiters
+		sum.AvgCostPerLiter = fuelStats.AvgPricePerLiter
+		sum.ConsumptionL100km = fuelStats.ConsumptionL100
+		if fuelStats.FillUps == 0 {
+			comp.Warnings = append(comp.Warnings, "Aucun plein enregistré : coût du carburant inconnu")
+		}
 	}
 
 	// 5. Unconverted foreign amounts, insurance expenses, carpool revenue
@@ -480,7 +526,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		kwhPriced:           kwhPriced,
 		highwayDrives:       highwayDrives,
 		unqualifiedDrives:   comp.UnqualifiedDrives,
-		trackedKm:           trackedKm,
+		trackedKm:           math.Max(trackedKm, fuelSpanKm),
 		basisKm:             basisKm,
 		insurancePresent:    !comp.InsuranceMissing,
 		acquisitionComplete: !comp.AcquisitionMissing,
@@ -488,6 +534,8 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		unconvertedEntries:  comp.UnconvertedExpenses,
 		drivesWithOdometer:  drivesWithOdometer,
 		odometerAnomalies:   comp.OdometerAnomalies + comp.OdometerGaps,
+		ice:                 isICE,
+		iceFillUps:          fuelStats.FillUps,
 	})
 
 	// 10. Aggregates
@@ -663,6 +711,21 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 	}
 
 	var points []odoPoint
+	var powertrain string
+	if err := s.pool.QueryRow(ctx, `SELECT powertrain FROM vehicles WHERE id = $1;`, vehicleID).Scan(&powertrain); err != nil {
+		return nil, nil, err
+	}
+	isICE := powertrain == models.PowertrainICE
+	if isICE {
+		// Fill-ups are odometer readings of a combustion vehicle, like manual checkpoints.
+		fuelLogs, err := s.repo.ListFuelLogs(ctx, vehicleID)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, f := range fuelLogs {
+			points = append(points, odoPoint{date: f.Date.In(loc), odo: f.Odometer})
+		}
+	}
 	if ownership != nil && ownership.StartOdometer != nil && *ownership.StartOdometer >= 0 {
 		points = append(points, odoPoint{
 			date: ownership.StartDate.In(loc),
@@ -763,6 +826,12 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 
 	if len(cleanPoints) < 2 {
 		return nil, nil, nil
+	}
+
+	if isICE {
+		// No TeslaMate history to precede: every interval is plain smoothing, never "pre-TeslaMate".
+		first := cleanPoints[0].date
+		firstTrackingTime = &first
 	}
 
 	smoothedByMonth := make(map[string]float64)

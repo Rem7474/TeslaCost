@@ -22,6 +22,7 @@ const adminConfirmPassword = ref('')
 // Step 2: Vehicle Setup
 const vehicleName = ref('Tesla Model 3')
 const vehicleVin = ref('')
+const vehiclePowertrain = ref<'EV' | 'ICE'>('EV')
 const vehicleOdometer = ref(15000)
 
 // Step 3: TeslaMate Connection (Optional)
@@ -73,6 +74,12 @@ async function handleStep2Submit() {
     error.value = 'Veuillez saisir un nom pour votre véhicule'
     return
   }
+  if (vehiclePowertrain.value === 'ICE') {
+    // A combustion vehicle has no TeslaMate link: skip the synchronization step
+    enableTeslaMate.value = false
+    await handleFinalSubmit()
+    return
+  }
   currentStep.value = 3
 }
 
@@ -111,6 +118,7 @@ async function handleFinalSubmit() {
   try {
     const payload: any = {
       name: vehicleName.value,
+      powertrain: vehiclePowertrain.value,
       vin: vehicleVin.value || undefined,
       current_odometer: Number(vehicleOdometer.value) || 0,
       teslamate_auth_type: enableTeslaMate.value ? teslamateAuthType.value : 'NONE',
@@ -256,6 +264,17 @@ function finishOnboarding() {
             />
           </div>
 
+          <div>
+            <label for="onboarding-vehicle-powertrain" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Motorisation</label>
+            <select id="onboarding-vehicle-powertrain"
+              v-model="vehiclePowertrain"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
+            >
+              <option value="EV">Électrique (suivi TeslaMate possible)</option>
+              <option value="ICE">Thermique (saisie manuelle des pleins)</option>
+            </select>
+          </div>
+
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label for="onboarding-vehicle-odometer" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Odomètre actuel (km)</label>
@@ -283,7 +302,7 @@ function finishOnboarding() {
             type="submit"
             class="w-full py-3.5 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all"
           >
-            <span>Continuer vers TeslaMate (Optionnel)</span>
+            <span>{{ vehiclePowertrain === 'ICE' ? 'Terminer' : 'Continuer vers TeslaMate (Optionnel)' }}</span>
             <ArrowRight class="w-4 h-4" />
           </button>
         </form>

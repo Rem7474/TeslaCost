@@ -21,20 +21,23 @@ func (r *Repository) CreateVehicle(ctx context.Context, v *models.Vehicle) error
 	}
 	defer tx.Rollback(ctx)
 
+	if v.Powertrain == "" {
+		v.Powertrain = models.PowertrainEV
+	}
 	query := `
 		INSERT INTO vehicles (
 			user_id, name, vin, teslamate_car_id, current_odometer,
 			teslamate_api_url, teslamate_auth_type, teslamate_api_key_encrypted,
 			teslamate_basic_user, teslamate_basic_pass_encrypted,
-			pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh, powertrain
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, created_at, updated_at;
 	`
 	err = tx.QueryRow(ctx, query,
 		v.UserID, v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
-		v.PreTeslaMateKwh100km, v.PreTeslaMateEurPerKwh,
+		v.PreTeslaMateKwh100km, v.PreTeslaMateEurPerKwh, v.Powertrain,
 	).Scan(&v.ID, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create vehicle: %w", err)
@@ -80,7 +83,7 @@ func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([
 		SELECT v.id, v.user_id, v.name, v.vin, v.teslamate_car_id, v.current_odometer,
 		       v.teslamate_api_url, v.teslamate_auth_type, v.teslamate_api_key_encrypted,
 		       v.teslamate_basic_user, v.teslamate_basic_pass_encrypted,
-		       v.pre_teslamate_kwh_100km, v.pre_teslamate_eur_per_kwh,
+		       v.pre_teslamate_kwh_100km, v.pre_teslamate_eur_per_kwh, v.powertrain,
 		       v.created_at, v.updated_at,
 		       COALESCE(vm.role, CASE WHEN v.user_id::text = $1 THEN 'OWNER' ELSE 'VIEWER' END) as role
 		FROM vehicles v
@@ -102,7 +105,7 @@ func (r *Repository) ListVehiclesByUserID(ctx context.Context, userID string) ([
 			&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
 			&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
 			&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-			&v.PreTeslaMateKwh100km, &v.PreTeslaMateEurPerKwh,
+			&v.PreTeslaMateKwh100km, &v.PreTeslaMateEurPerKwh, &v.Powertrain,
 			&v.CreatedAt, &v.UpdatedAt, &role,
 		); err != nil {
 			return nil, err
@@ -124,7 +127,7 @@ func (r *Repository) GetVehicleByID(ctx context.Context, id, userID string) (*mo
 		SELECT v.id, v.user_id, v.name, v.vin, v.teslamate_car_id, v.current_odometer,
 		       v.teslamate_api_url, v.teslamate_auth_type, v.teslamate_api_key_encrypted,
 		       v.teslamate_basic_user, v.teslamate_basic_pass_encrypted,
-		       v.pre_teslamate_kwh_100km, v.pre_teslamate_eur_per_kwh,
+		       v.pre_teslamate_kwh_100km, v.pre_teslamate_eur_per_kwh, v.powertrain,
 		       v.created_at, v.updated_at,
 		       COALESCE(vm.role, CASE WHEN v.user_id::text = $2 THEN 'OWNER' ELSE 'VIEWER' END) as role
 		FROM vehicles v
@@ -136,7 +139,7 @@ func (r *Repository) GetVehicleByID(ctx context.Context, id, userID string) (*mo
 		&v.ID, &v.UserID, &v.Name, &v.Vin, &v.TeslaMateCarID, &v.CurrentOdometer,
 		&v.TeslaMateAPIURL, &v.TeslaMateAuthType, &v.TeslaMateAPIKeyEncrypted,
 		&v.TeslaMateBasicUser, &v.TeslaMateBasicPassEnc,
-		&v.PreTeslaMateKwh100km, &v.PreTeslaMateEurPerKwh,
+		&v.PreTeslaMateKwh100km, &v.PreTeslaMateEurPerKwh, &v.Powertrain,
 		&v.CreatedAt, &v.UpdatedAt, &role,
 	)
 	if err != nil {
@@ -172,14 +175,15 @@ func (r *Repository) UpdateVehicle(ctx context.Context, v *models.Vehicle) error
 		    teslamate_api_key_encrypted = $7, teslamate_basic_user = $8,
 		    teslamate_basic_pass_encrypted = $9,
 		    pre_teslamate_kwh_100km = $10, pre_teslamate_eur_per_kwh = $11,
+		    powertrain = $12,
 		    updated_at = NOW()
-		WHERE id = $12;
+		WHERE id = $13;
 	`
 	tag, err := r.pool.Exec(ctx, query,
 		v.Name, v.Vin, v.TeslaMateCarID, v.CurrentOdometer,
 		v.TeslaMateAPIURL, v.TeslaMateAuthType, v.TeslaMateAPIKeyEncrypted,
 		v.TeslaMateBasicUser, v.TeslaMateBasicPassEnc,
-		v.PreTeslaMateKwh100km, v.PreTeslaMateEurPerKwh,
+		v.PreTeslaMateKwh100km, v.PreTeslaMateEurPerKwh, v.Powertrain,
 		v.ID,
 	)
 	if err != nil {

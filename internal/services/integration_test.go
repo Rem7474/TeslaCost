@@ -1612,3 +1612,116 @@ func TestIntegrationComparisonScenarios(t *testing.T) {
 		t.Errorf("scenarios must cascade with the vehicle, got %d", len(list))
 	}
 }
+
+func TestIntegrationICEVehicleFuelLogs(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	u, err := repo.CreateUser(ctx, "ice@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ice := &models.Vehicle{UserID: u.ID, Name: "Clio", Powertrain: models.PowertrainICE, TeslaMateAuthType: models.AuthModeNone, CurrentOdometer: 10000}
+	if err := repo.CreateVehicle(ctx, ice); err != nil {
+		t.Fatal(err)
+	}
+	ev := mustVehicle(t, repo, "ev-default@example.com")
+	if got, err := repo.GetVehicleByID(ctx, ev.ID, ev.UserID); err != nil || got.Powertrain != models.PowertrainEV {
+		t.Fatalf("vehicles default to EV, got %+v (%v)", got, err)
+	}
+	tco := NewTCOService(db.Pool, "Europe/Paris")
+
+	now := time.Now().UTC()
+	l := func(v float64) *float64 { return &v }
+	fills := []models.FuelLog{
+		{Date: now.AddDate(0, -3, 0), Odometer: 10000, Amount: money.FromFloat(80), Liters: l(50), IsFullTank: true},
+		{Date: now.AddDate(0, -2, 0), Odometer: 10500, Amount: money.FromFloat(40), Liters: l(25), IsFullTank: true},
+		{Date: now.AddDate(0, -1, -15), Odometer: 10800, Amount: money.FromFloat(20), Liters: l(12), IsFullTank: false},
+		{Date: now.AddDate(0, -1, 0), Odometer: 11100, Amount: money.FromFloat(40), Liters: l(24), IsFullTank: true},
+	}
+	for i := range fills {
+		fills[i].VehicleID = ice.ID
+		if err := repo.CreateFuelLog(ctx, &fills[i]); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var odo float64
+	if err := db.Pool.QueryRow(ctx, `SELECT current_odometer FROM vehicles WHERE id = $1`, ice.ID).Scan(&odo); err != nil || odo != 11100 {
+		t.Fatalf("current odometer = %v (%v), want 11100", odo, err)
+	}
+
+	sum, err := tco.ComputeVehicleTCO(ctx, ice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.Powertrain != models.PowertrainICE || sum.EnergyCost != money.FromFloat(180) {
+		t.Errorf("powertrain/energy = %s / %v, want ICE / 180", sum.Powertrain, sum.EnergyCost)
+	}
+	if sum.DistanceBasisKm != 1100 {
+		t.Errorf("distance basis = %v, want the 1100 km odometer span of the fill-ups", sum.DistanceBasisKm)
+	}
+	if sum.TotalLiters != 111 || sum.FuelFillUps != 4 || sum.ConsumptionL100km == nil || *sum.ConsumptionL100km != 5.545 { // 61 L over 1100 km between full tanks
+		t.Errorf("fuel figures: liters=%v fills=%d consumption=%v", sum.TotalLiters, sum.FuelFillUps, sum.ConsumptionL100km)
+	}
+	if sum.PreTeslaMateDistanceKm != 0 {
+		t.Errorf("a combustion vehicle has no pre-TeslaMate distance, got %v", sum.PreTeslaMateDistanceKm)
+	}
+	if sum.EnergyCostPerKm <= 0 {
+		t.Errorf("energy cost per km = %v, want > 0 without any drive", sum.EnergyCostPerKm)
+	}
+	var monthlyKm, monthlyEnergy float64
+	for _, m := range sum.MonthlyCosts {
+		monthlyKm += m.DistanceKm
+		monthlyEnergy += m.Energy.Float()
+	}
+	if monthlyKm < 1099 || monthlyKm > 1101 || monthlyEnergy != 180 {
+		t.Errorf("monthly totals: %.1f km, %.2f EUR; want 1100 km and 180 EUR", monthlyKm, monthlyEnergy)
+	}
+	for _, w := range sum.Completeness.Warnings {
+		if strings.Contains(w, "trajets") || strings.Contains(w, "recharge") {
+			t.Errorf("unexpected EV warning on a combustion vehicle: %q", w)
+		}
+	}
+	if sum.Completeness.ScorePct < 75 {
+		t.Errorf("completeness score = %d, unreasonably low for a vehicle with fill-ups", sum.Completeness.ScorePct)
+	}
+
+	// The comparison is built on an electric reference; the combustion vehicle only prefills the ICE side.
+	svc := NewComparisonService(tco)
+	if _, err := svc.Compare(ctx, &models.ComparisonScenario{Mode: models.ComparisonModeRetrospective, VehicleID: &ice.ID, AnnualKm: 10000, Years: 3}); !errors.Is(err, ErrComparisonNeedsEV) {
+		t.Errorf("retrospective on ICE = %v, want ErrComparisonNeedsEV", err)
+	}
+	d, err := svc.Defaults(ctx, ice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.ICELPer100Km == nil || *d.ICELPer100Km != 5.545 || d.ICEFuelPrice == nil || d.EVKwhPer100Km != nil {
+		t.Errorf("ICE defaults: %+v", d)
+	}
+
+	// Editing, odometer never lowered by a delete, cascade with the vehicle.
+	fills[3].Odometer = 11200
+	if err := repo.UpdateFuelLog(ctx, &fills[3]); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteFuelLog(ctx, ice.ID, fills[3].ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteFuelLog(ctx, ice.ID, fills[3].ID); !errors.Is(err, database.ErrNotFound) {
+		t.Errorf("second delete = %v, want ErrNotFound", err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT current_odometer FROM vehicles WHERE id = $1`, ice.ID).Scan(&odo); err != nil || odo != 11200 {
+		t.Errorf("current odometer = %v (%v), want 11200 (never lowered)", odo, err)
+	}
+	if logs, _ := repo.ListFuelLogs(ctx, ice.ID); len(logs) != 3 {
+		t.Errorf("fill-ups after delete = %d, want 3", len(logs))
+	}
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM vehicles WHERE id = $1`, ice.ID); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM fuel_logs`).Scan(&left)
+	if left != 0 {
+		t.Errorf("fuel logs must cascade with the vehicle, %d left", left)
+	}
+}

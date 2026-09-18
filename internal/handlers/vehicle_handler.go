@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -40,6 +42,23 @@ type SaveVehicleRequest struct {
 	TeslaMateBasicPass    *string         `json:"teslamate_basic_pass"` // Plain text from frontend
 	PreTeslaMateKwh100km  *float64        `json:"pre_teslamate_kwh_100km"`
 	PreTeslaMateEurPerKwh *float64        `json:"pre_teslamate_eur_per_kwh"`
+	Powertrain            string          `json:"powertrain"` // EV (default) or ICE
+}
+
+// validatePowertrain checks the powertrain of a vehicle payload and that an ICE vehicle has no TeslaMate link.
+// An empty value is accepted and left to the caller's default.
+func validatePowertrain(powertrain string, teslamateURL *string) error {
+	switch powertrain {
+	case "", models.PowertrainEV:
+		return nil
+	case models.PowertrainICE:
+		if teslamateURL != nil && strings.TrimSpace(*teslamateURL) != "" {
+			return errors.New("un véhicule thermique ne peut pas être relié à TeslaMate")
+		}
+		return nil
+	default:
+		return errors.New("motorisation invalide (EV ou ICE)")
+	}
 }
 
 func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -67,6 +86,14 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		writeError(w, http.StatusBadRequest, "Vehicle name is required")
 		return
+	}
+	if err := validatePowertrain(req.Powertrain, req.TeslaMateAPIURL); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	powertrain := req.Powertrain
+	if powertrain == "" {
+		powertrain = models.PowertrainEV
 	}
 
 	var encKey, encPass *string
@@ -101,6 +128,7 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TeslaMateBasicPassEnc:    encPass,
 		PreTeslaMateKwh100km:     req.PreTeslaMateKwh100km,
 		PreTeslaMateEurPerKwh:    req.PreTeslaMateEurPerKwh,
+		Powertrain:               powertrain,
 	}
 
 	if err := h.repo.CreateVehicle(r.Context(), v); err != nil {
@@ -141,6 +169,17 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req SaveVehicleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+
+	if req.Powertrain != "" {
+		if err := validatePowertrain(req.Powertrain, req.TeslaMateAPIURL); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		existing.Powertrain = req.Powertrain
+	} else if err := validatePowertrain(existing.Powertrain, req.TeslaMateAPIURL); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

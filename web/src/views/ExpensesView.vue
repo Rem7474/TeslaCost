@@ -7,7 +7,9 @@ import { api, type ExpenseDocumentHeader, type MaintenanceReminder, type Vehicle
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
 import DocumentPreviewModal from '@/components/expenses/DocumentPreviewModal.vue'
+import FuelLogsPanel from '@/components/expenses/FuelLogsPanel.vue'
 import {
+  Fuel,
   Receipt,
   Plus,
   Wrench,
@@ -242,7 +244,7 @@ async function loadData() {
       maintenanceExpenses.value = await api.getMaintenance(vehicleStore.activeVehicle.id)
     } else if (activeTab.value === 'REMINDERS') {
       await loadReminders()
-    } else if (activeTab.value === 'CHARGES') {
+    } else if (activeTab.value === 'CHARGES' && !vehicleStore.isIce) {
       chargesPage.value = 1
       const res = await api.getCharges(vehicleStore.activeVehicle.id, { missingCost: missingCostOnly.value })
       charges.value = res.charges
@@ -1251,7 +1253,7 @@ async function handleDeleteWebhook() {
           Nouveau rappel
         </button>
         <button
-          v-if="activeTab === 'CHARGES'"
+          v-if="activeTab === 'CHARGES' && !vehicleStore.isIce"
           @click="openAddChargeModal"
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
@@ -1300,9 +1302,10 @@ async function handleDeleteWebhook() {
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0"
             :class="activeTab === 'CHARGES' ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
           >
-            <Zap class="w-3.5 h-3.5" />
-            <span>Recharges</span>
-            <span v-if="chargesWithoutCost > 0" class="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <Fuel v-if="vehicleStore.isIce" class="w-3.5 h-3.5" />
+            <Zap v-else class="w-3.5 h-3.5" />
+            <span>{{ vehicleStore.isIce ? 'Pleins' : 'Recharges' }}</span>
+            <span v-if="!vehicleStore.isIce && chargesWithoutCost > 0" class="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
               {{ chargesWithoutCost }}
             </span>
           </button>
@@ -1728,7 +1731,13 @@ async function handleDeleteWebhook() {
     </div>
 
     <!-- Content: Charges -->
-    <div v-if="activeTab === 'CHARGES'" class="space-y-3">
+    <FuelLogsPanel
+      v-if="activeTab === 'CHARGES' && vehicleStore.isIce && vehicleStore.activeVehicle"
+      :vehicle-id="vehicleStore.activeVehicle.id"
+      :can-edit="vehicleStore.canEdit"
+    />
+
+    <div v-if="activeTab === 'CHARGES' && !vehicleStore.isIce" class="space-y-3">
       <!-- Pre-TeslaMate Charges Banner if configured -->
       <div
         v-if="vehicleStore.activeVehicle?.pre_teslamate_kwh_100km && vehicleStore.activeVehicle?.pre_teslamate_eur_per_kwh"

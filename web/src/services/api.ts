@@ -183,6 +183,15 @@ export const api = {
   removeVehicleMember: (vehicleId: string, memberId: string) =>
     request<any>(`/vehicles/${vehicleId}/members/${memberId}`, { method: 'DELETE' }),
 
+  // Fuel fill-ups (combustion vehicles); the list comes with consumption figures per segment and global stats
+  getFuelLogs: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/fuel-logs`),
+  createFuelLog: (vehicleId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/fuel-logs`, { method: 'POST', body: JSON.stringify(data) }),
+  updateFuelLog: (vehicleId: string, fuelLogId: string, data: any) =>
+    request<any>(`/vehicles/${vehicleId}/fuel-logs/${fuelLogId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteFuelLog: (vehicleId: string, fuelLogId: string) =>
+    request<any>(`/vehicles/${vehicleId}/fuel-logs/${fuelLogId}`, { method: 'DELETE' }),
+
   // Odometer Checkpoints
   getOdometerCheckpoints: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/odometer-checkpoints`),
   createOdometerCheckpoint: (vehicleId: string, data: any) =>

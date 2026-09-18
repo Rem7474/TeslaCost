@@ -81,9 +81,16 @@ type Vehicle struct {
 	TeslaMateBasicPassEnc    *string     `json:"-"`
 	PreTeslaMateKwh100km     *float64    `json:"pre_teslamate_kwh_100km,omitempty"`
 	PreTeslaMateEurPerKwh    *float64    `json:"pre_teslamate_eur_per_kwh,omitempty"`
+	Powertrain               string      `json:"powertrain"` // PowertrainEV | PowertrainICE
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
 }
+
+// Vehicle powertrains. ICE vehicles are tracked manually (fuel fill-ups) and have no TeslaMate link.
+const (
+	PowertrainEV  = "EV"
+	PowertrainICE = "ICE"
+)
 
 // VehicleMember represents a user who has access to a vehicle with a specific role.
 type VehicleMember struct {

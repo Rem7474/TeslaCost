@@ -256,6 +256,7 @@ func main() {
 		comparisonHandler := handlers.NewComparisonHandler(repo, comparisonService)
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
 		checkpointHandler := handlers.NewCheckpointHandler(repo)
+		fuelHandler := handlers.NewFuelHandler(repo)
 		reminderHandler := handlers.NewReminderHandler(repo, notificationService)
 		vehicleMemberHandler := handlers.NewVehicleMemberHandler(repo)
 
@@ -320,6 +321,12 @@ func main() {
 				r.Post("/{vehicleId}/odometer-checkpoints", checkpointHandler.Create)
 				r.Put("/{vehicleId}/odometer-checkpoints/{checkpointId}", checkpointHandler.Update)
 				r.Delete("/{vehicleId}/odometer-checkpoints/{checkpointId}", checkpointHandler.Delete)
+
+				// Fuel fill-ups (combustion vehicles)
+				r.Get("/{vehicleId}/fuel-logs", fuelHandler.List)
+				r.Post("/{vehicleId}/fuel-logs", fuelHandler.Create)
+				r.Put("/{vehicleId}/fuel-logs/{fuelLogId}", fuelHandler.Update)
+				r.Delete("/{vehicleId}/fuel-logs/{fuelLogId}", fuelHandler.Delete)
 
 				// Drives
 				r.Get("/{vehicleId}/drives", driveHandler.List)
