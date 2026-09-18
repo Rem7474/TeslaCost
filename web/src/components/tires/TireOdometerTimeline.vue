@@ -14,6 +14,10 @@ const shown = computed(() => hovered.value ?? pinned.value)
 const pct = (km: number) => (timeline.value.maxKm > 0 ? (km / timeline.value.maxKm) * 100 : 0)
 const fmtKm = (km: number) => `${Math.round(km).toLocaleString('fr-FR')} km`
 
+const hasData = computed(() => timeline.value.lanes.some((l) => l.segments.length > 0))
+const hasGaps = computed(() => timeline.value.lanes.some((l) => l.gaps.length > 0))
+const laneHeight = computed(() => (timeline.value.lanes.length > 1 ? 'h-7' : 'h-9'))
+
 const ticks = computed(() => {
   const step = tickStep(timeline.value.maxKm)
   const out: number[] = []
@@ -33,40 +37,45 @@ function onClick(seg: TimelineSegment) {
       <span class="text-[11px] text-slate-400">0 → {{ fmtKm(timeline.maxKm) }}</span>
     </div>
 
-    <div v-if="timeline.segments.length === 0" class="p-6 text-center text-xs text-slate-500 bg-slate-950/40 rounded-2xl">
+    <div v-if="!hasData" class="p-6 text-center text-xs text-slate-500 bg-slate-950/40 rounded-2xl">
       Aucune session de montage avec kilométrage enregistrée.
     </div>
 
     <template v-else>
-      <div class="relative h-9 rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
-        <div
-          v-for="(gap, i) in timeline.gaps"
-          :key="`gap-${i}`"
-          class="absolute top-0 h-full"
-          :style="{
-            left: pct(gap.startKm) + '%',
-            width: pct(gap.endKm - gap.startKm) + '%',
-            backgroundImage: 'repeating-linear-gradient(45deg, #334155 0 4px, transparent 4px 8px)',
-          }"
-          :title="`Aucun pneu enregistré (${fmtKm(gap.startKm)} → ${fmtKm(gap.endKm)})`"
-        ></div>
-        <button
-          v-for="seg in timeline.segments"
-          :key="seg.id"
-          type="button"
-          class="absolute top-0 h-full border-r border-slate-950 transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
-          :class="{ 'ring-2 ring-white ring-inset': pinned?.id === seg.id }"
-          :style="{ left: pct(seg.startKm) + '%', width: pct(seg.endKm - seg.startKm) + '%', backgroundColor: seg.color }"
-          :aria-label="`${seg.tires[0].label}, de ${fmtKm(seg.startKm)} à ${fmtKm(seg.endKm)}`"
-          @mouseenter="hovered = seg"
-          @mouseleave="hovered = null"
-          @focus="hovered = seg"
-          @blur="hovered = null"
-          @click="onClick(seg)"
-        ></button>
+      <div class="space-y-1.5">
+        <div v-for="lane in timeline.lanes" :key="lane.id" class="flex items-center gap-3">
+          <span v-if="timeline.lanes.length > 1" class="w-32 shrink-0 text-[11px] text-slate-400 truncate" :title="lane.label">{{ lane.label }}</span>
+          <div class="relative flex-1 rounded-xl overflow-hidden bg-slate-950 border border-slate-800" :class="laneHeight">
+            <div
+              v-for="(gap, i) in lane.gaps"
+              :key="`gap-${i}`"
+              class="absolute top-0 h-full"
+              :style="{
+                left: pct(gap.startKm) + '%',
+                width: pct(gap.endKm - gap.startKm) + '%',
+                backgroundImage: 'repeating-linear-gradient(45deg, #334155 0 4px, transparent 4px 8px)',
+              }"
+              :title="`Aucun pneu enregistré (${fmtKm(gap.startKm)} → ${fmtKm(gap.endKm)})`"
+            ></div>
+            <button
+              v-for="seg in lane.segments"
+              :key="seg.id"
+              type="button"
+              class="absolute top-0 h-full border-r border-slate-950 transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+              :class="{ 'ring-2 ring-white ring-inset': pinned?.id === seg.id }"
+              :style="{ left: pct(seg.startKm) + '%', width: pct(seg.endKm - seg.startKm) + '%', backgroundColor: seg.color }"
+              :aria-label="`${lane.label} : ${seg.tires[0].label}, de ${fmtKm(seg.startKm)} à ${fmtKm(seg.endKm)}`"
+              @mouseenter="hovered = seg"
+              @mouseleave="hovered = null"
+              @focus="hovered = seg"
+              @blur="hovered = null"
+              @click="onClick(seg)"
+            ></button>
+          </div>
+        </div>
       </div>
 
-      <div class="relative h-4 text-[10px] text-slate-500">
+      <div class="relative h-4 text-[10px] text-slate-500" :class="timeline.lanes.length > 1 ? 'ml-[8.75rem]' : ''">
         <span v-for="km in ticks" :key="km" class="absolute -translate-x-1/2 first:translate-x-0" :style="{ left: pct(km) + '%' }">
           {{ (km / 1000).toLocaleString('fr-FR') }}k
         </span>
@@ -76,7 +85,7 @@ function onClick(seg: TimelineSegment) {
         <span v-for="l in timeline.legend" :key="l.key" class="flex items-center gap-1.5 text-[11px] text-slate-300">
           <span class="w-2.5 h-2.5 rounded-sm" :style="{ backgroundColor: l.color }"></span>{{ l.key }}
         </span>
-        <span v-if="timeline.gaps.length" class="flex items-center gap-1.5 text-[11px] text-slate-400">
+        <span v-if="hasGaps" class="flex items-center gap-1.5 text-[11px] text-slate-400">
           <span class="w-2.5 h-2.5 rounded-sm bg-slate-600"></span>Aucun pneu enregistré
         </span>
       </div>
