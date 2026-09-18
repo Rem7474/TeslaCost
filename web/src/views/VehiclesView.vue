@@ -287,7 +287,7 @@ function validateOwnershipStep(step: number): boolean {
   }
   if (step === 2) {
     if (isPurchase.value) {
-      if (f.purchase_price === null || f.purchase_price === undefined || f.purchase_price === '' || Number(f.purchase_price) <= 0) {
+      if (f.purchase_price === null || f.purchase_price === undefined || Number(f.purchase_price) <= 0) {
         showAlert("Veuillez renseigner le prix d'achat TTC", 'Champ requis', 'warning')
         return false
       }
@@ -303,7 +303,7 @@ function validateOwnershipStep(step: number): boolean {
       }
     }
     if (isLease.value) {
-      if (f.lease_monthly_rent === null || f.lease_monthly_rent === undefined || f.lease_monthly_rent === '' || Number(f.lease_monthly_rent) < 0) {
+      if (f.lease_monthly_rent === null || f.lease_monthly_rent === undefined || Number(f.lease_monthly_rent) < 0) {
         showAlert('Veuillez renseigner le loyer mensuel', 'Champ requis', 'warning')
         return false
       }
@@ -417,8 +417,8 @@ async function openCheckpointsModal(v: any) {
 
 async function handleSavePreTeslaMateEnergy() {
   if (!checkpointsVehicle.value) return
-  const kwh100 = preTeslaMateForm.value.kwh_100km !== null && preTeslaMateForm.value.kwh_100km !== '' ? Number(preTeslaMateForm.value.kwh_100km) : null
-  const rate = preTeslaMateForm.value.eur_per_kwh !== null && preTeslaMateForm.value.eur_per_kwh !== '' ? Number(preTeslaMateForm.value.eur_per_kwh) : null
+  const kwh100 = preTeslaMateForm.value.kwh_100km != null ? Number(preTeslaMateForm.value.kwh_100km) : null
+  const rate = preTeslaMateForm.value.eur_per_kwh != null ? Number(preTeslaMateForm.value.eur_per_kwh) : null
   if (kwh100 !== null && (kwh100 <= 0 || kwh100 > 100)) {
     showAlert('Consommation moyenne invalide (doit être comprise entre 1 et 100 kWh/100km)', 'Champ invalide', 'warning')
     return

@@ -79,6 +79,9 @@ jobs:
       - name: Run npm audit (frontend dependency vulnerability scan)
         run: cd web && npm audit --audit-level=high
 
+      - name: Run TypeScript Typecheck
+        run: cd web && npm run typecheck
+
       - name: Build Frontend Assets
         run: cd web && npm run build
 

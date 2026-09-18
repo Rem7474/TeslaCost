@@ -126,7 +126,8 @@ async function handleFinalSubmit() {
       }
     }
 
-    await vehicleStore.createVehicle(payload)
+    await api.createVehicle(payload)
+    await vehicleStore.fetchVehicles()
     currentStep.value = 4
   } catch (err: any) {
     error.value = err.message || "Erreur lors de l'enregistrement du véhicule"
