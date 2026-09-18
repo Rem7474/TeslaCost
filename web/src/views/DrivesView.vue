@@ -379,9 +379,17 @@ onMounted(() => {
   loadDrives()
 })
 
-// Same heuristic as the backend's HighwayDrivePredicate / Drive.IsHighway().
+// Same speed heuristic as the backend's HighwayDrivePredicate / Drive.IsHighway() (which also counts drives whose
+// GPS detection found a toll). It favours recall: a false positive only adds the drive to the review queue.
 function isHighwayDrive(d: any) {
-  return (d.distance_km >= 40 && (d.speed_avg || 0) >= 70) || (d.distance_km >= 20 && (d.speed_max || 0) > 125)
+  const avg = d.speed_avg || 0
+  const max = d.speed_max || 0
+  return (
+    (d.distance_km >= 40 && avg >= 70) ||
+    (d.distance_km >= 20 && max > 125) ||
+    (d.distance_km >= 20 && max >= 110 && avg >= 70) ||
+    (d.distance_km >= 8 && max >= 105 && avg >= 70)
+  )
 }
 
 // Highway-like drive with no toll attached and not reviewed yet (same rule as the backend queue)
@@ -710,7 +718,7 @@ async function openCostModal(drive: any) {
 async function loadTollDetection(drive: any) {
   tollDetection.value = null
   tollDetectionError.value = ''
-  if (!vehicleStore.activeVehicle || drive.is_trip_group || !isHighwayDrive(drive)) return
+  if (!vehicleStore.activeVehicle || drive.is_trip_group) return
   try {
     tollDetection.value = await api.getTollDetection(vehicleStore.activeVehicle.id, drive.id)
   } catch (err) {
@@ -1901,9 +1909,9 @@ function formatDate(dateStr: string) {
             </div>
           </div>
 
-          <!-- 6. Détection péage autoroute (GPS, informatif — indépendant du statut de qualification) -->
+          <!-- 6. Détection péage autoroute (GPS, informatif — disponible sur tout trajet, même si l'heuristique de vitesse ne l'a pas repéré) -->
           <div
-            v-if="!selectedCostDrive.is_trip_group && isHighwayDrive(selectedCostDrive)"
+            v-if="!selectedCostDrive.is_trip_group"
             class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl space-y-2"
           >
             <div class="flex items-center justify-between gap-2">

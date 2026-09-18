@@ -53,3 +53,27 @@ func TestCompletenessScoreCombustionVehicle(t *testing.T) {
 		t.Errorf("score without any fill-up = %d, want 70 (energy dimension lost)", score)
 	}
 }
+
+func TestCompletenessScoreEmptyDenominators(t *testing.T) {
+	// An electric vehicle with drives but no highway drive, no odometer-checked drive and no priced entry
+	// has nothing to qualify, check or convert: those dimensions are complete, not empty.
+	in := completenessInputs{
+		kwhAdded: 100, kwhPriced: 100, trackedKm: 1000, basisKm: 1000,
+		insurancePresent: true, acquisitionComplete: true,
+	}
+	score, dims := completenessScore(in)
+	if score != 100 {
+		t.Fatalf("score = %d, want 100 (dimensions %+v)", score, dims)
+	}
+	for _, d := range dims {
+		if d.ScorePct != 100 {
+			t.Errorf("dimension %s = %d%%, want 100%%", d.Key, d.ScorePct)
+		}
+	}
+
+	// A real backlog still counts.
+	in.highwayDrives, in.unqualifiedDrives = 4, 1
+	if _, dims := completenessScore(in); dims[2].Key != "tolls" || dims[2].ScorePct != 75 {
+		t.Errorf("tolls dimension = %+v, want 75%%", dims[2])
+	}
+}
