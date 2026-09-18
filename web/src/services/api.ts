@@ -3,21 +3,20 @@ import { newIdempotencyKey } from '@/services/offlineQueue'
 
 const BASE_URL = '/api'
 
-let refreshPromise: Promise<string | null> | null = null
+// The access and refresh tokens live exclusively in HttpOnly cookies set by the API
+// (see internal/handlers/auth_handler.go) — JS never reads or stores them, which removes
+// them as an XSS exfiltration target compared to localStorage.
+let refreshPromise: Promise<boolean> | null = null
 
 function getHeaders(body?: any): HeadersInit {
-  const token = localStorage.getItem('teslacost_token')
   const headers: Record<string, string> = {}
   if (!(body instanceof FormData)) {
     headers['Content-Type'] = 'application/json'
   }
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`
-  }
   return headers
 }
 
-async function refreshAccessToken(): Promise<string | null> {
+async function refreshAccessToken(): Promise<boolean> {
   if (refreshPromise) {
     return refreshPromise
   }
@@ -29,18 +28,9 @@ async function refreshAccessToken(): Promise<string | null> {
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       })
-      if (!res.ok) {
-        throw new Error('Refresh failed')
-      }
-      const data = await res.json()
-      if (data.token) {
-        localStorage.setItem('teslacost_token', data.token)
-        return data.token as string
-      }
-      return null
-    } catch (err) {
-      localStorage.removeItem('teslacost_token')
-      return null
+      return res.ok
+    } catch {
+      return false
     } finally {
       refreshPromise = null
     }
@@ -119,14 +109,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}, offlineLa
       endpoint.startsWith('/auth/config')
 
     if (!isAuthEndpoint) {
-      const newToken = await refreshAccessToken()
-      if (newToken) {
-        // Retry the original request with the new access token
+      const refreshed = await refreshAccessToken()
+      if (refreshed) {
+        // The new access token cookie is already set by the browser; just retry.
         return request<T>(endpoint, options, offlineLabel)
       }
 
-      // Refresh failed or token invalid -> clear session and redirect to login
-      localStorage.removeItem('teslacost_token')
+      // Refresh failed -> session is over, redirect to login
       if (
         window.location.pathname !== '/login' &&
         window.location.pathname !== '/register' &&
@@ -356,12 +345,9 @@ export const api = {
     request<{ message: string }>(`/vehicles/${vehicleId}/documents/${docId}`, { method: 'DELETE' }),
 
   downloadDocumentBlob: async (vehicleId: string, docId: string): Promise<{ blob: Blob; filename: string }> => {
-    const token = localStorage.getItem('teslacost_token')
-    const headers: Record<string, string> = {}
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`
-    }
-    const res = await fetch(`${BASE_URL}/vehicles/${vehicleId}/documents/${docId}`, { headers })
+    const res = await fetch(`${BASE_URL}/vehicles/${vehicleId}/documents/${docId}`, {
+      credentials: 'include',
+    })
     if (!res.ok) {
       let errorMsg = 'Impossible de charger le document'
       try {

@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -16,23 +17,38 @@ const (
 	UserEmailKey contextKey = "userEmail"
 )
 
+// accessTokenCookieName mirrors the constant of the same name in the handlers package
+// (an internal/middleware -> internal/handlers import would be circular).
+const accessTokenCookieName = "teslacost_access_token"
+
+// extractBearerToken reads the JWT from the Authorization header (API/programmatic clients)
+// or, failing that, from the HttpOnly access-token cookie set by the browser-facing SPA.
+func extractBearerToken(r *http.Request) (string, error) {
+	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+			return "", fmt.Errorf("invalid Authorization format, expected 'Bearer <token>'")
+		}
+		return parts[1], nil
+	}
+
+	if cookie, err := r.Cookie(accessTokenCookieName); err == nil && cookie.Value != "" {
+		return cookie.Value, nil
+	}
+
+	return "", fmt.Errorf("missing Authorization header or %s cookie", accessTokenCookieName)
+}
+
 // AuthenticateJWT returns a middleware that validates the JWT token.
 func AuthenticateJWT(jwtSecret string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
-				sendJSONError(w, http.StatusUnauthorized, "Missing Authorization header")
+			tokenString, err := extractBearerToken(r)
+			if err != nil {
+				sendJSONError(w, http.StatusUnauthorized, err.Error())
 				return
 			}
 
-			parts := strings.SplitN(authHeader, " ", 2)
-			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
-				sendJSONError(w, http.StatusUnauthorized, "Invalid Authorization format, expected 'Bearer <token>'")
-				return
-			}
-
-			tokenString := parts[1]
 			claims, err := auth.ValidateToken(tokenString, jwtSecret)
 			if err != nil {
 				sendJSONError(w, http.StatusUnauthorized, "Invalid or expired token")

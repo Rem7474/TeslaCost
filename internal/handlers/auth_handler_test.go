@@ -114,3 +114,57 @@ func TestSetRefreshTokenCookie(t *testing.T) {
 		t.Fatalf("cookie not set")
 	}
 }
+
+func TestCookieSecureRespectsConfig(t *testing.T) {
+	cfg := &config.Config{CookieSecure: false}
+	h := NewAuthHandler(nil, cfg, nil)
+
+	rec := httptest.NewRecorder()
+	h.setRefreshTokenCookie(rec, "tok", time.Now().Add(time.Hour))
+	h.setAccessTokenCookie(rec, "tok", time.Now().Add(time.Hour))
+
+	for _, c := range rec.Result().Cookies() {
+		if c.Secure {
+			t.Errorf("expected Secure=false for cookie %s when CookieSecure is false, got true", c.Name)
+		}
+	}
+}
+
+func TestSetAndClearAccessTokenCookie(t *testing.T) {
+	cfg := &config.Config{CookieSecure: true}
+	h := NewAuthHandler(nil, cfg, nil)
+
+	rec := httptest.NewRecorder()
+	h.setAccessTokenCookie(rec, "access-tok", time.Now().Add(15*time.Minute))
+
+	var found bool
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == accessTokenCookie {
+			found = true
+			if c.Value != "access-tok" {
+				t.Errorf("expected value access-tok, got %s", c.Value)
+			}
+			if !c.HttpOnly || !c.Secure {
+				t.Errorf("expected HttpOnly and Secure true")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("access token cookie not set")
+	}
+
+	rec2 := httptest.NewRecorder()
+	h.clearAccessTokenCookie(rec2)
+	found = false
+	for _, c := range rec2.Result().Cookies() {
+		if c.Name == accessTokenCookie {
+			found = true
+			if c.MaxAge != -1 || c.Value != "" {
+				t.Errorf("expected cleared cookie, got MaxAge=%d Value=%q", c.MaxAge, c.Value)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected Set-Cookie clearing the access token cookie")
+	}
+}

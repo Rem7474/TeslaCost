@@ -37,15 +37,14 @@ export const useOfflineStore = defineStore('offline', () => {
     let sent = 0
     try {
       for (const m of await listQueuedMutations()) {
-        const token = localStorage.getItem('teslacost_token')
         let res: Response
         try {
           res = await fetch(`/api${m.endpoint}`, {
             method: m.method,
+            credentials: 'include',
             headers: {
               'Content-Type': 'application/json',
               'Idempotency-Key': m.id,
-              ...(token ? { Authorization: `Bearer ${token}` } : {}),
             },
             body: m.body,
           })

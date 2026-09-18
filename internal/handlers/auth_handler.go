@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"time"
 
 	"github.com/teslacost/teslacost/internal/auth"
@@ -15,10 +14,11 @@ import (
 )
 
 const (
-	oidcStateCookie     = "oidc_state"
-	oidcNonceCookie     = "oidc_nonce"
-	oidcCookieTTL       = 10 * time.Minute
-	refreshTokenCookie  = "teslacost_refresh_token"
+	oidcStateCookie    = "oidc_state"
+	oidcNonceCookie    = "oidc_nonce"
+	oidcCookieTTL      = 10 * time.Minute
+	refreshTokenCookie = "teslacost_refresh_token"
+	accessTokenCookie  = "teslacost_access_token"
 )
 
 type AuthHandler struct {
@@ -58,7 +58,7 @@ func (h *AuthHandler) setRefreshTokenCookie(w http.ResponseWriter, token string,
 		Expires:  expiresAt,
 		MaxAge:   int(time.Until(expiresAt).Seconds()),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
@@ -71,7 +71,51 @@ func (h *AuthHandler) clearRefreshTokenCookie(w http.ResponseWriter) {
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+}
+
+// setAccessTokenCookie stores the short-lived JWT access token in an HttpOnly cookie so the
+// frontend never needs to hold it in JS-readable storage (localStorage), removing it as an
+// XSS exfiltration target. The token is also still returned in the JSON body for non-browser
+// API consumers that prefer a Bearer header.
+func (h *AuthHandler) setAccessTokenCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     accessTokenCookie,
+		Value:    token,
+		Expires:  expiresAt,
+		MaxAge:   int(time.Until(expiresAt).Seconds()),
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+}
+
+func (h *AuthHandler) clearAccessTokenCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     accessTokenCookie,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+}
+
+// clearCookie immediately expires a named cookie (used for the short-lived OIDC state/nonce cookies).
+func (h *AuthHandler) clearCookie(w http.ResponseWriter, name string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
@@ -113,6 +157,8 @@ func (h *AuthHandler) issueSession(w http.ResponseWriter, r *http.Request, userI
 	}
 
 	h.setRefreshTokenCookie(w, plainRefreshToken, expiresAt)
+	accessTokenExpiresAt := time.Now().Add(time.Duration(h.cfg.JWTAccessExpirationMinutes) * time.Minute)
+	h.setAccessTokenCookie(w, accessToken, accessTokenExpiresAt)
 	return accessToken, plainRefreshToken, nil
 }
 
@@ -289,6 +335,8 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setRefreshTokenCookie(w, newPlainToken, expiresAt)
+	accessTokenExpiresAt := time.Now().Add(time.Duration(h.cfg.JWTAccessExpirationMinutes) * time.Minute)
+	h.setAccessTokenCookie(w, accessToken, accessTokenExpiresAt)
 	writeJSON(w, http.StatusOK, AuthResponse{
 		Token:        accessToken,
 		RefreshToken: newPlainToken,
@@ -313,6 +361,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.clearRefreshTokenCookie(w)
+	h.clearAccessTokenCookie(w)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "Logged out successfully",
 	})
@@ -389,7 +438,7 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing OIDC state cookie - session may have expired")
 		return
 	}
-	clearCookie(w, oidcStateCookie)
+	h.clearCookie(w, oidcStateCookie)
 
 	if r.URL.Query().Get("state") != stateCookie.Value {
 		writeError(w, http.StatusBadRequest, "OIDC state mismatch - possible CSRF attempt")
@@ -401,7 +450,7 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Missing OIDC nonce cookie - session may have expired")
 		return
 	}
-	clearCookie(w, oidcNonceCookie)
+	h.clearCookie(w, oidcNonceCookie)
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -429,25 +478,13 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, _, err := h.issueSession(w, r, dbUser.ID, dbUser.Email, "")
+	_, _, err = h.issueSession(w, r, dbUser.ID, dbUser.Email, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate token")
 		return
 	}
 
-	http.Redirect(w, r, "/oidc-callback?token="+url.QueryEscape(accessToken), http.StatusFound)
-}
-
-// clearCookie immediately expires a named cookie.
-func clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{
-		Name:     name,
-		Value:    "",
-		Expires:  time.Unix(0, 0),
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-		Path:     "/",
-	})
+	// Both the refresh and access token cookies were already set on this response by
+	// issueSession; the SPA just needs to know the handshake succeeded.
+	http.Redirect(w, r, "/oidc-callback", http.StatusFound)
 }

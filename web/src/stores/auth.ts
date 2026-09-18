@@ -2,33 +2,38 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/services/api'
 
-export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('teslacost_token'))
-  const user = ref<any | null>(null)
-  const isAuthenticated = computed(() => !!token.value)
+// The access/refresh tokens live in HttpOnly cookies set by the API — this store never
+// holds a token value, only whether the current cookie-backed session is valid.
+type AuthStatus = 'unknown' | 'authenticated' | 'unauthenticated'
 
+export const useAuthStore = defineStore('auth', () => {
+  const status = ref<AuthStatus>('unknown')
+  const user = ref<any | null>(null)
+  const isAuthenticated = computed(() => status.value === 'authenticated')
+
+  // Resolves the session status once by asking the API (cookies are sent automatically).
+  // Safe to call multiple times: only the first call (per page load) actually hits the network.
   async function init() {
-    if (token.value && !user.value) {
-      try {
-        user.value = await api.getMe()
-      } catch (err) {
-        logout()
-      }
+    if (status.value !== 'unknown') return
+    try {
+      user.value = await api.getMe()
+      status.value = 'authenticated'
+    } catch {
+      user.value = null
+      status.value = 'unauthenticated'
     }
   }
 
   async function login(credentials: { email: string; password: string }) {
     const res = await api.login(credentials)
-    token.value = res.token
     user.value = res.user
-    localStorage.setItem('teslacost_token', res.token)
+    status.value = 'authenticated'
   }
 
   async function register(payload: { email: string; password: string }) {
     const res = await api.register(payload)
-    token.value = res.token
     user.value = res.user
-    localStorage.setItem('teslacost_token', res.token)
+    status.value = 'authenticated'
   }
 
   async function logout() {
@@ -37,13 +42,12 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // Ignorer les erreurs réseau lors de la déconnexion
     }
-    token.value = null
     user.value = null
-    localStorage.removeItem('teslacost_token')
+    status.value = 'unauthenticated'
   }
 
   return {
-    token,
+    status,
     user,
     isAuthenticated,
     init,

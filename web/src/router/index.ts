@@ -67,7 +67,7 @@ const router = createRouter({
       component: OnboardingView,
     },
     {
-      // OIDC SSO callback — receives ?token= from the API after IdP auth
+      // OIDC SSO callback — the API has already set the session cookies before redirecting here.
       path: '/oidc-callback',
       name: 'oidc-callback',
       component: OIDCCallbackView,
@@ -99,6 +99,13 @@ async function checkOnboardingStatus() {
 
 router.beforeEach(async (to, _from, next) => {
   const authStore = useAuthStore()
+
+  // The access token lives in an HttpOnly cookie the SPA can't read directly, so the very
+  // first navigation of a page load must ask the API whether the session cookie is valid
+  // before it can decide where to route. Subsequent navigations reuse the resolved status.
+  if (authStore.status === 'unknown') {
+    await authStore.init()
+  }
 
   // On first startup without account, route to onboarding
   if (!authStore.isAuthenticated) {
