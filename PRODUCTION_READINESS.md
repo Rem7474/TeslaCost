@@ -2,7 +2,13 @@
 
 Suivi des actions issues de l'audit du 2026-09-17. Statuts : `⬜ à faire` / `🔄 en cours` / `✅ fait` / `⏭️ reporté`.
 
-PR de suivi : [#42 — fix(ops): production-readiness quick wins + top-5 blocking actions](https://github.com/Rem7474/TeslaCost/pull/42) (mergée) et [#45 — security: access token httpOnly cookie](https://github.com/Rem7474/TeslaCost/pull/45). ✅ Tous les checks CI passent sur les deux.
+PRs de suivi (toutes mergées, CI verte) : [#42 — quick wins + top-5](https://github.com/Rem7474/TeslaCost/pull/42), [#45 — security: access token httpOnly cookie](https://github.com/Rem7474/TeslaCost/pull/45), [#46 — split repository.go + interfaces par service](https://github.com/Rem7474/TeslaCost/pull/46).
+
+## Dette technique (hors audit initial, identifiée en cours de route)
+
+| # | Action | Fichier(s) | Statut | Notes |
+|---|---|---|---|---|
+| D1 | `repository.go` (3925 lignes / 113 méthodes, tous domaines confondus) | `internal/database/repository*.go` | ✅ | PR #46. Découpe mécanique en 15 fichiers par domaine (zéro changement de comportement, vérifié octet-pour-octet), puis interfaces consommateur (`notificationStore`, `tireWearStore`, `carpoolStore`) sur le modèle du `syncStore` déjà existant pour `SyncService` — permet de tester `NotificationService`/`TireWearService`/`CarpoolService` sans vraie base. Handlers volontairement laissés sur le type concret (`requireVehicleAccess` est un helper partagé par tous, le découpler est un chantier séparé plus lourd). |
 
 Seul point encore ouvert de l'audit initial : pas de métriques `/metrics` Prometheus / dashboard Grafana (catégorie Observabilité de l'audit, jamais traitée dans un lot — à arbitrer si utile pour votre setup).
 
