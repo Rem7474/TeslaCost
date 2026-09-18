@@ -1633,10 +1633,10 @@ func TestIntegrationICEVehicleFuelLogs(t *testing.T) {
 	now := time.Now().UTC()
 	l := func(v float64) *float64 { return &v }
 	fills := []models.FuelLog{
-		{Date: now.AddDate(0, -3, 0), Odometer: 10000, Amount: money.FromFloat(80), Liters: l(50), IsFullTank: true},
-		{Date: now.AddDate(0, -2, 0), Odometer: 10500, Amount: money.FromFloat(40), Liters: l(25), IsFullTank: true},
-		{Date: now.AddDate(0, -1, -15), Odometer: 10800, Amount: money.FromFloat(20), Liters: l(12), IsFullTank: false},
-		{Date: now.AddDate(0, -1, 0), Odometer: 11100, Amount: money.FromFloat(40), Liters: l(24), IsFullTank: true},
+		{Date: now.AddDate(0, -3, 0), Odometer: l(10000), Amount: money.FromFloat(80), Liters: l(50), IsFullTank: true},
+		{Date: now.AddDate(0, -2, 0), Odometer: l(10500), Amount: money.FromFloat(40), Liters: l(25), IsFullTank: true},
+		{Date: now.AddDate(0, -1, -15), Odometer: l(10800), Amount: money.FromFloat(20), Liters: l(12), IsFullTank: false},
+		{Date: now.AddDate(0, -1, 0), Odometer: l(11100), Amount: money.FromFloat(40), Liters: l(24), IsFullTank: true},
 	}
 	for i := range fills {
 		fills[i].VehicleID = ice.ID
@@ -1700,7 +1700,7 @@ func TestIntegrationICEVehicleFuelLogs(t *testing.T) {
 	}
 
 	// Editing, odometer never lowered by a delete, cascade with the vehicle.
-	fills[3].Odometer = 11200
+	fills[3].Odometer = l(11200)
 	if err := repo.UpdateFuelLog(ctx, &fills[3]); err != nil {
 		t.Fatal(err)
 	}
@@ -1723,5 +1723,113 @@ func TestIntegrationICEVehicleFuelLogs(t *testing.T) {
 	_ = db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM fuel_logs`).Scan(&left)
 	if left != 0 {
 		t.Errorf("fuel logs must cascade with the vehicle, %d left", left)
+	}
+}
+
+func TestIntegrationManualReadingsAndFillUpsAreIndependent(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	u, err := repo.CreateUser(ctx, "manual@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ice := &models.Vehicle{UserID: u.ID, Name: "Clio", Powertrain: models.PowertrainICE, TeslaMateAuthType: models.AuthModeNone}
+	if err := repo.CreateVehicle(ctx, ice); err != nil {
+		t.Fatal(err)
+	}
+	ev := &models.Vehicle{UserID: u.ID, Name: "Model 3", TeslaMateAuthType: models.AuthModeNone, CurrentOdometer: 20000}
+	if err := repo.CreateVehicle(ctx, ev); err != nil {
+		t.Fatal(err)
+	}
+	tco := NewTCOService(db.Pool, "Europe/Paris")
+
+	day := time.Now().UTC().Truncate(24 * time.Hour)
+	at := func(daysAgo int) time.Time { return day.AddDate(0, 0, -daysAgo) }
+	l := func(v float64) *float64 { return &v }
+
+	// Odometer readings alone (no fill-up): they define the distance and raise the current odometer.
+	for _, r := range []models.OdometerCheckpoint{
+		{VehicleID: ice.ID, Date: at(60), Odometer: 10000},
+		{VehicleID: ice.ID, Date: at(20), Odometer: 11000}, // 25 km/day
+	} {
+		if err := repo.CreateOdometerCheckpoint(ctx, &r); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var odo float64
+	if err := db.Pool.QueryRow(ctx, `SELECT current_odometer FROM vehicles WHERE id = $1`, ice.ID).Scan(&odo); err != nil || odo != 11000 {
+		t.Fatalf("current odometer = %v (%v), want 11000 from the readings", odo, err)
+	}
+	sum, err := tco.ComputeVehicleTCO(ctx, ice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.DistanceBasisKm != 1000 {
+		t.Errorf("distance basis = %v, want the 1000 km covered by the readings", sum.DistanceBasisKm)
+	}
+
+	// Fill-ups without mileage, framed by the readings: mileage and consumption are estimated.
+	fills := []models.FuelLog{
+		{Date: at(50), Amount: money.FromFloat(80), Liters: l(50), IsFullTank: true},
+		{Date: at(40), Amount: money.FromFloat(32), Liters: l(20), IsFullTank: true},
+		{Date: at(30), Amount: money.FromFloat(24), Liters: l(15), IsFullTank: true},
+	}
+	for i := range fills {
+		fills[i].VehicleID = ice.ID
+		if err := repo.CreateFuelLog(ctx, &fills[i]); err != nil {
+			t.Fatal(err)
+		}
+		if fills[i].Odometer != nil {
+			t.Fatal("a fill-up entered without mileage must stay without mileage")
+		}
+	}
+	logs, err := repo.ListFuelLogs(ctx, ice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readings, _ := repo.ListOdometerCheckpoints(ctx, ice.ID)
+	st := ComputeFuelStats(logs, BuildOdometerRefs(readings, nil))
+	if st.NoMileageCount != 3 || st.MeasurableCount != 2 || st.EstimatedCount != 2 {
+		t.Fatalf("stats: %+v", st)
+	}
+	if got := st.Logs[1].ConsumptionL100; got == nil || *got != 8 { // 20 L over 250 km
+		t.Errorf("second consumption = %v, want 8", got)
+	}
+	if st.ConsumptionL100 == nil || *st.ConsumptionL100 != 7 { // 35 L over 500 km
+		t.Errorf("overall consumption = %v, want 7", st.ConsumptionL100)
+	}
+
+	// The TCO still rests on the readings only, and the fill-ups add their cost.
+	sum, err = tco.ComputeVehicleTCO(ctx, ice.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.DistanceBasisKm != 1000 || sum.EnergyCost != money.FromFloat(136) {
+		t.Errorf("basis/energy = %v / %v, want 1000 km / 136 EUR", sum.DistanceBasisKm, sum.EnergyCost)
+	}
+
+	// A fill-up with a mileage joins the readings as a cross-checked point.
+	pts, err := repo.ListManualOdometerPoints(ctx, ice.ID)
+	if err != nil || len(pts) != 2 {
+		t.Fatalf("manual points = %d (%v), want the 2 readings only", len(pts), err)
+	}
+	withKm := models.FuelLog{VehicleID: ice.ID, Date: at(10), Odometer: l(11200), Amount: money.FromFloat(40), IsFullTank: true}
+	if err := repo.CreateFuelLog(ctx, &withKm); err != nil {
+		t.Fatal(err)
+	}
+	if pts, _ = repo.ListManualOdometerPoints(ctx, ice.ID); len(pts) != 3 || pts[2].Kind != models.OdometerPointFuel {
+		t.Errorf("manual points = %+v", pts)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT current_odometer FROM vehicles WHERE id = $1`, ice.ID).Scan(&odo); err != nil || odo != 11200 {
+		t.Errorf("current odometer = %v (%v), want 11200", odo, err)
+	}
+
+	// A reading on an electric vehicle never touches its odometer (TeslaMate owns it).
+	evReading := models.OdometerCheckpoint{VehicleID: ev.ID, Date: at(5), Odometer: 25000}
+	if err := repo.CreateOdometerCheckpoint(ctx, &evReading); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT current_odometer FROM vehicles WHERE id = $1`, ev.ID).Scan(&odo); err != nil || odo != 20000 {
+		t.Errorf("EV current odometer = %v (%v), want 20000 untouched", odo, err)
 	}
 }

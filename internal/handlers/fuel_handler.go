@@ -29,7 +29,7 @@ func NewFuelHandler(repo *database.Repository) *FuelHandler {
 // are linked: any two of them determine the third.
 type SaveFuelLogRequest struct {
 	Date          string       `json:"date"`
-	Odometer      float64      `json:"odometer"`
+	Odometer      *float64     `json:"odometer"` // Optional: estimated from the odometer readings when absent
 	Amount        *money.Cents `json:"amount"`
 	Liters        *float64     `json:"liters"`
 	PricePerLiter *float64     `json:"price_per_liter"`
@@ -51,8 +51,10 @@ func buildFuelLog(vehicleID string, req *SaveFuelLogRequest) (*models.FuelLog, e
 	if err != nil {
 		return nil, errors.New("Date invalide")
 	}
-	if err := validateRange(req.Odometer, 0, 2_000_000, "Kilométrage invalide (0 à 2 000 000 km)"); err != nil {
-		return nil, err
+	if req.Odometer != nil {
+		if err := validateRange(*req.Odometer, 0, 2_000_000, "Kilométrage invalide (0 à 2 000 000 km)"); err != nil {
+			return nil, err
+		}
 	}
 
 	liters, price := positiveOrNil(req.Liters), positiveOrNil(req.PricePerLiter)
@@ -108,18 +110,18 @@ func buildFuelLog(vehicleID string, req *SaveFuelLogRequest) (*models.FuelLog, e
 	}, nil
 }
 
-// checkFuelOdometerOrder rejects a fill-up whose odometer contradicts the fill-ups around it in time.
-// The fill-up being edited (id) is ignored; fill-ups on the same day are not compared.
-func checkFuelOdometerOrder(others []models.FuelLog, id string, date time.Time, odometer float64) error {
+// checkOdometerOrder rejects a mileage that contradicts the manual points (readings and fill-ups with a
+// mileage) around it in time. The point being edited (id) is ignored; points at the same instant are not compared.
+func checkOdometerOrder(others []models.OdometerPoint, id string, date time.Time, odometer float64) error {
 	for _, o := range others {
 		if o.ID == id {
 			continue
 		}
 		if o.Date.Before(date) && o.Odometer > odometer {
-			return errors.New("Kilométrage incohérent : un plein plus ancien a déjà un kilométrage supérieur")
+			return errors.New("Kilométrage incohérent : un relevé ou un plein plus ancien affiche déjà un kilométrage supérieur")
 		}
 		if o.Date.After(date) && o.Odometer < odometer {
-			return errors.New("Kilométrage incohérent : un plein plus récent a un kilométrage inférieur")
+			return errors.New("Kilométrage incohérent : un relevé ou un plein plus récent affiche un kilométrage inférieur")
 		}
 	}
 	return nil
@@ -150,14 +152,16 @@ func (h *FuelHandler) buildChecked(w http.ResponseWriter, r *http.Request, vehic
 		writeError(w, http.StatusBadRequest, err.Error())
 		return nil, false
 	}
-	existing, err := h.repo.ListFuelLogs(r.Context(), vehicleID)
-	if err != nil {
-		writeRepoError(w, r, err, "Failed to check fill-ups")
-		return nil, false
-	}
-	if err := checkFuelOdometerOrder(existing, id, f.Date, f.Odometer); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return nil, false
+	if f.Odometer != nil {
+		points, err := h.repo.ListManualOdometerPoints(r.Context(), vehicleID)
+		if err != nil {
+			writeRepoError(w, r, err, "Failed to check odometer points")
+			return nil, false
+		}
+		if err := checkOdometerOrder(points, id, f.Date, *f.Odometer); err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return nil, false
+		}
 	}
 	return f, true
 }
@@ -173,7 +177,17 @@ func (h *FuelHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeRepoError(w, r, err, "Failed to list fill-ups")
 		return
 	}
-	writeJSON(w, http.StatusOK, services.ComputeFuelStats(logs))
+	readings, err := h.repo.ListOdometerCheckpoints(r.Context(), vehicleID)
+	if err != nil {
+		writeRepoError(w, r, err, "Failed to list odometer readings")
+		return
+	}
+	ownership, err := h.repo.GetVehicleOwnership(r.Context(), vehicleID)
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
+		writeRepoError(w, r, err, "Failed to load ownership")
+		return
+	}
+	writeJSON(w, http.StatusOK, services.ComputeFuelStats(logs, services.BuildOdometerRefs(readings, ownership)))
 }
 
 func (h *FuelHandler) Create(w http.ResponseWriter, r *http.Request) {

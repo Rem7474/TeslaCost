@@ -41,16 +41,44 @@ func (r *Repository) ListFuelLogs(ctx context.Context, vehicleID string) ([]mode
 	return list, rows.Err()
 }
 
-// syncOdometerFromFuelLogs raises vehicles.current_odometer to the highest fill-up odometer.
-// It never lowers it: the value may come from another source (odometer edit, TeslaMate).
-func syncOdometerFromFuelLogs(ctx context.Context, tx pgx.Tx, vehicleID string) error {
+// syncOdometerFromManualPoints raises the current odometer of a combustion vehicle to the highest
+// manual reading or fill-up mileage. It never lowers it: the value may come from another source
+// (odometer edit). Electric vehicles are left to the TeslaMate synchronization.
+func syncOdometerFromManualPoints(ctx context.Context, tx pgx.Tx, vehicleID string) error {
 	_, err := tx.Exec(ctx, `
 		UPDATE vehicles
-		SET current_odometer = GREATEST(current_odometer, COALESCE((SELECT MAX(odometer) FROM fuel_logs WHERE vehicle_id = $1), 0)),
+		SET current_odometer = GREATEST(
+		        current_odometer,
+		        COALESCE((SELECT MAX(odometer) FROM fuel_logs WHERE vehicle_id = $1), 0),
+		        COALESCE((SELECT MAX(odometer) FROM odometer_checkpoints WHERE vehicle_id = $1), 0)),
 		    updated_at = NOW()
-		WHERE id = $1;
+		WHERE id = $1 AND powertrain = 'ICE';
 	`, vehicleID)
 	return err
+}
+
+// ListManualOdometerPoints lists the odometer readings and the fill-ups that carry a mileage, oldest first.
+func (r *Repository) ListManualOdometerPoints(ctx context.Context, vehicleID string) ([]models.OdometerPoint, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id::text, 'READING', date::timestamptz, odometer FROM odometer_checkpoints WHERE vehicle_id = $1
+		UNION ALL
+		SELECT id::text, 'FUEL', date, odometer FROM fuel_logs WHERE vehicle_id = $1 AND odometer IS NOT NULL
+		ORDER BY 3 ASC, 4 ASC;
+	`, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	points := []models.OdometerPoint{}
+	for rows.Next() {
+		var p models.OdometerPoint
+		if err := rows.Scan(&p.ID, &p.Kind, &p.Date, &p.Odometer); err != nil {
+			return nil, err
+		}
+		points = append(points, p)
+	}
+	return points, rows.Err()
 }
 
 // CreateFuelLog stores a fill-up and keeps the vehicle's current odometer up to date.
@@ -69,7 +97,7 @@ func (r *Repository) CreateFuelLog(ctx context.Context, f *models.FuelLog) error
 	).Scan(&f.ID, &f.CreatedAt, &f.UpdatedAt); err != nil {
 		return err
 	}
-	if err := syncOdometerFromFuelLogs(ctx, tx, f.VehicleID); err != nil {
+	if err := syncOdometerFromManualPoints(ctx, tx, f.VehicleID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -97,7 +125,7 @@ func (r *Repository) UpdateFuelLog(ctx context.Context, f *models.FuelLog) error
 	if err != nil {
 		return err
 	}
-	if err := syncOdometerFromFuelLogs(ctx, tx, f.VehicleID); err != nil {
+	if err := syncOdometerFromManualPoints(ctx, tx, f.VehicleID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

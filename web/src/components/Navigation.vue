@@ -13,6 +13,7 @@ import {
   LogOut,
   Zap,
   Scale,
+  ClipboardList,
 } from 'lucide-vue-next'
 import { APP_VERSION } from '@/version'
 
@@ -26,6 +27,7 @@ const allNavItems = [
   { name: 'drives', label: 'Trajets', path: '/drives', icon: NavIcon },
   { name: 'carpools', label: 'Covoiturage', path: '/carpools', icon: Users },
   { name: 'tires', label: 'Pneus', path: '/tires', icon: Disc },
+  { name: 'manual', label: 'Suivi manuel', path: '/manual', icon: ClipboardList },
   { name: 'expenses', label: 'Dépenses', path: '/expenses', icon: Receipt },
   { name: 'comparison', label: 'Comparatif', path: '/comparison', icon: Scale },
   { name: 'vehicles', label: 'Véhicules', path: '/vehicles', icon: Car },

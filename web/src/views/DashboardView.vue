@@ -976,7 +976,7 @@ function renderCharts() {
           </router-link>
           <router-link
             v-if="tco.powertrain === 'ICE' && !tco.fuel_fill_ups"
-            to="/expenses?tab=CHARGES"
+            to="/manual?tab=FUEL"
             class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
           >
             Saisir un plein

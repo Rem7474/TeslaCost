@@ -137,7 +137,7 @@ func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
 	distanceLabel := "Kilomètres couverts par des trajets"
 	if in.ice {
 		energyLabel, energyScore = "Pleins de carburant enregistrés", boolScore(in.iceFillUps > 0)
-		distanceLabel = "Kilomètres couverts par des pleins"
+		distanceLabel = "Kilomètres couverts par des relevés et des pleins"
 	}
 	tollsScore := 1 - ratio(float64(in.unqualifiedDrives), float64(in.highwayDrives))
 	odometerScore := 1 - ratio(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))
@@ -332,9 +332,33 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		if err != nil {
 			return nil, fmt.Errorf("fuel logs: %w", err)
 		}
-		fuelStats = ComputeFuelStats(fuelLogs)
-		if n := len(fuelStats.Logs); n >= 2 {
-			fuelSpanKm = fuelStats.Logs[n-1].Odometer - fuelStats.Logs[0].Odometer
+		readings, err := s.repo.ListOdometerCheckpoints(ctx, vehicleID)
+		if err != nil {
+			return nil, fmt.Errorf("odometer readings: %w", err)
+		}
+		fuelStats = ComputeFuelStats(fuelLogs, BuildOdometerRefs(readings, ownership))
+
+		// Mileage covered by manual odometer readings and fill-ups that carry a mileage
+		minOdo, maxOdo, known := 0.0, 0.0, false
+		note := func(odo float64) {
+			if !known || odo < minOdo {
+				minOdo = odo
+			}
+			if !known || odo > maxOdo {
+				maxOdo = odo
+			}
+			known = true
+		}
+		for _, r := range readings {
+			note(r.Odometer)
+		}
+		for _, f := range fuelLogs {
+			if f.Odometer != nil {
+				note(*f.Odometer)
+			}
+		}
+		if known {
+			fuelSpanKm = maxOdo - minOdo
 			basisKm = math.Max(basisKm, fuelSpanKm)
 		}
 	}
@@ -723,7 +747,9 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 			return nil, nil, err
 		}
 		for _, f := range fuelLogs {
-			points = append(points, odoPoint{date: f.Date.In(loc), odo: f.Odometer})
+			if f.Odometer != nil {
+				points = append(points, odoPoint{date: f.Date.In(loc), odo: *f.Odometer})
+			}
 		}
 	}
 	if ownership != nil && ownership.StartOdometer != nil && *ownership.StartOdometer >= 0 {

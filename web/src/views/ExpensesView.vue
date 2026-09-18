@@ -7,9 +7,7 @@ import { api, type ExpenseDocumentHeader, type MaintenanceReminder, type Vehicle
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
 import DocumentPreviewModal from '@/components/expenses/DocumentPreviewModal.vue'
-import FuelLogsPanel from '@/components/expenses/FuelLogsPanel.vue'
 import {
-  Fuel,
   Receipt,
   Plus,
   Wrench,
@@ -53,6 +51,11 @@ type TabType = typeof validTabs[number]
 
 const initialTab = (route.query.tab as string)?.toUpperCase()
 const activeTab = ref<TabType>(validTabs.includes(initialTab as TabType) ? (initialTab as TabType) : 'TOLLS')
+
+// A combustion vehicle has no charges: its fill-ups live in the manual tracking page
+watch([() => vehicleStore.isIce, activeTab], ([ice, tab]) => {
+  if (ice && tab === 'CHARGES') router.replace('/manual?tab=FUEL')
+}, { immediate: true })
 
 watch(activeTab, (newTab) => {
   if (route.query.tab !== newTab) {
@@ -1298,14 +1301,14 @@ async function handleDeleteWebhook() {
             <span>Péages</span>
           </button>
           <button
+            v-if="!vehicleStore.isIce"
             @click="activeTab = 'CHARGES'"
             class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors shrink-0"
             :class="activeTab === 'CHARGES' ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
           >
-            <Fuel v-if="vehicleStore.isIce" class="w-3.5 h-3.5" />
-            <Zap v-else class="w-3.5 h-3.5" />
-            <span>{{ vehicleStore.isIce ? 'Pleins' : 'Recharges' }}</span>
-            <span v-if="!vehicleStore.isIce && chargesWithoutCost > 0" class="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+            <Zap class="w-3.5 h-3.5" />
+            <span>Recharges</span>
+            <span v-if="chargesWithoutCost > 0" class="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
               {{ chargesWithoutCost }}
             </span>
           </button>
@@ -1731,12 +1734,6 @@ async function handleDeleteWebhook() {
     </div>
 
     <!-- Content: Charges -->
-    <FuelLogsPanel
-      v-if="activeTab === 'CHARGES' && vehicleStore.isIce && vehicleStore.activeVehicle"
-      :vehicle-id="vehicleStore.activeVehicle.id"
-      :can-edit="vehicleStore.canEdit"
-    />
-
     <div v-if="activeTab === 'CHARGES' && !vehicleStore.isIce" class="space-y-3">
       <!-- Pre-TeslaMate Charges Banner if configured -->
       <div
