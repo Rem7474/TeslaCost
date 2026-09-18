@@ -43,13 +43,22 @@ type TireWearStats struct {
 	WearExplanation        string  `json:"wear_explanation"`
 }
 
+// tireWearStore is the narrow slice of *database.Repository that TireWearService actually
+// needs. Consumer-defined so tests can supply a fake without a real database (mirrors the
+// syncStore interface in sync_service.go).
+type tireWearStore interface {
+	ListTireLogs(ctx context.Context, tireID string) ([]models.TireLog, error)
+	ListTireMountSessions(ctx context.Context, tireID string) ([]models.TireMountSession, error)
+	GetDrivingTelemetryStats(ctx context.Context, vehicleID string, ranges []database.OdometerRange) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error)
+}
+
 // TireWearService calculates wear projections and stats for tires.
 type TireWearService struct {
-	repo *database.Repository
+	repo tireWearStore
 }
 
 // NewTireWearService creates a new TireWearService.
-func NewTireWearService(repo *database.Repository) *TireWearService {
+func NewTireWearService(repo tireWearStore) *TireWearService {
 	return &TireWearService{repo: repo}
 }
 
