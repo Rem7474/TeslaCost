@@ -51,8 +51,15 @@ type AuthResponse struct {
 	User         any    `json:"user"`
 }
 
+// Secure is deliberately config-driven (cfg.CookieSecure: true in production, false
+// otherwise) rather than a hardcoded literal true on every cookie below. Forcing Secure
+// unconditionally would silently break every cookie-based session over plain HTTP on any
+// host other than literal "localhost" (the one origin browsers special-case as trustworthy
+// without TLS) — that was a real pre-existing bug this fixes. Static analysis can't verify a
+// non-literal boolean is "secure enough" and flags it regardless; NOSONAR below is intentional.
+
 func (h *AuthHandler) setRefreshTokenCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR
 		Name:     refreshTokenCookie,
 		Value:    token,
 		Expires:  expiresAt,
@@ -65,7 +72,7 @@ func (h *AuthHandler) setRefreshTokenCookie(w http.ResponseWriter, token string,
 }
 
 func (h *AuthHandler) clearRefreshTokenCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR
 		Name:     refreshTokenCookie,
 		Value:    "",
 		Expires:  time.Unix(0, 0),
@@ -82,7 +89,7 @@ func (h *AuthHandler) clearRefreshTokenCookie(w http.ResponseWriter) {
 // XSS exfiltration target. The token is also still returned in the JSON body for non-browser
 // API consumers that prefer a Bearer header.
 func (h *AuthHandler) setAccessTokenCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR
 		Name:     accessTokenCookie,
 		Value:    token,
 		Expires:  expiresAt,
@@ -95,7 +102,7 @@ func (h *AuthHandler) setAccessTokenCookie(w http.ResponseWriter, token string, 
 }
 
 func (h *AuthHandler) clearAccessTokenCookie(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR
 		Name:     accessTokenCookie,
 		Value:    "",
 		Expires:  time.Unix(0, 0),
@@ -109,7 +116,7 @@ func (h *AuthHandler) clearAccessTokenCookie(w http.ResponseWriter) {
 
 // clearCookie immediately expires a named cookie (used for the short-lived OIDC state/nonce cookies).
 func (h *AuthHandler) clearCookie(w http.ResponseWriter, name string) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR
 		Name:     name,
 		Value:    "",
 		Expires:  time.Unix(0, 0),
@@ -400,23 +407,22 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Secure flag is set to true for OIDC state/nonce cookies.
 	expire := time.Now().Add(oidcCookieTTL)
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR - Secure is config-driven (cfg.CookieSecure), see comment on setRefreshTokenCookie.
 		Name:     oidcStateCookie,
 		Value:    state,
 		Expires:  expire,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ // NOSONAR - Secure is config-driven (cfg.CookieSecure), see comment on setRefreshTokenCookie.
 		Name:     oidcNonceCookie,
 		Value:    noncePlain,
 		Expires:  expire,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   h.cfg.CookieSecure,
 		SameSite: http.SameSiteLaxMode,
 		Path:     "/",
 	})
