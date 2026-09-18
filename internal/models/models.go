@@ -216,8 +216,15 @@ type DriveExpense struct {
 	Notes             *string      `json:"notes,omitempty"`
 	DocumentID        *string      `json:"document_id,omitempty"`
 	DocumentFilename  *string      `json:"document_filename,omitempty"`
+	Source            string       `json:"source"` // ExpenseSourceManual or ExpenseSourceAutoToll
 	CreatedAt         time.Time    `json:"created_at"`
 }
+
+// Expense provenance: entered by the user, or created from a detected toll estimate.
+const (
+	ExpenseSourceManual   = "MANUAL"
+	ExpenseSourceAutoToll = "AUTO_TOLL"
+)
 
 // Tire represents an individual tire or set entry.
 type Tire struct {

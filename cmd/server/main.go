@@ -315,6 +315,8 @@ func main() {
 				r.Patch("/{vehicleId}/drives/{driveId}/toll-review", driveHandler.SetTollReview)
 				r.Get("/{vehicleId}/drives/{driveId}/toll-detection", driveHandler.GetTollDetection)
 				r.Post("/{vehicleId}/drives/{driveId}/detect-tolls", driveHandler.DetectTolls)
+				r.Post("/{vehicleId}/drives/{driveId}/apply-toll-estimate", driveHandler.ApplyTollEstimate)
+				r.Post("/{vehicleId}/drives/apply-toll-estimates", driveHandler.ApplyTollEstimatesBulk)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
 				r.Put("/{vehicleId}/trip-groups/{groupId}", driveHandler.UpdateTripGroup)
