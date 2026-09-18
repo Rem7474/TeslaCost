@@ -1,0 +1,135 @@
+<script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { Chart, registerables } from 'chart.js'
+import { downloadCsv } from '@/utils/csv'
+
+Chart.register(...registerables)
+
+const props = defineProps<{
+  items: { scenario: any; result: any }[]
+}>()
+
+function fmtEur(v: number | null | undefined, digits = 0): string {
+  return Number(v || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
+}
+
+function breakEven(r: any): string {
+  if (r.break_even_year === undefined || r.break_even_year === null) return 'non atteint'
+  if (r.break_even_year === 0) return 'dès l\'achat'
+  return `${String(r.break_even_year).replace('.', ',')} an(s)`
+}
+
+const rows = computed(() =>
+  props.items.map(({ scenario, result }) => ({
+    id: scenario.id,
+    name: scenario.name,
+    mode: scenario.mode === 'RETROSPECTIVE' ? 'Véhicule suivi' : 'Projection',
+    years: result.years_count,
+    km: result.annual_km,
+    ev: result.ev.total,
+    ice: result.ice.total,
+    evMonth: result.ev.per_month,
+    iceMonth: result.ice.per_month,
+    savings: result.ev_savings,
+    breakEven: breakEven(result),
+  }))
+)
+
+const canvas = ref<HTMLCanvasElement | null>(null)
+let chart: Chart | null = null
+
+function render() {
+  chart?.destroy()
+  if (!canvas.value) return
+  chart = new Chart(canvas.value, {
+    type: 'bar',
+    data: {
+      labels: rows.value.map((r) => r.name),
+      datasets: [
+        { label: 'Électrique', data: rows.value.map((r) => r.ev), backgroundColor: '#38bdf8', borderRadius: 4 },
+        { label: 'Thermique', data: rows.value.map((r) => r.ice), backgroundColor: '#f59e0b', borderRadius: 4 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtEur(Number(ctx.raw))}` } },
+      },
+      scales: {
+        x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#94a3b8', callback: (v) => fmtEur(Number(v)) }, grid: { color: '#1e293b' } },
+      },
+    },
+  })
+}
+
+function exportCsv() {
+  downloadCsv(
+    'comparatif-scenarios',
+    ['Scenario', 'Type', 'Duree (ans)', 'Km par an', 'Total electrique (EUR)', 'Total thermique (EUR)', 'Ecart en faveur de l\'electrique (EUR)', 'Point d\'equilibre'],
+    rows.value.map((r) => [
+      `"${r.name.replace(/"/g, '""')}"`,
+      r.mode,
+      r.years,
+      Math.round(r.km),
+      Number(r.ev).toFixed(2),
+      Number(r.ice).toFixed(2),
+      Number(r.savings).toFixed(2),
+      r.breakEven,
+    ])
+  )
+}
+
+onMounted(async () => {
+  await nextTick()
+  render()
+})
+onBeforeUnmount(() => chart?.destroy())
+</script>
+
+<template>
+  <div class="space-y-5 print-area">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 overflow-x-auto">
+      <div class="flex items-center justify-between mb-3 gap-3">
+        <h2 class="text-sm font-semibold text-white">Comparaison de {{ rows.length }} scénarios</h2>
+        <button type="button" class="no-print bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-xl" @click="exportCsv">
+          Exporter en CSV
+        </button>
+      </div>
+      <table class="w-full text-sm">
+        <caption class="sr-only">Totaux par scénario</caption>
+        <thead>
+          <tr class="text-xs text-slate-400 text-right">
+            <th scope="col" class="text-left font-semibold pb-2">Scénario</th>
+            <th scope="col" class="font-semibold pb-2">Électrique</th>
+            <th scope="col" class="font-semibold pb-2">Thermique</th>
+            <th scope="col" class="font-semibold pb-2">Écart</th>
+            <th scope="col" class="font-semibold pb-2">Équilibre</th>
+          </tr>
+        </thead>
+        <tbody class="text-slate-200">
+          <tr v-for="r in rows" :key="r.id" class="border-t border-slate-800 text-right">
+            <th scope="row" class="text-left font-normal py-2">
+              <div class="font-semibold text-white">{{ r.name }}</div>
+              <div class="text-[11px] text-slate-500">{{ r.mode }} · {{ r.years }} an(s) · {{ Math.round(r.km).toLocaleString('fr-FR') }} km/an</div>
+            </th>
+            <td>{{ fmtEur(r.ev) }}<div class="text-[11px] text-slate-500">{{ fmtEur(r.evMonth) }}/mois</div></td>
+            <td>{{ fmtEur(r.ice) }}<div class="text-[11px] text-slate-500">{{ fmtEur(r.iceMonth) }}/mois</div></td>
+            <td :class="r.savings >= 0 ? 'text-emerald-400' : 'text-amber-400'">
+              {{ r.savings >= 0 ? '−' : '+' }}{{ fmtEur(Math.abs(r.savings)) }}
+              <div class="text-[11px] text-slate-500">{{ r.savings >= 0 ? "l'électrique économise" : "l'électrique coûte plus" }}</div>
+            </td>
+            <td>{{ r.breakEven }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+      <h2 class="text-sm font-semibold text-white mb-3">Coût total par scénario</h2>
+      <div class="h-72"><canvas ref="canvas" role="img" aria-label="Coût total électrique et thermique par scénario"></canvas></div>
+    </div>
+  </div>
+</template>
