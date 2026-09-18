@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import { Zap } from 'lucide-vue-next'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
-onMounted(() => {
-  const params = new URLSearchParams(window.location.search)
-  const token = params.get('token')
-  if (token) {
-    localStorage.setItem('teslacost_token', token)
+onMounted(async () => {
+  // The API already set the session cookies before redirecting here; just confirm they work.
+  if (authStore.status === 'unknown') {
+    await authStore.init()
+  }
+  if (authStore.isAuthenticated) {
     router.replace('/')
   } else {
     router.replace('/login?error=oidc_failed')
