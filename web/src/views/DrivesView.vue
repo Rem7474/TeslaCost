@@ -310,6 +310,11 @@ const addingToll = ref(false)
 const tollDetection = ref<any | null>(null)
 const tollDetectionLoading = ref(false)
 const tollDetectionError = ref('')
+const tollDetectionEstimatedTotal = computed(() => {
+  const priced = (tollDetection.value?.segments || []).filter((s: any) => s.estimated_price != null)
+  if (!priced.length) return null
+  return priced.reduce((sum: number, s: any) => sum + s.estimated_price, 0)
+})
 
 async function loadDrives() {
   if (!vehicleStore.activeVehicle) {
@@ -1815,12 +1820,17 @@ function formatDate(dateStr: string) {
             <p v-if="tollDetectionError" class="text-[11px] text-rose-400">{{ tollDetectionError }}</p>
 
             <div v-if="tollDetection?.segments?.length" class="space-y-1 pt-1 border-t border-slate-700/50">
-              <div v-for="(seg, idx) in tollDetection.segments" :key="idx" class="text-[11px] text-slate-300 pl-9">
+              <div v-for="(seg, idx) in tollDetection.segments" :key="idx" class="text-[11px] text-slate-300 pl-9 flex items-center justify-between gap-2">
                 <span v-if="seg.type === 'close' && seg.exit">
                   {{ seg.operator ? `${seg.operator} : ` : '' }}{{ seg.entry }} → {{ seg.exit }}
                 </span>
                 <span v-else-if="seg.type === 'close'">Entrée détectée : {{ seg.entry }} (sortie non identifiée)</span>
                 <span v-else>Barrière : {{ seg.entry }}</span>
+                <span v-if="seg.estimated_price != null" class="text-amber-400 font-mono shrink-0">{{ seg.estimated_price.toFixed(2) }} €</span>
+              </div>
+              <div v-if="tollDetectionEstimatedTotal != null" class="flex items-center justify-between gap-2 pl-9 pt-1 border-t border-slate-700/50 text-[11px]">
+                <span class="text-slate-400">Estimation totale <span class="text-slate-500">(classe 1, véhicule léger)</span></span>
+                <span class="text-amber-400 font-mono font-semibold shrink-0">{{ tollDetectionEstimatedTotal.toFixed(2) }} €</span>
               </div>
             </div>
             <p v-else-if="tollDetection" class="text-[11px] text-slate-500 pl-9">Aucun péage détecté sur ce trajet.</p>
