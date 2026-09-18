@@ -82,6 +82,7 @@ type Vehicle struct {
 	PreTeslaMateKwh100km     *float64    `json:"pre_teslamate_kwh_100km,omitempty"`
 	PreTeslaMateEurPerKwh    *float64    `json:"pre_teslamate_eur_per_kwh,omitempty"`
 	Powertrain               string      `json:"powertrain"` // PowertrainEV | PowertrainICE
+	TeslaMateGrafanaURL      *string     `json:"teslamate_grafana_url,omitempty"` // Grafana serving the TeslaMate dashboards, to link drives
 	CreatedAt                time.Time   `json:"created_at"`
 	UpdatedAt                time.Time   `json:"updated_at"`
 }

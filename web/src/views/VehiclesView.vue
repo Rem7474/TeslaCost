@@ -48,6 +48,7 @@ const form = ref({
   current_odometer: 0,
   teslamate_car_id: 1,
   teslamate_api_url: '',
+  teslamate_grafana_url: '',
   teslamate_auth_type: 'NONE',
   teslamate_api_key: '',
   teslamate_basic_user: '',
@@ -382,6 +383,7 @@ function openCreateModal() {
     current_odometer: 0,
     teslamate_car_id: 1,
     teslamate_api_url: '',
+    teslamate_grafana_url: '',
     teslamate_auth_type: 'NONE',
     teslamate_api_key: '',
     teslamate_basic_user: '',
@@ -403,6 +405,7 @@ function openEditModal(v: any) {
     current_odometer: v.current_odometer ? Math.round(v.current_odometer) : 0,
     teslamate_car_id: v.teslamate_car_id || 1,
     teslamate_api_url: v.teslamate_api_url || '',
+    teslamate_grafana_url: v.teslamate_grafana_url || '',
     teslamate_auth_type: v.teslamate_auth_type || 'NONE',
     teslamate_api_key: '',
     teslamate_basic_user: v.teslamate_basic_user || '',
@@ -763,6 +766,12 @@ function clearCardTestResult(id: string) {
             <div>
               <label for="vehicle-teslamate-api-url" class="block text-xs font-semibold text-slate-300 mb-1">URL de base teslamateapi</label>
               <input id="vehicle-teslamate-api-url" v-model="form.teslamate_api_url" placeholder="ex: http://192.168.1.50:8080 ou http://host.docker.internal:8080" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+
+            <div>
+              <label for="vehicle-teslamate-grafana-url" class="block text-xs font-semibold text-slate-300 mb-1">URL Grafana TeslaMate (optionnelle)</label>
+              <input id="vehicle-teslamate-grafana-url" v-model="form.teslamate_grafana_url" type="url" placeholder="ex: http://192.168.1.50:3000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <p class="text-[11px] text-slate-500 mt-1">Ajoute un lien « Ouvrir dans TeslaMate » dans le détail de chaque trajet (dashboard Drive Details).</p>
             </div>
 
             <div class="grid grid-cols-2 gap-3">

@@ -1920,3 +1920,33 @@ func TestIntegrationHighwayPredicateMatchesGoHeuristic(t *testing.T) {
 	}
 }
 
+
+func TestIntegrationVehicleGrafanaURL(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	u, err := repo.CreateUser(ctx, "grafana@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "http://192.168.1.50:3000"
+	v := &models.Vehicle{UserID: u.ID, Name: "Model 3", TeslaMateAuthType: models.AuthModeNone, TeslaMateGrafanaURL: &url}
+	if err := repo.CreateVehicle(ctx, v); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetVehicleByID(ctx, v.ID, u.ID)
+	if err != nil || got.TeslaMateGrafanaURL == nil || *got.TeslaMateGrafanaURL != url {
+		t.Fatalf("GetVehicleByID = %+v (%v)", got, err)
+	}
+	list, err := repo.ListVehiclesByUserID(ctx, u.ID)
+	if err != nil || len(list) != 1 || list[0].TeslaMateGrafanaURL == nil || *list[0].TeslaMateGrafanaURL != url {
+		t.Fatalf("ListVehiclesByUserID = %+v (%v)", list, err)
+	}
+	// Cleared on update
+	got.TeslaMateGrafanaURL = nil
+	if err := repo.UpdateVehicle(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := repo.GetVehicleByID(ctx, v.ID, u.ID); again.TeslaMateGrafanaURL != nil {
+		t.Errorf("Grafana URL must be cleared, got %q", *again.TeslaMateGrafanaURL)
+	}
+}

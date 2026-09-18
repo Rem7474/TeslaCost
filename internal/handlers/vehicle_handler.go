@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -43,6 +44,34 @@ type SaveVehicleRequest struct {
 	PreTeslaMateKwh100km  *float64        `json:"pre_teslamate_kwh_100km"`
 	PreTeslaMateEurPerKwh *float64        `json:"pre_teslamate_eur_per_kwh"`
 	Powertrain            string          `json:"powertrain"` // EV (default) or ICE
+	TeslaMateGrafanaURL   *string         `json:"teslamate_grafana_url"` // Optional; empty clears it
+}
+
+// normalizeGrafanaURL validates the base URL of the Grafana serving the TeslaMate dashboards.
+// It returns nil for an empty value, and the URL without trailing slash otherwise.
+func normalizeGrafanaURL(raw *string) (*string, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	value := strings.TrimSpace(*raw)
+	if value == "" {
+		return nil, nil
+	}
+	if len(value) > 300 {
+		return nil, errors.New("URL Grafana trop longue (300 caractères maximum)")
+	}
+	u, err := url.Parse(value)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, errors.New("URL Grafana invalide (http:// ou https:// requis)")
+	}
+	if u.User != nil {
+		return nil, errors.New("l'URL Grafana ne doit pas contenir d'identifiants")
+	}
+	if u.RawQuery != "" || u.Fragment != "" {
+		return nil, errors.New("l'URL Grafana doit être une adresse de base, sans paramètres")
+	}
+	out := strings.TrimRight(u.String(), "/")
+	return &out, nil
 }
 
 // validatePowertrain checks the powertrain of a vehicle payload and that an ICE vehicle has no TeslaMate link.
@@ -95,6 +124,11 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if powertrain == "" {
 		powertrain = models.PowertrainEV
 	}
+	grafanaURL, err := normalizeGrafanaURL(req.TeslaMateGrafanaURL)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
 	var encKey, encPass *string
 	if req.TeslaMateAPIKey != nil && *req.TeslaMateAPIKey != "" {
@@ -129,6 +163,7 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		PreTeslaMateKwh100km:     req.PreTeslaMateKwh100km,
 		PreTeslaMateEurPerKwh:    req.PreTeslaMateEurPerKwh,
 		Powertrain:               powertrain,
+		TeslaMateGrafanaURL:      grafanaURL,
 	}
 
 	if err := h.repo.CreateVehicle(r.Context(), v); err != nil {
@@ -181,6 +216,15 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	} else if err := validatePowertrain(existing.Powertrain, req.TeslaMateAPIURL); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	if req.TeslaMateGrafanaURL != nil {
+		grafanaURL, err := normalizeGrafanaURL(req.TeslaMateGrafanaURL)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+		existing.TeslaMateGrafanaURL = grafanaURL
 	}
 
 	existing.Name = req.Name
