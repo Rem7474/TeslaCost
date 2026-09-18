@@ -40,7 +40,7 @@ const (
 type User struct {
 	ID           string    `json:"id"`
 	Email        string    `json:"email"`
-	PasswordHash *string   `json:"-"`                      // nullable: OIDC accounts have no local password
+	PasswordHash *string   `json:"-"` // nullable: OIDC accounts have no local password
 	OIDCSubject  *string   `json:"-"`
 	OIDCProvider *string   `json:"-"`
 	DisplayName  *string   `json:"display_name,omitempty"` // from IdP "name" claim
@@ -155,6 +155,27 @@ func (d Drive) IsHighway() bool {
 		speedMax = *d.SpeedMax
 	}
 	return (d.DistanceKm >= 40 && speedAvg >= 70) || (d.DistanceKm >= 20 && speedMax > 125)
+}
+
+// TollSegment is a single toll crossing detected on a drive: either a closed-network
+// entry/exit pair, a single open barrier, or a closed-network entry with no exit found
+// on this drive's trace (end of trace, GPS gap, ...).
+type TollSegment struct {
+	Network  string  `json:"network,omitempty"` // OpenTollData network_name (closed networks only)
+	Operator string  `json:"operator,omitempty"`
+	Type     string  `json:"type"` // "open" or "close"
+	Entry    string  `json:"entry"`
+	Exit     *string `json:"exit,omitempty"`
+}
+
+// TollDetection is the result of matching a drive's GPS trace against the toll station
+// reference dataset, cached per drive so the UI doesn't need to re-run detection every time.
+type TollDetection struct {
+	ID         string        `json:"id"`
+	DriveID    string        `json:"drive_id"`
+	VehicleID  string        `json:"vehicle_id"`
+	Segments   []TollSegment `json:"segments"`
+	DetectedAt time.Time     `json:"detected_at"`
 }
 
 // TripGroup allows grouping multiple drives (e.g. holiday trip with stops).
@@ -274,7 +295,7 @@ type MaintenanceExpense struct {
 	AmortizationMode         string      `json:"amortization_mode"`
 	CoverageKm               *float64    `json:"coverage_km,omitempty"`
 	CoverageMonths           *int        `json:"coverage_months,omitempty"`
-	ClosesMaintenanceID     *string     `json:"closes_maintenance_id,omitempty"`
+	ClosesMaintenanceID      *string     `json:"closes_maintenance_id,omitempty"`
 	Description              string      `json:"description"`
 	DocumentID               *string     `json:"document_id,omitempty"`
 	DocumentFilename         *string     `json:"document_filename,omitempty"`
@@ -415,17 +436,17 @@ type CarpoolTripWithPassengers struct {
 
 // CarpoolCostEstimate provides suggested real cost breakdown based on vehicle TCO metrics.
 type CarpoolCostEstimate struct {
-	StartDate             *time.Time  `json:"start_date,omitempty"`
-	DistanceKm            float64     `json:"distance_km"`
-	ElectricityCost       money.Cents `json:"electricity_cost"`
-	TollsCost             money.Cents `json:"tolls_cost"`
-	TiresCost             money.Cents `json:"tires_cost"`
-	MaintenanceCost       money.Cents `json:"maintenance_cost"`
-	InsuranceCost         money.Cents `json:"insurance_cost"`
-	OtherCost             money.Cents `json:"other_cost"`
-	TotalCost             money.Cents `json:"total_cost"`
-	ElectricityRatePerKwh float64     `json:"electricity_rate_per_kwh"`
-	TiresRatePerKm        float64     `json:"tires_rate_per_km"`
+	StartDate             *time.Time   `json:"start_date,omitempty"`
+	DistanceKm            float64      `json:"distance_km"`
+	ElectricityCost       money.Cents  `json:"electricity_cost"`
+	TollsCost             money.Cents  `json:"tolls_cost"`
+	TiresCost             money.Cents  `json:"tires_cost"`
+	MaintenanceCost       money.Cents  `json:"maintenance_cost"`
+	InsuranceCost         money.Cents  `json:"insurance_cost"`
+	OtherCost             money.Cents  `json:"other_cost"`
+	TotalCost             money.Cents  `json:"total_cost"`
+	ElectricityRatePerKwh float64      `json:"electricity_rate_per_kwh"`
+	TiresRatePerKm        float64      `json:"tires_rate_per_km"`
 	MaintenanceRatePerKm  float64      `json:"maintenance_rate_per_km"`
 	InsuranceRatePerKm    float64      `json:"insurance_rate_per_km"`
 	DailyInsuranceCost    *money.Cents `json:"daily_insurance_cost,omitempty"`
@@ -628,4 +649,3 @@ type RefreshToken struct {
 	CreatedIP *string   `json:"created_ip,omitempty"`
 	UserAgent *string   `json:"user_agent,omitempty"`
 }
-

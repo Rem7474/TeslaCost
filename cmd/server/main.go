@@ -225,7 +225,13 @@ func main() {
 
 		authHandler := handlers.NewAuthHandler(repo, cfg, oidcService)
 		vehicleHandler := handlers.NewVehicleHandler(repo, encryptor, syncService)
-		driveHandler := handlers.NewDriveHandler(repo, carpoolService)
+
+		tollDetectionService, err := services.NewTollDetectionService(repo, encryptor)
+		if err != nil {
+			slog.Error("failed to initialize toll detection service", "error", err)
+			os.Exit(1)
+		}
+		driveHandler := handlers.NewDriveHandler(repo, carpoolService, tollDetectionService)
 		tireHandler := handlers.NewTireHandler(repo, tireWearService)
 
 		storageService, err := storage.NewFileStorageService(cfg.StorageDir)
@@ -264,7 +270,6 @@ func main() {
 			r.Get("/oidc/login", authHandler.OIDCLogin)
 			r.Get("/oidc/callback", authHandler.OIDCCallback)
 		})
-
 
 		// Protected Routes
 		r.Group(func(r chi.Router) {
@@ -308,6 +313,8 @@ func main() {
 				r.Get("/{vehicleId}/drives/{driveId}/expenses", driveHandler.GetDriveExpenses)
 				r.Patch("/{vehicleId}/drives/{driveId}/tags", driveHandler.UpdateTags)
 				r.Patch("/{vehicleId}/drives/{driveId}/toll-review", driveHandler.SetTollReview)
+				r.Get("/{vehicleId}/drives/{driveId}/toll-detection", driveHandler.GetTollDetection)
+				r.Post("/{vehicleId}/drives/{driveId}/detect-tolls", driveHandler.DetectTolls)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
 				r.Put("/{vehicleId}/trip-groups/{groupId}", driveHandler.UpdateTripGroup)

@@ -225,6 +225,10 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify({ reviewed }) },
       'Trajet marqué sans péage'
     ),
+  getTollDetection: (vehicleId: string, driveId: string) =>
+    request<any>(`/vehicles/${vehicleId}/drives/${driveId}/toll-detection`),
+  detectTolls: (vehicleId: string, driveId: string) =>
+    request<any>(`/vehicles/${vehicleId}/drives/${driveId}/detect-tolls`, { method: 'POST' }),
   createTripGroup: (vehicleId: string, payload: { name: string; notes?: string; drive_ids: string[] }) =>
     request<any>(`/vehicles/${vehicleId}/trip-groups`, { method: 'POST', body: JSON.stringify(payload) }),
   getTripGroups: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-groups`),
