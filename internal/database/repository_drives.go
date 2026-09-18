@@ -75,6 +75,8 @@ func (r *Repository) GetLatestTeslaMateDriveStartTime(ctx context.Context, vehic
 type DriveFilter struct {
 	Tag             string
 	UnqualifiedOnly bool
+	HasToll         bool
+	TollSource      string // "", ExpenseSourceManual or ExpenseSourceAutoToll (only with HasToll)
 	TripGroupID     string
 	From            *time.Time
 	To              *time.Time
@@ -97,6 +99,20 @@ const UnqualifiedDrivePredicate = HighwayDrivePredicate + `
 	)
 `
 
+// tollDrivePredicate matches drives covered by a TOLL expense, attached directly or through a trip group.
+// sourceCond, when non-empty, further restricts the expense (e.g. "de.source = $3").
+func tollDrivePredicate(sourceCond string) string {
+	if sourceCond != "" {
+		sourceCond = " AND " + sourceCond
+	}
+	return `EXISTS (
+		SELECT 1 FROM drive_expenses de
+		WHERE de.type = 'TOLL'` + sourceCond + `
+		  AND (de.drive_id = drives.id
+		       OR de.trip_group_id IN (SELECT tgd.trip_group_id FROM trip_group_drives tgd WHERE tgd.drive_id = drives.id))
+	)`
+}
+
 func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter DriveFilter, limit, offset int) ([]models.Drive, int, error) {
 	var conditions []string
 	var args []any
@@ -116,6 +132,16 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter Dr
 
 	if filter.UnqualifiedOnly {
 		conditions = append(conditions, "("+UnqualifiedDrivePredicate+")")
+	}
+
+	if filter.HasToll {
+		sourceCond := ""
+		if filter.TollSource != "" {
+			sourceCond = fmt.Sprintf("de.source = $%d", argIdx)
+			args = append(args, filter.TollSource)
+			argIdx++
+		}
+		conditions = append(conditions, tollDrivePredicate(sourceCond))
 	}
 
 	if filter.TripGroupID != "" {
@@ -438,23 +464,27 @@ func (r *Repository) SaveDriveExpense(ctx context.Context, exp *models.DriveExpe
 		}
 	}
 
+	if exp.Source == "" {
+		exp.Source = models.ExpenseSourceManual
+	}
+
 	if exp.ID == "" {
 		err = tx.QueryRow(ctx, `
-			INSERT INTO drive_expenses (vehicle_id, trip_group_id, drive_id, type, amount, currency, fx_rate, date, notes, document_id)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO drive_expenses (vehicle_id, trip_group_id, drive_id, type, amount, currency, fx_rate, date, notes, document_id, source)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			RETURNING id, created_at;
 		`, exp.VehicleID, exp.TripGroupID, exp.DriveID, exp.Type,
-			exp.Amount, exp.Currency, exp.FxRate, exp.Date, exp.Notes, exp.DocumentID,
+			exp.Amount, exp.Currency, exp.FxRate, exp.Date, exp.Notes, exp.DocumentID, exp.Source,
 		).Scan(&exp.ID, &exp.CreatedAt)
 	} else {
 		err = tx.QueryRow(ctx, `
 			UPDATE drive_expenses
 			SET trip_group_id = $1, drive_id = $2, type = $3, amount = $4,
-			    currency = $5, fx_rate = $6, date = $7, notes = $8, document_id = $9
-			WHERE id::text = $10 AND vehicle_id = $11
+			    currency = $5, fx_rate = $6, date = $7, notes = $8, document_id = $9, source = $10
+			WHERE id::text = $11 AND vehicle_id = $12
 			RETURNING created_at;
 		`, exp.TripGroupID, exp.DriveID, exp.Type, exp.Amount,
-			exp.Currency, exp.FxRate, exp.Date, exp.Notes, exp.DocumentID,
+			exp.Currency, exp.FxRate, exp.Date, exp.Notes, exp.DocumentID, exp.Source,
 			exp.ID, exp.VehicleID,
 		).Scan(&exp.CreatedAt)
 	}
@@ -500,7 +530,7 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 			END,
 			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes,
 			e.document_id, doc.filename,
-			e.created_at
+			e.source, e.created_at
 		FROM drive_expenses e
 		LEFT JOIN drives d ON e.drive_id = d.id AND d.vehicle_id = e.vehicle_id
 		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id AND tg.vehicle_id = e.vehicle_id
@@ -522,7 +552,7 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 			&e.DriveID, &e.DriveTitle, &e.Type,
 			&e.Amount, &e.Currency, &e.FxRate, &e.Date, &e.Notes,
 			&e.DocumentID, &e.DocumentFilename,
-			&e.CreatedAt,
+			&e.Source, &e.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

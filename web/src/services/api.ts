@@ -200,6 +200,8 @@ export const api = {
       page?: number
       limit?: number
       unqualified?: boolean
+      hasToll?: boolean
+      tollSource?: string
       tripGroupId?: string
       from?: string
       to?: string
@@ -210,6 +212,8 @@ export const api = {
     if (params?.tag) q.set('tag', params.tag)
     if (params?.tripGroupId) q.set('trip_group_id', params.tripGroupId)
     if (params?.unqualified) q.set('unqualified', 'true')
+    if (params?.hasToll) q.set('has_toll', 'true')
+    if (params?.tollSource) q.set('toll_source', params.tollSource)
     if (params?.page) q.set('page', params.page.toString())
     if (params?.limit) q.set('limit', params.limit.toString())
     if (params?.from) q.set('from', params.from)
@@ -227,6 +231,10 @@ export const api = {
     ),
   getTollDetection: (vehicleId: string, driveId: string) =>
     request<any>(`/vehicles/${vehicleId}/drives/${driveId}/toll-detection`),
+  applyTollEstimate: (vehicleId: string, driveId: string) =>
+    request<any>(`/vehicles/${vehicleId}/drives/${driveId}/apply-toll-estimate`, { method: 'POST' }),
+  applyTollEstimatesBulk: (vehicleId: string, driveIds: string[]) =>
+    request<any>(`/vehicles/${vehicleId}/drives/apply-toll-estimates`, { method: 'POST', body: JSON.stringify({ drive_ids: driveIds }) }),
   detectTolls: (vehicleId: string, driveId: string) =>
     request<any>(`/vehicles/${vehicleId}/drives/${driveId}/detect-tolls`, { method: 'POST' }),
   createTripGroup: (vehicleId: string, payload: { name: string; notes?: string; drive_ids: string[] }) =>

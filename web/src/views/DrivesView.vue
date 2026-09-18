@@ -55,6 +55,8 @@ const limit = ref(savedLimit === 20 || savedLimit === 50 || savedLimit === 100 ?
 const totalPages = computed(() => Math.ceil(total.value / limit.value) || 1)
 const selectedTag = ref('')
 const unqualifiedOnly = ref(false)
+const hasTollOnly = ref(false)
+const tollSource = ref('')
 const unqualifiedCount = ref(0)
 const loading = ref(true)
 
@@ -199,6 +201,8 @@ function resetAllFilters() {
   searchQuery.value = ''
   selectedTag.value = ''
   unqualifiedOnly.value = false
+  hasTollOnly.value = false
+  tollSource.value = ''
   periodMode.value = 'ALL'
   customFrom.value = ''
   customTo.value = ''
@@ -341,6 +345,8 @@ async function loadDrives() {
       page: page.value,
       limit: limit.value,
       unqualified: unqualifiedOnly.value,
+      hasToll: hasTollOnly.value,
+      tollSource: hasTollOnly.value ? tollSource.value : '',
       from: fromStr,
       to: toStr,
       q: searchQuery.value.trim() || undefined,
@@ -356,7 +362,7 @@ async function loadDrives() {
 }
 
 watch(
-  () => [vehicleStore.activeVehicle?.id, selectedTag.value, unqualifiedOnly.value, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, selectedTag.value, unqualifiedOnly.value, hasTollOnly.value, tollSource.value, vehicleStore.lastSyncTimestamp],
   () => {
     page.value = 1
     loadDrives()
@@ -712,6 +718,75 @@ async function loadTollDetection(drive: any) {
   }
 }
 
+const existingTollExpense = computed(() => driveExpenses.value.find((e: any) => e.type === 'TOLL'))
+const canApplyTollEstimate = computed(
+  () =>
+    vehicleStore.canEdit &&
+    tollDetectionEstimatedTotal.value != null &&
+    (!existingTollExpense.value || existingTollExpense.value.source === 'AUTO_TOLL') &&
+    !existingTollExpense.value?.trip_group_id
+)
+const applyingToll = ref(false)
+
+async function handleApplyTollEstimate() {
+  if (!vehicleStore.activeVehicle || !selectedCostDrive.value) return
+  applyingToll.value = true
+  try {
+    const res = await api.applyTollEstimate(vehicleStore.activeVehicle.id, selectedCostDrive.value.id)
+    if (res.status === 'created' || res.status === 'updated') {
+      await refreshCostModal()
+    } else {
+      showAlert(tollApplyStatusLabel(res.status), 'Péage non appliqué', 'warning')
+    }
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    applyingToll.value = false
+  }
+}
+
+function tollApplyStatusLabel(status: string) {
+  switch (status) {
+    case 'skipped_manual':
+      return 'Un péage saisi manuellement existe déjà : il n\'est pas remplacé.'
+    case 'skipped_trip_group':
+      return 'Ce trajet fait partie d\'un voyage avec un péage : il n\'est pas modifié.'
+    case 'skipped_no_price':
+      return 'Aucun tarif estimé disponible pour ce trajet.'
+    case 'skipped_no_gps':
+      return 'Pas de tracé GPS disponible pour ce trajet.'
+    default:
+      return 'Le tarif n\'a pas pu être appliqué.'
+  }
+}
+
+async function handleBulkApplyToll() {
+  if (!vehicleStore.activeVehicle || !selectedDriveIds.value.length) return
+  const ok = await showConfirm({
+    title: 'Appliquer le péage automatique',
+    message: `Détecter les péages de ${selectedDriveIds.value.length} trajet(s) et enregistrer le tarif estimé ? Les péages saisis manuellement ne sont jamais modifiés.`,
+    confirmText: 'Appliquer',
+    type: 'info',
+  })
+  if (!ok) return
+  bulkApplyingToll.value = true
+  try {
+    const r = await api.applyTollEstimatesBulk(vehicleStore.activeVehicle.id, selectedDriveIds.value)
+    const skipped = r.skipped_manual + r.skipped_trip_group + r.skipped_no_price + r.skipped_no_gps
+    showAlert(
+      `${r.created} créé(s), ${r.updated} mis à jour, ${skipped} ignoré(s) (manuel: ${r.skipped_manual}, voyage: ${r.skipped_trip_group}, sans tarif: ${r.skipped_no_price}, sans GPS: ${r.skipped_no_gps})${r.failed ? `, ${r.failed} en erreur` : ''}.`,
+      'Péage automatique',
+      r.failed ? 'warning' : 'success'
+    )
+    await loadDrives()
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  } finally {
+    bulkApplyingToll.value = false
+  }
+}
+const bulkApplyingToll = ref(false)
+
 async function handleDetectTolls() {
   if (!vehicleStore.activeVehicle || !selectedCostDrive.value) return
   tollDetectionLoading.value = true
@@ -875,6 +950,27 @@ function formatDate(dateStr: string) {
           <AlertTriangle class="w-3.5 h-3.5" />
           À qualifier ({{ unqualifiedCount }})
         </button>
+        <button
+          @click="hasTollOnly = !hasTollOnly"
+          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
+          :class="hasTollOnly ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-cyan-400/80 hover:text-cyan-300'"
+          title="Trajets ayant une dépense de péage"
+        >
+          <Receipt class="w-3.5 h-3.5" />
+          Avec péage
+        </button>
+        <template v-if="hasTollOnly">
+          <label for="drives-toll-source" class="sr-only">Origine du péage</label>
+          <select
+            id="drives-toll-source"
+            v-model="tollSource"
+            class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500"
+          >
+            <option value="">Tous</option>
+            <option value="AUTO_TOLL">Auto</option>
+            <option value="MANUAL">Manuel</option>
+          </select>
+        </template>
         <button
           @click="selectedTag = ''"
           class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
@@ -1057,6 +1153,19 @@ function formatDate(dateStr: string) {
         <span>Fusionner & Péage</span>
       </button>
 
+      <!-- Auto toll -->
+      <button
+        v-if="vehicleStore.canEdit"
+        type="button"
+        @click="handleBulkApplyToll"
+        :disabled="bulkApplyingToll"
+        class="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors disabled:opacity-50"
+        title="Détecte les péages et enregistre le tarif estimé (sans toucher aux péages manuels)"
+      >
+        <Receipt class="w-3.5 h-3.5" />
+        <span>{{ bulkApplyingToll ? 'Application...' : `Péage auto (${selectedDriveIds.length})` }}</span>
+      </button>
+
       <!-- Batch Tag actions -->
       <button
         type="button"
@@ -1123,7 +1232,7 @@ function formatDate(dateStr: string) {
     <div v-else-if="!drives.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 space-y-3">
       <p>Aucun trajet trouvé pour cette sélection ou période.</p>
       <button
-        v-if="searchQuery || periodMode !== 'ALL' || selectedTag || unqualifiedOnly"
+        v-if="searchQuery || periodMode !== 'ALL' || selectedTag || unqualifiedOnly || hasTollOnly"
         @click="resetAllFilters"
         class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl border border-slate-700 transition-colors"
       >
@@ -1708,6 +1817,7 @@ function formatDate(dateStr: string) {
                 <div v-if="editingExpenseId !== exp.id" class="flex items-center justify-between gap-2">
                   <span>
                     {{ exp.type === 'TOLL' ? 'Péage' : exp.type }}
+                    <span v-if="exp.source === 'AUTO_TOLL'" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-medium" title="Calculé automatiquement à partir du tracé GPS">auto</span>
                     <span v-if="exp.notes" class="text-slate-500">({{ exp.notes }})</span>
                     <span v-if="exp.trip_group_id" class="text-indigo-400"> • part du voyage sur {{ exp.amount.toFixed(2) }} {{ exp.currency }}</span>
                   </span>
@@ -1830,7 +1940,17 @@ function formatDate(dateStr: string) {
               </div>
               <div v-if="tollDetectionEstimatedTotal != null" class="flex items-center justify-between gap-2 pl-9 pt-1 border-t border-slate-700/50 text-[11px]">
                 <span class="text-slate-400">Estimation totale <span class="text-slate-500">(classe 1, véhicule léger)</span></span>
-                <span class="text-amber-400 font-mono font-semibold shrink-0">{{ tollDetectionEstimatedTotal.toFixed(2) }} €</span>
+                <span class="flex items-center gap-2 shrink-0">
+                  <span class="text-amber-400 font-mono font-semibold">{{ tollDetectionEstimatedTotal.toFixed(2) }} €</span>
+                  <button
+                    v-if="canApplyTollEstimate"
+                    @click="handleApplyTollEstimate"
+                    :disabled="applyingToll"
+                    class="px-2 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    {{ applyingToll ? '...' : existingTollExpense ? 'Mettre à jour' : 'Appliquer' }}
+                  </button>
+                </span>
               </div>
             </div>
             <p v-else-if="tollDetection" class="text-[11px] text-slate-500 pl-9">Aucun péage détecté sur ce trajet.</p>

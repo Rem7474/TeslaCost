@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -309,6 +310,60 @@ func (h *DriveHandler) DetectTolls(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, detection)
 }
 
+// ApplyTollEstimate records the estimated toll of one drive as an AUTO_TOLL expense.
+func (h *DriveHandler) ApplyTollEstimate(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+	driveID := chi.URLParam(r, "driveId")
+
+	vehicle := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if vehicle == nil {
+		return
+	}
+
+	result, err := h.tollDetectionService.ApplyTollEstimate(r.Context(), vehicle, driveID)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Trajet introuvable")
+			return
+		}
+		slog.ErrorContext(r.Context(), "apply toll estimate failed", "component", "api", "error", err)
+		writeError(w, http.StatusBadGateway, "Échec de l'application du tarif de péage")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+type ApplyTollEstimatesRequest struct {
+	DriveIDs []string `json:"drive_ids"`
+}
+
+// ApplyTollEstimatesBulk applies the estimated toll to several drives of one vehicle.
+func (h *DriveHandler) ApplyTollEstimatesBulk(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	vehicle := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if vehicle == nil {
+		return
+	}
+
+	var req ApplyTollEstimatesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return
+	}
+	if len(req.DriveIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "Sélectionnez au moins un trajet")
+		return
+	}
+	if len(req.DriveIDs) > services.MaxBulkTollDrives {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("Maximum %d trajets à la fois", services.MaxBulkTollDrives))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, h.tollDetectionService.ApplyTollEstimatesBulk(r.Context(), vehicle, req.DriveIDs))
+}
+
 type CreateTripGroupRequest struct {
 	Name     string   `json:"name"`
 	Notes    *string  `json:"notes"`
@@ -418,8 +473,15 @@ func parseDriveFilter(r *http.Request) database.DriveFilter {
 	filter := database.DriveFilter{
 		Tag:             r.URL.Query().Get("tag"),
 		UnqualifiedOnly: r.URL.Query().Get("unqualified") == "true",
+		HasToll:         r.URL.Query().Get("has_toll") == "true",
 		TripGroupID:     r.URL.Query().Get("trip_group_id"),
 		Query:           strings.TrimSpace(r.URL.Query().Get("q")),
+	}
+
+	switch src := r.URL.Query().Get("toll_source"); src {
+	case models.ExpenseSourceManual, models.ExpenseSourceAutoToll:
+		filter.TollSource = src
+		filter.HasToll = true
 	}
 
 	if fromStr := r.URL.Query().Get("from"); fromStr != "" {

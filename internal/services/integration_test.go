@@ -1429,3 +1429,77 @@ func TestRecordSyncFailureAlertsOnlyOnTransitionToOpen(t *testing.T) {
 }
 
 
+
+func TestIntegrationTollSourceAndHasTollFilter(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "toll@example.com")
+
+	base := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
+	manual := mustDrive(t, repo, v.ID, 1, base, 1000, 100)
+	auto := mustDrive(t, repo, v.ID, 2, base.Add(3*time.Hour), 1100, 100)
+	grouped1 := mustDrive(t, repo, v.ID, 3, base.Add(6*time.Hour), 1200, 100)
+	grouped2 := mustDrive(t, repo, v.ID, 4, base.Add(9*time.Hour), 1300, 100)
+	none := mustDrive(t, repo, v.ID, 5, base.Add(12*time.Hour), 1400, 100)
+
+	// Expenses saved without a source default to MANUAL.
+	m := &models.DriveExpense{VehicleID: v.ID, DriveID: &manual.ID, Type: "TOLL", Amount: 1000, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, m, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	a := &models.DriveExpense{VehicleID: v.ID, DriveID: &auto.ID, Type: "TOLL", Amount: 2000, Currency: "EUR", Date: base, Source: models.ExpenseSourceAutoToll}
+	if err := repo.SaveDriveExpense(ctx, a, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	g := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 3000, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, g, []string{grouped1.ID, grouped2.ID}, "Voyage"); err != nil {
+		t.Fatal(err)
+	}
+	parking := &models.DriveExpense{VehicleID: v.ID, DriveID: &none.ID, Type: "PARKING", Amount: 500, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, parking, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if m.Source != models.ExpenseSourceManual {
+		t.Fatalf("expected default source MANUAL, got %q", m.Source)
+	}
+	perDrive, err := repo.GetDriveExpensesByDriveID(ctx, v.ID, auto.ID)
+	if err != nil || len(perDrive) != 1 || perDrive[0].Source != models.ExpenseSourceAutoToll {
+		t.Fatalf("expected the auto expense to expose its source, got %+v (err %v)", perDrive, err)
+	}
+
+	ids := func(f database.DriveFilter) map[string]bool {
+		list, _, err := repo.ListDrives(ctx, v.ID, f, 50, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]bool{}
+		for _, d := range list {
+			out[d.ID] = true
+		}
+		return out
+	}
+
+	all := ids(database.DriveFilter{HasToll: true})
+	if len(all) != 4 || !all[manual.ID] || !all[auto.ID] || !all[grouped1.ID] || !all[grouped2.ID] || all[none.ID] {
+		t.Fatalf("has-toll filter must match direct and trip-group tolls only (not parking), got %v", all)
+	}
+	onlyAuto := ids(database.DriveFilter{HasToll: true, TollSource: models.ExpenseSourceAutoToll})
+	if len(onlyAuto) != 1 || !onlyAuto[auto.ID] {
+		t.Fatalf("expected only the auto-toll drive, got %v", onlyAuto)
+	}
+	onlyManual := ids(database.DriveFilter{HasToll: true, TollSource: models.ExpenseSourceManual})
+	if len(onlyManual) != 3 || onlyManual[auto.ID] {
+		t.Fatalf("expected manual toll drives (direct + group), got %v", onlyManual)
+	}
+
+	// Editing an auto expense through the manual path hands ownership to the user.
+	a.Source = ""
+	a.Amount = 2500
+	if err := repo.SaveDriveExpense(ctx, a, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+	if a.Source != models.ExpenseSourceManual {
+		t.Fatalf("expected a manual edit to make the expense MANUAL, got %q", a.Source)
+	}
+}
