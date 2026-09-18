@@ -372,26 +372,16 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		}
 	}
 
-	dailyKmMap := make(map[string]float64)
-	dayCarpoolKm := make(map[string]float64)
 	if len(drives) > 0 {
 		ids := make([]string, len(drives))
-		dateSet := make(map[string]struct{})
 		for i, d := range drives {
 			ids[i] = d.ID
-			dateStr := d.StartTime.UTC().Format("2006-01-02")
-			dateSet[dateStr] = struct{}{}
-			dayCarpoolKm[dateStr] += d.DistanceKm
 		}
-		dates := make([]string, 0, len(dateSet))
-		for dStr := range dateSet {
-			dates = append(dates, dStr)
-		}
-		dailyDistances, err := s.getDailyDistances(ctx, vehicleID, dates)
+
+		insuranceCosts, err := s.AllocateInsuranceCosts(ctx, vehicleID, drives, rates)
 		if err != nil {
 			return nil, err
 		}
-		dailyKmMap = dailyDistances
 
 		// Tolls allocated to each drive (a trip group toll is split by distance)
 		tolls, err := s.repo.GetTollExpensesForDrives(ctx, vehicleID, ids)
@@ -409,18 +399,7 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 			leg.StartLabel = placeLabel(d.StartAddress)
 			leg.EndLabel = placeLabel(d.EndAddress)
 			leg.TollsCost = tolls[d.ID]
-
-			// Daily insurance allocation:
-			// Daily Insurance / Total km driven that day * Leg km
-			if rates.InsuranceSource == InsuranceSourceIncluded {
-				leg.InsuranceCost = 0
-			} else if rates.DailyInsuranceCost > 0 {
-				dateStr := d.StartTime.UTC().Format("2006-01-02")
-				totalDayKm := math.Max(dailyKmMap[dateStr], dayCarpoolKm[dateStr])
-				if totalDayKm > 0 {
-					leg.InsuranceCost = money.FromFloat(rates.DailyInsuranceCost.Float() * (d.DistanceKm / totalDayKm))
-				}
-			}
+			leg.InsuranceCost = insuranceCosts[d.ID]
 
 			legs = append(legs, leg)
 		}
@@ -464,6 +443,51 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 	}
 	est.TotalCost = est.ElectricityCost + est.TollsCost + est.TiresCost + est.MaintenanceCost + est.InsuranceCost
 	return est, nil
+}
+
+// AllocateInsuranceCosts shares the vehicle's insurance cost across drives. Insurance is a
+// monthly/annual premium that costs the same regardless of distance driven, so it must first be
+// allocated per day (rates.DailyInsuranceCost), then split among that day's drives in proportion
+// to their share of the day's total distance. When no fixed daily cost is known (e.g. insufficient
+// history), each drive falls back to rates.InsurancePerKm applied to its own distance.
+func (s *CarpoolService) AllocateInsuranceCosts(ctx context.Context, vehicleID string, drives []models.Drive, rates *UnitRates) (map[string]money.Cents, error) {
+	costs := make(map[string]money.Cents, len(drives))
+	if len(drives) == 0 {
+		return costs, nil
+	}
+	if rates.InsuranceSource == InsuranceSourceIncluded || rates.DailyInsuranceCost <= 0 {
+		for _, d := range drives {
+			costs[d.ID] = money.FromFloat(d.DistanceKm * rates.InsurancePerKm)
+		}
+		return costs, nil
+	}
+
+	dateSet := make(map[string]struct{}, len(drives))
+	dayKm := make(map[string]float64, len(drives))
+	for _, d := range drives {
+		dateStr := d.StartTime.UTC().Format("2006-01-02")
+		dateSet[dateStr] = struct{}{}
+		dayKm[dateStr] += d.DistanceKm
+	}
+	dates := make([]string, 0, len(dateSet))
+	for dStr := range dateSet {
+		dates = append(dates, dStr)
+	}
+	dailyKmMap, err := s.getDailyDistances(ctx, vehicleID, dates)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, d := range drives {
+		dateStr := d.StartTime.UTC().Format("2006-01-02")
+		totalDayKm := math.Max(dailyKmMap[dateStr], dayKm[dateStr])
+		if totalDayKm > 0 {
+			costs[d.ID] = money.FromFloat(rates.DailyInsuranceCost.Float() * (d.DistanceKm / totalDayKm))
+		} else {
+			costs[d.ID] = money.FromFloat(d.DistanceKm * rates.InsurancePerKm)
+		}
+	}
+	return costs, nil
 }
 
 // getDailyDistances returns a map of date string "YYYY-MM-DD" (UTC) to total km driven by the vehicle on that date.
