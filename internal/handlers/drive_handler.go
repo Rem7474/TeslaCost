@@ -126,16 +126,21 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 			rates.TiresSource == services.RateSourceDefault ||
 			rates.MaintenanceSource == services.RateSourceDefault
 
-		elecCost := money.FromFloat(kwh * rates.ElectricityPerKwh)
-		tiresCost := money.FromFloat(d.DistanceKm * rates.TiresPerKm)
-		maintCost := money.FromFloat(d.DistanceKm * rates.MaintenancePerKm)
+		components := services.ComputeCostComponents(rates, d.DistanceKm, kwh)
+		elecCost := components.ElectricityCost
+		tiresCost := components.TiresCost
+		maintCost := components.MaintenanceCost
 		insCost := insuranceCosts[d.ID]
 		tollsCost := tollsMap[d.ID]
 		totalCost := elecCost + tiresCost + maintCost + insCost + tollsCost
 
 		costPerKm := 0.0
+		// The insurance rate actually applied to this drive, which may differ from the vehicle's
+		// flat rates.InsurancePerKm since insurance is allocated per day, not per km.
+		insRate := rates.InsurancePerKm
 		if d.DistanceKm > 0 {
 			costPerKm = math.Round((totalCost.Float()/d.DistanceKm)*1000) / 1000
+			insRate = math.Round((insCost.Float()/d.DistanceKm)*1000) / 1000
 		}
 
 		enriched[i] = EnrichedDrive{
@@ -153,7 +158,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 				MaintenanceRate:       rates.MaintenancePerKm,
 				MaintenanceRateSource: rates.MaintenanceSource,
 				InsuranceCost:         insCost,
-				InsuranceRate:         rates.InsurancePerKm,
+				InsuranceRate:         insRate,
 				InsuranceSource:       rates.InsuranceSource,
 				TollsCost:             tollsCost,
 				TotalCost:             totalCost,

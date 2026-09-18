@@ -91,6 +91,25 @@ func DefaultUnitRates() *UnitRates {
 	}
 }
 
+// CostComponents holds the per-km/per-kWh cost components of a drive, excluding insurance and
+// tolls (insurance is a fixed daily cost allocated separately via AllocateInsuranceCosts; tolls
+// are direct expenses looked up per drive).
+type CostComponents struct {
+	ElectricityCost money.Cents
+	TiresCost       money.Cents
+	MaintenanceCost money.Cents
+}
+
+// ComputeCostComponents applies a vehicle's unit rates to a given distance/energy, shared by the
+// drive list and the carpool cost estimate so the two never drift apart.
+func ComputeCostComponents(rates *UnitRates, distanceKm, kwh float64) CostComponents {
+	return CostComponents{
+		ElectricityCost: money.FromFloat(kwh * rates.ElectricityPerKwh),
+		TiresCost:       money.FromFloat(distanceKm * rates.TiresPerKm),
+		MaintenanceCost: money.FromFloat(distanceKm * rates.MaintenancePerKm),
+	}
+}
+
 // DriveEnergyKwh returns the energy of a drive and how it was obtained.
 func DriveEnergyKwh(distanceKm float64, energyKwh, consumptionKwh100km *float64) (float64, string) {
 	switch {
@@ -363,11 +382,12 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 	legs := make([]models.CarpoolLeg, 0, len(drives))
 	energySource := EnergySourceMeasured
 	costLeg := func(distance, kwh float64) models.CarpoolLeg {
+		c := ComputeCostComponents(rates, distance, kwh)
 		return models.CarpoolLeg{
 			DistanceKm:      math.Round(distance*100) / 100,
-			ElectricityCost: money.FromFloat(kwh * rates.ElectricityPerKwh),
-			TiresCost:       money.FromFloat(distance * rates.TiresPerKm),
-			MaintenanceCost: money.FromFloat(distance * rates.MaintenancePerKm),
+			ElectricityCost: c.ElectricityCost,
+			TiresCost:       c.TiresCost,
+			MaintenanceCost: c.MaintenanceCost,
 			InsuranceCost:   money.FromFloat(distance * rates.InsurancePerKm),
 		}
 	}
