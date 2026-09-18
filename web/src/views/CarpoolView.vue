@@ -832,17 +832,14 @@ onMounted(() => {
 
       <!-- Header row: Select all checkbox & Total info -->
       <div v-if="vehicleStore.canEdit" class="flex items-center justify-between text-xs text-slate-400 px-2">
-        <label
-          class="flex items-center gap-2 font-semibold text-slate-300 hover:text-white cursor-pointer select-none"
+        <button
+          type="button"
+          @click="toggleSelectAll"
+          class="flex items-center gap-2 hover:text-slate-200 transition-colors"
         >
-          <input
-            type="checkbox"
-            :checked="isAllSelected"
-            @change="toggleSelectAll"
-            class="w-4 h-4 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer shrink-0"
-          />
-          <span>{{ isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }} ({{ trips.length }})</span>
-        </label>
+          <component :is="isAllSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
+          <span>{{ isAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }}</span>
+        </button>
         <span>{{ trips.length }} covoiturage(s) au total</span>
       </div>
 
