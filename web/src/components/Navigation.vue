@@ -11,6 +11,7 @@ import {
   Car,
   LogOut,
   Zap,
+  Scale,
 } from 'lucide-vue-next'
 import { APP_VERSION } from '@/version'
 
@@ -24,6 +25,7 @@ const navItems = [
   { name: 'carpools', label: 'Covoiturage', path: '/carpools', icon: Users },
   { name: 'tires', label: 'Pneus', path: '/tires', icon: Disc },
   { name: 'expenses', label: 'Dépenses', path: '/expenses', icon: Receipt },
+  { name: 'comparison', label: 'Comparatif', path: '/comparison', icon: Scale },
   { name: 'vehicles', label: 'Véhicules', path: '/vehicles', icon: Car },
 ]
 

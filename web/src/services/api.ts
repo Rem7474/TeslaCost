@@ -314,6 +314,18 @@ export const api = {
   // TCO Analytics
   getTCO: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/tco`),
 
+  // EV vs ICE cost comparison (informational)
+  getComparisonScenarios: () => request<any[]>('/comparison-scenarios'),
+  createComparisonScenario: (data: any) =>
+    request<any>('/comparison-scenarios', { method: 'POST', body: JSON.stringify(data) }),
+  updateComparisonScenario: (scenarioId: string, data: any) =>
+    request<any>(`/comparison-scenarios/${scenarioId}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteComparisonScenario: (scenarioId: string) =>
+    request<any>(`/comparison-scenarios/${scenarioId}`, { method: 'DELETE' }),
+  getComparisonResult: (scenarioId: string) => request<any>(`/comparison-scenarios/${scenarioId}/result`),
+  getComparisonDefaults: (vehicleId?: string) =>
+    request<any>(`/comparison-scenarios/defaults${vehicleId ? `?vehicle_id=${encodeURIComponent(vehicleId)}` : ''}`),
+
   // Carpooling / BlaBlaCar
   getCarpools: (vehicleId: string) => request<{ trips: any[]; summary: any }>(`/vehicles/${vehicleId}/carpools`),
   getCarpool: (vehicleId: string, id: string) => request<any>(`/vehicles/${vehicleId}/carpools/${id}`),
