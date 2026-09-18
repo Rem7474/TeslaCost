@@ -11,6 +11,83 @@ import (
 	"github.com/teslacost/teslacost/internal/models"
 )
 
+// fakeNotificationStore is an in-memory notificationStore, letting CheckAndNotify's business
+// logic (anti-spam window, webhook dispatch) be tested without a real database.
+type fakeNotificationStore struct {
+	webhook          *models.VehicleWebhook
+	reminders        []models.MaintenanceReminder
+	markedNotifiedID string
+}
+
+func (f *fakeNotificationStore) GetVehicleWebhook(ctx context.Context, vehicleID string) (*models.VehicleWebhook, error) {
+	return f.webhook, nil
+}
+
+func (f *fakeNotificationStore) ListMaintenanceReminders(ctx context.Context, vehicleID string, currentOdo float64) ([]models.MaintenanceReminder, error) {
+	return f.reminders, nil
+}
+
+func (f *fakeNotificationStore) MarkReminderNotified(ctx context.Context, reminderID string, notifiedAt time.Time, notifiedOdo float64) error {
+	f.markedNotifiedID = reminderID
+	return nil
+}
+
+func TestCheckAndNotifyDispatchesDueReminder(t *testing.T) {
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	store := &fakeNotificationStore{
+		webhook: &models.VehicleWebhook{URL: server.URL, Type: "GENERIC", Enabled: true},
+		reminders: []models.MaintenanceReminder{
+			{ID: "rem-1", Title: "Vidange", Status: "OVERDUE", WebhookEnabled: true},
+		},
+	}
+	svc := NewNotificationService(store)
+
+	if err := svc.CheckAndNotify(context.Background(), &models.Vehicle{ID: "v1", Name: "Model 3"}, 50000); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 1 {
+		t.Fatalf("expected exactly 1 webhook call, got %d", callCount)
+	}
+	if store.markedNotifiedID != "rem-1" {
+		t.Fatalf("expected reminder rem-1 to be marked notified, got %q", store.markedNotifiedID)
+	}
+}
+
+func TestCheckAndNotifySkipsRecentlyNotifiedReminder(t *testing.T) {
+	var callCount int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount++
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	notifiedAt := time.Now().Add(-24 * time.Hour) // 1 day ago: inside the 7-day anti-spam window
+	notifiedOdo := 49900.0                        // 100 km ago: below the 500 km anti-spam threshold
+	store := &fakeNotificationStore{
+		webhook: &models.VehicleWebhook{URL: server.URL, Type: "GENERIC", Enabled: true},
+		reminders: []models.MaintenanceReminder{
+			{
+				ID: "rem-1", Title: "Vidange", Status: "OVERDUE", WebhookEnabled: true,
+				LastNotifiedAt: &notifiedAt, LastNotifiedOdometer: &notifiedOdo,
+			},
+		},
+	}
+	svc := NewNotificationService(store)
+
+	if err := svc.CheckAndNotify(context.Background(), &models.Vehicle{ID: "v1", Name: "Model 3"}, 50000); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if callCount != 0 {
+		t.Fatalf("expected the anti-spam window to suppress the webhook, got %d calls", callCount)
+	}
+}
+
 func TestFormatPayloadDiscord(t *testing.T) {
 	remKm := 450.0
 	rem := &models.MaintenanceReminder{

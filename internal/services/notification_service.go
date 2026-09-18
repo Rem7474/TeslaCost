@@ -10,18 +10,26 @@ import (
 	"strings"
 	"time"
 
-	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
+// notificationStore is the narrow slice of *database.Repository that NotificationService
+// actually needs. Consumer-defined so tests can supply a fake without a real database
+// (mirrors the syncStore interface in sync_service.go).
+type notificationStore interface {
+	GetVehicleWebhook(ctx context.Context, vehicleID string) (*models.VehicleWebhook, error)
+	ListMaintenanceReminders(ctx context.Context, vehicleID string, currentOdo float64) ([]models.MaintenanceReminder, error)
+	MarkReminderNotified(ctx context.Context, reminderID string, notifiedAt time.Time, notifiedOdo float64) error
+}
+
 // NotificationService handles evaluation of maintenance reminders and dispatching homelab webhooks.
 type NotificationService struct {
-	repo       *database.Repository
+	repo       notificationStore
 	httpClient *http.Client
 }
 
 // NewNotificationService creates a new NotificationService instance.
-func NewNotificationService(repo *database.Repository) *NotificationService {
+func NewNotificationService(repo notificationStore) *NotificationService {
 	return &NotificationService{
 		repo: repo,
 		httpClient: &http.Client{

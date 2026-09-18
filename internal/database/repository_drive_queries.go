@@ -1,0 +1,277 @@
+package database
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/money"
+)
+
+// Cross-domain drive/toll/telemetry read queries used by carpool and TCO reporting.
+
+func (r *Repository) GetDriveByID(ctx context.Context, driveID, vehicleID string) (*models.Drive, error) {
+	query := `
+		SELECT id, vehicle_id, teslamate_drive_id, start_time, end_time,
+		       start_odometer, end_odometer, distance_km, duration_min,
+		       speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
+		       consumption_kwh_100km, tags, is_manual, toll_reviewed_at, created_at, updated_at
+		FROM drives
+		WHERE id::text = $1 AND vehicle_id = $2 AND deleted_upstream_at IS NULL;
+	`
+	var d models.Drive
+	err := r.pool.QueryRow(ctx, query, driveID, vehicleID).Scan(
+		&d.ID, &d.VehicleID, &d.TeslaMateDriveID, &d.StartTime, &d.EndTime,
+		&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
+		&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
+		&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
+		&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.TollReviewedAt, &d.CreatedAt, &d.UpdatedAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return &d, nil
+}
+
+func (r *Repository) GetTripGroupDrives(ctx context.Context, vehicleID, tripGroupID string) ([]models.Drive, error) {
+	query := `
+		SELECT d.id, d.vehicle_id, d.teslamate_drive_id, d.start_time, d.end_time,
+		       d.start_odometer, d.end_odometer, d.distance_km, d.duration_min,
+		       d.speed_avg, d.speed_max, d.power_max, d.power_min, d.start_address, d.end_address, d.energy_consumed_kwh,
+		       d.consumption_kwh_100km, d.tags, d.is_manual, d.toll_reviewed_at, d.created_at, d.updated_at
+		FROM drives d
+		JOIN trip_group_drives tgd ON d.id = tgd.drive_id
+		JOIN trip_groups tg ON tg.id = tgd.trip_group_id
+		WHERE tgd.trip_group_id::text = $1 AND tg.vehicle_id = $2 AND d.vehicle_id = $2 AND d.deleted_upstream_at IS NULL
+		ORDER BY tgd.order_index ASC;
+	`
+	rows, err := r.pool.Query(ctx, query, tripGroupID, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.Drive
+	for rows.Next() {
+		var d models.Drive
+		if err := rows.Scan(
+			&d.ID, &d.VehicleID, &d.TeslaMateDriveID, &d.StartTime, &d.EndTime,
+			&d.StartOdometer, &d.EndOdometer, &d.DistanceKm, &d.DurationMin,
+			&d.SpeedAvg, &d.SpeedMax, &d.PowerMax, &d.PowerMin,
+			&d.StartAddress, &d.EndAddress, &d.EnergyConsumedKwh,
+			&d.ConsumptionKwh100km, &d.Tags, &d.IsManual, &d.TollReviewedAt, &d.CreatedAt, &d.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, d)
+	}
+	return list, rows.Err()
+}
+
+// DriveTollAllocationCTE allocates drive expenses (in EUR) to drives of vehicle $1: an expense attached to
+// a drive counts fully for it; an expense attached to a trip group is split across the group's drives
+// proportionally to their distance (equally when the group has no distance).
+const DriveTollAllocationCTE = `
+	WITH group_stats AS (
+		SELECT tgd.trip_group_id, SUM(d.distance_km) AS km, COUNT(*) AS n
+		FROM trip_group_drives tgd
+		JOIN trip_groups tg ON tg.id = tgd.trip_group_id AND tg.vehicle_id = $1
+		JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
+		GROUP BY tgd.trip_group_id
+	),
+	allocations AS (
+		SELECT e.id AS expense_id, e.drive_id, ` + AmountEURExpr + ` AS allocated
+		FROM drive_expenses e
+		JOIN drives d ON d.id = e.drive_id AND d.deleted_upstream_at IS NULL
+		WHERE e.vehicle_id = $1
+		UNION ALL
+		SELECT e.id, tgd.drive_id,
+		       ` + AmountEURExpr + ` * CASE WHEN gs.km > 0 THEN d.distance_km / gs.km ELSE 1.0 / gs.n END
+		FROM drive_expenses e
+		JOIN group_stats gs ON gs.trip_group_id = e.trip_group_id
+		JOIN trip_group_drives tgd ON tgd.trip_group_id = e.trip_group_id
+		JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
+		WHERE e.vehicle_id = $1
+	)
+`
+
+// GetTollExpensesForDrives returns the drive expenses allocated to each drive (EUR).
+func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]money.Cents, error) {
+	result := make(map[string]money.Cents)
+	ids := uniqueStrings(driveIDs)
+	if len(ids) == 0 {
+		return result, nil
+	}
+
+	rows, err := r.pool.Query(ctx, DriveTollAllocationCTE+`
+		SELECT drive_id::text, COALESCE(SUM(allocated), 0)
+		FROM allocations
+		WHERE drive_id::text = ANY($2::text[])
+		GROUP BY drive_id;
+	`, vehicleID, ids)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var dID string
+		var amt money.Cents
+		if err := rows.Scan(&dID, &amt); err != nil {
+			return result, err
+		}
+		result[dID] = amt
+	}
+	return result, rows.Err()
+}
+
+// GetTotalTollExpensesForDrives sums the expenses allocated to a set of drives (EUR).
+func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (money.Cents, error) {
+	perDrive, err := r.GetTollExpensesForDrives(ctx, vehicleID, driveIDs)
+	var total money.Cents
+	for _, amt := range perDrive {
+		total += amt
+	}
+	return total, err
+}
+
+// GetTollExpensesForTripGroup sums the expenses allocated to the drives of a trip group (EUR).
+func (r *Repository) GetTollExpensesForTripGroup(ctx context.Context, vehicleID, tripGroupID string) (money.Cents, error) {
+	drives, err := r.GetTripGroupDrives(ctx, vehicleID, tripGroupID)
+	if err != nil {
+		return 0, err
+	}
+	ids := make([]string, len(drives))
+	for i, d := range drives {
+		ids[i] = d.ID
+	}
+	return r.GetTotalTollExpensesForDrives(ctx, vehicleID, ids)
+}
+
+// GetDriveExpensesByDriveID lists expenses attached to a drive directly or through its trip groups,
+// with the share allocated to this drive.
+func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, driveID string) ([]models.DriveExpense, error) {
+	rows, err := r.pool.Query(ctx, DriveTollAllocationCTE+`
+		SELECT
+			e.id, e.vehicle_id, e.trip_group_id, tg.name,
+			e.drive_id,
+			CASE
+				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
+				ELSE NULL
+			END,
+			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes,
+			e.document_id, doc.filename,
+			e.created_at,
+			a.allocated
+		FROM allocations a
+		JOIN drive_expenses e ON e.id = a.expense_id
+		LEFT JOIN drives d ON e.drive_id = d.id
+		LEFT JOIN trip_groups tg ON e.trip_group_id = tg.id
+		LEFT JOIN expense_documents doc ON e.document_id = doc.id
+		WHERE a.drive_id::text = $2
+		ORDER BY e.date ASC;
+	`, vehicleID, driveID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.DriveExpense
+	for rows.Next() {
+		var de models.DriveExpense
+		if err := rows.Scan(
+			&de.ID, &de.VehicleID, &de.TripGroupID, &de.TripGroupName,
+			&de.DriveID, &de.DriveTitle, &de.Type,
+			&de.Amount, &de.Currency, &de.FxRate, &de.Date, &de.Notes,
+			&de.DocumentID, &de.DocumentFilename,
+			&de.CreatedAt,
+			&de.AllocatedAmount,
+		); err != nil {
+			return nil, err
+		}
+		list = append(list, de)
+	}
+	return list, rows.Err()
+}
+
+// OdometerRange represents a half-open interval [Min, Max) of vehicle odometer readings.
+// Max == nil means the session is still active (no upper bound).
+type OdometerRange struct {
+	Min float64
+	Max *float64
+}
+
+// buildDrivingTelemetryQuery constructs the SQL query and arguments for telemetry stats.
+func buildDrivingTelemetryQuery(vehicleID string, ranges []OdometerRange) (string, []any) {
+	if len(ranges) == 0 {
+		return "", nil
+	}
+
+	args := []any{vehicleID}
+	var clauses []string
+	for _, rng := range ranges {
+		lo := len(args) + 1
+		args = append(args, rng.Min)
+		if rng.Max != nil {
+			hi := len(args) + 1
+			args = append(args, *rng.Max)
+			clauses = append(clauses, fmt.Sprintf("(end_odometer >= $%d AND end_odometer <= $%d)", lo, hi))
+		} else {
+			// Active session — upper bound is the vehicle's current odometer (no constraint needed)
+			clauses = append(clauses, fmt.Sprintf("(end_odometer >= $%d)", lo))
+		}
+	}
+
+	query := fmt.Sprintf(`
+		SELECT
+			COALESCE(AVG(NULLIF(power_max, 0)), 0),
+			COALESCE(AVG(NULLIF(power_min, 0)), 0),
+			COALESCE(AVG(NULLIF(consumption_kwh_100km, 0)), 0),
+			COUNT(*)
+		FROM drives
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
+		  AND (%s)
+	`, strings.Join(clauses, " OR "))
+
+	return query, args
+}
+
+// GetDrivingTelemetryStats returns driving dynamics averaged over the provided odometer ranges.
+// Each range corresponds to a tire mount session: only drives whose end_odometer falls within
+// [range.Min, range.Max) (or >= range.Min when Max is nil) are included.
+// Returns zeros and count=0 when ranges is empty or no matching drives exist.
+func (r *Repository) GetDrivingTelemetryStats(ctx context.Context, vehicleID string, ranges []OdometerRange) (avgPowerMax, avgPowerMin, avgConsumption float64, count int, err error) {
+	if len(ranges) == 0 {
+		return 0, 0, 0, 0, nil
+	}
+
+	query, args := buildDrivingTelemetryQuery(vehicleID, ranges)
+
+	err = r.pool.QueryRow(ctx, query, args...).Scan(&avgPowerMax, &avgPowerMin, &avgConsumption, &count)
+	if err != nil {
+		return 0, 0, 0, 0, err
+	}
+
+	return avgPowerMax, avgPowerMin, avgConsumption, count, nil
+}
+
+// ============================================================================
+// TeslaMate Reconciliation
+// ============================================================================
+
+// ReconcileResult reports records no longer present in TeslaMate.
+type ReconcileResult struct {
+	Missing int  // TeslaMate records of the covered window absent from the API response
+	Marked  int  // Records flagged as deleted upstream
+	Skipped bool // Guard triggered: too many records would disappear at once
+}
+
+// Share of the covered window above which missing records are considered an API anomaly rather than deletions.
+const maxUpstreamDeletionShare = 0.2

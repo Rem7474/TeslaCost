@@ -15,12 +15,25 @@ import (
 	"github.com/teslacost/teslacost/internal/money"
 )
 
-type CarpoolService struct {
-	pool *pgxpool.Pool
-	repo *database.Repository
+// carpoolStore is the narrow slice of *database.Repository that CarpoolService actually
+// needs. Consumer-defined so tests can supply a fake without a real database (mirrors the
+// syncStore interface in sync_service.go).
+type carpoolStore interface {
+	GetVehicleOwnership(ctx context.Context, vehicleID string) (*models.VehicleOwnership, error)
+	GetDriveByID(ctx context.Context, driveID, vehicleID string) (*models.Drive, error)
+	GetTripGroupDrives(ctx context.Context, vehicleID, tripGroupID string) ([]models.Drive, error)
+	GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]money.Cents, error)
+	GetCarpoolTrip(ctx context.Context, id, vehicleID string) (*models.CarpoolTripWithPassengers, error)
+	UpdateCarpoolTrip(ctx context.Context, trip *models.CarpoolTrip, legs []models.CarpoolLeg, passengers []models.CarpoolPassenger) error
+	ListCarpoolTrips(ctx context.Context, vehicleID string) ([]models.CarpoolTripWithPassengers, error)
 }
 
-func NewCarpoolService(pool *pgxpool.Pool, repo *database.Repository) *CarpoolService {
+type CarpoolService struct {
+	pool *pgxpool.Pool
+	repo carpoolStore
+}
+
+func NewCarpoolService(pool *pgxpool.Pool, repo carpoolStore) *CarpoolService {
 	return &CarpoolService{
 		pool: pool,
 		repo: repo,
