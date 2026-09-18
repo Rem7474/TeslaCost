@@ -28,9 +28,12 @@ const formError = ref('')
 
 const fuelTypes = computed<any[]>(() => defaults.value?.ice || [])
 
+// The tracked-vehicle comparison relies on an electric vehicle's real costs
+const canCompareTrackedVehicle = computed(() => !!vehicleStore.activeVehicle && !vehicleStore.isIce)
+
 function emptyForm() {
   return {
-    mode: (vehicleStore.activeVehicle ? 'RETROSPECTIVE' : 'PROJECTION') as Mode,
+    mode: (canCompareTrackedVehicle.value ? 'RETROSPECTIVE' : 'PROJECTION') as Mode,
     name: '',
     annual_km: 12000,
     years: 5,
@@ -100,7 +103,8 @@ async function loadScenarios() {
 }
 
 async function loadDefaults() {
-  const vehicleId = isRetro.value ? vehicleStore.activeVehicle?.id : undefined
+  // A tracked combustion vehicle prefills the ICE side of a projection with its measured consumption and fuel price
+  const vehicleId = isRetro.value || vehicleStore.isIce ? vehicleStore.activeVehicle?.id : undefined
   try {
     defaults.value = await api.getComparisonDefaults(vehicleId)
   } catch (err) {
@@ -134,6 +138,8 @@ function applyDefaultsToForm() {
   if (d.ev_kwh_per_100km) form.ev.kwh_per_100km = d.ev_kwh_per_100km
   if (d.ev_eur_per_kwh) form.ev.eur_per_kwh = d.ev_eur_per_kwh
   applyFuelDefaults()
+  if (d.ice_l_per_100km) form.ice.l_per_100km = d.ice_l_per_100km
+  if (d.ice_fuel_price) form.ice.fuel_price = d.ice_fuel_price
 }
 
 async function onModeChange() {
@@ -193,7 +199,7 @@ function stepError(): string {
     if (!form.name.trim()) return 'Donnez un nom au comparatif.'
     if (!(Number(form.annual_km) > 0)) return 'Indiquez un kilométrage annuel.'
     if (!(Number(form.years) >= 1 && Number(form.years) <= 15)) return 'La durée doit être comprise entre 1 et 15 ans.'
-    if (isRetro.value && !vehicleStore.activeVehicle) return 'Aucun véhicule actif : choisissez le mode projection.'
+    if (isRetro.value && !canCompareTrackedVehicle.value) return 'Ce mode nécessite un véhicule électrique suivi : choisissez le mode projection.'
   }
   if (step.value === 2) {
     if (!(Number(form.ice.l_per_100km) > 0)) return 'Indiquez la consommation du thermique.'
@@ -410,7 +416,7 @@ onBeforeUnmount(destroyChart)
         <div>
           <label for="cmp-mode" class="block text-xs font-semibold text-slate-300 mb-1">Type de comparatif</label>
           <select id="cmp-mode" v-model="form.mode" :disabled="!!editingId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" @change="onModeChange">
-            <option value="RETROSPECTIVE" :disabled="!vehicleStore.activeVehicle">
+            <option value="RETROSPECTIVE" :disabled="!canCompareTrackedVehicle">
               Mon électrique suivie{{ vehicleStore.activeVehicle ? ` (${vehicleStore.activeVehicle.name})` : '' }} vs un thermique
             </option>
             <option value="PROJECTION">Projection : je compare deux véhicules que je saisis</option>

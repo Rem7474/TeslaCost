@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useVehicleStore } from '@/stores/vehicle'
 import {
   LayoutDashboard,
   Navigation as NavIcon,
@@ -18,8 +19,9 @@ import { APP_VERSION } from '@/version'
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const vehicleStore = useVehicleStore()
 
-const navItems = [
+const allNavItems = [
   { name: 'dashboard', label: 'Tableau de bord', path: '/', icon: LayoutDashboard },
   { name: 'drives', label: 'Trajets', path: '/drives', icon: NavIcon },
   { name: 'carpools', label: 'Covoiturage', path: '/carpools', icon: Users },
@@ -28,6 +30,10 @@ const navItems = [
   { name: 'comparison', label: 'Comparatif', path: '/comparison', icon: Scale },
   { name: 'vehicles', label: 'Véhicules', path: '/vehicles', icon: Car },
 ]
+
+// Drives and carpooling rely on TeslaMate trips, which a combustion vehicle does not have
+const tripPages = ['drives', 'carpools']
+const navItems = computed(() => allNavItems.filter((item) => !(vehicleStore.isIce && tripPages.includes(item.name))))
 
 const currentRouteName = computed(() => route.name)
 

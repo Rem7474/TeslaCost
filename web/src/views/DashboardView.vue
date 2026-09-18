@@ -975,7 +975,14 @@ function renderCharts() {
             Renseigner l'acquisition
           </router-link>
           <router-link
-            v-if="tco.completeness.untracked_distance_km > 0 && !tco.pre_teslamate_cost"
+            v-if="tco.powertrain === 'ICE' && !tco.fuel_fill_ups"
+            to="/expenses?tab=CHARGES"
+            class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
+          >
+            Saisir un plein
+          </router-link>
+          <router-link
+            v-if="tco.powertrain !== 'ICE' && tco.completeness.untracked_distance_km > 0 && !tco.pre_teslamate_cost"
             to="/vehicles"
             class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
           >
@@ -1210,7 +1217,7 @@ function renderCharts() {
         <!-- Energy Cost -->
         <div class="bg-gradient-to-br from-slate-900 to-slate-900/50 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm">
           <div class="flex items-center justify-between mb-3">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Énergie (Charges)</span>
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ tco?.powertrain === 'ICE' ? 'Carburant (pleins)' : 'Énergie (Charges)' }}</span>
             <div class="p-2 bg-sky-500/10 text-sky-400 rounded-xl">
               <Zap class="w-5 h-5" />
             </div>
@@ -1219,7 +1226,10 @@ function renderCharts() {
             {{ (tco?.energy_cost || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
           </div>
           <div class="mt-2 space-y-0.5">
-            <p class="text-xs text-slate-400">
+            <p v-if="tco?.powertrain === 'ICE'" class="text-xs text-slate-400">
+              {{ (tco?.energy_cost_per_km || 0).toFixed(3) }} €/km • {{ Math.round(tco?.total_liters || 0).toLocaleString('fr-FR') }} L<template v-if="tco?.consumption_l_100km"> • {{ tco.consumption_l_100km.toFixed(2) }} L/100</template><template v-if="tco?.avg_cost_per_liter"> • {{ tco.avg_cost_per_liter.toFixed(3) }} €/L</template>
+            </p>
+            <p v-else class="text-xs text-slate-400">
               {{ (tco?.energy_cost_per_km || 0).toFixed(3) }} €/km • {{ Math.round(tco?.total_kwh_added || 0).toLocaleString('fr-FR') }} kWh
             </p>
             <p v-if="tco?.completeness?.charges_without_cost" class="text-[11px] text-amber-400">

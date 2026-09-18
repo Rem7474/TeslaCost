@@ -18,6 +18,9 @@ const minMonthsForAnnualKm = 3
 // ErrComparisonNeedsVehicle is returned when a RETROSPECTIVE comparison has no reference vehicle.
 var ErrComparisonNeedsVehicle = errors.New("comparison: retrospective mode requires a vehicle")
 
+// ErrComparisonNeedsEV is returned when a RETROSPECTIVE comparison references a combustion vehicle.
+var ErrComparisonNeedsEV = errors.New("comparison: retrospective mode requires an electric vehicle")
+
 // ICEDefault is an indicative starting point for the equivalent combustion vehicle of a given fuel.
 type ICEDefault struct {
 	FuelType  string  `json:"fuel_type"`
@@ -41,6 +44,9 @@ type ComparisonDefaults struct {
 	AnnualKmFromData  bool         `json:"annual_km_from_data"` // False when the default mileage is a fallback
 	EVKwhPer100Km     *float64     `json:"ev_kwh_per_100km,omitempty"`
 	EVEurPerKwh       *float64     `json:"ev_eur_per_kwh,omitempty"`
+	Powertrain        string       `json:"powertrain,omitempty"`      // Of the reference vehicle
+	ICELPer100Km      *float64     `json:"ice_l_per_100km,omitempty"` // Measured on a tracked combustion vehicle
+	ICEFuelPrice      *float64     `json:"ice_fuel_price,omitempty"`  // Average EUR per litre paid
 	ICE               []ICEDefault `json:"ice"`
 	MaintenanceYearly money.Cents  `json:"maintenance_yearly"`
 	InsuranceYearly   money.Cents  `json:"insurance_yearly"`
@@ -113,6 +119,9 @@ func (s *ComparisonService) Compare(ctx context.Context, sc *models.ComparisonSc
 		if err != nil {
 			return nil, err
 		}
+		if sum.Powertrain == models.PowertrainICE {
+			return nil, ErrComparisonNeedsEV
+		}
 		ev, notes = evBaselineFromTCO(sum, sc.AnnualKm, sc.Years)
 	} else {
 		if sc.EV == nil {
@@ -153,6 +162,15 @@ func (s *ComparisonService) Defaults(ctx context.Context, vehicleID string) (*Co
 		return nil, err
 	}
 	d.AnnualKm, d.AnnualKmFromData = annualKmFromTCO(sum)
+	d.Powertrain = sum.Powertrain
+	if sum.Powertrain == models.PowertrainICE {
+		d.ICELPer100Km = sum.ConsumptionL100km
+		if sum.AvgCostPerLiter > 0 {
+			v := sum.AvgCostPerLiter
+			d.ICEFuelPrice = &v
+		}
+		return d, nil
+	}
 	if sum.TotalKwhAdded > 0 && sum.DistanceBasisKm > 0 {
 		v := round1(sum.TotalKwhAdded / sum.DistanceBasisKm * 100)
 		d.EVKwhPer100Km = &v

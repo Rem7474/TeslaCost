@@ -22,6 +22,8 @@ export const useVehicleStore = defineStore('vehicle', () => {
   const isEditor = computed(() => userRole.value === 'EDITOR')
   const isViewer = computed(() => userRole.value === 'VIEWER')
   const canEdit = computed(() => isOwner.value || isEditor.value)
+  // Combustion vehicles are tracked manually (fuel fill-ups) and have no TeslaMate link
+  const isIce = computed(() => activeVehicle.value?.powertrain === 'ICE')
 
   async function fetchVehicles() {
     isLoading.value = true
@@ -115,6 +117,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
     isEditor,
     isViewer,
     canEdit,
+    isIce,
     isSyncing,
     syncResult,
     syncError,

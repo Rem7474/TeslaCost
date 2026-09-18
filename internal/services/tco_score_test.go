@@ -30,3 +30,26 @@ func TestCompletenessScore(t *testing.T) {
 		t.Fatalf("no kilometers at all must cost the distance weight, got %d", score)
 	}
 }
+
+func TestCompletenessScoreCombustionVehicle(t *testing.T) {
+	in := completenessInputs{
+		ice: true, iceFillUps: 5, trackedKm: 1000, basisKm: 1000, pricedEntries: 5,
+		insurancePresent: true, acquisitionComplete: true,
+	}
+	score, dims := completenessScore(in)
+	if score != 100 {
+		t.Errorf("score = %d, want 100 for a fully documented combustion vehicle (dimensions %+v)", score, dims)
+	}
+	byKey := map[string]CompletenessDimension{}
+	for _, d := range dims {
+		byKey[d.Key] = d
+	}
+	if byKey["energy"].Label != "Pleins de carburant enregistrés" || byKey["distance"].Label != "Kilomètres couverts par des pleins" {
+		t.Errorf("combustion labels: %+v / %+v", byKey["energy"], byKey["distance"])
+	}
+
+	in.iceFillUps = 0
+	if score, _ := completenessScore(in); score != 70 {
+		t.Errorf("score without any fill-up = %d, want 70 (energy dimension lost)", score)
+	}
+}
