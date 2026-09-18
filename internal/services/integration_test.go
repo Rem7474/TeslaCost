@@ -1833,3 +1833,90 @@ func TestIntegrationManualReadingsAndFillUpsAreIndependent(t *testing.T) {
 		t.Errorf("EV current odometer = %v (%v), want 20000 untouched", odo, err)
 	}
 }
+
+func TestIntegrationHighwayPredicateMatchesGoHeuristic(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "highway@example.com")
+
+	// A grid around every threshold of the heuristic: SQL and Go must agree on each drive.
+	type sample struct {
+		km, avg float64
+		max     int
+	}
+	var samples []sample
+	for _, km := range []float64{5, 7.9, 8, 15, 19.9, 20, 39.9, 40, 80} {
+		for _, avg := range []float64{40, 69.9, 70, 95} {
+			for _, max := range []int{90, 104, 105, 109, 110, 125, 126, 132} {
+				samples = append(samples, sample{km, avg, max})
+			}
+		}
+	}
+	start := time.Now().UTC().AddDate(-1, 0, 0)
+	ids := map[int]*models.Drive{}
+	for i, sm := range samples {
+		tmID := i + 1
+		avg, max := sm.avg, sm.max
+		d := &models.Drive{VehicleID: v.ID, TeslaMateDriveID: &tmID, StartTime: start.Add(time.Duration(i) * time.Hour), EndTime: start.Add(time.Duration(i)*time.Hour + 30*time.Minute),
+			DistanceKm: sm.km, SpeedAvg: &avg, SpeedMax: &max, Tags: []string{}}
+		if _, err := repo.UpsertTeslaMateDrive(ctx, d); err != nil {
+			t.Fatal(err)
+		}
+		ids[tmID] = d
+	}
+
+	rows, err := db.Pool.Query(ctx, `SELECT teslamate_drive_id, `+database.HighwayDrivePredicate+` FROM drives WHERE vehicle_id = $1`, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	checked := 0
+	for rows.Next() {
+		var tmID int
+		var sqlSays bool
+		if err := rows.Scan(&tmID, &sqlSays); err != nil {
+			t.Fatal(err)
+		}
+		d := ids[tmID]
+		if goSays := d.IsHighway(); goSays != sqlSays {
+			t.Errorf("drive %.1f km avg %.1f max %d: Go=%v SQL=%v", d.DistanceKm, *d.SpeedAvg, *d.SpeedMax, goSays, sqlSays)
+		}
+		checked++
+	}
+	rows.Close()
+	if checked != len(samples) {
+		t.Fatalf("checked %d drives, want %d", checked, len(samples))
+	}
+
+	// A short, slow-looking drive is highway as soon as its GPS detection found a toll segment; an empty detection is not.
+	slow := &models.Drive{VehicleID: v.ID, TeslaMateDriveID: intPtr(9001), StartTime: start.Add(1000 * time.Hour), EndTime: start.Add(1001 * time.Hour),
+		DistanceKm: 6, SpeedAvg: floatPtr(50), SpeedMax: intPtr(90), Tags: []string{}}
+	if _, err := repo.UpsertTeslaMateDrive(ctx, slow); err != nil {
+		t.Fatal(err)
+	}
+	isHighway := func() bool {
+		var b bool
+		if err := db.Pool.QueryRow(ctx, `SELECT `+database.HighwayDrivePredicate+` FROM drives WHERE id = $1`, slow.ID).Scan(&b); err != nil {
+			t.Fatal(err)
+		}
+		return b
+	}
+	if isHighway() {
+		t.Fatal("a 6 km drive at 90 km/h is not highway before any detection")
+	}
+	empty := &models.TollDetection{DriveID: slow.ID, VehicleID: v.ID, Segments: nil}
+	if err := repo.UpsertTollDetection(ctx, empty); err != nil {
+		t.Fatal(err)
+	}
+	if isHighway() {
+		t.Error("a detection without segment (null or empty) must not make the drive highway")
+	}
+	found := &models.TollDetection{DriveID: slow.ID, VehicleID: v.ID, Segments: []models.TollSegment{{Type: "open", Entry: "Péage A"}}}
+	if err := repo.UpsertTollDetection(ctx, found); err != nil {
+		t.Fatal(err)
+	}
+	if !isHighway() {
+		t.Error("a drive with a detected toll segment must be highway")
+	}
+}
+

@@ -120,6 +120,14 @@ func ratio(part, total float64) float64 {
 	return math.Max(0, math.Min(1, part/total))
 }
 
+// completion is the share of items without a problem; with no item at all there is nothing missing.
+func completion(problems, total float64) float64 {
+	if total <= 0 {
+		return 1
+	}
+	return 1 - ratio(problems, total)
+}
+
 func boolScore(ok bool) float64 {
 	if ok {
 		return 1
@@ -139,12 +147,6 @@ func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
 		energyLabel, energyScore = "Pleins de carburant enregistrés", boolScore(in.iceFillUps > 0)
 		distanceLabel = "Kilomètres couverts par des relevés et des pleins"
 	}
-	tollsScore := 1 - ratio(float64(in.unqualifiedDrives), float64(in.highwayDrives))
-	odometerScore := 1 - ratio(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))
-	if in.ice {
-		// No trips to qualify and no trip odometer to check on a combustion vehicle
-		tollsScore, odometerScore = 1, 1
-	}
 	dims := []struct {
 		key, label string
 		weight     float64
@@ -152,11 +154,11 @@ func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
 	}{
 		{"energy", energyLabel, 0.30, energyScore},
 		{"distance", distanceLabel, 0.20, distance},
-		{"tolls", "Trajets autoroutiers qualifiés", 0.15, tollsScore},
+		{"tolls", "Trajets autoroutiers qualifiés", 0.15, completion(float64(in.unqualifiedDrives), float64(in.highwayDrives))},
 		{"insurance", "Assurance renseignée", 0.10, boolScore(in.insurancePresent)},
 		{"acquisition", "Acquisition et décote renseignées", 0.10, boolScore(in.acquisitionComplete)},
-		{"odometer", "Continuité de l'odomètre", 0.10, odometerScore},
-		{"currency", "Dépenses converties en euros", 0.05, 1 - ratio(float64(in.unconvertedEntries), float64(in.pricedEntries+in.unconvertedEntries))},
+		{"odometer", "Continuité de l'odomètre", 0.10, completion(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))},
+		{"currency", "Dépenses converties en euros", 0.05, completion(float64(in.unconvertedEntries), float64(in.pricedEntries+in.unconvertedEntries))},
 	}
 	var total float64
 	out := make([]CompletenessDimension, 0, len(dims))
