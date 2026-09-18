@@ -604,7 +604,7 @@ async function handleRecalculateSingle(trip: any) {
     title: 'Recalculer le covoiturage',
     message: `Voulez-vous recalculer les coûts réels de "${trip.title}" selon les tarifs et péages actuels ?\n(Les montants perçus des passagers restent inchangés)`,
     confirmText: 'Recalculer',
-    type: 'primary',
+    type: 'info',
   })
   if (!ok) return
 
@@ -627,7 +627,7 @@ async function handleBatchRecalculate() {
     title: 'Recalculer les covoiturages sélectionnés',
     message: `Voulez-vous recalculer les coûts réels de ${count} covoiturage(s) selon les tarifs d'électricité, péages, pneus et entretien actuels ?\n(Les montants perçus des passagers restent inchangés)`,
     confirmText: 'Recalculer',
-    type: 'primary',
+    type: 'info',
   })
   if (!ok) return
 
@@ -917,7 +917,7 @@ onMounted(() => {
               :key="leg.id"
               class="bg-slate-950/60 border border-slate-800/80 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-300"
             >
-              <div class="font-semibold text-slate-200">{{ stopNames(trip.legs)[i] }} → {{ stopNames(trip.legs)[i + 1] }}</div>
+              <div class="font-semibold text-slate-200">{{ stopNames(trip.legs)[Number(i)] }} → {{ stopNames(trip.legs)[Number(i) + 1] }}</div>
               <div class="text-slate-400">
                 {{ leg.distance_km }} km • {{ fmt(leg.total_cost) }} € •
                 {{ 1 + leg.passenger_seats }} à bord • {{ fmt(leg.cost_per_person) }} €/pers.

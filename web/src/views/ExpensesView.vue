@@ -208,6 +208,8 @@ const chargeForm = ref({
   address: '',
   odometer: '',
   notes: '',
+  document_id: null as string | null,
+  document_filename: null as string | null,
 })
 
 // datetime-local inputs expect local time, not UTC
@@ -676,6 +678,7 @@ async function onDropzoneDirectUpload(file: File | null, form: any) {
 }
 
 interface DocumentPreviewState {
+  id: string
   url: string
   filename: string
   isPdf: boolean
@@ -725,7 +728,7 @@ onUnmounted(() => {
   closeDocPreview()
 })
 
-async function viewOrDownloadDocument(docId: string, filename?: string, download = false) {
+async function viewOrDownloadDocument(docId: string | null | undefined, filename?: string | null, download = false) {
   if (!vehicleStore.activeVehicle || !docId) return
   loadingDocId.value = docId
   try {
@@ -747,6 +750,7 @@ async function viewOrDownloadDocument(docId: string, filename?: string, download
       const isPdf = lower.endsWith('.pdf') || mime.includes('pdf')
       const isImage = /\.(png|jpe?g|webp|gif|svg)$/i.test(lower) || mime.startsWith('image/')
       previewDoc.value = {
+        id: docId,
         url: blobUrl,
         filename: finalName,
         isPdf,
