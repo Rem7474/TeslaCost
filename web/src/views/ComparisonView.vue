@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
-import { Scale, Plus, Trash2, Pencil, ArrowLeft, ArrowRight, Info, TrendingDown, TrendingUp } from 'lucide-vue-next'
+import { Scale, Plus, Trash2, Pencil, ArrowLeft, ArrowRight, Info, TrendingDown, TrendingUp, ChevronDown, Download, Printer, GitCompare } from 'lucide-vue-next'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import { downloadCsv } from '@/utils/csv'
+import ComparisonCompare from '@/components/comparison/ComparisonCompare.vue'
 
 Chart.register(...registerables)
 
@@ -19,7 +21,7 @@ const saving = ref(false)
 const defaults = ref<any | null>(null)
 
 // 'list' | 'edit' (steps 1-2) | 'result'
-const view = ref<'list' | 'edit' | 'result'>('list')
+const view = ref<'list' | 'edit' | 'result' | 'compare'>('list')
 const step = ref(1)
 const editingId = ref<string | null>(null)
 const currentScenario = ref<any | null>(null)
@@ -47,6 +49,12 @@ function emptyForm() {
       insurance_yearly: 650,
       tax_yearly: 0,
     },
+    options: {
+      fuel_inflation_pct: 0,
+      electricity_inflation_pct: 0,
+      cost_inflation_pct: 0,
+      ev_incentives: 0,
+    },
     ev: {
       kwh_per_100km: 16,
       eur_per_kwh: 0.2,
@@ -60,22 +68,23 @@ function emptyForm() {
 }
 
 const form = reactive(emptyForm())
+const showAdvanced = ref(false)
 
 const isRetro = computed(() => form.mode === 'RETROSPECTIVE')
 
 const iceFields = [
-  { key: 'purchase_price', label: "Prix d'achat (€)", step: 100 },
-  { key: 'resale_value', label: 'Valeur de revente en fin de période (€)', step: 100 },
-  { key: 'maintenance_yearly', label: 'Entretien par an (€)', step: 10 },
-  { key: 'insurance_yearly', label: 'Assurance par an (€)', step: 10 },
-  { key: 'tax_yearly', label: 'Taxes par an (€)', step: 10 },
+  { key: 'purchase_price', label: "Prix d'achat (€)" },
+  { key: 'resale_value', label: 'Valeur de revente en fin de période (€)' },
+  { key: 'maintenance_yearly', label: 'Entretien par an (€)' },
+  { key: 'insurance_yearly', label: 'Assurance par an (€)' },
+  { key: 'tax_yearly', label: 'Taxes par an (€)' },
 ] as const
 
 const evFields = [
-  { key: 'purchase_price', label: "Prix d'achat net des aides (€)", step: 100 },
-  { key: 'resale_value', label: 'Valeur de revente en fin de période (€)', step: 100 },
-  { key: 'maintenance_yearly', label: 'Entretien par an (€)', step: 10 },
-  { key: 'insurance_yearly', label: 'Assurance par an (€)', step: 10 },
+  { key: 'purchase_price', label: "Prix d'achat net des aides (€)" },
+  { key: 'resale_value', label: 'Valeur de revente en fin de période (€)' },
+  { key: 'maintenance_yearly', label: 'Entretien par an (€)' },
+  { key: 'insurance_yearly', label: 'Assurance par an (€)' },
 ] as const
 
 function fmtEur(v: number | null | undefined, digits = 0): string {
@@ -121,6 +130,7 @@ function applyFuelDefaults() {
 
 async function startNew() {
   Object.assign(form, emptyForm())
+  showAdvanced.value = false
   editingId.value = null
   formError.value = ''
   step.value = 1
@@ -155,7 +165,9 @@ function editScenario(sc: any) {
     years: sc.years,
     ice: { ...sc.ice },
     ev: sc.ev ? { ...sc.ev } : emptyForm().ev,
+    options: { ...emptyForm().options, ...(sc.options || {}) },
   })
+  showAdvanced.value = Object.values(form.options).some((v) => Number(v) !== 0)
   editingId.value = sc.id
   formError.value = ''
   step.value = 1
@@ -174,7 +186,13 @@ function buildPayload() {
       l_per_100km: Number(form.ice.l_per_100km),
       fuel_price: Number(form.ice.fuel_price),
     },
-    options: {},
+    options: {
+      fuel_inflation_pct: Number(form.options.fuel_inflation_pct) || 0,
+      electricity_inflation_pct: Number(form.options.electricity_inflation_pct) || 0,
+      cost_inflation_pct: Number(form.options.cost_inflation_pct) || 0,
+      // Incentives only apply when the electric vehicle is described by the user
+      ev_incentives: isRetro.value ? 0 : Number(form.options.ev_incentives) || 0,
+    },
   }
   if (isRetro.value) {
     payload.vehicle_id = vehicleStore.activeVehicle?.id
@@ -307,42 +325,142 @@ const costRows = computed(() => {
 })
 
 const chartRef = ref<HTMLCanvasElement | null>(null)
-let chartInstance: Chart | null = null
+const barRef = ref<HTMLCanvasElement | null>(null)
+const tornadoRef = ref<HTMLCanvasElement | null>(null)
+let charts: Chart[] = []
 
 function destroyChart() {
-  if (chartInstance) {
-    chartInstance.destroy()
-    chartInstance = null
-  }
+  charts.forEach((c) => c.destroy())
+  charts = []
 }
+
+const axisStyle = { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
+const eurAxis = { ticks: { color: '#94a3b8', callback: (v: any) => fmtEur(Number(v)) }, grid: { color: '#1e293b' } }
 
 function renderChart() {
   destroyChart()
-  if (!chartRef.value || !result.value) return
-  const points = result.value.cumulative as { year: number; ev: number; ice: number }[]
-  chartInstance = new Chart(chartRef.value, {
-    type: 'line',
-    data: {
-      labels: points.map((p) => (p.year === 0 ? 'Achat' : `An ${p.year}`)),
-      datasets: [
-        { label: 'Électrique', data: points.map((p) => p.ev), borderColor: '#38bdf8', backgroundColor: '#38bdf8', tension: 0.15 },
-        { label: 'Thermique', data: points.map((p) => p.ice), borderColor: '#f59e0b', backgroundColor: '#f59e0b', tension: 0.15 },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
-        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtEur(Number(ctx.raw))}` } },
+  if (!result.value) return
+  const r = result.value
+
+  if (chartRef.value) {
+    const points = r.cumulative as { year: number; ev: number; ice: number }[]
+    charts.push(new Chart(chartRef.value, {
+      type: 'line',
+      data: {
+        labels: points.map((p) => (p.year === 0 ? 'Achat' : `An ${p.year}`)),
+        datasets: [
+          { label: 'Électrique', data: points.map((p) => p.ev), borderColor: '#38bdf8', backgroundColor: '#38bdf8', tension: 0.15 },
+          { label: 'Thermique', data: points.map((p) => p.ice), borderColor: '#f59e0b', backgroundColor: '#f59e0b', tension: 0.15 },
+        ],
       },
-      scales: {
-        x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
-        y: { ticks: { color: '#94a3b8', callback: (v) => fmtEur(Number(v)) }, grid: { color: '#1e293b' } },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
+          tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtEur(Number(ctx.raw))}` } },
+        },
+        scales: { x: axisStyle, y: eurAxis },
       },
-    },
-  })
+    }))
+  }
+
+  if (barRef.value) {
+    const colors = ['#38bdf8', '#a78bfa', '#34d399', '#94a3b8', '#f472b6']
+    charts.push(new Chart(barRef.value, {
+      type: 'bar',
+      data: {
+        labels: ['Électrique', 'Thermique'],
+        datasets: costRows.value.map((row, i) => ({
+          label: row.label,
+          data: [row.ev, row.ice],
+          backgroundColor: colors[i % colors.length],
+        })),
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
+          tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtEur(Number(ctx.raw))}` } },
+        },
+        scales: { x: { ...axisStyle, stacked: true }, y: { ...eurAxis, stacked: true } },
+      },
+    }))
+  }
+
+  if (tornadoRef.value) {
+    const rows = r.sensitivity as { label: string; delta_shift: number }[]
+    charts.push(new Chart(tornadoRef.value, {
+      type: 'bar',
+      data: {
+        labels: rows.map((s) => s.label),
+        datasets: [{
+          label: "Écart sur l'économie de l'électrique",
+          data: rows.map((s) => s.delta_shift),
+          backgroundColor: rows.map((s) => (s.delta_shift >= 0 ? '#34d399' : '#f87171')),
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: (ctx) => ` ${Number(ctx.raw) >= 0 ? '+' : '−'}${fmtEur(Math.abs(Number(ctx.raw)))} en faveur de l'électrique` } },
+        },
+        scales: { x: eurAxis, y: axisStyle },
+      },
+    }))
+  }
+}
+
+// --- Compare several scenarios ---
+
+const selectedIds = ref<string[]>([])
+const compareItems = ref<{ scenario: any; result: any }[]>([])
+const MAX_COMPARE = 3
+
+function toggleSelected(id: string) {
+  if (selectedIds.value.includes(id)) {
+    selectedIds.value = selectedIds.value.filter((s) => s !== id)
+  } else if (selectedIds.value.length < MAX_COMPARE) {
+    selectedIds.value = [...selectedIds.value, id]
+  }
+}
+
+async function openCompare() {
+  const chosen = scenarios.value.filter((s) => selectedIds.value.includes(s.id))
+  try {
+    const results = await Promise.all(chosen.map((s) => api.getComparisonResult(s.id)))
+    compareItems.value = chosen.map((scenario, i) => ({ scenario, result: results[i] }))
+    view.value = 'compare'
+  } catch (err: any) {
+    await showAlert(err?.message || 'Comparaison impossible.', 'Comparatif', 'danger')
+  }
+}
+
+// --- Export ---
+
+function exportResultCsv() {
+  const r = result.value
+  if (!r) return
+  const name = (currentScenario.value?.name || 'comparatif').replace(/[^\w-]+/g, '-')
+  const rows: (string | number)[][] = costRows.value.map((row) => [row.label, Number(row.ev).toFixed(2), Number(row.ice).toFixed(2)])
+  rows.push(['Total', Number(r.ev.total).toFixed(2), Number(r.ice.total).toFixed(2)])
+  rows.push(['Par mois', Number(r.ev.per_month).toFixed(2), Number(r.ice.per_month).toFixed(2)])
+  rows.push(['Cout au km', r.ev.cost_per_km, r.ice.cost_per_km])
+  rows.push(["Ecart en faveur de l'electrique", Number(r.ev_savings).toFixed(2), ''])
+  rows.push(['', '', ''])
+  rows.push(['Annee', 'Cout cumule electrique', 'Cout cumule thermique'])
+  for (const p of r.cumulative) rows.push([p.year, Number(p.ev).toFixed(2), Number(p.ice).toFixed(2)])
+  downloadCsv(`comparatif-${name}`, ['Poste', 'Electrique (EUR)', 'Thermique (EUR)'], rows)
+}
+
+function printResult() {
+  window.print()
 }
 
 watch(view, (v) => {
@@ -384,8 +502,29 @@ onBeforeUnmount(destroyChart)
         Aucun comparatif pour l'instant. Créez-en un pour estimer ce qu'un thermique équivalent vous coûterait
         (ou ce qu'une électrique vous coûterait) sur plusieurs années.
       </div>
-      <ul v-else class="grid gap-3 md:grid-cols-2">
+      <div v-else class="space-y-3">
+      <div v-if="scenarios.length >= 2" class="flex items-center justify-between gap-3 text-xs text-slate-400">
+        <span>Cochez 2 ou 3 comparatifs pour les comparer côte à côte.</span>
+        <button
+          type="button"
+          :disabled="selectedIds.length < 2"
+          class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 border border-slate-700 font-semibold px-3 py-2 rounded-xl flex items-center gap-2"
+          @click="openCompare"
+        >
+          <GitCompare class="w-4 h-4" /> Comparer ({{ selectedIds.length }})
+        </button>
+      </div>
+      <ul class="grid gap-3 md:grid-cols-2">
         <li v-for="sc in scenarios" :key="sc.id" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3">
+          <input
+            :id="`cmp-select-${sc.id}`"
+            type="checkbox"
+            class="rounded border-slate-600 bg-slate-800 shrink-0"
+            :checked="selectedIds.includes(sc.id)"
+            :disabled="!selectedIds.includes(sc.id) && selectedIds.length >= MAX_COMPARE"
+            :aria-label="`Sélectionner ${sc.name} pour la comparaison`"
+            @change="toggleSelected(sc.id)"
+          />
           <button class="text-left min-w-0 flex-1" @click="openResult(sc)">
             <div class="text-sm font-semibold text-white truncate">{{ sc.name }}</div>
             <div class="text-xs text-slate-400">
@@ -402,6 +541,15 @@ onBeforeUnmount(destroyChart)
           </div>
         </li>
       </ul>
+      </div>
+    </div>
+
+    <!-- Compare several scenarios -->
+    <div v-else-if="view === 'compare'" class="space-y-5">
+      <button class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 no-print" @click="view = 'list'">
+        <ArrowLeft class="w-4 h-4" /> Mes comparatifs
+      </button>
+      <ComparisonCompare :items="compareItems" />
     </div>
 
     <!-- Editor (steps 1 and 2) -->
@@ -426,7 +574,7 @@ onBeforeUnmount(destroyChart)
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label for="cmp-km" class="block text-xs font-semibold text-slate-300 mb-1">Kilomètres par an</label>
-            <input id="cmp-km" v-model.number="form.annual_km" type="number" min="1" step="500" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <input id="cmp-km" v-model.number="form.annual_km" type="number" min="1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             <p v-if="defaults && isRetro" class="text-[11px] text-slate-500 mt-1">
               {{ defaults.annual_km_from_data ? 'Estimé depuis votre historique' : 'Valeur par défaut (historique insuffisant)' }}
             </p>
@@ -450,18 +598,18 @@ onBeforeUnmount(destroyChart)
             </div>
             <div>
               <label for="cmp-ice-l100" class="block text-xs font-semibold text-slate-300 mb-1">Consommation (L/100 km)</label>
-              <input id="cmp-ice-l100" v-model.number="form.ice.l_per_100km" type="number" min="0.1" step="0.1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input id="cmp-ice-l100" v-model.number="form.ice.l_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
               <label for="cmp-ice-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix du carburant (€/L)</label>
-              <input id="cmp-ice-price" v-model.number="form.ice.fuel_price" type="number" min="0" step="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input id="cmp-ice-price" v-model.number="form.ice.fuel_price" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <p class="text-[11px] text-slate-500 flex items-center gap-1"><Info class="w-3 h-3" /> {{ defaults?.source || 'Valeurs indicatives, à ajuster' }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="f in iceFields" :key="f.key">
               <label :for="`cmp-ice-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ f.label }}</label>
-              <input :id="`cmp-ice-${f.key}`" v-model.number="form.ice[f.key]" type="number" min="0" :step="f.step" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input :id="`cmp-ice-${f.key}`" v-model.number="form.ice[f.key]" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
         </div>
@@ -471,21 +619,54 @@ onBeforeUnmount(destroyChart)
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="cmp-ev-kwh" class="block text-xs font-semibold text-slate-300 mb-1">Consommation (kWh/100 km)</label>
-              <input id="cmp-ev-kwh" v-model.number="form.ev.kwh_per_100km" type="number" min="0.1" step="0.1" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input id="cmp-ev-kwh" v-model.number="form.ev.kwh_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
               <label for="cmp-ev-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix moyen de l'électricité (€/kWh)</label>
-              <input id="cmp-ev-price" v-model.number="form.ev.eur_per_kwh" type="number" min="0" step="0.01" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input id="cmp-ev-price" v-model.number="form.ev.eur_per_kwh" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="f in evFields" :key="f.key">
               <label :for="`cmp-ev-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ f.label }}</label>
-              <input :id="`cmp-ev-${f.key}`" v-model.number="form.ev[f.key]" type="number" min="0" :step="f.step" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input :id="`cmp-ev-${f.key}`" v-model.number="form.ev[f.key]" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
         </div>
       </template>
+
+      <div v-if="step === 2" class="pt-2 border-t border-slate-800">
+        <button
+          type="button"
+          class="flex items-center gap-1.5 text-xs font-semibold text-slate-300 hover:text-white"
+          :aria-expanded="showAdvanced"
+          aria-controls="cmp-advanced"
+          @click="showAdvanced = !showAdvanced"
+        >
+          <ChevronDown class="w-4 h-4 transition-transform" :class="showAdvanced ? 'rotate-180' : ''" /> Affiner (inflation, aides)
+        </button>
+        <div v-show="showAdvanced" id="cmp-advanced" class="mt-3 space-y-3">
+          <p class="text-[11px] text-slate-500">Évolution annuelle moyenne des prix, appliquée dès la deuxième année. Laissez à 0 pour des prix constants.</p>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label for="cmp-infl-fuel" class="block text-xs font-semibold text-slate-300 mb-1">Carburant (%/an)</label>
+              <input id="cmp-infl-fuel" v-model.number="form.options.fuel_inflation_pct" type="number" min="-10" max="30" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+            <div>
+              <label for="cmp-infl-elec" class="block text-xs font-semibold text-slate-300 mb-1">Électricité (%/an)</label>
+              <input id="cmp-infl-elec" v-model.number="form.options.electricity_inflation_pct" type="number" min="-10" max="30" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+            <div>
+              <label for="cmp-infl-cost" class="block text-xs font-semibold text-slate-300 mb-1">Entretien, assurance, taxes (%/an)</label>
+              <input id="cmp-infl-cost" v-model.number="form.options.cost_inflation_pct" type="number" min="-10" max="30" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+          </div>
+          <div v-if="!isRetro">
+            <label for="cmp-ev-incentives" class="block text-xs font-semibold text-slate-300 mb-1">Aides à l'achat de l'électrique (€, déduites du prix)</label>
+            <input id="cmp-ev-incentives" v-model.number="form.options.ev_incentives" type="number" min="0" step="any" class="w-full sm:w-1/2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          </div>
+        </div>
+      </div>
 
       <p v-if="formError" class="text-xs text-red-300" role="alert">{{ formError }}</p>
 
@@ -500,10 +681,20 @@ onBeforeUnmount(destroyChart)
     </form>
 
     <!-- Result -->
-    <div v-else-if="view === 'result'" class="space-y-5">
-      <button class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5" @click="view = 'list'">
-        <ArrowLeft class="w-4 h-4" /> Mes comparatifs
-      </button>
+    <div v-else-if="view === 'result'" class="space-y-5 print-area">
+      <div class="flex items-center justify-between gap-3 no-print">
+        <button class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5" @click="view = 'list'">
+          <ArrowLeft class="w-4 h-4" /> Mes comparatifs
+        </button>
+        <div v-if="result" class="flex items-center gap-2">
+          <button type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5" @click="exportResultCsv">
+            <Download class="w-4 h-4" /> CSV
+          </button>
+          <button type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5" @click="printResult">
+            <Printer class="w-4 h-4" /> Imprimer / PDF
+          </button>
+        </div>
+      </div>
 
       <div v-if="!result" class="text-sm text-slate-400">Calcul en cours…</div>
       <template v-else>
@@ -565,13 +756,20 @@ onBeforeUnmount(destroyChart)
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <h2 class="text-sm font-semibold text-white mb-3">Répartition des coûts sur la période</h2>
+          <div class="h-64"><canvas ref="barRef" aria-label="Coût par poste, électrique et thermique" role="img"></canvas></div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
           <h2 class="text-sm font-semibold text-white mb-1">Coût cumulé</h2>
           <p class="text-xs text-slate-400 mb-3">{{ breakEvenText }}</p>
           <div class="h-64"><canvas ref="chartRef" aria-label="Coût cumulé électrique et thermique" role="img"></canvas></div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <h2 class="text-sm font-semibold text-white mb-2">Sensibilité</h2>
+          <h2 class="text-sm font-semibold text-white mb-1">Sensibilité</h2>
+          <p class="text-xs text-slate-400 mb-3">Effet sur l'économie de l'électrique quand une hypothèse varie de 20 %.</p>
+          <div class="h-48 mb-3"><canvas ref="tornadoRef" aria-label="Sensibilité de l'écart aux hypothèses" role="img"></canvas></div>
           <ul class="text-xs text-slate-300 space-y-1">
             <li v-for="s in result.sensitivity" :key="s.label" class="flex justify-between">
               <span>{{ s.label }}</span>
@@ -587,7 +785,7 @@ onBeforeUnmount(destroyChart)
           </ul>
         </div>
 
-        <div class="flex gap-2">
+        <div class="flex gap-2 no-print">
           <button class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2" @click="editScenario(currentScenario)">
             <Pencil class="w-4 h-4" /> Modifier les hypothèses
           </button>
@@ -596,3 +794,30 @@ onBeforeUnmount(destroyChart)
     </div>
   </div>
 </template>
+
+<style>
+@media print {
+  aside,
+  header,
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  .h-screen,
+  .overflow-y-auto,
+  .overflow-hidden {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .print-area,
+  .print-area * {
+    color: #111827 !important;
+    background: transparent !important;
+    border-color: #d1d5db !important;
+  }
+  body,
+  html {
+    background: #ffffff !important;
+  }
+}
+</style>
