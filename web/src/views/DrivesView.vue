@@ -15,6 +15,7 @@ import {
   Receipt,
   Layers,
   MapPin,
+  ExternalLink,
   Clock,
   Zap,
   ChevronLeft,
@@ -390,6 +391,21 @@ function isHighwayDrive(d: any) {
     (d.distance_km >= 20 && max >= 110 && avg >= 70) ||
     (d.distance_km >= 8 && max >= 105 && avg >= 70)
   )
+}
+
+// Link to the drive in the TeslaMate Grafana "Drive Details" dashboard (standard TeslaMate dashboard uid),
+// when the vehicle has a Grafana URL configured. The time range is padded so the whole drive is visible.
+function teslamateDriveUrl(d: any): string | null {
+  const v = vehicleStore.activeVehicle
+  if (!v?.teslamate_grafana_url || !d?.teslamate_drive_id || d.is_trip_group) return null
+  const params = new URLSearchParams({
+    orgId: '1',
+    from: String(new Date(d.start_time).getTime() - 60_000),
+    to: String(new Date(d.end_time).getTime() + 60_000),
+    'var-car_id': String(v.teslamate_car_id || 1),
+    'var-drive_id': String(d.teslamate_drive_id),
+  })
+  return `${v.teslamate_grafana_url}/d/zm7wN6Zgz/drive-details?${params.toString()}`
 }
 
 // Highway-like drive with no toll attached and not reviewed yet (same rule as the backend queue)
@@ -1616,6 +1632,17 @@ function formatDate(dateStr: string) {
               <p class="text-xs text-slate-400">{{ formatDate(selectedCostDrive.start_time) }}</p>
             </div>
           </div>
+          <a
+            v-if="teslamateDriveUrl(selectedCostDrive)"
+            :href="teslamateDriveUrl(selectedCostDrive)!"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="ml-auto mr-1 px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold rounded-lg flex items-center gap-1.5 shrink-0"
+            title="Ouvrir ce trajet dans le dashboard TeslaMate"
+          >
+            <ExternalLink class="w-3.5 h-3.5 text-sky-400" />
+            <span class="hidden sm:inline">TeslaMate</span>
+          </a>
           <button @click="showCostModal = false" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0">
             <X class="w-5 h-5" />
           </button>
