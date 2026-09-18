@@ -110,6 +110,14 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Insurance is a fixed daily/monthly cost, not a per-km one: allocate each day's flat
+	// insurance cost across that day's drives in proportion to distance.
+	insuranceCosts, err := h.carpoolService.AllocateInsuranceCosts(r.Context(), vehicleID, drives, rates)
+	if err != nil {
+		writeRepoError(w, r, err, "Failed to compute cost rates")
+		return
+	}
+
 	enriched := make([]EnrichedDrive, len(drives))
 	for i, d := range drives {
 		kwh, energySource := services.DriveEnergyKwh(d.DistanceKm, d.EnergyConsumedKwh, d.ConsumptionKwh100km)
@@ -121,7 +129,7 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		elecCost := money.FromFloat(kwh * rates.ElectricityPerKwh)
 		tiresCost := money.FromFloat(d.DistanceKm * rates.TiresPerKm)
 		maintCost := money.FromFloat(d.DistanceKm * rates.MaintenancePerKm)
-		insCost := money.FromFloat(d.DistanceKm * rates.InsurancePerKm)
+		insCost := insuranceCosts[d.ID]
 		tollsCost := tollsMap[d.ID]
 		totalCost := elecCost + tiresCost + maintCost + insCost + tollsCost
 
