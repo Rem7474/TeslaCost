@@ -1503,3 +1503,112 @@ func TestIntegrationTollSourceAndHasTollFilter(t *testing.T) {
 		t.Fatalf("expected a manual edit to make the expense MANUAL, got %q", a.Source)
 	}
 }
+
+func TestIntegrationComparisonScenarios(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "compare@example.com")
+	svc := NewComparisonService(NewTCOService(db.Pool, "Europe/Paris"))
+
+	now := time.Now().UTC()
+	mustDrive(t, repo, v.ID, 1, now.AddDate(0, -4, 0), 10000, 3000)
+	mustDrive(t, repo, v.ID, 2, now.AddDate(0, -2, 0), 13000, 3000)
+	cost := money.Cents(60000) // 600 EUR for 2400 kWh -> 0.25 EUR/kWh
+	tm := 1
+	if _, err := repo.UpsertTeslaMateCharge(ctx, &models.ChargeLog{VehicleID: v.ID, TeslaMateChargeID: &tm, Date: now.AddDate(0, -1, 0), KwhAdded: 2400, Cost: &cost, Currency: "EUR"}); err != nil {
+		t.Fatal(err)
+	}
+
+	sc := &models.ComparisonScenario{
+		UserID: v.UserID, VehicleID: &v.ID, Name: "Vs SUV essence", Mode: models.ComparisonModeRetrospective,
+		AnnualKm: 15000, Years: 5,
+		ICE: models.ICEInputs{FuelType: "SP95_E10", LPer100Km: 7, FuelPrice: 1.8,
+			PurchasePrice: money.FromFloat(30000), ResaleValue: money.FromFloat(12000),
+			MaintenanceYearly: money.FromFloat(700), InsuranceYearly: money.FromFloat(650)},
+		Options: models.ScenarioOptions{FuelInflationPct: 2},
+	}
+	if err := repo.CreateComparisonScenario(ctx, sc); err != nil {
+		t.Fatal(err)
+	}
+	got, err := repo.GetComparisonScenario(ctx, v.UserID, sc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.EV != nil || got.Options.FuelInflationPct != 2 || got.ICE.FuelPrice != 1.8 || got.ICE.PurchasePrice != money.FromFloat(30000) {
+		t.Fatalf("round trip mismatch: %+v", got)
+	}
+
+	// The comparison reads the real TCO and writes nothing.
+	before, err := NewTCOService(db.Pool, "Europe/Paris").ComputeVehicleTCO(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := svc.Compare(ctx, got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, _ := NewTCOService(db.Pool, "Europe/Paris").ComputeVehicleTCO(ctx, v.ID)
+	if before.TotalCost != after.TotalCost {
+		t.Fatalf("comparison changed the TCO: %v -> %v", before.TotalCost, after.TotalCost)
+	}
+	// EV energy: 0.10 EUR/km (600 EUR / 6000 km) * 15000 km * 5 years = 7500 EUR.
+	if res.EV.Energy != money.FromFloat(7500) {
+		t.Errorf("EV energy = %v, want 7500 from the real charge cost", res.EV.Energy)
+	}
+	if res.ICE.Energy <= money.FromFloat(7*1.8/100*15000*5) { // inflation makes it higher than the flat figure
+		t.Errorf("ICE energy = %v, expected fuel inflation to apply", res.ICE.Energy)
+	}
+
+	d, err := svc.Defaults(ctx, v.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.EVEurPerKwh == nil || *d.EVEurPerKwh != 0.25 || len(d.ICE) == 0 {
+		t.Errorf("unexpected defaults: %+v", d)
+	}
+
+	// PROJECTION scenarios need EV inputs and no vehicle; other users cannot read them.
+	proj := &models.ComparisonScenario{
+		UserID: v.UserID, Name: "Projection", Mode: models.ComparisonModeProjection, AnnualKm: 12000, Years: 4,
+		ICE: sc.ICE, EV: &models.EVInputs{KwhPer100Km: 16, EurPerKwh: 0.2, PurchasePrice: money.FromFloat(38000), ResaleValue: money.FromFloat(18000)},
+	}
+	if err := repo.CreateComparisonScenario(ctx, proj); err != nil {
+		t.Fatal(err)
+	}
+	other, err := repo.CreateUser(ctx, "other@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.GetComparisonScenario(ctx, other.ID, proj.ID); !errors.Is(err, database.ErrNotFound) {
+		t.Errorf("foreign user read = %v, want ErrNotFound", err)
+	}
+	if list, _ := repo.ListComparisonScenarios(ctx, v.UserID); len(list) != 2 {
+		t.Errorf("list = %d scenarios, want 2", len(list))
+	}
+
+	// The DB constraint rejects a RETROSPECTIVE scenario without vehicle.
+	bad := *sc
+	bad.VehicleID = nil
+	if err := repo.CreateComparisonScenario(ctx, &bad); err == nil {
+		t.Error("expected constraint violation for retrospective scenario without vehicle")
+	}
+
+	proj.Name = "Projection renommée"
+	if err := repo.UpdateComparisonScenario(ctx, proj); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteComparisonScenario(ctx, v.UserID, proj.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteComparisonScenario(ctx, v.UserID, proj.ID); !errors.Is(err, database.ErrNotFound) {
+		t.Errorf("second delete = %v, want ErrNotFound", err)
+	}
+
+	// Deleting the vehicle removes its RETROSPECTIVE scenarios.
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM vehicles WHERE id = $1`, v.ID); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := repo.ListComparisonScenarios(ctx, v.UserID); len(list) != 0 {
+		t.Errorf("scenarios must cascade with the vehicle, got %d", len(list))
+	}
+}

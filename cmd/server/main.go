@@ -114,6 +114,7 @@ func main() {
 	var syncService *services.SyncService
 	var tireWearService *services.TireWearService
 	var tcoService *services.TCOService
+	var comparisonService *services.ComparisonService
 	var carpoolService *services.CarpoolService
 	var notificationService *services.NotificationService
 
@@ -148,6 +149,7 @@ func main() {
 		syncService.SetNotificationService(notificationService)
 		tireWearService = services.NewTireWearService(repo)
 		tcoService = services.NewTCOService(dbPool.Pool, cfg.ReportingTimezone)
+		comparisonService = services.NewComparisonService(tcoService)
 		carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
 	}
 
@@ -251,6 +253,7 @@ func main() {
 
 		expenseHandler := handlers.NewExpenseHandler(repo, storageService)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
+		comparisonHandler := handlers.NewComparisonHandler(repo, comparisonService)
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
 		checkpointHandler := handlers.NewCheckpointHandler(repo)
 		reminderHandler := handlers.NewReminderHandler(repo, notificationService)
@@ -277,6 +280,16 @@ func main() {
 			r.Use(handlers.Idempotency(repo))
 
 			r.Get("/api/auth/me", authHandler.Me)
+
+			// EV vs ICE cost comparison (informational)
+			r.Route("/api/comparison-scenarios", func(r chi.Router) {
+				r.Get("/", comparisonHandler.List)
+				r.Post("/", comparisonHandler.Create)
+				r.Get("/defaults", comparisonHandler.Defaults)
+				r.Put("/{scenarioId}", comparisonHandler.Update)
+				r.Delete("/{scenarioId}", comparisonHandler.Delete)
+				r.Get("/{scenarioId}/result", comparisonHandler.Result)
+			})
 
 			// Vehicles
 			r.Route("/api/vehicles", func(r chi.Router) {
