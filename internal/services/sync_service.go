@@ -571,6 +571,13 @@ func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, 
 }
 
 func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) {
+	return buildTeslaMateClient(v, s.encryptor)
+}
+
+// buildTeslaMateClient constructs an authenticated TeslaMateAPI client for a vehicle,
+// decrypting whichever credential its configured auth type requires. Shared by SyncService
+// and any other service that needs to call TeslaMateAPI on a vehicle's behalf.
+func buildTeslaMateClient(v *models.Vehicle, encryptor *crypto.Encryptor) (*teslamate.Client, error) {
 	if v.TeslaMateAPIURL == nil || *v.TeslaMateAPIURL == "" {
 		return nil, fmt.Errorf("no TeslaMate API URL provided")
 	}
@@ -584,7 +591,7 @@ func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) 
 	switch cfg.AuthType {
 	case teslamate.AuthBearer:
 		if v.TeslaMateAPIKeyEncrypted != nil && *v.TeslaMateAPIKeyEncrypted != "" {
-			token, err := s.encryptor.Decrypt(*v.TeslaMateAPIKeyEncrypted)
+			token, err := encryptor.Decrypt(*v.TeslaMateAPIKeyEncrypted)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decrypt API key: %w", err)
 			}
@@ -595,7 +602,7 @@ func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) 
 			cfg.Username = *v.TeslaMateBasicUser
 		}
 		if v.TeslaMateBasicPassEnc != nil && *v.TeslaMateBasicPassEnc != "" {
-			pass, err := s.encryptor.Decrypt(*v.TeslaMateBasicPassEnc)
+			pass, err := encryptor.Decrypt(*v.TeslaMateBasicPassEnc)
 			if err != nil {
 				return nil, fmt.Errorf("failed to decrypt basic password: %w", err)
 			}

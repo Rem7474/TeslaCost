@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"encoding/json"
+	"errors"
+	"log/slog"
 	"math"
 	"net/http"
 	"strconv"
@@ -44,14 +46,16 @@ type EnrichedDrive struct {
 }
 
 type DriveHandler struct {
-	repo           *database.Repository
-	carpoolService *services.CarpoolService
+	repo                 *database.Repository
+	carpoolService       *services.CarpoolService
+	tollDetectionService *services.TollDetectionService
 }
 
-func NewDriveHandler(repo *database.Repository, carpoolService *services.CarpoolService) *DriveHandler {
+func NewDriveHandler(repo *database.Repository, carpoolService *services.CarpoolService, tollDetectionService *services.TollDetectionService) *DriveHandler {
 	return &DriveHandler{
-		repo:           repo,
-		carpoolService: carpoolService,
+		repo:                 repo,
+		carpoolService:       carpoolService,
+		tollDetectionService: tollDetectionService,
 	}
 }
 
@@ -238,6 +242,58 @@ func (h *DriveHandler) SetTollReview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "reviewed": req.Reviewed})
+}
+
+// GetTollDetection returns the cached toll detection result for a drive, or null if
+// detection has never been run on it.
+func (h *DriveHandler) GetTollDetection(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+	driveID := chi.URLParam(r, "driveId")
+
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
+		return
+	}
+
+	detection, err := h.repo.GetTollDetectionByDrive(r.Context(), vehicleID, driveID)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeJSON(w, http.StatusOK, nil)
+			return
+		}
+		writeRepoError(w, r, err, "Failed to get toll detection")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, detection)
+}
+
+// DetectTolls fetches the drive's GPS trace and matches it against the toll station
+// reference, replacing any previously cached result for this drive.
+func (h *DriveHandler) DetectTolls(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+	driveID := chi.URLParam(r, "driveId")
+
+	vehicle := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if vehicle == nil {
+		return
+	}
+
+	detection, err := h.tollDetectionService.DetectTolls(r.Context(), vehicle, driveID)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Trajet introuvable")
+			return
+		}
+		if errors.Is(err, services.ErrNoGPSTrace) {
+			writeError(w, http.StatusBadRequest, services.ErrNoGPSTrace.Error())
+			return
+		}
+		slog.ErrorContext(r.Context(), "toll detection failed", "component", "api", "error", err)
+		writeError(w, http.StatusBadGateway, "Échec de la détection des péages (TeslaMateAPI injoignable ou trajet non disponible)")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, detection)
 }
 
 type CreateTripGroupRequest struct {

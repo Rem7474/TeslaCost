@@ -103,6 +103,23 @@ type DrivesResponse struct {
 	} `json:"data"`
 }
 
+// DrivePosition is a single GPS sample of a drive's route.
+type DrivePosition struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Date      string  `json:"date"`
+}
+
+// DriveDetailResponse represents the response of /api/v1/cars/:CarID/drives/:DriveID,
+// which returns the same drive summary as DrivesResponse plus the full GPS trace.
+type DriveDetailResponse struct {
+	Data struct {
+		Drive struct {
+			DriveDetails []DrivePosition `json:"drive_details"`
+		} `json:"drive"`
+	} `json:"data"`
+}
+
 // Charge represents a single charging session returned by /api/v1/cars/:CarID/charges.
 type Charge struct {
 	ChargeID          int      `json:"charge_id"`

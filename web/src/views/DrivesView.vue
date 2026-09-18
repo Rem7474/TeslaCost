@@ -307,6 +307,9 @@ const inlineTollAmount = ref<number | ''>('')
 const inlineTollType = ref('TOLL')
 const inlineTollNotes = ref('')
 const addingToll = ref(false)
+const tollDetection = ref<any | null>(null)
+const tollDetectionLoading = ref(false)
+const tollDetectionError = ref('')
 
 async function loadDrives() {
   if (!vehicleStore.activeVehicle) {
@@ -365,12 +368,14 @@ onMounted(() => {
   loadDrives()
 })
 
+// Same heuristic as the backend's HighwayDrivePredicate / Drive.IsHighway().
+function isHighwayDrive(d: any) {
+  return (d.distance_km >= 40 && (d.speed_avg || 0) >= 70) || (d.distance_km >= 20 && (d.speed_max || 0) > 125)
+}
+
 // Highway-like drive with no toll attached and not reviewed yet (same rule as the backend queue)
 function needsTollQualification(d: any) {
-  const isHighway =
-    (d.distance_km >= 40 && (d.speed_avg || 0) >= 70) ||
-    (d.distance_km >= 20 && (d.speed_max || 0) > 125)
-  return !d.toll_reviewed_at && isHighway && !(d.costs?.tolls_cost > 0)
+  return !d.toll_reviewed_at && isHighwayDrive(d) && !(d.costs?.tolls_cost > 0)
 }
 
 async function markNoToll(d: any) {
@@ -688,6 +693,31 @@ async function openCostModal(drive: any) {
   inlineTollAmount.value = ''
   inlineTollNotes.value = ''
   loadDriveExpenses(drive.id)
+  loadTollDetection(drive)
+}
+
+async function loadTollDetection(drive: any) {
+  tollDetection.value = null
+  tollDetectionError.value = ''
+  if (!vehicleStore.activeVehicle || drive.is_trip_group || !isHighwayDrive(drive)) return
+  try {
+    tollDetection.value = await api.getTollDetection(vehicleStore.activeVehicle.id, drive.id)
+  } catch (err) {
+    console.error('Failed to load toll detection', err)
+  }
+}
+
+async function handleDetectTolls() {
+  if (!vehicleStore.activeVehicle || !selectedCostDrive.value) return
+  tollDetectionLoading.value = true
+  tollDetectionError.value = ''
+  try {
+    tollDetection.value = await api.detectTolls(vehicleStore.activeVehicle.id, selectedCostDrive.value.id)
+  } catch (err: any) {
+    tollDetectionError.value = err.message || 'Échec de la détection'
+  } finally {
+    tollDetectionLoading.value = false
+  }
 }
 
 async function loadDriveExpenses(driveId: string) {
@@ -1754,6 +1784,46 @@ function formatDate(dateStr: string) {
                 </button>
               </div>
             </div>
+          </div>
+
+          <!-- 6. Détection péage autoroute (GPS, informatif — indépendant du statut de qualification) -->
+          <div
+            v-if="!selectedCostDrive.is_trip_group && isHighwayDrive(selectedCostDrive)"
+            class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl space-y-2"
+          >
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-3">
+                <div class="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg">
+                  <MapPin class="w-4 h-4" />
+                </div>
+                <div>
+                  <div class="text-xs font-semibold text-white">Détection péage autoroute</div>
+                  <div class="text-[11px] text-slate-400">Basée sur le tracé GPS TeslaMate</div>
+                </div>
+              </div>
+              <button
+                v-if="selectedCostDrive.teslamate_drive_id"
+                @click="handleDetectTolls"
+                :disabled="tollDetectionLoading"
+                class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50 shrink-0"
+              >
+                {{ tollDetectionLoading ? 'Détection...' : tollDetection ? 'Re-détecter' : 'Détecter les péages' }}
+              </button>
+              <span v-else class="text-[11px] text-slate-500 shrink-0">Trajet manuel, pas de tracé GPS</span>
+            </div>
+
+            <p v-if="tollDetectionError" class="text-[11px] text-rose-400">{{ tollDetectionError }}</p>
+
+            <div v-if="tollDetection?.segments?.length" class="space-y-1 pt-1 border-t border-slate-700/50">
+              <div v-for="(seg, idx) in tollDetection.segments" :key="idx" class="text-[11px] text-slate-300 pl-9">
+                <span v-if="seg.type === 'close' && seg.exit">
+                  {{ seg.operator ? `${seg.operator} : ` : '' }}{{ seg.entry }} → {{ seg.exit }}
+                </span>
+                <span v-else-if="seg.type === 'close'">Entrée détectée : {{ seg.entry }} (sortie non identifiée)</span>
+                <span v-else>Barrière : {{ seg.entry }}</span>
+              </div>
+            </div>
+            <p v-else-if="tollDetection" class="text-[11px] text-slate-500 pl-9">Aucun péage détecté sur ce trajet.</p>
           </div>
         </div>
 
