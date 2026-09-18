@@ -149,9 +149,14 @@ type Drive struct {
 	UpdatedAt           time.Time  `json:"updated_at"`
 }
 
-// IsHighway returns true if the drive matches the highway detection heuristic:
-// either distance >= 40 km and speed_avg >= 70 km/h,
-// or distance >= 20 km and speed_max > 125 km/h.
+// IsHighway returns true if the drive matches the highway detection heuristic. It favours recall:
+// a false positive only puts a drive in the toll review queue, a miss hides a toll cost.
+//   - long and reasonably fast: distance >= 40 km and speed_avg >= 70 km/h;
+//   - over 20 km with a highway top speed: speed_max > 125 km/h;
+//   - over 20 km at the reduced limit (rain, works): speed_max >= 110 km/h and speed_avg >= 70 km/h;
+//   - a short hop between two exits: distance >= 8 km, speed_max >= 105 km/h and speed_avg >= 70 km/h.
+//
+// The same rules exist in database.HighwayDrivePredicate and in the drives page (isHighwayDrive).
 func (d Drive) IsHighway() bool {
 	speedAvg := 0.0
 	if d.SpeedAvg != nil {
@@ -161,7 +166,10 @@ func (d Drive) IsHighway() bool {
 	if d.SpeedMax != nil {
 		speedMax = *d.SpeedMax
 	}
-	return (d.DistanceKm >= 40 && speedAvg >= 70) || (d.DistanceKm >= 20 && speedMax > 125)
+	return (d.DistanceKm >= 40 && speedAvg >= 70) ||
+		(d.DistanceKm >= 20 && speedMax > 125) ||
+		(d.DistanceKm >= 20 && speedMax >= 110 && speedAvg >= 70) ||
+		(d.DistanceKm >= 8 && speedMax >= 105 && speedAvg >= 70)
 }
 
 // TollSegment is a single toll crossing detected on a drive: either a closed-network
