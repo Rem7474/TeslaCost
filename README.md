@@ -17,7 +17,7 @@
 - **📁 Gestionnaire de documents & factures** : stockage sécurisé des pièces jointes (PDF, photos) sur volume Docker dédié avec contrôle d'accès applicatif strict.
 - **🛞 Gestion du cycle de vie des pneus** : suivi des sculptures, sessions de permutation transactionnelles, exclusion des périodes de stockage et projection kilométrique restante.
 - **👥 Module de covoiturage équitable** : synchronisation automatique des dates de trajet, recalcul des coûts réels en lot, prix d'électricité pondéré sur les charges récentes et quote-part d'assurance au jour/km.
-- **📱 PWA & Mode hors-connexion** : saisie des dépenses sans réseau avec file d'attente IndexedDB et déduplication par clé d'idempotence.
+- **📱 PWA, saisie rapide & mode hors-connexion** : bouton « + » (recharge, plein, péage/parking) dans la barre du bas, coût des recharges TeslaMate à compléter en un champ, photo du ticket depuis l'appareil, et saisie sans réseau avec file d'attente IndexedDB et déduplication par clé d'idempotence.
 
 ---
 
@@ -47,6 +47,7 @@
   - *Crédit classique* : tableau d'amortissement mois par mois, dissociation capital / intérêts, frais de dossier et assurance emprunteur.
   - *LOA & LLD* : prise en compte de l'apport initial, des loyers mensuels, du dépôt de garantie, du forfait kilométrique contractuel et provision mensuelle pour dépassement ou frais de remise en état.
 - **Indicateurs financiers avancés** : coût d'usage au km (énergie + péages), coût complet au km, coût net des recettes de covoiturage et score de complétude du TCO.
+- **Efficacité énergétique** (véhicules électriques) : consommation réelle en kWh/100 km, coût de l'énergie aux 100 km (mensuel et moyenne sur 3 mois), rendement de charge (énergie stockée sur énergie tirée du réseau) et répartition des recharges entre prise domestique, AC et DC d'après leur puissance moyenne. Endpoint `GET /api/vehicles/{id}/energy-stats`.
 
 ### 4. Rappels d'entretien & Notifications Homelab
 - **Double condition de déclenchement** : surveillance combinée de la date d'échéance et/ou du seuil kilométrique calculé sur l'odomètre réel.

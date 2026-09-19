@@ -28,6 +28,7 @@ import {
   Bell,
 } from 'lucide-vue-next'
 import { Chart, registerables } from 'chart.js'
+import EnergyEfficiencyPanel from '@/components/dashboard/EnergyEfficiencyPanel.vue'
 
 Chart.register(...registerables)
 
@@ -1291,6 +1292,13 @@ function renderCharts() {
           </router-link>
         </div>
       </div>
+
+      <!-- Energy efficiency: consumption, real cost per 100 km and charging habits (electric vehicles) -->
+      <EnergyEfficiencyPanel
+        v-if="vehicleStore.activeVehicle && !vehicleStore.isIce"
+        :vehicle-id="vehicleStore.activeVehicle.id"
+        :sync-key="vehicleStore.lastSyncTimestamp"
+      />
 
       <!-- Chart 1 & Donut: Expenses & Breakdown -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
