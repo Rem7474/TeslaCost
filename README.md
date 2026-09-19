@@ -29,6 +29,7 @@
   - Flux standard *Authorization Code Flow* avec PKCE (S256), vérification anti-CSRF (`state`) et anti-rejeu (`nonce` chiffré SHA-256).
   - Just-In-Time (JIT) provisioning : création automatique du compte ou liaison avec un compte local partageant le même e-mail. L'adresse ne doit pas être signalée non vérifiée par le fournisseur (`email_verified: false` est refusé), et seul un compte local qui n'a pas encore d'identité SSO est lié : un compte déjà lié n'est jamais rattaché à une autre identité.
   - Whitelist optionnelle (`OIDC_ALLOWED_EMAILS`, sans distinction de casse) et désactivation possible de l'authentification locale (`OIDC_DISABLE_LOCAL_AUTH`).
+- **Compte & sécurité** (page `Compte`) : liste des appareils connectés (navigateur, système, adresse, dernière activité), déconnexion d'un appareil ou de tous, et changement de mot de passe qui déconnecte les autres appareils. Un appareil déconnecté garde son accès jusqu'à 15 minutes, la durée de vie du jeton d'accès. Les jetons de rafraîchissement expirés ou révoqués sont purgés chaque jour.
 - **Chiffrement au repos** : chiffrement symétrique AES-256-GCM des identifiants et tokens de connexion TeslaMate dans PostgreSQL.
 - **Rate limiting** : `/api/auth/login` et `/api/auth/register` sont limités à 10 tentatives/minute par adresse client (voir `TRUSTED_PROXIES` derrière un reverse proxy), `/api/auth/refresh` et les routes SSO à des seuils plus larges.
 

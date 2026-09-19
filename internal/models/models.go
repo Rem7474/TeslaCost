@@ -689,3 +689,13 @@ type BatterySnapshot struct {
 	CurrentCapacityKwh *float64 `json:"current_capacity_kwh,omitempty"`
 	HealthPercent      *float64 `json:"health_percent,omitempty"`
 }
+
+// Session is a signed-in device: a family of rotating refresh tokens.
+type Session struct {
+	ID         string    `json:"id"` // The refresh token family
+	StartedAt  time.Time `json:"started_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	IP         *string   `json:"ip,omitempty"`
+	UserAgent  *string   `json:"user_agent,omitempty"`
+	Current    bool      `json:"current"`
+}
