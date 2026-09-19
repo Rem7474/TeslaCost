@@ -202,7 +202,7 @@ labels:
   - "traefik.http.routers.teslacost.middlewares=teslacost-headers"
 ```
 
-Pensez aussi à ajuster `APP_BASE_URL` et `CORS_ALLOWED_ORIGINS` pour qu'ils reflètent le nom de domaine public utilisé, et à laisser `COOKIE_SECURE` sur sa valeur par défaut (activée automatiquement dès que `APP_BASE_URL` commence par `https://` ou que `ENVIRONMENT=production`).
+Pensez aussi à ajuster `APP_BASE_URL` pour qu'il reflète le nom de domaine public utilisé (l'origine CORS en est déduite automatiquement), et à laisser `COOKIE_SECURE` sur sa valeur par défaut (activée automatiquement dès que `APP_BASE_URL` commence par `https://` ou que `ENVIRONMENT=production`).
 
 ---
 
@@ -268,7 +268,7 @@ docker run --rm \
 | `DB_PORT_BIND` | Adresse:port de liaison du conteneur Postgres sur l'hôte | `127.0.0.1:5432` |
 | `BACKUP_INTERVAL_HOURS` | Intervalle entre deux cycles de sauvegarde automatique | `24` |
 | `BACKUP_RETENTION_DAYS` | Durée de rétention des sauvegardes avant purge | `14` |
-| `CORS_ALLOWED_ORIGINS` | Origines autorisées (séparées par virgule) | `http://localhost:8080` |
+| `CORS_ALLOWED_ORIGINS` | Origines CORS autorisées (séparées par virgule), uniquement utile pour un frontend servi depuis une autre origine | *Optionnel* (origine de `APP_BASE_URL`, plus `localhost:3000`/`5173` hors production) |
 
 ### Configuration OIDC / SSO (Optionnel)
 

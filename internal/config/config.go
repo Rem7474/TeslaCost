@@ -4,6 +4,7 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -95,13 +96,9 @@ func Load() *Config {
 	initialAdminEmail := getEnv("INITIAL_ADMIN_EMAIL", "")
 	initialAdminPassword := getEnv("INITIAL_ADMIN_PASSWORD", "")
 
-	originsRaw := getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173,http://localhost:8080")
-	var allowedOrigins []string
-	for _, origin := range strings.Split(originsRaw, ",") {
-		o := strings.TrimSpace(origin)
-		if o != "" {
-			allowedOrigins = append(allowedOrigins, o)
-		}
+	allowedOrigins := parseOrigins(getEnv("CORS_ALLOWED_ORIGINS", ""))
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = DefaultAllowedOrigins(appBaseURL, env)
 	}
 
 	syncIntervalMinutes, _ := strconv.Atoi(getEnv("SYNC_INTERVAL_MINUTES", "30"))
@@ -205,6 +202,33 @@ func (c *Config) InsecureDefaults() []string {
 	}
 
 	return warnings
+}
+
+// DefaultAllowedOrigins derives the CORS origins from the public base URL, since the embedded
+// frontend is same-origin as the API. Outside production, the local dev servers are added.
+func DefaultAllowedOrigins(appBaseURL, env string) []string {
+	var origins []string
+	if u, err := url.Parse(appBaseURL); err == nil && u.Scheme != "" && u.Host != "" {
+		origins = append(origins, u.Scheme+"://"+u.Host)
+	}
+	if !strings.EqualFold(env, "production") {
+		for _, dev := range []string{"http://localhost:3000", "http://localhost:5173"} {
+			if !slices.Contains(origins, dev) {
+				origins = append(origins, dev)
+			}
+		}
+	}
+	return origins
+}
+
+func parseOrigins(raw string) []string {
+	var origins []string
+	for _, origin := range strings.Split(raw, ",") {
+		if o := strings.TrimSpace(origin); o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
 }
 
 func getEnv(key, defaultVal string) string {
