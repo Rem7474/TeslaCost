@@ -114,6 +114,7 @@ func main() {
 	var syncService *services.SyncService
 	var tireWearService *services.TireWearService
 	var tcoService *services.TCOService
+	var energyStatsService *services.EnergyStatsService
 	var comparisonService *services.ComparisonService
 	var carpoolService *services.CarpoolService
 	var notificationService *services.NotificationService
@@ -149,6 +150,7 @@ func main() {
 		syncService.SetNotificationService(notificationService)
 		tireWearService = services.NewTireWearService(repo)
 		tcoService = services.NewTCOService(dbPool.Pool, cfg.ReportingTimezone)
+		energyStatsService = services.NewEnergyStatsService(dbPool.Pool, cfg.ReportingTimezone)
 		comparisonService = services.NewComparisonService(tcoService)
 		carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
 	}
@@ -253,6 +255,7 @@ func main() {
 
 		expenseHandler := handlers.NewExpenseHandler(repo, storageService)
 		tcoHandler := handlers.NewTCOHandler(repo, tcoService)
+		energyHandler := handlers.NewEnergyHandler(repo, energyStatsService)
 		comparisonHandler := handlers.NewComparisonHandler(repo, comparisonService)
 		carpoolHandler := handlers.NewCarpoolHandler(repo, carpoolService)
 		checkpointHandler := handlers.NewCheckpointHandler(repo)
@@ -404,6 +407,7 @@ func main() {
 
 				// TCO Analytics
 				r.Get("/{vehicleId}/tco", tcoHandler.GetTCO)
+				r.Get("/{vehicleId}/energy-stats", energyHandler.GetStats)
 			})
 		})
 	}
