@@ -120,14 +120,15 @@ func (r *Repository) UpsertOIDCUser(ctx context.Context, email, subject, provide
 	)
 	if err != nil {
 		// Conflict on email (local account with same email exists but no OIDC link yet).
-		// Link the existing account to this OIDC identity.
+		// Link the existing account to this OIDC identity, but only a local account that has no identity yet:
+		// one already tied to another identity (or provider) is never re-pointed by a matching address.
 		linkQuery := `
 			UPDATE users
 			SET oidc_subject  = $1,
 			    oidc_provider = $2,
 			    display_name  = COALESCE($3, display_name),
 			    updated_at    = NOW()
-			WHERE email = $4
+			WHERE email = $4 AND oidc_subject IS NULL
 			RETURNING id, email, password_hash, oidc_subject, oidc_provider, display_name, created_at, updated_at;
 		`
 		var linked models.User

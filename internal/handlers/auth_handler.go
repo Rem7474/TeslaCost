@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/teslacost/teslacost/internal/auth"
@@ -16,6 +19,7 @@ import (
 const (
 	oidcStateCookie    = "oidc_state"
 	oidcNonceCookie    = "oidc_nonce"
+	oidcVerifierCookie = "oidc_verifier"
 	oidcCookieTTL      = 10 * time.Minute
 	refreshTokenCookie = "teslacost_refresh_token"
 	accessTokenCookie  = "teslacost_access_token"
@@ -25,10 +29,11 @@ type AuthHandler struct {
 	repo        *database.Repository
 	cfg         *config.Config
 	oidcService *auth.OIDCService // nil when OIDC is not configured
+	throttle    *auth.LoginThrottle
 }
 
 func NewAuthHandler(repo *database.Repository, cfg *config.Config, oidcService *auth.OIDCService) *AuthHandler {
-	return &AuthHandler{repo: repo, cfg: cfg, oidcService: oidcService}
+	return &AuthHandler{repo: repo, cfg: cfg, oidcService: oidcService, throttle: auth.NewLoginThrottle()}
 }
 
 type RegisterRequest struct {
@@ -45,10 +50,11 @@ type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
 }
 
+// AuthResponse carries the short-lived access token and the user. The refresh token is only ever sent as an
+// HttpOnly cookie: put in the body it would be readable by any script running in the page.
 type AuthResponse struct {
-	Token        string `json:"token"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	User         any    `json:"user"`
+	Token string `json:"token"`
+	User  any    `json:"user"`
 }
 
 // Secure is deliberately config-driven (cfg.CookieSecure: true in production, false
@@ -217,6 +223,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Email required and password must be at least 8 characters")
 		return
 	}
+	if len(req.Password) > auth.MaxPasswordBytes {
+		writeError(w, http.StatusBadRequest, "Le mot de passe ne doit pas dépasser 72 octets")
+		return
+	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
@@ -229,16 +239,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, refreshToken, err := h.issueSession(w, r, user.ID, user.Email, "")
+	accessToken, _, err := h.issueSession(w, r, user.ID, user.Email, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate session tokens")
 		return
 	}
-	writeJSON(w, http.StatusCreated, AuthResponse{
-		Token:        accessToken,
-		RefreshToken: refreshToken,
-		User:         user,
-	})
+	writeJSON(w, http.StatusCreated, AuthResponse{Token: accessToken, User: user})
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -253,26 +259,33 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if blocked, retryAfter := h.throttle.Blocked(req.Email); blocked {
+		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
+		writeError(w, http.StatusTooManyRequests, "Trop de tentatives de connexion pour ce compte : réessayez plus tard")
+		return
+	}
+
+	// An unknown address and a wrong password take the same time and give the same answer.
 	user, err := h.repo.GetUserByEmail(r.Context(), req.Email)
-	if err != nil {
+	if err != nil || user.PasswordHash == nil {
+		auth.CheckPasswordAgainstNobody(req.Password)
+		h.throttle.Fail(req.Email)
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
-	if user.PasswordHash == nil || !auth.CheckPassword(req.Password, *user.PasswordHash) {
+	if !auth.CheckPassword(req.Password, *user.PasswordHash) {
+		h.throttle.Fail(req.Email)
 		writeError(w, http.StatusUnauthorized, "Invalid email or password")
 		return
 	}
 
-	accessToken, refreshToken, err := h.issueSession(w, r, user.ID, user.Email, "")
+	h.throttle.Reset(req.Email)
+	accessToken, _, err := h.issueSession(w, r, user.ID, user.Email, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Failed to generate session tokens")
 		return
 	}
-	writeJSON(w, http.StatusOK, AuthResponse{
-		Token:        accessToken,
-		RefreshToken: refreshToken,
-		User:         user,
-	})
+	writeJSON(w, http.StatusOK, AuthResponse{Token: accessToken, User: user})
 }
 
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
@@ -344,11 +357,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	h.setRefreshTokenCookie(w, newPlainToken, expiresAt)
 	accessTokenExpiresAt := time.Now().Add(time.Duration(h.cfg.JWTAccessExpirationMinutes) * time.Minute)
 	h.setAccessTokenCookie(w, accessToken, accessTokenExpiresAt)
-	writeJSON(w, http.StatusOK, AuthResponse{
-		Token:        accessToken,
-		RefreshToken: newPlainToken,
-		User:         user,
-	})
+	writeJSON(w, http.StatusOK, AuthResponse{Token: accessToken, User: user})
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
@@ -407,6 +416,8 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	verifier := auth.GenerateCodeVerifier()
+
 	expire := time.Now().Add(oidcCookieTTL)
 	http.SetCookie(w, &http.Cookie{ // NOSONAR - Secure is config-driven (cfg.CookieSecure), see comment on setRefreshTokenCookie.
 		Name:     oidcStateCookie,
@@ -427,7 +438,17 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 	})
 
-	http.Redirect(w, r, h.oidcService.LoginURL(state, nonceHashed), http.StatusFound)
+	http.SetCookie(w, &http.Cookie{ // NOSONAR - Secure is config-driven (cfg.CookieSecure), see comment on setRefreshTokenCookie.
+		Name:     oidcVerifierCookie,
+		Value:    verifier,
+		Expires:  expire,
+		HttpOnly: true,
+		Secure:   h.cfg.CookieSecure,
+		SameSite: http.SameSiteLaxMode,
+		Path:     "/",
+	})
+
+	http.Redirect(w, r, h.oidcService.LoginURL(state, nonceHashed, verifier), http.StatusFound)
 }
 
 // OIDCCallback handles the redirect from the IdP, exchanges the authorization code,
@@ -446,7 +467,7 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	h.clearCookie(w, oidcStateCookie)
 
-	if r.URL.Query().Get("state") != stateCookie.Value {
+	if subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) != 1 {
 		writeError(w, http.StatusBadRequest, "OIDC state mismatch - possible CSRF attempt")
 		return
 	}
@@ -458,6 +479,13 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	h.clearCookie(w, oidcNonceCookie)
 
+	verifierCookie, err := r.Cookie(oidcVerifierCookie)
+	if err != nil || verifierCookie.Value == "" {
+		writeError(w, http.StatusBadRequest, "Missing OIDC verifier cookie - session may have expired")
+		return
+	}
+	h.clearCookie(w, oidcVerifierCookie)
+
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		oidcErr := r.URL.Query().Get("error")
@@ -465,13 +493,19 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userInfo, err := h.oidcService.ExchangeCode(r.Context(), code, nonceCookie.Value)
+	userInfo, err := h.oidcService.ExchangeCode(r.Context(), code, nonceCookie.Value, verifierCookie.Value)
 	if err != nil {
 		if errors.Is(err, auth.ErrEmailNotAllowed) {
 			writeError(w, http.StatusForbidden, "Your email address is not authorized on this instance")
 			return
 		}
-		writeError(w, http.StatusUnauthorized, fmt.Sprintf("OIDC authentication failed: %v", err))
+		if errors.Is(err, auth.ErrEmailNotVerified) {
+			writeError(w, http.StatusForbidden, "Votre fournisseur d'identité n'a pas vérifié votre adresse e-mail")
+			return
+		}
+		// The detail (token endpoint answers, claim names) is for the logs, not for whoever sent the request.
+		slog.WarnContext(r.Context(), "OIDC authentication failed", "component", "auth", "error", err)
+		writeError(w, http.StatusUnauthorized, "OIDC authentication failed")
 		return
 	}
 
@@ -493,4 +527,4 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	// Both the refresh and access token cookies were already set on this response by
 	// issueSession; the SPA just needs to know the handshake succeeded.
 	http.Redirect(w, r, "/oidc-callback", http.StatusFound)
-}
+}
