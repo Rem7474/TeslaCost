@@ -2460,17 +2460,17 @@ async function handleDeleteWebhook() {
               </div>
               <div>
                 <label for="charge-form-kwh-added" class="block text-xs font-semibold text-slate-300 mb-1">Énergie ajoutée (kWh)</label>
-                <input id="charge-form-kwh-added" v-model="chargeForm.kwh_added" type="number" step="0.001" min="0.001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <input id="charge-form-kwh-added" v-model="chargeForm.kwh_added" type="number" inputmode="decimal" step="0.001" min="0.001" required class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
             </div>
             <div class="grid grid-cols-2 gap-3">
               <div>
                 <label for="charge-form-address" class="block text-xs font-semibold text-slate-300 mb-1">Lieu (optionnel)</label>
-                <input id="charge-form-address" v-model="chargeForm.address" placeholder="Borne, domicile..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <input id="charge-form-address" v-model="chargeForm.address" placeholder="Borne, domicile..." class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
               <div>
                 <label for="charge-form-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
-                <input id="charge-form-odometer" v-model="chargeForm.odometer" type="number" min="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+                <input id="charge-form-odometer" v-model="chargeForm.odometer" type="number" inputmode="numeric" min="0" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               </div>
             </div>
           </template>
@@ -2478,7 +2478,7 @@ async function handleDeleteWebhook() {
           <div>
             <label for="charge-form-cost" class="block text-xs font-semibold text-slate-300 mb-1">Coût</label>
             <div class="flex gap-1.5">
-              <input id="charge-form-cost" v-model="chargeForm.cost" type="number" step="0.01" min="0" required placeholder="0.00 si gratuite" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input id="charge-form-cost" v-model="chargeForm.cost" type="number" inputmode="decimal" step="0.01" min="0" required placeholder="0.00 si gratuite" class="field-touch w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
               <label for="charge-form-currency" class="sr-only">Devise</label>
               <select id="charge-form-currency" v-model="chargeForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
                 <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
@@ -2487,11 +2487,11 @@ async function handleDeleteWebhook() {
           </div>
           <div v-if="chargeForm.currency !== 'EUR'">
             <label for="charge-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ chargeForm.currency }} = ? €)</label>
-            <input id="charge-form-fx-rate" v-model="chargeForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <input id="charge-form-fx-rate" v-model="chargeForm.fx_rate" type="number" inputmode="decimal" step="0.000001" min="0.000001" required class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
             <label for="charge-form-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes (optionnel)</label>
-            <input id="charge-form-notes" v-model="chargeForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <input id="charge-form-notes" v-model="chargeForm.notes" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <!-- Justificatif / Facture -->

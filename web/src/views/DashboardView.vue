@@ -1316,7 +1316,7 @@ function renderCharts() {
             </div>
           </div>
           <div class="h-64 sm:h-72">
-            <canvas ref="monthlyChartRef"></canvas>
+            <canvas ref="monthlyChartRef" role="img" aria-label="Évolution mensuelle du coût par poste"></canvas>
           </div>
         </div>
 
@@ -1324,7 +1324,7 @@ function renderCharts() {
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
           <h3 class="text-sm font-bold text-white mb-4">Répartition du coût complet</h3>
           <div class="h-56 sm:h-64">
-            <canvas ref="donutChartRef"></canvas>
+            <canvas ref="donutChartRef" role="img" aria-label="Répartition du coût complet par poste"></canvas>
           </div>
         </div>
       </div>
@@ -1377,7 +1377,7 @@ function renderCharts() {
         </div>
 
         <div class="h-64 sm:h-72">
-          <canvas ref="mileageChartRef"></canvas>
+          <canvas ref="mileageChartRef" role="img" aria-label="Kilométrage mensuel et coût au kilomètre"></canvas>
         </div>
       </div>
 
@@ -1542,7 +1542,7 @@ function renderCharts() {
               <span>Répartition du mois</span>
             </h4>
             <div class="w-full h-56 sm:h-64 relative">
-              <canvas ref="monthDonutRef"></canvas>
+              <canvas ref="monthDonutRef" role="img" aria-label="Répartition des coûts du mois sélectionné"></canvas>
             </div>
           </div>
 
