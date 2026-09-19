@@ -36,6 +36,7 @@
 - **Odomètre temps réel** : actualisation en direct de l'odomètre du véhicule dès que TeslaMate le remonte.
 - **Tâches en arrière-plan** : synchronisation non bloquante avec suivi de progression et exclusion mutuelle par véhicule.
 - **Reprise après coupure** : importation de l'historique des trajets (`/drives`) et recharges (`/charges`) reprenant automatiquement là où elle s'est arrêtée.
+- **Relecture complète après enrichissement** : quand une migration ajoute des données issues de TeslaMate (niveaux de batterie, température), l'état d'import est réinitialisé et la synchronisation suivante relit tout l'historique. Les coûts saisis à la main sont conservés.
 - **Relecture glissante (30 jours)** : mise à jour automatique des coûts de recharge complétés a posteriori dans TeslaMate.
 - **Recharges manuelles & sans coût** : signalement clair des recharges sans tarif (jamais 0 € imposé) et saisie possible des recharges hors suivi (ex: prise domestique chez un tiers).
 - **Contrôle d'intégrité** : vérification de continuité de l'odomètre (trous, reculs, écarts de distance) et seuil de sécurité sur la suppression massive de données.
@@ -48,6 +49,7 @@
   - *LOA & LLD* : prise en compte de l'apport initial, des loyers mensuels, du dépôt de garantie, du forfait kilométrique contractuel et provision mensuelle pour dépassement ou frais de remise en état.
 - **Indicateurs financiers avancés** : coût d'usage au km (énergie + péages), coût complet au km, coût net des recettes de covoiturage et score de complétude du TCO.
 - **Efficacité énergétique** (véhicules électriques) : consommation réelle en kWh/100 km, coût de l'énergie aux 100 km (mensuel et moyenne sur 3 mois), rendement de charge (énergie stockée sur énergie tirée du réseau) et répartition des recharges entre prise domestique, AC et DC d'après leur puissance moyenne. Endpoint `GET /api/vehicles/{id}/energy-stats`.
+- **Batterie et température** : niveau de batterie de début et de fin de chaque trajet et recharge, température extérieure moyenne (convertie en °C quelle que soit l'unité de TeslaMate), capacité utile estimée d'après l'énergie ajoutée et le pourcentage gagné, coût d'une charge de 0 à 100 % par type de recharge, et surconsommation par temps froid comparée au temps doux. La santé de la batterie calculée par TeslaMate (`/battery-health`, versions récentes de TeslaMateApi) est relevée à chaque synchronisation, une fois par jour, pour tracer son évolution.
 
 ### 4. Rappels d'entretien & Notifications Homelab
 - **Double condition de déclenchement** : surveillance combinée de la date d'échéance et/ou du seuil kilométrique calculé sur l'odomètre réel.
