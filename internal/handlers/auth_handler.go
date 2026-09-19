@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/teslacost/teslacost/internal/config"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
+	"github.com/teslacost/teslacost/internal/models"
 )
 
 const (
@@ -134,6 +136,15 @@ func (h *AuthHandler) clearCookie(w http.ResponseWriter, name string) {
 	})
 }
 
+// clientAddress is the address to record for a request, without a port: r.RemoteAddr is already the client's
+// address once the ClientIP middleware ran, and a "host:port" would not fit the column of an IPv6 client.
+func clientAddress(r *http.Request) string {
+	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
 func (h *AuthHandler) issueSession(w http.ResponseWriter, r *http.Request, userID, email, familyID string) (string, string, error) {
 	accessToken, err := auth.GenerateAccessToken(userID, email, h.cfg.JWTSecret, h.cfg.JWTAccessExpirationMinutes)
 	if err != nil {
@@ -154,7 +165,7 @@ func (h *AuthHandler) issueSession(w http.ResponseWriter, r *http.Request, userI
 	}
 
 	expiresAt := time.Now().Add(time.Duration(h.cfg.JWTRefreshExpirationDays) * 24 * time.Hour)
-	ip := r.RemoteAddr
+	ip := clientAddress(r)
 	ua := r.UserAgent()
 	var ipPtr, uaPtr *string
 	if ip != "" {
@@ -317,7 +328,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresAt := time.Now().Add(time.Duration(h.cfg.JWTRefreshExpirationDays) * 24 * time.Hour)
-	ip := r.RemoteAddr
+	ip := clientAddress(r)
 	ua := r.UserAgent()
 	var ipPtr, uaPtr *string
 	if ip != "" {
@@ -394,7 +405,10 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "User not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, user)
+	writeJSON(w, http.StatusOK, struct {
+		*models.User
+		HasPassword bool `json:"has_password"`
+	}{user, user.PasswordHash != nil})
 }
 
 // OIDCLogin initiates the Authorization Code Flow: generates state + nonce cookies,

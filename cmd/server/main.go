@@ -81,6 +81,34 @@ func configureLogging(cfg *config.Config) {
 	slog.SetDefault(slog.New(requestIDHandler{handler}))
 }
 
+// purgeExpiredRefreshTokens deletes the refresh tokens that can no longer be used, at start-up and then every
+// interval, until ctx ends.
+func purgeExpiredRefreshTokens(ctx context.Context, repo *database.Repository, interval time.Duration) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("recovered panic in the token purge", "component", "auth", "error", r)
+		}
+	}()
+	purge := func() {
+		if n, err := repo.CleanupExpiredRefreshTokens(ctx); err != nil {
+			slog.Warn("could not purge expired refresh tokens", "component", "auth", "error", err)
+		} else if n > 0 {
+			slog.Info("purged expired refresh tokens", "component", "auth", "count", n)
+		}
+	}
+	purge()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			purge()
+		}
+	}
+}
+
 // maxJSONBodyBytes caps the body of API requests; uploads have their own limit in their handler.
 const maxJSONBodyBytes = 1 << 20
 
@@ -329,6 +357,10 @@ func main() {
 			r.Use(handlers.Idempotency(repo))
 
 			r.Get("/api/auth/me", authHandler.Me)
+			r.Get("/api/auth/sessions", authHandler.ListSessions)
+			r.Delete("/api/auth/sessions/{sessionId}", authHandler.RevokeSession)
+			r.Post("/api/auth/logout-all", authHandler.LogoutAll)
+			r.With(httprate.LimitByIP(10, time.Minute)).Post("/api/auth/password", authHandler.ChangePassword)
 
 			// EV vs ICE cost comparison (informational)
 			r.Route("/api/comparison-scenarios", func(r chi.Router) {
@@ -479,6 +511,11 @@ func main() {
 
 	if syncService != nil && cfg.SyncIntervalMinutes > 0 {
 		go syncService.StartBackgroundWorker(bgCtx, cfg.SyncIntervalMinutes)
+	}
+
+	// Every refresh adds a token row: the expired and revoked ones are purged once a day.
+	if repo != nil {
+		go purgeExpiredRefreshTokens(bgCtx, repo, 24*time.Hour)
 	}
 
 	go func() {

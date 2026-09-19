@@ -15,6 +15,7 @@ import {
   Zap,
   Scale,
   ClipboardList,
+  UserRound,
   Plus,
   Ellipsis,
   X,
@@ -36,6 +37,7 @@ const allNavItems = [
   { name: 'expenses', label: 'Dépenses', path: '/expenses', icon: Receipt },
   { name: 'comparison', label: 'Comparatif', path: '/comparison', icon: Scale },
   { name: 'vehicles', label: 'Véhicules', path: '/vehicles', icon: Car },
+  { name: 'account', label: 'Compte', path: '/account', icon: UserRound },
 ]
 
 // Drives and carpooling rely on TeslaMate trips, which a combustion vehicle does not have

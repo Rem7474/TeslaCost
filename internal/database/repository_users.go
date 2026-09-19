@@ -280,6 +280,77 @@ func (r *Repository) RevokeAllUserRefreshTokens(ctx context.Context, userID stri
 	return nil
 }
 
+// ListSessions returns the signed-in devices of a user: the refresh token families that still hold a usable token,
+// most recently used first. Each rotation adds a token to its family, so the family's own bounds are the session's.
+func (r *Repository) ListSessions(ctx context.Context, userID string) ([]models.Session, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT family_id::text,
+		       MIN(created_at), MAX(created_at),
+		       (ARRAY_AGG(created_ip ORDER BY created_at DESC))[1],
+		       (ARRAY_AGG(user_agent ORDER BY created_at DESC))[1]
+		FROM refresh_tokens
+		WHERE user_id = $1
+		GROUP BY family_id
+		HAVING BOOL_OR(NOT is_revoked AND expires_at > NOW())
+		ORDER BY MAX(created_at) DESC;
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions: %w", err)
+	}
+	defer rows.Close()
+	sessions := []models.Session{}
+	for rows.Next() {
+		var s models.Session
+		if err := rows.Scan(&s.ID, &s.StartedAt, &s.LastUsedAt, &s.IP, &s.UserAgent); err != nil {
+			return nil, fmt.Errorf("failed to read a session: %w", err)
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, rows.Err()
+}
+
+// RevokeUserSession revokes one of the user's sessions. It reports false when the family is not theirs (or not
+// there): a session id never reveals whether it exists for someone else.
+func (r *Repository) RevokeUserSession(ctx context.Context, userID, familyID string) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `UPDATE refresh_tokens SET is_revoked = TRUE WHERE user_id = $1 AND family_id::text = $2;`, userID, familyID)
+	if err != nil {
+		return false, fmt.Errorf("failed to revoke session: %w", err)
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+// RevokeUserSessionsExcept revokes every session of the user but keepFamily (all of them when it is empty) and
+// returns how many sessions were still active.
+func (r *Repository) RevokeUserSessionsExcept(ctx context.Context, userID, keepFamily string) (int, error) {
+	var revoked int
+	err := r.pool.QueryRow(ctx, `
+		WITH active AS (
+			SELECT DISTINCT family_id FROM refresh_tokens
+			WHERE user_id = $1 AND NOT is_revoked AND expires_at > NOW() AND ($2 = '' OR family_id::text <> $2)
+		), done AS (
+			UPDATE refresh_tokens SET is_revoked = TRUE
+			WHERE user_id = $1 AND family_id IN (SELECT family_id FROM active)
+		)
+		SELECT COUNT(*) FROM active;
+	`, userID, keepFamily).Scan(&revoked)
+	if err != nil {
+		return 0, fmt.Errorf("failed to revoke sessions: %w", err)
+	}
+	return revoked, nil
+}
+
+// UpdatePasswordHash replaces the local password of a user.
+func (r *Repository) UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE id = $1;`, userID, passwordHash)
+	if err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // CleanupExpiredRefreshTokens deletes old expired/revoked refresh tokens older than 7 days.
 func (r *Repository) CleanupExpiredRefreshTokens(ctx context.Context) (int64, error) {
 	query := `DELETE FROM refresh_tokens WHERE expires_at < NOW() - INTERVAL '7 days' OR (is_revoked = TRUE AND created_at < NOW() - INTERVAL '7 days');`
