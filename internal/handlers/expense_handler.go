@@ -3,8 +3,8 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"path/filepath"
 	"strconv"
@@ -590,22 +590,10 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	// Determine MIME type
-	detected := http.DetectContentType(data)
-	headerType := strings.ToLower(header.Header.Get("Content-Type"))
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-
-	var mimeType string
-	switch {
-	case strings.HasPrefix(headerType, "application/pdf") || strings.HasPrefix(detected, "application/pdf") || ext == ".pdf":
-		mimeType = "application/pdf"
-	case strings.HasPrefix(headerType, "image/jpeg") || strings.HasPrefix(detected, "image/jpeg") || ext == ".jpg" || ext == ".jpeg":
-		mimeType = "image/jpeg"
-	case strings.HasPrefix(headerType, "image/png") || strings.HasPrefix(detected, "image/png") || ext == ".png":
-		mimeType = "image/png"
-	case strings.HasPrefix(headerType, "image/webp") || strings.HasPrefix(detected, "image/webp") || ext == ".webp":
-		mimeType = "image/webp"
-	default:
+	// The type comes from the content, never from what the client declared or the extension: a file named
+	// receipt.pdf that is really HTML would otherwise be stored and served under a document type.
+	mimeType, ok := documentMimeType(data)
+	if !ok {
 		writeError(w, http.StatusBadRequest, "Format de fichier non supporté. Formats acceptés : PDF, PNG, JPEG, WEBP")
 		return
 	}
@@ -696,6 +684,15 @@ func (h *ExpenseHandler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 
 // DownloadDocument streams the document binary to the client for display or download.
 // The file is read from the filesystem volume; access is gated by DB ownership check.
+// documentMimeType identifies an accepted document (PDF, PNG, JPEG, WEBP) from its first bytes.
+func documentMimeType(data []byte) (string, bool) {
+	switch detected := http.DetectContentType(data); detected {
+	case "application/pdf", "image/jpeg", "image/png", "image/webp":
+		return detected, true
+	}
+	return "", false
+}
+
 func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	vehicleID := chi.URLParam(r, "vehicleId")
@@ -748,7 +745,12 @@ func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request
 
 	w.Header().Set("Content-Type", doc.MimeType)
 	w.Header().Set("Content-Length", strconv.FormatInt(int64(len(fileData)), 10))
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", doc.Filename))
+	disposition := mime.FormatMediaType("inline", map[string]string{"filename": doc.Filename})
+	if disposition == "" {
+		disposition = "inline"
+	}
+	w.Header().Set("Content-Disposition", disposition)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(fileData)
 }
