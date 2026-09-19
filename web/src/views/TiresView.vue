@@ -1886,7 +1886,7 @@ function formatDate(d: string) {
             </button>
             <button
               v-if="selectedTire.current_position !== 'DISPOSED'"
-              @click="openDisposeModal"
+              @click="openDisposeModal()"
               class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg transition-colors"
               title="Mettre au rebut (usé, crevé, vendu)"
             >
