@@ -1,0 +1,102 @@
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { Chart, registerables } from 'chart.js'
+import { Snowflake } from 'lucide-vue-next'
+import { AXIS_TEXT, GRID_COLOR, fmt, type EnergyStats } from './energyStats'
+
+Chart.register(...registerables)
+
+const props = defineProps<{ stats: EnergyStats }>()
+
+const canvas = ref<HTMLCanvasElement | null>(null)
+let chart: Chart | null = null
+
+const bins = computed(() => props.stats.temperature_bins)
+const effect = computed(() => props.stats.temperature)
+
+const binLabel = (b: { min_c: number; max_c: number }) => `${b.min_c} à ${b.max_c} °C`
+
+// Cold to warm: the colour repeats what the axis says.
+function binColor(minC: number) {
+  if (minC < 0) return '#60a5fa'
+  if (minC < 10) return '#38bdf8'
+  if (minC < 20) return '#34d399'
+  return '#f59e0b'
+}
+
+function draw() {
+  chart?.destroy()
+  chart = null
+  if (!canvas.value || bins.value.length === 0) return
+  chart = new Chart(canvas.value, {
+    type: 'bar',
+    data: {
+      labels: bins.value.map(binLabel),
+      datasets: [
+        {
+          label: 'Consommation',
+          data: bins.value.map((b) => b.consumption_kwh_100km),
+          backgroundColor: bins.value.map((b) => binColor(b.min_c)),
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${fmt(Number(ctx.raw), 1)} kWh/100 km`,
+            afterLabel: (ctx) => {
+              const b = bins.value[ctx.dataIndex]
+              return `${b.drives} trajet(s), ${fmt(b.distance_km, 0)} km`
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT } },
+        y: { beginAtZero: true, grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT }, title: { display: true, text: 'kWh/100 km', color: AXIS_TEXT } },
+      },
+    },
+  })
+}
+
+watch(() => props.stats, async () => {
+  await nextTick()
+  draw()
+}, { immediate: true, flush: 'post' })
+
+onBeforeUnmount(() => chart?.destroy())
+</script>
+
+<template>
+  <div v-if="bins.length > 0" class="space-y-3" role="group" aria-labelledby="energy-temperature-title">
+    <h4 id="energy-temperature-title" class="flex items-center gap-2 text-xs font-bold text-slate-200">
+      <Snowflake class="h-4 w-4 text-sky-400" aria-hidden="true" />
+      Effet de la température
+    </h4>
+
+    <p v-if="effect.extra_percent !== undefined" class="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-sm text-sky-100">
+      Sous 5 °C, la voiture consomme <strong>{{ fmt(effect.cold_consumption_kwh_100km, 1) }} kWh/100 km</strong>
+      contre {{ fmt(effect.mild_consumption_kwh_100km, 1) }} par temps doux (15 à 25 °C) :
+      <strong>+{{ fmt(effect.extra_percent, 0) }} %</strong><template v-if="effect.extra_cost_per_100km !== undefined">, soit environ {{ fmt(effect.extra_cost_per_100km, 2) }} € de plus aux 100 km</template>.
+    </p>
+
+    <div class="h-52">
+      <canvas ref="canvas" role="img" aria-label="Consommation moyenne aux 100 km selon la température extérieure"></canvas>
+    </div>
+    <table class="sr-only">
+      <caption>Consommation selon la température extérieure</caption>
+      <thead><tr><th>Température</th><th>kWh/100 km</th><th>Trajets</th><th>Distance (km)</th></tr></thead>
+      <tbody>
+        <tr v-for="b in bins" :key="b.min_c">
+          <td>{{ binLabel(b) }}</td><td>{{ fmt(b.consumption_kwh_100km, 1) }}</td><td>{{ b.drives }}</td><td>{{ fmt(b.distance_km, 0) }}</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="text-[11px] text-slate-500">Trajets d'au moins 5 km, groupés par température extérieure moyenne ; tranches de moins de 50 km masquées.</p>
+  </div>
+</template>
