@@ -1,0 +1,218 @@
+/** Same speed heuristic as the backend's HighwayDrivePredicate / Drive.IsHighway() (which also counts drives whose
+ * GPS detection found a toll). It favours recall: a false positive only adds the drive to the review queue. */
+export function isHighwayDrive(d: any) {
+  const avg = d.speed_avg || 0
+  const max = d.speed_max || 0
+  return (
+    (d.distance_km >= 40 && avg >= 70) ||
+    (d.distance_km >= 20 && max > 125) ||
+    (d.distance_km >= 20 && max >= 110 && avg >= 70) ||
+    (d.distance_km >= 8 && max >= 105 && avg >= 70)
+  )
+}
+
+/** Highway-like drive with no toll attached and not reviewed yet (same rule as the backend queue). */
+export function needsTollQualification(d: any) {
+  return !d.toll_reviewed_at && isHighwayDrive(d) && !(d.costs?.tolls_cost > 0)
+}
+
+/** Link to the drive in the TeslaMate Grafana "Drive Details" dashboard (standard TeslaMate dashboard uid),
+ * when the vehicle has a Grafana URL configured. The time range is padded so the whole drive is visible. */
+export function teslamateDriveUrl(vehicle: any, d: any): string | null {
+  if (!vehicle?.teslamate_grafana_url || !d?.teslamate_drive_id || d.is_trip_group) return null
+  const params = new URLSearchParams({
+    orgId: '1',
+    from: String(new Date(d.start_time).getTime() - 60_000),
+    to: String(new Date(d.end_time).getTime() + 60_000),
+    'var-car_id': String(vehicle.teslamate_car_id || 1),
+    'var-drive_id': String(d.teslamate_drive_id),
+  })
+  return `${vehicle.teslamate_grafana_url}/d/zm7wN6Zgz/drive-details?${params.toString()}`
+}
+
+export function tollApplyStatusLabel(status: string) {
+  switch (status) {
+    case 'skipped_manual':
+      return 'Un péage saisi manuellement existe déjà : il n\'est pas remplacé.'
+    case 'skipped_trip_group':
+      return 'Ce trajet fait partie d\'un voyage avec un péage : il n\'est pas modifié.'
+    case 'skipped_no_price':
+      return 'Aucun tarif estimé disponible pour ce trajet.'
+    case 'skipped_no_gps':
+      return 'Pas de tracé GPS disponible pour ce trajet.'
+    default:
+      return 'Le tarif n\'a pas pu être appliqué.'
+  }
+}
+
+export function formatDriveDate(dateStr: string) {
+  return new Date(dateStr).toLocaleDateString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+export function formatTripDates(tg: any) {
+  if (!tg.start_time) return 'Aucun trajet'
+  const start = new Date(tg.start_time).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+  const end = tg.end_time ? new Date(tg.end_time).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : start
+  return start === end ? start : `${start} → ${end}`
+}
+
+// ----- Month navigation (YYYY-MM strings) -----
+
+export function currentYearMonth(now = new Date()) {
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** The month `delta` months after (or before, when negative) the given YYYY-MM. */
+export function shiftMonth(yearMonth: string, delta: number) {
+  const [y, m] = yearMonth.split('-').map(Number)
+  const d = new Date(y, m - 1 + delta, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+/** First and last day (YYYY-MM-DD) of a YYYY-MM month. */
+export function monthRange(yearMonth: string) {
+  const [y, m] = yearMonth.split('-').map(Number)
+  const lastDay = new Date(y, m, 0).getDate()
+  const mm = String(m).padStart(2, '0')
+  return { from: `${y}-${mm}-01`, to: `${y}-${mm}-${String(lastDay).padStart(2, '0')}` }
+}
+
+export function formatMonthLabel(yearMonth: string) {
+  if (!yearMonth) return ''
+  const [y, m] = yearMonth.split('-').map(Number)
+  const str = new Date(y, m - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  return str.charAt(0).toUpperCase() + str.slice(1)
+}
+
+/** Page buttons to show: every page when there are few, otherwise the ends and a window around the current one. */
+export function paginationPages(current: number, totalPages: number): (number | string)[] {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, i) => i + 1)
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, '...', totalPages]
+  }
+  if (current >= totalPages - 3) {
+    return [1, '...', totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
+  }
+  return [1, '...', current - 1, current, current + 1, '...', totalPages]
+}
+
+// ----- Selection and tags -----
+
+/** Tags after toggling one: Pro and Perso exclude each other. */
+export function toggleTag(tags: string[] | undefined, tag: string): string[] {
+  let current = [...(tags || [])]
+  const idx = current.indexOf(tag)
+  if (idx > -1) {
+    current.splice(idx, 1)
+  } else {
+    if (tag === 'Pro') {
+      current = current.filter((t) => t !== 'Perso')
+    } else if (tag === 'Perso') {
+      current = current.filter((t) => t !== 'Pro')
+    }
+    current.push(tag)
+  }
+  return current
+}
+
+/** Tags after applying a batch tag: Pro or Perso replaces the other, null clears both. */
+export function applyBatchTag(tags: string[] | undefined, tag: 'Pro' | 'Perso' | null): string[] {
+  let current = [...(tags || [])]
+  if (tag === 'Pro') {
+    current = current.filter((t) => t !== 'Perso')
+    if (!current.includes('Pro')) current.push('Pro')
+  } else if (tag === 'Perso') {
+    current = current.filter((t) => t !== 'Pro')
+    if (!current.includes('Perso')) current.push('Perso')
+  } else {
+    current = current.filter((t) => t !== 'Pro' && t !== 'Perso')
+  }
+  return current
+}
+
+export function selectionSummary(list: any[]): string {
+  if (!list.length) return ''
+  const totalKm = list.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
+  const totalKwh = list.reduce((s, d) => s + (Number(d.costs?.electricity_kwh) || 0), 0)
+  const totalCost = list.reduce((s, d) => s + (Number(d.costs?.total_cost) || 0), 0)
+  return `${Math.round(totalKm).toLocaleString('fr-FR')} km • ${Math.round(totalKwh)} kWh • ${totalCost.toFixed(2)} €`
+}
+
+export const DRIVE_CSV_HEADERS = ['ID', 'Date', 'Depart', 'Arrivee', 'Distance_km', 'Duree_min', 'Conso_kWh_100km', 'Energie_kWh', 'Cout_Total_EUR', 'Cout_km_EUR', 'Tags']
+
+export function driveCsvRows(list: any[]) {
+  return list.map((d) => [
+    d.id,
+    d.start_time ? new Date(d.start_time).toISOString().slice(0, 16) : '',
+    `"${(d.start_address || '').replace(/"/g, '""')}"`,
+    `"${(d.end_address || '').replace(/"/g, '""')}"`,
+    d.distance_km || 0,
+    d.duration_min || 0,
+    d.consumption_kwh_100km || 0,
+    d.costs?.electricity_kwh || 0,
+    (d.costs?.total_cost || 0).toFixed(2),
+    (d.costs?.cost_per_km || 0).toFixed(3),
+    `"${(d.tags || []).join(', ')}"`,
+  ])
+}
+
+/** Expenses of several drives with the ones they share (a trip group's expense) counted once. */
+export function uniqueById<T extends { id: string }>(items: T[]): T[] {
+  const map = new Map<string, T>()
+  for (const e of items) {
+    if (!map.has(e.id)) map.set(e.id, e)
+  }
+  return Array.from(map.values())
+}
+
+/** A trip group presented like a drive for the cost modal: distances and costs summed over its drives. */
+export function buildTripCostDrive(tg: any, tgDrives: any[]) {
+  const totalKm = tgDrives.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
+  const totalDuration = tgDrives.reduce((s, d) => s + (Number(d.duration_min) || 0), 0)
+  const totalKwh = tgDrives.reduce((s, d) => s + (Number(d.costs?.electricity_kwh) || 0), 0)
+  const elecCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.electricity_cost) || 0), 0)
+  const tiresCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.tires_cost) || 0), 0)
+  const maintCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.maintenance_cost) || 0), 0)
+  const insurCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.insurance_cost) || 0), 0)
+  const tollsCost = Number(tg.expenses_total || 0)
+  const totalCost = elecCost + tiresCost + maintCost + insurCost + tollsCost
+  const costPerKm = totalKm > 0 ? totalCost / totalKm : 0
+
+  const firstDrive = tgDrives[0]
+  const lastDrive = tgDrives[tgDrives.length - 1]
+
+  return {
+    id: tg.id,
+    is_trip_group: true,
+    start_time: tg.start_time || firstDrive?.start_time || tg.created_at,
+    start_address: firstDrive ? (firstDrive.start_address || 'Départ').split(',')[0] : 'Départ',
+    end_address: lastDrive ? (lastDrive.end_address || 'Arrivée').split(',')[0] : 'Arrivée',
+    distance_km: Math.round(totalKm),
+    duration_min: totalDuration,
+    tags: [],
+    trip_group_name: tg.name,
+    drives_count: tgDrives.length,
+    costs: {
+      electricity_kwh: Math.round(totalKwh),
+      electricity_rate: totalKwh > 0 ? elecCost / totalKwh : 0.22,
+      electricity_cost: elecCost,
+      tires_rate: totalKm > 0 ? tiresCost / totalKm : 0.02,
+      tires_cost: tiresCost,
+      maintenance_rate: totalKm > 0 ? maintCost / totalKm : 0.015,
+      maintenance_cost: maintCost,
+      insurance_rate: totalKm > 0 ? insurCost / totalKm : 0,
+      insurance_cost: insurCost,
+      tolls_cost: tollsCost,
+      total_cost: totalCost,
+      cost_per_km: costPerKm,
+      has_estimates: tgDrives.some((d) => d.costs?.has_estimates),
+    },
+  }
+}
