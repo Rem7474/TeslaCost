@@ -186,7 +186,7 @@ export const api = {
   // Fuel fill-ups (combustion vehicles); the list comes with consumption figures per segment and global stats
   getFuelLogs: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/fuel-logs`),
   createFuelLog: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/fuel-logs`, { method: 'POST', body: JSON.stringify(data) }),
+    request<any>(`/vehicles/${vehicleId}/fuel-logs`, { method: 'POST', body: JSON.stringify(data) }, `Plein de ${data.amount} €`),
   updateFuelLog: (vehicleId: string, fuelLogId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/fuel-logs/${fuelLogId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFuelLog: (vehicleId: string, fuelLogId: string) =>

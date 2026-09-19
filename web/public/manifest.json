@@ -31,5 +31,32 @@
       "type": "image/svg+xml",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Saisie rapide",
+      "short_name": "Saisie",
+      "description": "Ajouter une recharge, un plein ou un coût",
+      "url": "/?quick=1",
+      "icons": [
+        {
+          "src": "/pwa-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Péage / parking",
+      "short_name": "Péage",
+      "url": "/?quick=expense",
+      "icons": [
+        {
+          "src": "/pwa-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }
