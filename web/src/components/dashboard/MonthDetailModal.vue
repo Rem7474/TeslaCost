@@ -1,0 +1,396 @@
+<script setup lang="ts">
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Chart, registerables } from 'chart.js'
+import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info } from 'lucide-vue-next'
+import { buildMonthBreakdown, formatMonthName, type MonthDetailMode } from '@/utils/dashboard'
+
+Chart.register(...registerables)
+
+// Cost detail of one month with a donut chart and the itemized list; ← / → move between months, Esc closes.
+// The modal is open while a month is selected.
+const props = defineProps<{ monthlyCosts: any[] }>()
+const selectedMonth = defineModel<any | null>('month', { required: true })
+
+const monthDonutRef = ref<HTMLCanvasElement | null>(null)
+let monthDonutChartInstance: Chart | null = null
+const monthDetailViewMode = ref<MonthDetailMode>('economic')
+
+const ITEM_ICONS: Record<string, any> = {
+  energy: Zap,
+  tolls: Receipt,
+  tires: Disc,
+  maintenance: Wrench,
+  insurance: Shield,
+  financing: Briefcase,
+  other: Coins,
+}
+
+const selectedMonthIndex = computed(() => {
+  if (!selectedMonth.value) return -1
+  return props.monthlyCosts.findIndex((m: any) => m.month === selectedMonth.value.month)
+})
+
+const hasPrevMonth = computed(() => selectedMonthIndex.value > 0)
+const hasNextMonth = computed(() => selectedMonthIndex.value >= 0 && selectedMonthIndex.value < props.monthlyCosts.length - 1)
+
+function selectPrevMonth() {
+  if (hasPrevMonth.value) {
+    selectedMonth.value = props.monthlyCosts[selectedMonthIndex.value - 1]
+  }
+}
+
+function selectNextMonth() {
+  if (hasNextMonth.value) {
+    selectedMonth.value = props.monthlyCosts[selectedMonthIndex.value + 1]
+  }
+}
+
+function closeMonthDetail() {
+  selectedMonth.value = null
+}
+
+const selectedMonthBreakdown = computed(() => {
+  if (!selectedMonth.value) return null
+  const breakdown = buildMonthBreakdown(selectedMonth.value, monthDetailViewMode.value)
+  return { ...breakdown, items: breakdown.items.map((it) => ({ ...it, icon: ITEM_ICONS[it.key] })) }
+})
+
+function renderMonthDonutChart() {
+  if (monthDonutChartInstance) {
+    monthDonutChartInstance.destroy()
+    monthDonutChartInstance = null
+  }
+  if (!monthDonutRef.value || !selectedMonthBreakdown.value) return
+
+  const breakdown = selectedMonthBreakdown.value
+  const activeItems = breakdown.items.filter((it) => it.displayAmount > 0.005)
+
+  let labels: string[]
+  let data: number[]
+  let backgroundColors: string[]
+
+  if (activeItems.length > 0) {
+    labels = activeItems.map((it) => it.label)
+    data = activeItems.map((it) => it.displayAmount)
+    backgroundColors = activeItems.map((it) => it.color)
+  } else {
+    labels = ['Aucune dépense']
+    data = [1]
+    backgroundColors = ['#334155']
+  }
+
+  monthDonutChartInstance = new Chart(monthDonutRef.value, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [
+        {
+          data,
+          backgroundColor: backgroundColors,
+          borderWidth: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#94a3b8',
+            font: { size: 11 },
+            boxWidth: 10,
+            padding: 10,
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              if (activeItems.length === 0) return ' Aucune dépense enregistrée'
+              const val = Number(ctx.raw || 0).toFixed(2)
+              const total = breakdown.activeTotal
+              const pct = total > 0 ? ((Number(ctx.raw || 0) / total) * 100).toFixed(1) : '0'
+              return ` ${ctx.label} : ${val} € (${pct}%)`
+            },
+          },
+        },
+      },
+      cutout: '68%',
+    },
+  })
+}
+
+// Opening or changing the month draws the chart once the canvas exists; closing destroys it
+watch(selectedMonth, async (month) => {
+  if (!month) {
+    if (monthDonutChartInstance) {
+      monthDonutChartInstance.destroy()
+      monthDonutChartInstance = null
+    }
+    return
+  }
+  await nextTick()
+  renderMonthDonutChart()
+})
+
+watch(monthDetailViewMode, () => {
+  renderMonthDonutChart()
+})
+
+function onKeydown(e: KeyboardEvent) {
+  if (!selectedMonth.value) return
+  if (e.key === 'Escape') {
+    closeMonthDetail()
+  } else if (e.key === 'ArrowLeft') {
+    selectPrevMonth()
+  } else if (e.key === 'ArrowRight') {
+    selectNextMonth()
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  if (monthDonutChartInstance) monthDonutChartInstance.destroy()
+})
+</script>
+
+<template>
+  <div
+    v-if="selectedMonth && selectedMonthBreakdown"
+    class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    @click.self="closeMonthDetail"
+  >
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+      <!-- Header with Month Title, Prev/Next Navigation, and Close Button -->
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between gap-2 shrink-0 bg-slate-900/95">
+        <div class="flex items-center gap-2 sm:gap-3 min-w-0 pr-2">
+          <div class="p-2 bg-indigo-500/10 text-indigo-400 rounded-xl shrink-0">
+            <PieChart class="w-5 h-5" />
+          </div>
+          <div class="min-w-0 truncate">
+            <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate">
+              <span class="truncate">Détail des coûts — {{ formatMonthName(selectedMonthBreakdown.month) }}</span>
+            </h3>
+            <p class="text-xs text-slate-400 truncate">
+              Ventilation complète des postes de dépenses et coût kilométrique
+            </p>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-1 sm:gap-2 shrink-0">
+          <div class="flex items-center bg-slate-800/80 rounded-xl border border-slate-700/60 p-0.5">
+            <button
+              type="button"
+              :disabled="!hasPrevMonth"
+              @click="selectPrevMonth"
+              class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 rounded-lg hover:bg-slate-700/50 transition-colors"
+              title="Mois précédent (←)"
+            >
+              <ChevronLeft class="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              :disabled="!hasNextMonth"
+              @click="selectNextMonth"
+              class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 rounded-lg hover:bg-slate-700/50 transition-colors"
+              title="Mois suivant (→)"
+            >
+              <ChevronRight class="w-4 h-4" />
+            </button>
+          </div>
+          <button
+            type="button"
+            @click="closeMonthDetail"
+            class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            title="Fermer (Échap)"
+          >
+            <X class="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-5">
+
+      <!-- 4 KPI Summary Cards for the Month -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+          <span class="text-[11px] font-medium text-slate-400 block">Distance totale</span>
+          <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
+            {{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString('fr-FR') }} <span class="text-xs font-normal text-slate-400">km</span>
+          </div>
+          <span v-if="selectedMonthBreakdown.smoothedKm > 0" class="text-[10px] text-slate-400 block truncate">
+            dont {{ Math.round(selectedMonthBreakdown.smoothedKm).toLocaleString('fr-FR') }} km lissés
+          </span>
+          <span v-else class="text-[10px] text-slate-500 block truncate">100% trajets GPS</span>
+        </div>
+
+        <div class="bg-emerald-500/5 border border-emerald-500/30 p-3 rounded-xl">
+          <span class="text-[11px] font-medium text-emerald-400 block">Coût kilométrique</span>
+          <div class="text-base sm:text-lg font-extrabold text-emerald-400 mt-0.5">
+            {{ selectedMonthBreakdown.costPerKm.toFixed(3) }} <span class="text-xs font-normal text-emerald-500/80">€/km</span>
+          </div>
+          <span class="text-[10px] text-emerald-400/70 block">Coût de revient réel</span>
+        </div>
+
+        <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+          <span class="text-[11px] font-medium text-slate-400 block">Coût d'usage calculé</span>
+          <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
+            {{ selectedMonthBreakdown.economicTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
+          </div>
+          <span class="text-[10px] text-slate-400 block">Base coût au km</span>
+        </div>
+
+        <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
+          <span class="text-[11px] font-medium text-slate-400 block">Total décaissé (cash)</span>
+          <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
+            {{ selectedMonthBreakdown.cashTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
+          </div>
+          <span class="text-[10px] text-slate-400 block">Règlements du mois</span>
+        </div>
+      </div>
+
+      <!-- Toggle View Mode: Economic Cost vs Cash-Flow -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-slate-800/40 border border-slate-700/50 rounded-xl text-xs">
+        <span class="text-slate-300 font-medium flex items-center gap-1.5">
+          <Info class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          <span>Mode de calcul de la répartition :</span>
+        </span>
+        <div class="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-700/70">
+          <button
+            type="button"
+            @click="monthDetailViewMode = 'economic'"
+            :class="[
+              'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+              monthDetailViewMode === 'economic' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+            ]"
+          >
+            Coût de revient (€/km)
+          </button>
+          <button
+            type="button"
+            @click="monthDetailViewMode = 'cash'"
+            :class="[
+              'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+              monthDetailViewMode === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+            ]"
+          >
+            Dépenses décaissées (€)
+          </button>
+        </div>
+      </div>
+
+      <!-- Content: Donut Chart (Left) + Itemized Breakdown List (Right) -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+        <!-- Left (2 cols): Donut Chart -->
+        <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
+          <h4 class="text-xs font-bold text-white mb-2 self-start flex items-center gap-1.5">
+            <PieChart class="w-3.5 h-3.5 text-indigo-400" />
+            <span>Répartition du mois</span>
+          </h4>
+          <div class="w-full h-56 sm:h-64 relative">
+            <canvas ref="monthDonutRef" role="img" aria-label="Répartition des coûts du mois sélectionné"></canvas>
+          </div>
+        </div>
+
+        <!-- Right (3 cols): Itemized Table / List -->
+        <div class="md:col-span-3 space-y-2">
+          <h4 class="text-xs font-bold text-white mb-2 flex items-center justify-between">
+            <span>Détail chiffré par poste de dépense</span>
+            <span class="text-[11px] text-slate-400 font-normal">
+              {{ monthDetailViewMode === 'economic' ? 'Lissage d\'usage inclus' : 'Montants comptants' }}
+            </span>
+          </h4>
+
+          <div class="space-y-1.5 max-h-72 sm:max-h-80 overflow-y-auto pr-1">
+            <div
+              v-for="item in selectedMonthBreakdown.items"
+              :key="item.key"
+              class="p-2.5 bg-slate-800/50 border border-slate-700/40 rounded-xl flex items-center justify-between gap-3 text-xs hover:border-slate-600 transition-colors"
+            >
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span
+                  class="w-2.5 h-2.5 rounded-full shrink-0"
+                  :style="{ backgroundColor: item.color }"
+                ></span>
+                <component :is="item.icon" class="w-4 h-4 shrink-0 text-slate-400" />
+                <div class="min-w-0">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-semibold text-white truncate">{{ item.label }}</span>
+                    <span v-if="item.subLabel" class="text-[10px] px-1.5 py-0.2 bg-slate-700 text-slate-300 rounded font-normal">
+                      {{ item.subLabel }}
+                    </span>
+                  </div>
+                  <p v-if="item.note" class="text-[10px] text-slate-400 truncate">
+                    {{ item.note }}
+                  </p>
+                </div>
+              </div>
+
+              <div class="text-right shrink-0">
+                <div class="flex items-baseline justify-end gap-2">
+                  <span class="font-bold text-white text-xs sm:text-sm">
+                    {{ item.displayAmount.toFixed(2) }} €
+                  </span>
+                  <span class="text-[10px] text-slate-400 font-medium">
+                    ({{ item.sharePct.toFixed(1) }}%)
+                  </span>
+                </div>
+                <div class="text-[10px] text-emerald-400 font-medium">
+                  {{ item.costPerKm.toFixed(3) }} €/km
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Total Row -->
+          <div class="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex items-center justify-between text-xs mt-2">
+            <div class="font-bold text-white flex items-center gap-2">
+              <span>Total du mois</span>
+              <span class="text-[11px] text-slate-400 font-normal">({{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString('fr-FR') }} km)</span>
+            </div>
+            <div class="text-right">
+              <div class="font-extrabold text-white text-sm sm:text-base">
+                {{ selectedMonthBreakdown.activeTotal.toFixed(2) }} €
+              </div>
+              <div class="text-[11px] font-bold text-emerald-400">
+                {{ (selectedMonthBreakdown.distanceKm > 0 ? selectedMonthBreakdown.activeTotal / selectedMonthBreakdown.distanceKm : 0).toFixed(3) }} €/km
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <!-- Footer with Quick Links and Close Button -->
+      <div class="px-5 py-3.5 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0 bg-slate-900/95">
+        <div class="flex items-center gap-2">
+          <router-link
+            to="/drives"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5"
+          >
+            <Activity class="w-3.5 h-3.5 text-indigo-400" />
+            <span>Trajets du véhicule</span>
+          </router-link>
+          <router-link
+            to="/expenses"
+            class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5"
+          >
+            <Receipt class="w-3.5 h-3.5 text-amber-400" />
+            <span>Dépenses & Factures</span>
+          </router-link>
+        </div>
+
+        <button
+          type="button"
+          @click="closeMonthDetail"
+          class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors self-end sm:self-auto"
+        >
+          Fermer
+        </button>
+      </div>
+    </div>
+  </div>
+</template>

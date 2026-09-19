@@ -1,0 +1,133 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Chart, registerables } from 'chart.js'
+import { filterMonthsByRange, monthlyRangeOptions, type MonthlyRangeKey } from '@/utils/dashboard'
+
+Chart.register(...registerables)
+
+// Stacked monthly costs per item; a click on a month opens its detail
+const props = defineProps<{ monthlyCosts: any[] | null }>()
+const emit = defineEmits<{ 'open-month': [month: any] }>()
+
+const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
+const monthlyChartRange = ref<MonthlyRangeKey>('ALL')
+const filteredMonthlyCosts = computed(() => filterMonthsByRange(props.monthlyCosts || [], monthlyChartRange.value))
+let monthlyChartInstance: Chart | null = null
+
+function renderChart() {
+  if (!monthlyChartRef.value || !props.monthlyCosts) return
+  if (monthlyChartInstance) monthlyChartInstance.destroy()
+
+  const filteredList = filteredMonthlyCosts.value
+  const filteredLabels = filteredList.map((m: any) => m.month)
+  const energyData = filteredList.map((m: any) => m.energy)
+  const tollsData = filteredList.map((m: any) => m.tolls)
+  const tiresData = filteredList.map((m: any) => m.tires || 0)
+  const maintData = filteredList.map((m: any) => m.maintenance)
+  const insuranceData = filteredList.map((m: any) => m.insurance || 0)
+  const otherData = filteredList.map((m: any) => m.other || 0)
+  const financingData = filteredList.map((m: any) => m.financing || 0)
+
+  monthlyChartInstance = new Chart(monthlyChartRef.value, {
+    type: 'bar',
+    data: {
+      labels: filteredLabels,
+      datasets: [
+        { label: 'Énergie (€)', data: energyData, backgroundColor: '#38bdf8', borderRadius: 4 },
+        { label: 'Péages & Parkings (€)', data: tollsData, backgroundColor: '#f59e0b', borderRadius: 4 },
+        { label: 'Pneus (€)', data: tiresData, backgroundColor: '#10b981', borderRadius: 4 },
+        { label: 'Entretien (€)', data: maintData, backgroundColor: '#ec4899', borderRadius: 4 },
+        { label: 'Assurance (€)', data: insuranceData, backgroundColor: '#a855f7', borderRadius: 4 },
+        { label: 'Financement (€)', data: financingData, backgroundColor: '#f97316', borderRadius: 4 },
+        { label: 'Abonnements, taxes & autres (€)', data: otherData, backgroundColor: '#64748b', borderRadius: 4 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      onClick: (event: any) => {
+        if (!monthlyChartInstance) return
+        const points = monthlyChartInstance.getElementsAtEventForMode(
+          event.native || event,
+          'index',
+          { intersect: false },
+          true
+        )
+        if (points && points.length > 0) {
+          const dataIndex = points[0].index
+          const monthItem = filteredList[dataIndex]
+          if (monthItem) {
+            emit('open-month', monthItem)
+          }
+        }
+      },
+      onHover: (event: any, elements: any[]) => {
+        const canvas = monthlyChartRef.value
+        if (canvas) {
+          canvas.style.cursor = elements && elements.length > 0 ? 'pointer' : 'default'
+        }
+      },
+      plugins: {
+        legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const val = Number(context.raw || 0).toFixed(2)
+              return `${context.dataset.label} : ${val} €`
+            },
+            footer: (items) => {
+              const total = items.reduce((sum, item) => sum + (Number(item.raw) || 0), 0)
+              return `Total mois : ${total.toFixed(2)} €`
+            },
+          },
+        },
+      },
+      scales: {
+        x: { stacked: true, grid: { color: '#1e293b' }, ticks: { color: '#64748b' } },
+        y: {
+          stacked: true,
+          grid: { color: '#1e293b' },
+          ticks: { color: '#64748b', callback: (v) => `${v} €` },
+        },
+      },
+    },
+  })
+}
+
+onMounted(renderChart)
+watch([() => props.monthlyCosts, monthlyChartRange], renderChart, { flush: 'post' })
+onUnmounted(() => {
+  if (monthlyChartInstance) monthlyChartInstance.destroy()
+})
+</script>
+
+<template>
+  <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+      <h3 class="text-sm font-bold text-white flex items-center gap-2">
+        <span>Évolution mensuelle des dépenses (€)</span>
+      </h3>
+      <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5 self-start sm:self-auto">
+        <button
+          v-for="opt in monthlyRangeOptions"
+          :key="opt.key"
+          type="button"
+          @click="monthlyChartRange = opt.key"
+          :class="[
+            'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+            monthlyChartRange === opt.key ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white',
+          ]"
+        >
+          {{ opt.label }}
+        </button>
+      </div>
+    </div>
+    <div class="h-64 sm:h-72">
+      <canvas ref="monthlyChartRef" role="img" aria-label="Évolution mensuelle du coût par poste"></canvas>
+    </div>
+  </div>
+</template>
