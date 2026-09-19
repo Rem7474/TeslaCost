@@ -29,6 +29,7 @@ import {
   Wallet,
   CreditCard,
   KeyRound,
+  Pencil,
 } from 'lucide-vue-next'
 
 const vehicleStore = useVehicleStore()
