@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"sync"
 	"time"
@@ -67,6 +68,7 @@ type syncStore interface {
 	MarkSyncSuccess(ctx context.Context, vehicleID, resource string, fullImport bool) error
 	ReconcileTeslaMateRecords(ctx context.Context, resource, vehicleID string, coveredAfter *time.Time, seenIDs []int) (*database.ReconcileResult, error)
 	ListAllVehiclesWithTeslaMate(ctx context.Context) ([]models.Vehicle, error)
+	UpsertBatterySnapshot(ctx context.Context, vehicleID string, day time.Time, snap models.BatterySnapshot) error
 }
 
 // SyncService orchestrates synchronization from TeslaMate to TeslaCost.
@@ -242,6 +244,7 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 
 	drives := s.syncDrives(ctx, client, v, carID)
 	charges := s.syncCharges(ctx, client, v, carID)
+	s.syncBatteryHealth(ctx, client, v, carID)
 	syncWarnings = append(syncWarnings, drives.warnings...)
 	syncWarnings = append(syncWarnings, charges.warnings...)
 
@@ -263,6 +266,36 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		SyncedAt:        time.Now().UTC().Format(time.RFC3339),
 		Warnings:        syncWarnings,
 	}, nil
+}
+
+// syncBatteryHealth keeps today's battery health as computed by TeslaMate. It is best effort: TeslaMateApi
+// versions without the endpoint, or a vehicle with too little charging history, simply leave no snapshot.
+func (s *SyncService) syncBatteryHealth(ctx context.Context, client *teslamate.Client, v *models.Vehicle, carID int) {
+	if s.repo == nil {
+		return
+	}
+	health, err := client.GetBatteryHealth(ctx, carID)
+	if err != nil {
+		slog.Info("battery health not available", "component", "sync", "vehicle_id", v.ID, "reason", err)
+		return
+	}
+	if health.CurrentCapacity <= 0 && health.MaxCapacity <= 0 {
+		return
+	}
+	positive := func(v float64) *float64 {
+		if v <= 0 {
+			return nil
+		}
+		return &v
+	}
+	snap := models.BatterySnapshot{
+		MaxCapacityKwh:     positive(health.MaxCapacity),
+		CurrentCapacityKwh: positive(health.CurrentCapacity),
+		HealthPercent:      positive(health.BatteryHealthPercentage),
+	}
+	if err := s.repo.UpsertBatterySnapshot(ctx, v.ID, time.Now().UTC(), snap); err != nil {
+		slog.Warn("could not store battery health", "component", "sync", "vehicle_id", v.ID, "error", err)
+	}
 }
 
 type resourceSyncStats struct {
@@ -437,6 +470,8 @@ func buildDrive(vehicleID string, td teslamate.Drive, units *teslamate.Units, st
 		powerMin = &td.PowerMin
 	}
 
+	startLevel, endLevel := batteryLevels(td.BatteryDetails)
+
 	tmDriveID := td.DriveID
 	return &models.Drive{
 		VehicleID:           vehicleID,
@@ -455,8 +490,34 @@ func buildDrive(vehicleID string, td teslamate.Drive, units *teslamate.Units, st
 		EndAddress:          endAddr,
 		EnergyConsumedKwh:   td.EnergyConsumedNet,
 		ConsumptionKwh100km: td.ConsumptionNet,
+		StartBatteryLevel:   startLevel,
+		EndBatteryLevel:     endLevel,
+		OutsideTempC:        tempCelsius(td.OutsideTempAvg, units),
 		Tags:                []string{},
 	}
+}
+
+// batteryLevels returns the state of charge at both ends of a drive or charge; a missing end level (reported as
+// 0) means the reading is unknown.
+func batteryLevels(b teslamate.BatteryDetails) (start, end *int) {
+	if b.EndBatteryLevel <= 0 {
+		return nil, nil
+	}
+	s, e := b.StartBatteryLevel, b.EndBatteryLevel
+	return &s, &e
+}
+
+// tempCelsius converts the average outside temperature reported in the TeslaMate unit, to one decimal.
+func tempCelsius(v *float64, units *teslamate.Units) *float64 {
+	if v == nil {
+		return nil
+	}
+	c := *v
+	if units != nil {
+		c = teslamate.ConvertTemperatureToC(c, units.UnitOfTemperature)
+	}
+	c = math.Round(c*10) / 10
+	return &c
 }
 
 func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client, v *models.Vehicle, carID int) resourceSyncStats {
@@ -554,6 +615,8 @@ func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, 
 		kwhUsedPtr = &tc.ChargeEnergyUsed
 	}
 
+	startLevel, endLevel := batteryLevels(tc.BatteryDetails)
+
 	tmChargeID := tc.ChargeID
 	return &models.ChargeLog{
 		VehicleID:         vehicleID,
@@ -567,6 +630,9 @@ func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, 
 		CostSource:        "TESLAMATE",
 		Currency:          "EUR",
 		Odometer:          odoPtr,
+		StartBatteryLevel: startLevel,
+		EndBatteryLevel:   endLevel,
+		OutsideTempC:      tempCelsius(tc.OutsideTempAvg, units),
 	}
 }
 

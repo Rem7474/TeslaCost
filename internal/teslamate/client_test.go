@@ -180,3 +180,97 @@ func TestDistanceConversion(t *testing.T) {
 		t.Errorf("Expected %f km, got %f", expected, miInKm)
 	}
 }
+
+// Payloads shaped after TeslaMateApi's /drives, /charges and /battery-health responses.
+func TestBatteryAndTemperatureFieldsAreDecoded(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v1/cars/1/charges":
+			w.Write([]byte(`{"data":{"car":{"car_id":1},"charges":[
+				{"charge_id":7,"start_date":"2026-02-03T18:00:00Z","end_date":"2026-02-03T22:00:00Z","charge_energy_added":30.5,"charge_energy_used":33.1,
+				 "cost":6.2,"duration_min":240,"battery_details":{"start_battery_level":22,"end_battery_level":71},
+				 "range_ideal":{"start_range":100,"end_range":330},"outside_temp_avg":41.0,"odometer":12000},
+				{"charge_id":8,"start_date":"2026-02-04T18:00:00Z","end_date":"2026-02-04T19:00:00Z","charge_energy_added":10,"charge_energy_used":10,
+				 "duration_min":60,"battery_details":{"start_battery_level":50,"end_battery_level":60},"outside_temp_avg":null,"odometer":12100}],
+				"units":{"unit_of_length":"km","unit_of_temperature":"F"}}}`))
+		case "/api/v1/cars/1/drives":
+			w.Write([]byte(`{"data":{"car":{"car_id":1},"drives":[
+				{"drive_id":3,"start_date":"2026-02-03T08:00:00Z","end_date":"2026-02-03T09:00:00Z","odometer_details":{"odometer_start":1,"odometer_end":41,"odometer_distance":40},
+				 "battery_details":{"start_usable_battery_level":80,"start_battery_level":81,"end_usable_battery_level":70,"end_battery_level":71,"reduced_range":false,"is_sufficiently_precise":true},
+				 "outside_temp_avg":-2.5,"inside_temp_avg":20.1,"energy_consumed_net":6.1,"consumption_net":0.152}],
+				"units":{"unit_of_length":"km","unit_of_temperature":"C"}}}`))
+		case "/api/v1/cars/1/battery-health":
+			w.Write([]byte(`{"data":{"car":{"car_id":1},"battery_health":{"max_range":480,"current_range":462,"max_capacity":78.4,"current_capacity":75.1,"rated_efficiency":140.5,"battery_health_percentage":95.79},"units":{"unit_of_length":"km"}}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewClient(Config{BaseURL: server.URL, AuthType: AuthNone})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	charges, units, err := client.GetCharges(ctx, 1, ChargeFilterOptions{})
+	if err != nil || len(charges) != 2 {
+		t.Fatalf("charges: %v, %d", err, len(charges))
+	}
+	if b := charges[0].BatteryDetails; b.StartBatteryLevel != 22 || b.EndBatteryLevel != 71 {
+		t.Errorf("charge battery levels: %+v", b)
+	}
+	if charges[0].OutsideTempAvg == nil || *charges[0].OutsideTempAvg != 41.0 {
+		t.Errorf("charge temperature: %v", charges[0].OutsideTempAvg)
+	}
+	if charges[1].OutsideTempAvg != nil {
+		t.Errorf("a null temperature must stay nil, got %v", *charges[1].OutsideTempAvg)
+	}
+	if units.UnitOfTemperature != "F" {
+		t.Errorf("temperature unit: %q", units.UnitOfTemperature)
+	}
+
+	drives, _, err := client.GetDrives(ctx, 1, DriveFilterOptions{})
+	if err != nil || len(drives) != 1 {
+		t.Fatalf("drives: %v, %d", err, len(drives))
+	}
+	if b := drives[0].BatteryDetails; b.StartBatteryLevel != 81 || b.EndBatteryLevel != 71 {
+		t.Errorf("drive battery levels: %+v", b)
+	}
+	if drives[0].OutsideTempAvg == nil || *drives[0].OutsideTempAvg != -2.5 {
+		t.Errorf("drive temperature: %v", drives[0].OutsideTempAvg)
+	}
+
+	health, err := client.GetBatteryHealth(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if health.MaxCapacity != 78.4 || health.CurrentCapacity != 75.1 || health.BatteryHealthPercentage != 95.79 {
+		t.Errorf("battery health: %+v", health)
+	}
+}
+
+func TestBatteryHealthUnavailableOnOlderTeslaMateApi(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNotFound) }))
+	defer server.Close()
+	client, _ := NewClient(Config{BaseURL: server.URL, AuthType: AuthNone})
+	if _, err := client.GetBatteryHealth(context.Background(), 1); err == nil {
+		t.Fatal("a missing endpoint must be reported as an error so the caller can skip the snapshot")
+	}
+}
+
+func TestConvertTemperatureToC(t *testing.T) {
+	cases := []struct {
+		in   float64
+		unit string
+		want float64
+	}{
+		{41, "F", 5}, {32, "F", 0}, {14, "f", -10}, {-2.5, "C", -2.5}, {20, "", 20},
+	}
+	for _, c := range cases {
+		if got := ConvertTemperatureToC(c.in, c.unit); got < c.want-0.001 || got > c.want+0.001 {
+			t.Errorf("ConvertTemperatureToC(%v, %q) = %v, want %v", c.in, c.unit, got, c.want)
+		}
+	}
+}

@@ -1297,6 +1297,7 @@ function renderCharts() {
       <EnergyEfficiencyPanel
         v-if="vehicleStore.activeVehicle && !vehicleStore.isIce"
         :vehicle-id="vehicleStore.activeVehicle.id"
+        :grafana-url="vehicleStore.activeVehicle.teslamate_grafana_url"
         :sync-key="vehicleStore.lastSyncTimestamp"
       />
 

@@ -95,6 +95,10 @@ func (f *fakeSyncStore) ReconcileTeslaMateRecords(_ context.Context, resource, _
 	return res, nil
 }
 
+func (f *fakeSyncStore) UpsertBatterySnapshot(context.Context, string, time.Time, models.BatterySnapshot) error {
+	return nil
+}
+
 func (f *fakeSyncStore) ListAllVehiclesWithTeslaMate(context.Context) ([]models.Vehicle, error) {
 	return nil, nil
 }

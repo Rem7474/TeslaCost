@@ -3,43 +3,15 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Gauge } from 'lucide-vue-next'
 import { api } from '@/services/api'
+import EnergyBatterySection from './EnergyBatterySection.vue'
+import EnergyTemperatureSection from './EnergyTemperatureSection.vue'
+import { AXIS_TEXT, GRID_COLOR, fmt, fmtPercent, type ChargeClass, type EnergyStats } from './energyStats'
 
 Chart.register(...registerables)
 
-interface EnergyMonth {
-  month: string
-  distance_km: number
-  consumption_kwh_100km?: number
-  price_per_kwh?: number
-  cost_per_100km?: number
-  cost_per_100km_trailing?: number
-  kwh_added: number
-  energy_cost: number
-}
-
-interface ChargeClass {
-  class: 'SLOW' | 'AC' | 'DC' | 'UNKNOWN'
-  sessions: number
-  kwh_added: number
-  energy_cost: number
-  price_per_kwh?: number
-  charge_efficiency?: number
-}
-
-interface EnergyStats {
-  months: EnergyMonth[]
-  charge_classes: ChargeClass[]
-  summary: {
-    consumption_kwh_100km?: number
-    charge_efficiency?: number
-    price_per_kwh?: number
-    cost_per_100km?: number
-    sessions_without_cost: number
-  }
-}
-
 const props = defineProps<{
   vehicleId: string
+  grafanaUrl?: string | null
   // Bumped after a synchronization so the figures follow the imported drives and charges
   syncKey?: number
 }>()
@@ -69,9 +41,6 @@ const hasData = computed(() => (stats.value?.months.length ?? 0) > 0)
 
 const totalKwh = computed(() => (stats.value?.charge_classes ?? []).reduce((sum, c) => sum + c.kwh_added, 0))
 
-const fmt = (v: number | undefined, digits: number) =>
-  v === undefined ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })
-const fmtPercent = (v: number | undefined) => (v === undefined ? '—' : `${(v * 100).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} %`)
 const share = (c: ChargeClass) => (totalKwh.value > 0 ? Math.round((c.kwh_added / totalKwh.value) * 100) : 0)
 
 async function load() {
@@ -85,8 +54,6 @@ async function load() {
   }
 }
 
-const axisText = '#94a3b8'
-const gridColor = '#1e293b'
 
 function baseOptions(unit: string) {
   return {
@@ -94,7 +61,7 @@ function baseOptions(unit: string) {
     maintainAspectRatio: false,
     interaction: { mode: 'index' as const, intersect: false },
     plugins: {
-      legend: { position: 'top' as const, labels: { color: axisText, font: { size: 11 } } },
+      legend: { position: 'top' as const, labels: { color: AXIS_TEXT, font: { size: 11 } } },
       tooltip: {
         callbacks: {
           label: (ctx: any) => (ctx.raw === null || ctx.raw === undefined ? '' : `${ctx.dataset.label} : ${fmt(Number(ctx.raw), 2)} ${unit}`),
@@ -102,8 +69,8 @@ function baseOptions(unit: string) {
       },
     },
     scales: {
-      x: { grid: { color: gridColor }, ticks: { color: axisText } },
-      y: { grid: { color: gridColor }, ticks: { color: axisText, callback: (v: any) => `${v}` }, title: { display: true, text: unit, color: axisText } },
+      x: { grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT } },
+      y: { grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT, callback: (v: any) => `${v}` }, title: { display: true, text: unit, color: AXIS_TEXT } },
     },
   }
 }
@@ -217,7 +184,7 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <dl class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
         <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Consommation réelle</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ fmt(stats?.summary.consumption_kwh_100km, 1) }} <span class="text-xs font-medium text-slate-400">kWh/100 km</span></dd>
@@ -232,6 +199,11 @@ onBeforeUnmount(() => {
         <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rendement de charge</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ fmtPercent(stats?.summary.charge_efficiency) }}</dd>
         <p class="mt-0.5 text-[11px] text-slate-400">Énergie stockée dans la batterie sur énergie tirée du réseau.</p>
+      </div>
+      <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Charge complète</dt>
+        <dd class="mt-1 text-xl font-bold text-white">{{ fmt(stats?.summary.cost_per_full_charge, 2) }} <span class="text-xs font-medium text-slate-400">€ (0 → 100 %)</span></dd>
+        <p class="mt-0.5 text-[11px] text-slate-400">Extrapolé des recharges dont le coût et le niveau de batterie sont connus.</p>
       </div>
     </dl>
 
@@ -281,12 +253,17 @@ onBeforeUnmount(() => {
             <div class="h-full rounded-full" :class="c.class === 'DC' ? 'bg-amber-400' : c.class === 'AC' ? 'bg-sky-400' : 'bg-emerald-400'" :style="{ width: `${share(c)}%` }"></div>
           </div>
           <p class="mt-2 text-xs text-slate-400">
-            {{ fmt(c.kwh_added, 0) }} kWh · {{ fmt(c.price_per_kwh, 3) }} €/kWh · rendement {{ fmtPercent(c.charge_efficiency) }}
+            {{ fmt(c.kwh_added, 0) }} kWh · {{ fmt(c.price_per_kwh, 3) }} €/kWh · rendement {{ fmtPercent(c.charge_efficiency) }}<template v-if="c.cost_per_full_charge !== undefined"> · 0 → 100 % : {{ fmt(c.cost_per_full_charge, 2) }} €</template>
           </p>
         </li>
       </ul>
       <p class="mt-2 text-[11px] text-slate-500">Classement d'après la puissance moyenne de chaque recharge (énergie ajoutée sur sa durée).</p>
     </div>
+
+    <template v-if="stats">
+      <EnergyTemperatureSection :stats="stats" />
+      <EnergyBatterySection :stats="stats" :grafana-url="grafanaUrl" />
+    </template>
   </section>
   <p v-else-if="failed" role="alert" class="rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-slate-400">
     Les statistiques d'efficacité énergétique n'ont pas pu être chargées.

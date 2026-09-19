@@ -82,6 +82,8 @@ type Drive struct {
 	PowerMin          int             `json:"power_min"`
 	EnergyConsumedNet *float64        `json:"energy_consumed_net"`
 	ConsumptionNet    *float64        `json:"consumption_net"`
+	BatteryDetails    BatteryDetails  `json:"battery_details"`
+	OutsideTempAvg    *float64        `json:"outside_temp_avg"` // Unit of Units.UnitOfTemperature, null when unknown
 }
 
 // ParsedStartTime parses StartDate into time.Time.
@@ -122,19 +124,20 @@ type DriveDetailResponse struct {
 
 // Charge represents a single charging session returned by /api/v1/cars/:CarID/charges.
 type Charge struct {
-	ChargeID          int      `json:"charge_id"`
-	StartDate         string   `json:"start_date"`
-	EndDate           string   `json:"end_date"`
-	Address           string   `json:"address"`
-	ChargeEnergyAdded float64  `json:"charge_energy_added"`
-	ChargeEnergyUsed  float64  `json:"charge_energy_used"`
-	Cost              *float64 `json:"cost"` // nil when no tariff is configured in TeslaMate
-	DurationMin       int      `json:"duration_min"`
-	DurationStr       string   `json:"duration_str"`
-	OutsideTempAvg    float64  `json:"outside_temp_avg"`
-	Odometer          float64  `json:"odometer"`
-	Latitude          float64  `json:"latitude"`
-	Longitude         float64  `json:"longitude"`
+	ChargeID          int            `json:"charge_id"`
+	StartDate         string         `json:"start_date"`
+	EndDate           string         `json:"end_date"`
+	Address           string         `json:"address"`
+	ChargeEnergyAdded float64        `json:"charge_energy_added"`
+	ChargeEnergyUsed  float64        `json:"charge_energy_used"`
+	Cost              *float64       `json:"cost"` // nil when no tariff is configured in TeslaMate
+	DurationMin       int            `json:"duration_min"`
+	DurationStr       string         `json:"duration_str"`
+	BatteryDetails    BatteryDetails `json:"battery_details"`
+	OutsideTempAvg    *float64       `json:"outside_temp_avg"` // Unit of Units.UnitOfTemperature, null when unknown
+	Odometer          float64        `json:"odometer"`
+	Latitude          float64        `json:"latitude"`
+	Longitude         float64        `json:"longitude"`
 }
 
 // ParsedStartTime parses StartDate into time.Time.
@@ -171,4 +174,20 @@ type ChargeFilterOptions struct {
 	Show      int
 	StartDate string // YYYY-MM-DD or RFC3339
 	EndDate   string // YYYY-MM-DD or RFC3339
+}
+
+// BatteryHealth is the battery state computed by TeslaMateApi from the charging history.
+// Capacities are in kWh and the health is the current capacity over the highest one observed.
+type BatteryHealth struct {
+	MaxCapacity             float64 `json:"max_capacity"`
+	CurrentCapacity         float64 `json:"current_capacity"`
+	BatteryHealthPercentage float64 `json:"battery_health_percentage"`
+}
+
+// BatteryHealthResponse represents the response of /api/v1/cars/:CarID/battery-health.
+type BatteryHealthResponse struct {
+	Data struct {
+		BatteryHealth BatteryHealth `json:"battery_health"`
+		Units         Units         `json:"units"`
+	} `json:"data"`
 }

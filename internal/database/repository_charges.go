@@ -16,8 +16,9 @@ func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.Charge
 	query := `
 		INSERT INTO charge_logs (
 			vehicle_id, teslamate_charge_id, date, end_date,
-			address, kwh_added, kwh_used, cost, cost_source, currency, odometer, is_manual
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'TESLAMATE', $9, $10, FALSE)
+			address, kwh_added, kwh_used, cost, cost_source, currency, odometer, is_manual,
+			start_battery_level, end_battery_level, outside_temp_c
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'TESLAMATE', $9, $10, FALSE, $11, $12, $13)
 		ON CONFLICT (vehicle_id, teslamate_charge_id) DO UPDATE
 		SET date = EXCLUDED.date,
 		    end_date = EXCLUDED.end_date,
@@ -27,6 +28,9 @@ func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.Charge
 		    cost = CASE WHEN charge_logs.cost_source = 'MANUAL' THEN charge_logs.cost ELSE EXCLUDED.cost END,
 		    currency = CASE WHEN charge_logs.cost_source = 'MANUAL' THEN charge_logs.currency ELSE EXCLUDED.currency END,
 		    odometer = EXCLUDED.odometer,
+		    start_battery_level = EXCLUDED.start_battery_level,
+		    end_battery_level = EXCLUDED.end_battery_level,
+		    outside_temp_c = EXCLUDED.outside_temp_c,
 		    deleted_upstream_at = NULL
 		RETURNING id, (xmax = 0) AS is_inserted;
 	`
@@ -34,6 +38,7 @@ func (r *Repository) UpsertTeslaMateCharge(ctx context.Context, c *models.Charge
 	err := r.pool.QueryRow(ctx, query,
 		c.VehicleID, c.TeslaMateChargeID, c.Date, c.EndDate,
 		c.Address, c.KwhAdded, c.KwhUsed, c.Cost, c.Currency, c.Odometer,
+		c.StartBatteryLevel, c.EndBatteryLevel, c.OutsideTempC,
 	).Scan(&c.ID, &isInserted)
 	return isInserted, err
 }
