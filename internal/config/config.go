@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+// DefaultTrustedProxies are the address ranges assumed for the reverse proxy in front of the application:
+// loopback and the private ranges of Docker networks and home LANs. A proxy on a public address has to be
+// listed in TRUSTED_PROXIES.
+var DefaultTrustedProxies = []string{
+	"127.0.0.0/8", "::1/128",
+	"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7",
+}
+
 // Config stores application configuration loaded from environment variables.
 type Config struct {
 	Port                       string
@@ -17,7 +25,6 @@ type Config struct {
 	DatabaseURL                string
 	AppEncryptionKey           string
 	JWTSecret                  string
-	JWTExpirationHours         int
 	JWTAccessExpirationMinutes int
 	JWTRefreshExpirationDays   int
 	CookieSecure               bool
@@ -28,6 +35,11 @@ type Config struct {
 	SyncIntervalMinutes        int
 	ReportingTimezone          string
 	StorageDir                 string // Directory for document file storage (Docker volume mount point)
+
+	// Reverse proxy and browser hardening
+	TrustedProxies        []string // Addresses or CIDR ranges of the reverse proxy allowed to set X-Forwarded-*; default: private ranges
+	SecurityHeaders       bool     // Send the security headers (disable when the proxy already sets them)
+	ContentSecurityPolicy string   // Empty = built-in policy, "off" = no CSP header, anything else replaces the policy
 
 	// OIDC / OAuth2 SSO (optional — enabled when OIDCIssuerURL is non-empty)
 	OIDCEnabled          bool
@@ -73,11 +85,6 @@ func Load() *Config {
 
 	encKey := getEnv("APP_ENCRYPTION_KEY", "dev-default-32-byte-secret-key!!")
 	jwtSecret := getEnv("JWT_SECRET", "super_secret_jwt_signing_key_for_teslacost_app")
-	jwtExpHours, _ := strconv.Atoi(getEnv("JWT_EXPIRATION_HOURS", "72"))
-	if jwtExpHours <= 0 {
-		jwtExpHours = 72
-	}
-
 	jwtAccessExpMinutes, _ := strconv.Atoi(getEnv("JWT_ACCESS_EXPIRATION_MINUTES", "15"))
 	if jwtAccessExpMinutes <= 0 {
 		jwtAccessExpMinutes = 15
@@ -104,6 +111,11 @@ func Load() *Config {
 	syncIntervalMinutes, _ := strconv.Atoi(getEnv("SYNC_INTERVAL_MINUTES", "30"))
 	if syncIntervalMinutes < 0 {
 		syncIntervalMinutes = 0
+	}
+
+	trustedProxies := DefaultTrustedProxies
+	if raw := getEnv("TRUSTED_PROXIES", ""); raw != "" {
+		trustedProxies = parseOrigins(raw)
 	}
 
 	reportingTimezone := getEnv("APP_TIMEZONE", "Europe/Paris")
@@ -142,7 +154,6 @@ func Load() *Config {
 		DatabaseURL:                dbURL,
 		AppEncryptionKey:           encKey,
 		JWTSecret:                  jwtSecret,
-		JWTExpirationHours:         jwtExpHours,
 		JWTAccessExpirationMinutes: jwtAccessExpMinutes,
 		JWTRefreshExpirationDays:   jwtRefreshExpDays,
 		CookieSecure:               cookieSecure,
@@ -153,6 +164,9 @@ func Load() *Config {
 		SyncIntervalMinutes:        syncIntervalMinutes,
 		ReportingTimezone:          reportingTimezone,
 		StorageDir:                 storageDir,
+		TrustedProxies:             trustedProxies,
+		SecurityHeaders:            getEnvBool("SECURITY_HEADERS", true),
+		ContentSecurityPolicy:      strings.TrimSpace(getEnv("CONTENT_SECURITY_POLICY", "")),
 		OIDCEnabled:                oidcIssuerURL != "",
 		OIDCIssuerURL:              oidcIssuerURL,
 		OIDCClientID:               oidcClientID,

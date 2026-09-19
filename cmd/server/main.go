@@ -81,6 +81,39 @@ func configureLogging(cfg *config.Config) {
 	slog.SetDefault(slog.New(requestIDHandler{handler}))
 }
 
+// maxJSONBodyBytes caps the body of API requests; uploads have their own limit in their handler.
+const maxJSONBodyBytes = 1 << 20
+
+// contentSecurityPolicy is the policy sent with every response: the built-in one, a custom one from the
+// environment, or none ("off").
+func contentSecurityPolicy(cfg *config.Config) string {
+	switch {
+	case strings.EqualFold(cfg.ContentSecurityPolicy, "off"):
+		return ""
+	case cfg.ContentSecurityPolicy != "":
+		return cfg.ContentSecurityPolicy
+	default:
+		return appMiddleware.DefaultCSP
+	}
+}
+
+// insecureDefaultsError refuses a production configuration that still holds a secret published in the repository.
+// Other environments only get the warnings: the defaults are convenient for local development.
+func insecureDefaultsError(cfg *config.Config) error {
+	warnings := cfg.InsecureDefaults()
+	if len(warnings) == 0 {
+		return nil
+	}
+	if !strings.EqualFold(cfg.Environment, "production") {
+		for _, w := range warnings {
+			slog.Warn("insecure default secret", "component", "security", "detail", w)
+		}
+		return nil
+	}
+	return fmt.Errorf("ENVIRONMENT=production with default secrets: %s. Generate real values (openssl rand -hex 32) "+
+		"and set them in .env, or set ENVIRONMENT=development for a throwaway local instance", strings.Join(warnings, "; "))
+}
+
 func main() {
 	// 1. Load configuration
 	cfg := config.Load()
@@ -88,14 +121,17 @@ func main() {
 
 	slog.Info("Starting TeslaCost Full-Stack Server...")
 
-	// Warn loudly (without blocking startup) if a production deployment still uses one of the
-	// well-known placeholder secrets shipped in docker-compose.yml / .env.example.
-	if strings.EqualFold(cfg.Environment, "production") {
-		if warnings := cfg.InsecureDefaults(); len(warnings) > 0 {
-			for _, w := range warnings {
-				slog.Warn("insecure default secret detected in production", "component", "security", "detail", w)
-			}
-		}
+	// A production deployment must not run with a secret published in the repository: anyone could forge
+	// sessions or decrypt the stored TeslaMate credentials.
+	if err := insecureDefaultsError(cfg); err != nil {
+		slog.Error("refusing to start", "component", "security", "reason", err)
+		os.Exit(1)
+	}
+
+	trustedProxies, err := appMiddleware.ParseTrustedProxies(cfg.TrustedProxies)
+	if err != nil {
+		slog.Error("invalid TRUSTED_PROXIES", "component", "security", "error", err)
+		os.Exit(1)
 	}
 
 	// 2. Initialize encryption module
@@ -160,10 +196,17 @@ func main() {
 
 	// Standard middlewares
 	r.Use(chiMiddleware.RequestID)
-	r.Use(chiMiddleware.RealIP)
+	// The client address only comes from forwarding headers when the peer is a trusted proxy: rate limits and
+	// session records depend on it.
+	r.Use(appMiddleware.ClientIP(trustedProxies))
 	r.Use(chiMiddleware.Logger)
 	r.Use(chiMiddleware.Recoverer)
 	r.Use(chiMiddleware.Timeout(60 * time.Second))
+	if cfg.SecurityHeaders {
+		r.Use(appMiddleware.SecurityHeaders(contentSecurityPolicy(cfg)))
+	}
+	r.Use(appMiddleware.BodyLimit(maxJSONBodyBytes))
+	r.Use(appMiddleware.OriginCheck(append([]string{cfg.AppBaseURL}, cfg.AllowedOrigins...)))
 
 	// CORS setup
 	r.Use(cors.Handler(cors.Options{
