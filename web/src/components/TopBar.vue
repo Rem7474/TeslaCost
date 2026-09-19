@@ -36,19 +36,19 @@ function onVehicleChange(event: Event) {
 
 <template>
   <div>
-    <header class="bg-slate-900/60 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+    <header class="bg-slate-900/60 backdrop-blur-md border-b border-slate-800 sticky top-0 z-40 px-3 sm:px-4 py-3 flex items-center justify-between gap-2">
       <!-- Vehicle Selector -->
-      <div class="flex items-center gap-3">
-        <div class="p-2 bg-slate-800 rounded-lg text-slate-400">
+      <div class="flex min-w-0 flex-1 items-center gap-3">
+        <div class="hidden sm:block p-2 bg-slate-800 rounded-lg text-slate-400">
           <Car class="w-5 h-5" />
         </div>
 
-        <div v-if="vehicleStore.vehicles.length" class="flex items-center gap-2">
+        <div v-if="vehicleStore.vehicles.length" class="flex min-w-0 flex-1 items-center gap-2">
           <label for="topbar-active-vehicle" class="sr-only">Véhicule actif</label>
           <select id="topbar-active-vehicle"
             :value="vehicleStore.activeVehicle?.id"
             @change="onVehicleChange"
-            class="bg-slate-800 text-slate-100 text-sm font-semibold rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500 transition-colors max-w-[170px] sm:max-w-[220px] md:max-w-xs truncate"
+            class="bg-slate-800 text-slate-100 text-sm font-semibold rounded-lg px-3 py-1.5 border border-slate-700 focus:outline-none focus:border-rose-500 transition-colors min-w-0 flex-1 sm:flex-none max-w-[220px] md:max-w-xs truncate"
           >
             <option v-for="v in vehicleStore.vehicles" :key="v.id" :value="v.id">
               {{ v.name }}
@@ -57,7 +57,7 @@ function onVehicleChange(event: Event) {
           </select>
 
           <!-- Odometer pill -->
-          <div class="flex items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-lg text-xs text-slate-300 border border-slate-700/50">
+          <div class="hidden min-[360px]:flex shrink-0 items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-lg text-xs text-slate-300 border border-slate-700/50">
             <Gauge class="w-3.5 h-3.5 text-rose-400 shrink-0" />
             <span class="truncate max-w-[90px] sm:max-w-none">{{ Math.round(vehicleStore.activeVehicle?.current_odometer || 0).toLocaleString('fr-FR') }} km</span>
           </div>
@@ -80,25 +80,26 @@ function onVehicleChange(event: Event) {
       </div>
 
       <!-- Actions (Sync) -->
-      <div class="flex items-center gap-2">
+      <div class="flex shrink-0 items-center gap-2">
         <!-- Offline queue -->
         <div
           v-if="!offlineStore.isOnline || offlineStore.pendingCount > 0"
           class="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border"
           :class="offlineStore.isOnline ? 'text-sky-300 bg-sky-500/10 border-sky-500/20' : 'text-amber-300 bg-amber-500/10 border-amber-500/20'"
           :title="offlineStore.isOnline ? 'Envoi des saisies enregistrées hors ligne' : 'Les saisies sont conservées et seront envoyées au retour du réseau'"
+          :aria-label="`${!offlineStore.isOnline ? 'Hors ligne. ' : ''}${offlineStore.pendingCount > 0 ? offlineStore.pendingCount + ' saisie(s) en attente' : ''}`"
         >
           <WifiOff v-if="!offlineStore.isOnline" class="w-3.5 h-3.5 shrink-0" />
           <CloudUpload v-else class="w-3.5 h-3.5 shrink-0" :class="{ 'animate-pulse': offlineStore.isFlushing }" />
-          <span v-if="!offlineStore.isOnline">Hors ligne</span>
-          <span v-if="offlineStore.pendingCount > 0">{{ offlineStore.pendingCount }} en attente</span>
+          <span v-if="!offlineStore.isOnline" class="hidden sm:inline">Hors ligne</span>
+          <span v-if="offlineStore.pendingCount > 0">{{ offlineStore.pendingCount }}<span class="hidden sm:inline"> en attente</span></span>
         </div>
 
         <button
           v-if="vehicleStore.activeVehicle?.teslamate_api_url"
           @click="vehicleStore.syncActiveVehicle"
           :disabled="vehicleStore.isSyncing"
-          class="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all"
+          class="flex min-h-11 min-w-11 items-center justify-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-lg transition-all sm:min-h-0 sm:min-w-0"
           :class="
             vehicleStore.isSyncing
               ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
@@ -122,7 +123,7 @@ function onVehicleChange(event: Event) {
           </button>
         </div>
 
-        <span class="text-[10px] font-mono px-2 py-1 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700/50 font-medium">
+        <span class="hidden sm:inline text-[10px] font-mono px-2 py-1 rounded-lg bg-slate-800/80 text-slate-400 border border-slate-700/50 font-medium">
           {{ APP_VERSION }}
         </span>
       </div>
