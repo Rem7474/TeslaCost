@@ -36,7 +36,7 @@ onMounted(async () => {
 <template>
   <div v-if="showDashboardLayout" class="flex h-screen overflow-hidden bg-slate-950">
     <Navigation />
-    <div class="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden pb-16 md:pb-0">
+    <div class="flex-1 flex flex-col min-w-0 overflow-y-auto overflow-x-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0">
       <TopBar />
       <main class="flex-1 p-4 md:p-6 max-w-7xl w-full mx-auto">
         <!-- Attente de l'initialisation du store véhicule pour éviter un affichage vide au refresh -->

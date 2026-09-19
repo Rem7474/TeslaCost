@@ -136,3 +136,26 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
+
+/* Bottom bars keep clear of the home indicator on notched phones (viewport-fit=cover). */
+.safe-area-pb {
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom));
+}
+
+/* Touch-sized form controls. Mobile browsers zoom the page when a field below 16px gets focus, so the
+   size is enforced on every touch device, above the Tailwind utilities (unlayered rules win over layers). */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea,
+  .dp__input {
+    font-size: 16px !important;
+  }
+}
+
+/* Comfortable tap target (48px) for the fields of the quick entry forms. */
+@media (pointer: coarse) {
+  .field-touch {
+    min-height: 3rem;
+  }
+}
