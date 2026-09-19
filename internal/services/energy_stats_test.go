@@ -189,3 +189,138 @@ func TestComputeEnergyStatsUnknownClassForManualCharges(t *testing.T) {
 	}
 	eq(t, "unknown price/kWh", got.ChargeClasses[0].PricePerKwh, 0.3)
 }
+
+func soc(v int) *int { return &v }
+
+func sessionSoc(start time.Time, kwh float64, from, to int, cost *money.Cents) energyCharge {
+	end := start.Add(4 * time.Hour)
+	return energyCharge{Month: start.Format("2006-01"), Start: start, End: &end, KwhAdded: kwh, Cost: cost, StartSoc: soc(from), EndSoc: soc(to)}
+}
+
+func TestUsableCapacityNeedsAWideSwingAndAPlausibleResult(t *testing.T) {
+	d := time.Date(2026, 1, 10, 18, 0, 0, 0, time.UTC)
+	if c, ok := usableCapacity(sessionSoc(d, 40, 20, 70, nil)); !ok || c != 80 {
+		t.Errorf("40 kWh over 50 points: got (%v, %v), want 80 kWh", c, ok)
+	}
+	for name, c := range map[string]energyCharge{
+		"swing under 30 points":    sessionSoc(d, 12, 40, 60, nil),
+		"level going down":         sessionSoc(d, 40, 70, 20, nil),
+		"unknown levels":           {KwhAdded: 40, Start: d},
+		"implausibly small result": sessionSoc(d, 5, 10, 90, nil),
+		"implausibly large result": sessionSoc(d, 200, 10, 60, nil),
+	} {
+		if _, ok := usableCapacity(c); ok {
+			t.Errorf("%s: estimate accepted", name)
+		}
+	}
+}
+
+func TestCapacityEstimateUsesMedianAndMostRecentSessions(t *testing.T) {
+	base := time.Date(2026, 1, 1, 18, 0, 0, 0, time.UTC)
+	var charges []energyCharge
+	// One session every 10 days, each a 50 point swing (20 to 70 %): kWh added = capacity / 2. The newest session
+	// (90 kWh, so 180 kWh) is not a plausible capacity and is skipped, so the window covers the ten sessions
+	// before it and drops the oldest one (75 kWh).
+	kwhs := []float64{37.5, 37.5, 39.5, 40, 40, 40.5, 39.5, 40, 40, 40.5, 39.5, 90}
+	for i, k := range kwhs {
+		charges = append(charges, sessionSoc(base.AddDate(0, 0, i*10), k, 20, 70, nil))
+	}
+	got := computeEnergyStats(nil, charges)
+
+	// Window: 75, 79, 80, 80, 81, 79, 80, 80, 79, 81 (the newest plausible ones) => median 80.
+	eq(t, "current capacity", got.Summary.EstimatedCapacityKwh, 80)
+	if got.Summary.CapacitySamples != 10 {
+		t.Errorf("samples: got %d, want 10", got.Summary.CapacitySamples)
+	}
+
+	// January holds the first four sessions: 75, 75, 79, 80 => median 77.
+	var jan *EnergyMonth
+	for i := range got.Months {
+		if got.Months[i].Month == "2026-01" {
+			jan = &got.Months[i]
+		}
+	}
+	if jan == nil || jan.EstimatedCapacityKwh == nil || jan.CapacitySamples != 4 {
+		t.Fatalf("january: %+v", jan)
+	}
+	eq(t, "jan capacity", jan.EstimatedCapacityKwh, 77)
+}
+
+func TestCostPerFullChargeGroupsByClass(t *testing.T) {
+	d := time.Date(2026, 2, 1, 18, 0, 0, 0, time.UTC)
+	// AC: 50 points for 10 EUR => 20 EUR per 100 points. DC: 40 points for 16 EUR => 40 EUR per 100 points.
+	ac := sessionSoc(d, 40, 20, 70, ptrCents(10))
+	dcEnd := d.Add(15 * time.Minute)
+	dc := energyCharge{Month: "2026-02", Start: d, End: &dcEnd, KwhAdded: 32, Cost: ptrCents(16), StartSoc: soc(10), EndSoc: soc(50)}
+	small := sessionSoc(d, 8, 50, 60, ptrCents(100)) // 10 points: too small a swing to price a full charge
+	unpriced := sessionSoc(d, 40, 20, 70, nil)
+
+	got := computeEnergyStats(nil, []energyCharge{ac, dc, small, unpriced})
+
+	eq(t, "overall", got.Summary.CostPerFullCharge, 28.89) // 26 EUR over 90 points
+	for _, c := range got.ChargeClasses {
+		switch c.Class {
+		case ChargeClassAC:
+			eq(t, "AC full charge", c.CostPerFullCharge, 20)
+		case ChargeClassDC:
+			eq(t, "DC full charge", c.CostPerFullCharge, 40)
+		}
+	}
+}
+
+func TestChargesWithoutLevelsGiveNoCapacityNorFullChargeCost(t *testing.T) {
+	got := computeEnergyStats(nil, []energyCharge{session("2026-01", 4, 30, ptrF(33), ptrCents(6))})
+	isNil(t, "capacity", got.Summary.EstimatedCapacityKwh)
+	isNil(t, "full charge", got.Summary.CostPerFullCharge)
+	isNil(t, "monthly capacity", got.Months[0].EstimatedCapacityKwh)
+}
+
+func TestComputeTemperatureWinterEffect(t *testing.T) {
+	price := 0.25
+	raw := []tempBinRaw{
+		{MinC: -5, Drives: 4, DistanceKm: 60, Kwh: 12},   // -5..0 °C: 20 kWh/100 km
+		{MinC: 0, Drives: 30, DistanceKm: 500, Kwh: 95},  // 0..5 °C: 19 kWh/100 km
+		{MinC: 5, Drives: 20, DistanceKm: 300, Kwh: 51},  // 5..10 °C: not part of the comparison
+		{MinC: 15, Drives: 40, DistanceKm: 400, Kwh: 60}, // 15..20 °C: 15 kWh/100 km
+		{MinC: 20, Drives: 10, DistanceKm: 100, Kwh: 14}, // 20..25 °C: 14 kWh/100 km
+		{MinC: 30, Drives: 1, DistanceKm: 20, Kwh: 4},    // too little distance to be displayed
+	}
+	bins, effect := computeTemperature(raw, &price)
+
+	if len(bins) != 5 {
+		t.Fatalf("bins: got %d, want 5 (the 20 km bin is left out)", len(bins))
+	}
+	if bins[0].MinC != -5 || bins[0].MaxC != 0 || bins[0].ConsumptionKwh100km != 20 {
+		t.Errorf("first bin: %+v", bins[0])
+	}
+	if bins[len(bins)-1].MinC != 20 {
+		t.Errorf("bins must be ordered by temperature, last: %+v", bins[len(bins)-1])
+	}
+	// Cold pool: 560 km, 107 kWh => 19.1. Mild pool: 500 km, 74 kWh => 14.8.
+	eq(t, "cold", effect.ColdConsumptionKwh100km, 19.1)
+	eq(t, "mild", effect.MildConsumptionKwh100km, 14.8)
+	eq(t, "extra percent", effect.ExtraPercent, 29.1)
+	eq(t, "extra cost", effect.ExtraCostPer100km, 1.08) // 4.3 kWh more per 100 km at 0.25 EUR
+}
+
+func TestComputeTemperatureNeedsBothGroups(t *testing.T) {
+	_, effect := computeTemperature([]tempBinRaw{{MinC: 0, Drives: 10, DistanceKm: 400, Kwh: 80}}, nil)
+	isNil(t, "cold without mild data", effect.ColdConsumptionKwh100km)
+	isNil(t, "extra percent", effect.ExtraPercent)
+
+	// Mild weather consuming more than cold weather (unusual data) reports no extra rather than a negative one.
+	_, effect = computeTemperature([]tempBinRaw{
+		{MinC: 0, Drives: 10, DistanceKm: 400, Kwh: 60},
+		{MinC: 15, Drives: 10, DistanceKm: 400, Kwh: 80},
+	}, nil)
+	eq(t, "cold", effect.ColdConsumptionKwh100km, 15)
+	isNil(t, "extra percent", effect.ExtraPercent)
+	isNil(t, "extra cost without a price", effect.ExtraCostPer100km)
+}
+
+func TestComputeTemperatureWithoutDrives(t *testing.T) {
+	bins, _ := computeTemperature(nil, nil)
+	if bins == nil || len(bins) != 0 {
+		t.Errorf("empty input must give an empty, non-nil list, got %v", bins)
+	}
+}

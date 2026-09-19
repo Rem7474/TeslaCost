@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 )
 
@@ -33,6 +34,16 @@ const (
 	minDistanceForTrailing     = 100.0
 	trailingMonths             = 3
 
+	// A capacity read from a small state-of-charge swing is dominated by the 1 % rounding of the reading.
+	minSocSwingForCapacity = 30
+	// Bounds of a plausible usable capacity, to drop readings from truncated sessions.
+	minPlausibleCapacityKwh = 20.0
+	maxPlausibleCapacityKwh = 150.0
+	// The current capacity is the median of this many most recent usable sessions.
+	currentCapacitySamples = 10
+	// The cost of a full charge needs a swing wide enough for the rounding of the reading not to dominate.
+	minSocSwingForFullChargeCost = 20
+
 	// The energy drawn from the grid always exceeds the energy stored, so a genuine ratio is below 1. TeslaMateApi
 	// reports GREATEST(energy used, energy added): when the grid energy was not measured (typically DC charging)
 	// both are equal and the ratio is exactly 1, which means "unknown" rather than a lossless charge. Ratios
@@ -54,6 +65,10 @@ type EnergyMonth struct {
 	CostPer100km        *float64    `json:"cost_per_100km,omitempty"`
 	// CostPer100kmTrailing smooths the gap between when energy is bought and when it is driven.
 	CostPer100kmTrailing *float64 `json:"cost_per_100km_trailing,omitempty"`
+	// EstimatedCapacityKwh is the median usable capacity derived from the month's sessions (energy added over the
+	// state of charge gained); CapacitySamples is how many sessions it rests on.
+	EstimatedCapacityKwh *float64 `json:"estimated_capacity_kwh,omitempty"`
+	CapacitySamples      int      `json:"capacity_samples,omitempty"`
 }
 
 // ChargeClassStat aggregates the charging sessions of one class over the whole history.
@@ -64,6 +79,8 @@ type ChargeClassStat struct {
 	EnergyCost       money.Cents `json:"energy_cost"`
 	PricePerKwh      *float64    `json:"price_per_kwh,omitempty"`
 	ChargeEfficiency *float64    `json:"charge_efficiency,omitempty"`
+	// CostPerFullCharge is what going from 0 to 100 % costs with this kind of charging.
+	CostPerFullCharge *float64 `json:"cost_per_full_charge,omitempty"`
 }
 
 // EnergySummary holds the figures over the whole history.
@@ -75,6 +92,10 @@ type EnergySummary struct {
 	PricePerKwh         *float64 `json:"price_per_kwh,omitempty"`
 	CostPer100km        *float64 `json:"cost_per_100km,omitempty"`
 	SessionsWithoutCost int      `json:"sessions_without_cost"`
+	// EstimatedCapacityKwh is the median over the most recent sessions that allow the estimate.
+	EstimatedCapacityKwh *float64 `json:"estimated_capacity_kwh,omitempty"`
+	CapacitySamples      int      `json:"capacity_samples,omitempty"`
+	CostPerFullCharge    *float64 `json:"cost_per_full_charge,omitempty"`
 }
 
 // EnergyStats is the cost-aware efficiency view of a vehicle: what it consumes, what the energy costs and how
@@ -83,6 +104,11 @@ type EnergyStats struct {
 	Months        []EnergyMonth     `json:"months"`
 	ChargeClasses []ChargeClassStat `json:"charge_classes"`
 	Summary       EnergySummary     `json:"summary"`
+	// TemperatureBins and Temperature show how the outside temperature changes the consumption.
+	TemperatureBins []TemperatureBin  `json:"temperature_bins"`
+	Temperature     TemperatureEffect `json:"temperature"`
+	// BatteryHealth is the history of the health computed by TeslaMate, one reading a day at most.
+	BatteryHealth []models.BatterySnapshot `json:"battery_health"`
 }
 
 // energyDriveMonth is the drives of a month, aggregated by the database.
@@ -102,6 +128,9 @@ type energyCharge struct {
 	KwhAdded float64
 	KwhUsed  *float64 // Energy drawn from the grid
 	Cost     *money.Cents
+	// State of charge (%) at both ends of the session, nil when unknown.
+	StartSoc *int
+	EndSoc   *int
 }
 
 // classifyCharge buckets a session by average power. ok is false when no power can be derived.
@@ -142,6 +171,10 @@ type energyAcc struct {
 	effAdded, effUsed                float64
 	cost                             money.Cents
 	kwhPriced                        float64
+	// Sessions with a known cost and state-of-charge swing: what a full charge costs is derived from them.
+	socSwingPriced  float64
+	costSwingPriced money.Cents
+	capacities      []float64
 }
 
 func (a *energyAcc) addCharge(c energyCharge) {
@@ -154,6 +187,50 @@ func (a *energyAcc) addCharge(c energyCharge) {
 		a.effAdded += c.KwhAdded
 		a.effUsed += *c.KwhUsed
 	}
+	swing := socSwing(c)
+	if swing >= minSocSwingForFullChargeCost && c.Cost != nil {
+		a.socSwingPriced += float64(swing)
+		a.costSwingPriced += *c.Cost
+	}
+	if capacity, ok := usableCapacity(c); ok {
+		a.capacities = append(a.capacities, capacity)
+	}
+}
+
+// socSwing is the state of charge gained by a session, 0 when unknown or not increasing.
+func socSwing(c energyCharge) int {
+	if c.StartSoc == nil || c.EndSoc == nil || *c.EndSoc <= *c.StartSoc {
+		return 0
+	}
+	return *c.EndSoc - *c.StartSoc
+}
+
+// usableCapacity estimates the usable battery capacity (kWh) from the energy added and the state of charge gained.
+func usableCapacity(c energyCharge) (float64, bool) {
+	swing := socSwing(c)
+	if swing < minSocSwingForCapacity || c.KwhAdded <= 0 {
+		return 0, false
+	}
+	capacity := c.KwhAdded / (float64(swing) / 100)
+	if capacity < minPlausibleCapacityKwh || capacity > maxPlausibleCapacityKwh {
+		return 0, false
+	}
+	return capacity, true
+}
+
+// median of a non-empty slice (the slice is reordered).
+func median(values []float64) float64 {
+	sort.Float64s(values)
+	n := len(values)
+	if n%2 == 1 {
+		return values[n/2]
+	}
+	return (values[n/2-1] + values[n/2]) / 2
+}
+
+// fullChargeCost extrapolates the cost of going from 0 to 100 % from the sessions that have both a cost and a swing.
+func fullChargeCost(cost money.Cents, swing float64) *float64 {
+	return ratioPtr(cost.Float()*100, swing, 2)
 }
 
 func ratioPtr(num, den float64, digits int) *float64 {
@@ -177,6 +254,22 @@ func previousMonths(month string, n int) []string {
 	out := make([]string, 0, n)
 	for i := n - 1; i >= 0; i-- {
 		out = append(out, t.AddDate(0, -i, 0).Format("2006-01"))
+	}
+	return out
+}
+
+// recentCapacities returns the capacities of the n most recent sessions that allow the estimate.
+func recentCapacities(charges []energyCharge, n int) []float64 {
+	sorted := append([]energyCharge(nil), charges...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].Start.After(sorted[j].Start) })
+	var out []float64
+	for _, c := range sorted {
+		if capacity, ok := usableCapacity(c); ok {
+			out = append(out, capacity)
+			if len(out) == n {
+				break
+			}
+		}
 	}
 	return out
 }
@@ -228,7 +321,12 @@ func computeEnergyStats(drives []energyDriveMonth, charges []energyCharge) *Ener
 	}
 	sort.Strings(keys)
 
-	out := &EnergyStats{Months: make([]EnergyMonth, 0, len(keys)), ChargeClasses: []ChargeClassStat{}}
+	out := &EnergyStats{
+		Months:          make([]EnergyMonth, 0, len(keys)),
+		ChargeClasses:   []ChargeClassStat{},
+		TemperatureBins: []TemperatureBin{},
+		BatteryHealth:   []models.BatterySnapshot{},
+	}
 	for _, m := range keys {
 		a := months[m]
 		em := EnergyMonth{
@@ -240,6 +338,11 @@ func computeEnergyStats(drives []energyDriveMonth, charges []energyCharge) *Ener
 			ChargeEfficiency:    ratioPtr(a.effAdded, a.effUsed, 3),
 			EnergyCost:          a.cost,
 			PricePerKwh:         ratioPtr(a.cost.Float(), a.kwhPriced, 3),
+		}
+		if len(a.capacities) > 0 {
+			em.CapacitySamples = len(a.capacities)
+			c := round1(median(append([]float64(nil), a.capacities...)))
+			em.EstimatedCapacityKwh = &c
 		}
 		if a.distanceKm >= minDistanceForCostPer100km {
 			em.CostPer100km = ratioPtr(a.cost.Float()*100, a.distanceKm, 2)
@@ -267,12 +370,13 @@ func computeEnergyStats(drives []energyDriveMonth, charges []energyCharge) *Ener
 			continue
 		}
 		out.ChargeClasses = append(out.ChargeClasses, ChargeClassStat{
-			Class:            class,
-			Sessions:         c.sessions,
-			KwhAdded:         round1(c.kwhAdded),
-			EnergyCost:       c.cost,
-			PricePerKwh:      ratioPtr(c.cost.Float(), c.kwhPriced, 3),
-			ChargeEfficiency: ratioPtr(c.effAdded, c.effUsed, 3),
+			Class:             class,
+			Sessions:          c.sessions,
+			KwhAdded:          round1(c.kwhAdded),
+			EnergyCost:        c.cost,
+			PricePerKwh:       ratioPtr(c.cost.Float(), c.kwhPriced, 3),
+			ChargeEfficiency:  ratioPtr(c.effAdded, c.effUsed, 3),
+			CostPerFullCharge: fullChargeCost(c.costSwingPriced, c.socSwingPriced),
 		})
 	}
 
@@ -296,6 +400,12 @@ func computeEnergyStats(drives []energyDriveMonth, charges []energyCharge) *Ener
 	}
 	if trackedKm >= minDistanceForCostPer100km {
 		out.Summary.CostPer100km = ratioPtr(trackedCost.Float()*100, trackedKm, 2)
+	}
+	out.Summary.CostPerFullCharge = fullChargeCost(total.costSwingPriced, total.socSwingPriced)
+	if recent := recentCapacities(charges, currentCapacitySamples); len(recent) > 0 {
+		c := round1(median(recent))
+		out.Summary.EstimatedCapacityKwh = &c
+		out.Summary.CapacitySamples = len(recent)
 	}
 	return out
 }
@@ -344,6 +454,7 @@ func (s *EnergyStatsService) Compute(ctx context.Context, vehicleID string) (*En
 	// The cost is converted to EUR the same way as in the cost ledger; a foreign cost without rate stays unknown.
 	chargeRows, err := s.pool.Query(ctx, `
 		SELECT TO_CHAR(date AT TIME ZONE $2, 'YYYY-MM') AS m, date, end_date, kwh_added::float8, kwh_used::float8,
+		       start_battery_level, end_battery_level,
 		       CASE WHEN cost IS NULL THEN NULL
 		            WHEN currency = 'EUR' THEN ROUND(cost, 2)
 		            WHEN fx_rate IS NOT NULL THEN ROUND(cost * fx_rate, 2) END AS cost_eur
@@ -357,7 +468,7 @@ func (s *EnergyStatsService) Compute(ctx context.Context, vehicleID string) (*En
 	var charges []energyCharge
 	for chargeRows.Next() {
 		var c energyCharge
-		if err := chargeRows.Scan(&c.Month, &c.Start, &c.End, &c.KwhAdded, &c.KwhUsed, &c.Cost); err != nil {
+		if err := chargeRows.Scan(&c.Month, &c.Start, &c.End, &c.KwhAdded, &c.KwhUsed, &c.StartSoc, &c.EndSoc, &c.Cost); err != nil {
 			chargeRows.Close()
 			return nil, err
 		}
@@ -368,5 +479,64 @@ func (s *EnergyStatsService) Compute(ctx context.Context, vehicleID string) (*En
 		return nil, err
 	}
 
-	return computeEnergyStats(drives, charges), nil
+	stats := computeEnergyStats(drives, charges)
+
+	bins, err := s.temperatureBins(ctx, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	stats.TemperatureBins, stats.Temperature = computeTemperature(bins, stats.Summary.PricePerKwh)
+
+	if stats.BatteryHealth, err = s.batteryHealth(ctx, vehicleID); err != nil {
+		return nil, err
+	}
+	return stats, nil
+}
+
+// temperatureBins aggregates the drives that report both their energy and the outside temperature, by 5 degree bin.
+func (s *EnergyStatsService) temperatureBins(ctx context.Context, vehicleID string) ([]tempBinRaw, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT (FLOOR(outside_temp_c / $2) * $2)::int AS bin_min, COUNT(*),
+		       SUM(distance_km)::float8, SUM(energy_consumed_kwh)::float8
+		FROM drives
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL
+		  AND outside_temp_c IS NOT NULL AND energy_consumed_kwh > 0 AND distance_km >= $3
+		GROUP BY bin_min;
+	`, vehicleID, tempBinWidthC, minDriveKmForTemperature)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var bins []tempBinRaw
+	for rows.Next() {
+		var b tempBinRaw
+		if err := rows.Scan(&b.MinC, &b.Drives, &b.DistanceKm, &b.Kwh); err != nil {
+			return nil, err
+		}
+		bins = append(bins, b)
+	}
+	return bins, rows.Err()
+}
+
+// batteryHealth lists the daily battery health readings recorded from TeslaMate, oldest first.
+func (s *EnergyStatsService) batteryHealth(ctx context.Context, vehicleID string) ([]models.BatterySnapshot, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT captured_on::text, max_capacity_kwh::float8, current_capacity_kwh::float8, health_percent::float8
+		FROM battery_health_snapshots
+		WHERE vehicle_id = $1
+		ORDER BY captured_on;
+	`, vehicleID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	snaps := []models.BatterySnapshot{}
+	for rows.Next() {
+		var snap models.BatterySnapshot
+		if err := rows.Scan(&snap.Date, &snap.MaxCapacityKwh, &snap.CurrentCapacityKwh, &snap.HealthPercent); err != nil {
+			return nil, err
+		}
+		snaps = append(snaps, snap)
+	}
+	return snaps, rows.Err()
 }
