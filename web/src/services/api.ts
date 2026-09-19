@@ -322,6 +322,7 @@ export const api = {
 
   // TCO Analytics
   getTCO: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/tco`),
+  getEnergyStats: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/energy-stats`),
 
   // EV vs ICE cost comparison (informational)
   getComparisonScenarios: () => request<any[]>('/comparison-scenarios'),
