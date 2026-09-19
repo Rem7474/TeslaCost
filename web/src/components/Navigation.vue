@@ -236,6 +236,7 @@ function handleLogout() {
           </button>
         </li>
       </ul>
+      <p class="mt-3 text-center font-mono text-[11px] text-slate-500">TeslaCost {{ APP_VERSION }}</p>
     </div>
   </div>
 </template>
