@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 
@@ -40,9 +41,14 @@ const MaxPasswordBytes = 72
 var ErrPasswordTooLong = errors.New("password must be at most 72 bytes")
 
 // dummyHash is compared against when no account matches, so that an unknown address takes as long to refuse as a
-// wrong password and the response time does not reveal which addresses have an account.
+// wrong password and the response time does not reveal which addresses have an account. It hashes random bytes
+// drawn at start-up: nothing can match it, and there is no literal password in the source.
 var dummyHash = func() []byte {
-	h, err := bcrypt.GenerateFromPassword([]byte("teslacost-timing-equalizer"), 12)
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		panic(err)
+	}
+	h, err := bcrypt.GenerateFromPassword(secret, 12)
 	if err != nil {
 		panic(err)
 	}
