@@ -1,0 +1,242 @@
+<script setup lang="ts">
+import { computed, ref, watch } from 'vue'
+import { api, type ExpenseDocumentHeader } from '@/services/api'
+import { useConfirm } from '@/composables/useConfirm'
+import { useDocumentAttach } from '@/composables/useDocumentAttach'
+import { Zap, X, Paperclip, FileText, Eye, UploadCloud } from 'lucide-vue-next'
+import AppDatePicker from '@/components/AppDatePicker.vue'
+import { CURRENCIES, currencyPayload, formatDate, toLocalDateTimeInput } from '@/utils/expenses'
+
+// Records a charge made outside TeslaMate, or completes / corrects the cost of `editing`.
+const props = defineProps<{ vehicleId: string; editing: any | null; documents: ExpenseDocumentHeader[]; currentOdometer: number }>()
+const emit = defineEmits<{
+  saved: []
+  'document-added': [doc: ExpenseDocumentHeader]
+  'view-document': [docId: string | null | undefined, filename?: string | null, download?: boolean]
+}>()
+const open = defineModel<boolean>('open', { required: true })
+const { showAlert } = useConfirm()
+const { isUploadingDocument, onSelectExistingDoc, onFileInputChange } = useDocumentAttach(
+  () => props.vehicleId,
+  () => props.documents,
+  (doc) => emit('document-added', doc)
+)
+
+const editingCharge = computed(() => props.editing)
+
+const chargeForm = ref({
+  date: toLocalDateTimeInput(new Date()),
+  kwh_added: '',
+  cost: '',
+  currency: 'EUR',
+  fx_rate: '',
+  address: '',
+  odometer: '',
+  notes: '',
+  document_id: null as string | null,
+  document_filename: null as string | null,
+})
+
+watch(open, (isOpen) => {
+  if (!isOpen) return
+  const c = props.editing
+  if (!c) {
+    chargeForm.value = {
+      date: toLocalDateTimeInput(new Date()),
+      kwh_added: '',
+      cost: '',
+      currency: 'EUR',
+      fx_rate: '',
+      address: '',
+      odometer: props.currentOdometer ? String(Math.round(props.currentOdometer)) : '',
+      notes: '',
+      document_id: null,
+      document_filename: null,
+    }
+  } else {
+    chargeForm.value = {
+      date: toLocalDateTimeInput(new Date(c.date)),
+      kwh_added: String(c.kwh_added),
+      cost: c.cost !== null && c.cost !== undefined ? String(c.cost) : '',
+      currency: c.currency || 'EUR',
+      fx_rate: c.fx_rate ? String(c.fx_rate) : '',
+      address: c.address || '',
+      odometer: c.odometer ? String(Math.round(c.odometer)) : '',
+      notes: c.notes || '',
+      document_id: c.document_id || null,
+      document_filename: c.document_filename || null,
+    }
+  }
+})
+
+async function handleSaveCharge() {
+  if (!props.vehicleId) return
+  const payload = {
+    date: new Date(chargeForm.value.date).toISOString(),
+    kwh_added: Number(chargeForm.value.kwh_added),
+    cost: Number(chargeForm.value.cost),
+    ...currencyPayload(chargeForm.value),
+    address: chargeForm.value.address || null,
+    odometer: chargeForm.value.odometer ? Number(chargeForm.value.odometer) : null,
+    notes: chargeForm.value.notes || null,
+    document_id: chargeForm.value.document_id || null,
+  }
+  try {
+    if (editingCharge.value) {
+      await api.updateCharge(props.vehicleId, editingCharge.value.id, payload)
+    } else {
+      await api.createCharge(props.vehicleId, payload)
+    }
+    open.value = false
+    emit('saved')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+</script>
+
+<template>
+  <div
+    v-if="open"
+    class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    @click.self="open = false"
+  >
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+        <div class="min-w-0 pr-2">
+          <h3 class="text-base font-bold text-white flex items-center gap-2 truncate">
+            <Zap class="w-5 h-5 text-sky-400 shrink-0" />
+            {{ !editingCharge ? 'Recharge hors TeslaMate' : editingCharge.is_manual ? 'Modifier la recharge' : 'Coût de la recharge' }}
+          </h3>
+          <p v-if="editingCharge && !editingCharge.is_manual" class="text-[11px] text-slate-400 mt-1">
+            Recharge TeslaMate du {{ formatDate(editingCharge.date) }} (+{{ editingCharge.kwh_added }} kWh). Le coût saisi ici ne sera pas écrasé par les synchronisations.
+          </p>
+        </div>
+        <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0">
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <form id="charge-modal-form" @submit.prevent="handleSaveCharge" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+        <template v-if="!editingCharge || editingCharge.is_manual">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="charge-form-date" class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
+              <AppDatePicker id="charge-form-date" v-model="chargeForm.date" enable-time-picker required size="xs" />
+            </div>
+            <div>
+              <label for="charge-form-kwh-added" class="block text-xs font-semibold text-slate-300 mb-1">Énergie ajoutée (kWh)</label>
+              <input id="charge-form-kwh-added" v-model="chargeForm.kwh_added" type="number" inputmode="decimal" step="0.001" min="0.001" required class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label for="charge-form-address" class="block text-xs font-semibold text-slate-300 mb-1">Lieu (optionnel)</label>
+              <input id="charge-form-address" v-model="chargeForm.address" placeholder="Borne, domicile..." class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+            <div>
+              <label for="charge-form-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
+              <input id="charge-form-odometer" v-model="chargeForm.odometer" type="number" inputmode="numeric" min="0" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            </div>
+          </div>
+        </template>
+
+        <div>
+          <label for="charge-form-cost" class="block text-xs font-semibold text-slate-300 mb-1">Coût</label>
+          <div class="flex gap-1.5">
+            <input id="charge-form-cost" v-model="chargeForm.cost" type="number" inputmode="decimal" step="0.01" min="0" required placeholder="0.00 si gratuite" class="field-touch w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="charge-form-currency" class="sr-only">Devise</label>
+            <select id="charge-form-currency" v-model="chargeForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
+              <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
+            </select>
+          </div>
+        </div>
+        <div v-if="chargeForm.currency !== 'EUR'">
+          <label for="charge-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ chargeForm.currency }} = ? €)</label>
+          <input id="charge-form-fx-rate" v-model="chargeForm.fx_rate" type="number" inputmode="decimal" step="0.000001" min="0.000001" required class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label for="charge-form-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes (optionnel)</label>
+          <input id="charge-form-notes" v-model="chargeForm.notes" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+        </div>
+
+        <!-- Justificatif / Facture -->
+        <div class="space-y-2 bg-slate-800/40 p-3 rounded-xl border border-slate-700/60">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+              <Paperclip class="w-3.5 h-3.5 text-indigo-400" />
+              Justificatif / Facture
+            </span>
+            <span v-if="chargeForm.document_id" class="text-[11px] text-emerald-400 font-medium">Lié</span>
+          </div>
+
+          <div v-if="chargeForm.document_id" class="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/30 rounded-xl">
+            <div class="flex items-center gap-2 min-w-0">
+              <FileText class="w-4 h-4 text-indigo-400 shrink-0" />
+              <span class="text-xs text-white truncate font-medium">{{ chargeForm.document_filename || 'Facture liée' }}</span>
+            </div>
+            <div class="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                @click="emit('view-document', chargeForm.document_id, chargeForm.document_filename, false)"
+                class="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800"
+                title="Voir le document"
+              >
+                <Eye class="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                @click="chargeForm.document_id = null; chargeForm.document_filename = null"
+                class="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
+                title="Détacher le justificatif"
+              >
+                <X class="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          <div v-else class="space-y-2">
+            <div class="flex flex-col sm:flex-row gap-2">
+              <div class="flex-1" v-if="documents.length > 0">
+                <label for="charge-existing-doc" class="sr-only">Choisir une facture existante</label>
+                <select
+                  id="charge-existing-doc"
+                  class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
+                  @change="(e: any) => onSelectExistingDoc(e.target.value, chargeForm)"
+                >
+                  <option value="">-- Associer une facture existante --</option>
+                  <option v-for="d in documents" :key="d.id" :value="d.id">
+                    {{ d.filename }} ({{ formatDate(d.created_at) }})
+                  </option>
+                </select>
+              </div>
+              <label class="cursor-pointer px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
+                <UploadCloud class="w-3.5 h-3.5" />
+                <span>{{ isUploadingDocument ? 'Téléversement...' : 'Nouveau fichier' }}</span>
+                <input
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  class="hidden"
+                  :disabled="isUploadingDocument"
+                  @change="(e: any) => onFileInputChange(e, chargeForm)"
+                />
+              </label>
+            </div>
+            <p class="text-[10px] text-slate-400">
+              PDF ou image (reçu Superchargeur, borne publique, etc.).
+            </p>
+          </div>
+        </div>
+      </form>
+
+      <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+        <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+          Annuler
+        </button>
+        <button type="submit" form="charge-modal-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
+          Enregistrer
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
