@@ -63,6 +63,12 @@ services:
       DB_SSLMODE: disable
       APP_ENCRYPTION_KEY: ${APP_ENCRYPTION_KEY:-change-this-to-a-secure-32-byte-key-in-prod!}
       JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_signing_key_for_teslacost_app}
+      JWT_ACCESS_EXPIRATION_MINUTES: ${JWT_ACCESS_EXPIRATION_MINUTES:-}
+      JWT_REFRESH_EXPIRATION_DAYS: ${JWT_REFRESH_EXPIRATION_DAYS:-}
+      # Reverse proxy and browser hardening (see the README, section "Exposition sur Internet")
+      TRUSTED_PROXIES: ${TRUSTED_PROXIES:-}
+      SECURITY_HEADERS: ${SECURITY_HEADERS:-}
+      CONTENT_SECURITY_POLICY: ${CONTENT_SECURITY_POLICY:-}
       DISABLE_REGISTRATION: ${DISABLE_REGISTRATION:-false}
       INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}

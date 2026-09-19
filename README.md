@@ -168,44 +168,26 @@ docker run -d \
 
 ---
 
-### Exposition sur Internet : reverse proxy & headers de sécurité
+### Exposition sur Internet : reverse proxy & sécurité
 
-TeslaCost ne termine pas le TLS et ne pose pas lui-même de headers de sécurité HTTP : ces responsabilités sont déléguées au reverse proxy placé devant, comme c'est l'usage pour une application self-hébergée. Si vous exposez l'instance au-delà de votre réseau local, placez-la derrière un reverse proxy qui gère au minimum :
+TeslaCost ne termine pas le TLS : placez-le derrière un reverse proxy qui le gère (Caddy ou Traefik avec Let's Encrypt automatique, ou Nginx avec un certificat existant). Le reste est porté par l'application.
 
-- **TLS** (certificat Let's Encrypt automatique via Traefik/Caddy, ou certificat existant avec Nginx)
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains`
-- `X-Content-Type-Options: nosniff`
-- `X-Frame-Options: DENY` (ou `SAMEORIGIN` si vous embarquez l'app ailleurs)
-- `Referrer-Policy: strict-origin-when-cross-origin`
+- **Secrets** : avec `ENVIRONMENT=production` (valeur par défaut de `docker-compose.yml`), le serveur refuse de démarrer tant que `JWT_SECRET`, `APP_ENCRYPTION_KEY` ou `DB_PASSWORD` ont une valeur publiée dans le dépôt. Le message d'erreur nomme la variable à changer. `ENVIRONMENT=development` conserve les valeurs d'exemple pour un essai local.
+- **Adresse du client** : `X-Forwarded-For` et `X-Forwarded-Proto` ne sont crus que si la connexion vient d'un proxy de confiance (`TRUSTED_PROXIES`, par défaut le loopback et les plages privées : réseau Docker, LAN). La chaîne est lue de droite à gauche : les entrées ajoutées par le client ne sont jamais utilisées. Le limiteur de tentatives de connexion et les sessions enregistrent cette adresse. Un proxy sur une adresse publique doit être listé ; `TRUSTED_PROXIES=none` n'en approuve aucun.
+- **En-têtes de sécurité** posés par l'application : `Content-Security-Policy` (ressources du même domaine, aperçus par `blob:`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy`, et `Strict-Transport-Security` uniquement sur les requêtes HTTPS. `SECURITY_HEADERS=false` les désactive si votre proxy les pose déjà ; `CONTENT_SECURITY_POLICY` remplace la politique (`off` supprime seulement celle-ci).
+- **Requêtes entre sites** : une requête qui modifie des données et dont l'en-tête `Origin` n'est ni `APP_BASE_URL`, ni une origine de `CORS_ALLOWED_ORIGINS`, ni l'hôte demandé est refusée (403). Les requêtes portant un en-tête `Authorization` ou sans `Origin` (scripts, `curl`) ne sont pas concernées.
+- **Port de l'application** : ne publiez pas le port 8080 sur Internet ; seul le proxy doit l'atteindre (`PORT` et le réseau Docker). Une connexion directe de l'extérieur qui apparaîtrait depuis une adresse privée (NAT Docker sans conservation de l'IP source) serait traitée comme un proxy de confiance.
+- Les sessions utilisent un jeton d'accès de 15 minutes (`JWT_ACCESS_EXPIRATION_MINUTES`) renouvelé par un jeton de rafraîchissement rotatif de 30 jours (`JWT_REFRESH_EXPIRATION_DAYS`).
 
 Exemple avec **Caddy** (`Caddyfile`) :
 
 ```caddyfile
 teslacost.homelab.local {
     reverse_proxy localhost:8080
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-    }
 }
 ```
 
-Exemple avec **Traefik** (labels docker-compose sur le service `api`) :
-
-```yaml
-labels:
-  - "traefik.enable=true"
-  - "traefik.http.routers.teslacost.rule=Host(`teslacost.homelab.local`)"
-  - "traefik.http.routers.teslacost.tls.certresolver=letsencrypt"
-  - "traefik.http.middlewares.teslacost-headers.headers.stsSeconds=31536000"
-  - "traefik.http.middlewares.teslacost-headers.headers.contentTypeNosniff=true"
-  - "traefik.http.middlewares.teslacost-headers.headers.frameDeny=true"
-  - "traefik.http.routers.teslacost.middlewares=teslacost-headers"
-```
-
-Pensez aussi à ajuster `APP_BASE_URL` pour qu'il reflète le nom de domaine public utilisé (l'origine CORS en est déduite automatiquement), et à laisser `COOKIE_SECURE` sur sa valeur par défaut (activée automatiquement dès que `APP_BASE_URL` commence par `https://` ou que `ENVIRONMENT=production`).
+Pensez à ajuster `APP_BASE_URL` et `CORS_ALLOWED_ORIGINS` pour qu'ils reflètent le nom de domaine public utilisé, et à laisser `COOKIE_SECURE` sur sa valeur par défaut (activée automatiquement dès que `APP_BASE_URL` commence par `https://` ou que `ENVIRONMENT=production`).
 
 ---
 
@@ -261,7 +243,11 @@ docker run --rm \
 | `TESLACOST_VERSION` | Tag d'image à déployer (`ghcr.io/rem7474/teslacost:<tag>`) ; à pinner en production | `latest` |
 | `DATABASE_URL` | Chaîne de connexion PostgreSQL (`postgres://...`) ; alternative aux variables `DB_*` | *Optionnel* |
 | `JWT_SECRET` | Secret de signature des jetons JWT — **à changer impérativement**, la valeur par défaut est connue publiquement | *Obligatoire* |
-| `JWT_EXPIRATION_HOURS` | Durée de validité des sessions utilisateurs (heures) | `72` |
+| `JWT_ACCESS_EXPIRATION_MINUTES` | Durée de validité du jeton d'accès | `15` |
+| `JWT_REFRESH_EXPIRATION_DAYS` | Durée de validité du jeton de rafraîchissement | `30` |
+| `TRUSTED_PROXIES` | Adresses ou plages CIDR du reverse proxy autorisé à fournir `X-Forwarded-*` (`none` : aucun) | loopback + plages privées |
+| `SECURITY_HEADERS` | Envoi des en-têtes de sécurité par l'application | `true` |
+| `CONTENT_SECURITY_POLICY` | Remplace la politique CSP (`off` : aucune) | politique intégrée |
 | `APP_ENCRYPTION_KEY` | Clé de chiffrement AES-256 des identifiants TeslaMate — **à changer impérativement**, la valeur par défaut est connue publiquement | *Obligatoire* |
 | `APP_TIMEZONE` | Fuseau horaire de calcul et reporting | `Europe/Paris` |
 | `STORAGE_DIR` | Répertoire de stockage des documents sur le volume | `/data/documents` |

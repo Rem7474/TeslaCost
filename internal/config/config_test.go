@@ -119,3 +119,26 @@ func TestExplicitCORSOriginsOverrideDefaults(t *testing.T) {
 		t.Fatalf("explicit origins must replace the derived ones, got %v", got)
 	}
 }
+
+func TestTrustedProxiesDefaultAndOverride(t *testing.T) {
+	t.Setenv("TRUSTED_PROXIES", "")
+	if got := config.Load().TrustedProxies; len(got) != len(config.DefaultTrustedProxies) {
+		t.Errorf("default ranges expected, got %v", got)
+	}
+	t.Setenv("TRUSTED_PROXIES", "203.0.113.4, 198.51.100.0/24")
+	got := config.Load().TrustedProxies
+	if len(got) != 2 || got[0] != "203.0.113.4" || got[1] != "198.51.100.0/24" {
+		t.Errorf("override expected, got %v", got)
+	}
+}
+
+func TestSecurityHeadersDefaultOn(t *testing.T) {
+	t.Setenv("SECURITY_HEADERS", "")
+	if !config.Load().SecurityHeaders {
+		t.Error("security headers must default to on")
+	}
+	t.Setenv("SECURITY_HEADERS", "false")
+	if config.Load().SecurityHeaders {
+		t.Error("SECURITY_HEADERS=false must turn them off")
+	}
+}
