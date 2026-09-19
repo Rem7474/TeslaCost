@@ -143,6 +143,10 @@ type Drive struct {
 	EndAddress          *string    `json:"end_address,omitempty"`
 	EnergyConsumedKwh   *float64   `json:"energy_consumed_kwh,omitempty"`
 	ConsumptionKwh100km *float64   `json:"consumption_kwh_100km,omitempty"`
+	// Stored by the synchronization and read by the energy statistics, not exposed with the drive.
+	StartBatteryLevel   *int       `json:"-"`
+	EndBatteryLevel     *int       `json:"-"`
+	OutsideTempC        *float64   `json:"-"`
 	Tags                []string   `json:"tags"`
 	IsManual            bool       `json:"is_manual"`
 	TollReviewedAt      *time.Time `json:"toll_reviewed_at,omitempty"`
@@ -342,6 +346,10 @@ type ChargeLog struct {
 	Currency          string       `json:"currency"`
 	FxRate            *float64     `json:"fx_rate,omitempty"`
 	Odometer          *float64     `json:"odometer,omitempty"`
+	// Stored by the synchronization and read by the energy statistics, not exposed with the charge.
+	StartBatteryLevel *int         `json:"-"`
+	EndBatteryLevel   *int         `json:"-"`
+	OutsideTempC      *float64     `json:"-"`
 	IsManual          bool         `json:"is_manual"`
 	Notes             *string      `json:"notes,omitempty"`
 	DocumentID        *string      `json:"document_id,omitempty"`
@@ -672,4 +680,12 @@ type RefreshToken struct {
 	CreatedAt time.Time `json:"created_at"`
 	CreatedIP *string   `json:"created_ip,omitempty"`
 	UserAgent *string   `json:"user_agent,omitempty"`
+}
+
+// BatterySnapshot is the battery health computed by TeslaMate on a given day.
+type BatterySnapshot struct {
+	Date               string   `json:"date"` // YYYY-MM-DD
+	MaxCapacityKwh     *float64 `json:"max_capacity_kwh,omitempty"`
+	CurrentCapacityKwh *float64 `json:"current_capacity_kwh,omitempty"`
+	HealthPercent      *float64 `json:"health_percent,omitempty"`
 }

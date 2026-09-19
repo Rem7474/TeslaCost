@@ -20,8 +20,9 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 			vehicle_id, teslamate_drive_id, start_time, end_time,
 			start_odometer, end_odometer, distance_km, duration_min,
 			speed_avg, speed_max, power_max, power_min, start_address, end_address, energy_consumed_kwh,
-			consumption_kwh_100km, tags, is_manual
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, FALSE)
+			consumption_kwh_100km, tags, is_manual,
+			start_battery_level, end_battery_level, outside_temp_c
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, FALSE, $18, $19, $20)
 		ON CONFLICT (vehicle_id, teslamate_drive_id) DO UPDATE
 		SET start_time = EXCLUDED.start_time,
 		    end_time = EXCLUDED.end_time,
@@ -37,6 +38,9 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		    end_address = EXCLUDED.end_address,
 		    energy_consumed_kwh = EXCLUDED.energy_consumed_kwh,
 		    consumption_kwh_100km = EXCLUDED.consumption_kwh_100km,
+		    start_battery_level = EXCLUDED.start_battery_level,
+		    end_battery_level = EXCLUDED.end_battery_level,
+		    outside_temp_c = EXCLUDED.outside_temp_c,
 		    deleted_upstream_at = NULL,
 		    updated_at = NOW()
 		RETURNING id, (xmax = 0) AS is_inserted;
@@ -48,6 +52,7 @@ func (r *Repository) UpsertTeslaMateDrive(ctx context.Context, d *models.Drive) 
 		d.SpeedAvg, d.SpeedMax, d.PowerMax, d.PowerMin,
 		d.StartAddress, d.EndAddress, d.EnergyConsumedKwh,
 		d.ConsumptionKwh100km, d.Tags,
+		d.StartBatteryLevel, d.EndBatteryLevel, d.OutsideTempC,
 	).Scan(&d.ID, &isInserted)
 	return isInserted, err
 }

@@ -2,6 +2,9 @@ package database
 
 import (
 	"context"
+	"time"
+
+	"github.com/teslacost/teslacost/internal/models"
 )
 
 // Per-resource sync-state bookkeeping (has a full import completed, last success).
@@ -32,3 +35,16 @@ func (r *Repository) MarkSyncSuccess(ctx context.Context, vehicleID, resource st
 // ============================================================================
 // Carpooling / BlaBlaCar Module
 // ============================================================================
+
+// UpsertBatterySnapshot keeps the battery health of a day: a later reading the same day replaces the earlier one.
+func (r *Repository) UpsertBatterySnapshot(ctx context.Context, vehicleID string, day time.Time, snap models.BatterySnapshot) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO battery_health_snapshots (vehicle_id, captured_on, max_capacity_kwh, current_capacity_kwh, health_percent)
+		VALUES ($1, $2::date, $3, $4, $5)
+		ON CONFLICT (vehicle_id, captured_on) DO UPDATE
+		SET max_capacity_kwh = EXCLUDED.max_capacity_kwh,
+		    current_capacity_kwh = EXCLUDED.current_capacity_kwh,
+		    health_percent = EXCLUDED.health_percent;
+	`, vehicleID, day.Format("2006-01-02"), snap.MaxCapacityKwh, snap.CurrentCapacityKwh, snap.HealthPercent)
+	return err
+}

@@ -236,6 +236,25 @@ func (c *Client) GetCharges(ctx context.Context, carID int, opts ChargeFilterOpt
 	return resp.Data.Charges, &resp.Data.Units, nil
 }
 
+// GetBatteryHealth retrieves the battery health computed by TeslaMateApi. Older versions of TeslaMateApi do not
+// expose the endpoint.
+func (c *Client) GetBatteryHealth(ctx context.Context, carID int) (*BatteryHealth, error) {
+	var resp BatteryHealthResponse
+	endpoint := fmt.Sprintf("/api/v1/cars/%d/battery-health", carID)
+	if err := c.doRequest(ctx, http.MethodGet, endpoint, nil, &resp); err != nil {
+		return nil, err
+	}
+	return &resp.Data.BatteryHealth, nil
+}
+
+// ConvertTemperatureToC converts a temperature to Celsius based on the reported unit.
+func ConvertTemperatureToC(val float64, unit string) float64 {
+	if strings.EqualFold(unit, "F") {
+		return (val - 32) * 5 / 9
+	}
+	return val
+}
+
 // ConvertDistanceToKm converts a distance to kilometers based on the reported unit.
 func ConvertDistanceToKm(val float64, unit string) float64 {
 	if strings.ToLower(unit) == "mi" {
