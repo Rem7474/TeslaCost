@@ -109,15 +109,17 @@ onBeforeUnmount(() => chart?.destroy())
     <div v-if="showChart" class="h-52">
       <canvas ref="canvas" role="img" aria-label="Capacité de la batterie par mois : mesure TeslaMate et estimation d'après les recharges"></canvas>
     </div>
-    <table v-if="showChart" class="sr-only">
-      <caption>Capacité de la batterie par mois</caption>
-      <thead><tr><th>Mois</th><th>TeslaMate (kWh)</th><th>Estimée (kWh)</th></tr></thead>
-      <tbody>
-        <tr v-for="(m, i) in series.months" :key="m">
-          <td>{{ m }}</td><td>{{ fmt(series.teslamate[i] ?? undefined, 1) }}</td><td>{{ fmt(series.estimated[i] ?? undefined, 1) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div v-if="showChart" class="sr-only">
+      <table>
+        <caption>Capacité de la batterie par mois</caption>
+        <thead><tr><th>Mois</th><th>TeslaMate (kWh)</th><th>Estimée (kWh)</th></tr></thead>
+        <tbody>
+          <tr v-for="(m, i) in series.months" :key="m">
+            <td>{{ m }}</td><td>{{ fmt(series.teslamate[i] ?? undefined, 1) }}</td><td>{{ fmt(series.estimated[i] ?? undefined, 1) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <p v-if="grafanaUrl" class="text-[11px] text-slate-400">
       Courbes détaillées dans

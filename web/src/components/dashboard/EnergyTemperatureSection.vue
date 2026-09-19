@@ -88,15 +88,17 @@ onBeforeUnmount(() => chart?.destroy())
     <div class="h-52">
       <canvas ref="canvas" role="img" aria-label="Consommation moyenne aux 100 km selon la température extérieure"></canvas>
     </div>
-    <table class="sr-only">
-      <caption>Consommation selon la température extérieure</caption>
-      <thead><tr><th>Température</th><th>kWh/100 km</th><th>Trajets</th><th>Distance (km)</th></tr></thead>
-      <tbody>
-        <tr v-for="b in bins" :key="b.min_c">
-          <td>{{ binLabel(b) }}</td><td>{{ fmt(b.consumption_kwh_100km, 1) }}</td><td>{{ b.drives }}</td><td>{{ fmt(b.distance_km, 0) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="sr-only">
+      <table>
+        <caption>Consommation selon la température extérieure</caption>
+        <thead><tr><th>Température</th><th>kWh/100 km</th><th>Trajets</th><th>Distance (km)</th></tr></thead>
+        <tbody>
+          <tr v-for="b in bins" :key="b.min_c">
+            <td>{{ binLabel(b) }}</td><td>{{ fmt(b.consumption_kwh_100km, 1) }}</td><td>{{ b.drives }}</td><td>{{ fmt(b.distance_km, 0) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <p class="text-[11px] text-slate-500">Trajets d'au moins 5 km, groupés par température extérieure moyenne ; tranches de moins de 50 km masquées.</p>
   </div>
 </template>

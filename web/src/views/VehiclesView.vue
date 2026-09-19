@@ -505,13 +505,13 @@ function clearCardTestResult(id: string) {
         class="bg-slate-900 border border-slate-800 p-5 rounded-2xl relative transition-all"
         :class="{ 'border-rose-500/40 shadow-lg shadow-rose-500/5': vehicleStore.activeVehicleId === v.id }"
       >
-        <div class="flex items-start justify-between">
-          <div class="flex items-center gap-3">
-            <div class="p-3 bg-slate-800 rounded-xl text-rose-400">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex min-w-0 items-center gap-3">
+            <div class="shrink-0 p-3 bg-slate-800 rounded-xl text-rose-400">
               <Car class="w-6 h-6" />
             </div>
-            <div>
-              <div class="flex items-center gap-2">
+            <div class="min-w-0">
+              <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <h3 class="text-base font-bold text-white">{{ v.name }}</h3>
                 <span
                   v-if="v.role"
@@ -525,11 +525,11 @@ function clearCardTestResult(id: string) {
                   {{ v.role === 'OWNER' ? 'Propriétaire' : v.role === 'EDITOR' ? 'Co-conducteur' : 'Lecteur' }}
                 </span>
               </div>
-              <p v-if="v.vin" class="text-xs text-slate-400 font-mono">{{ v.vin }}</p>
+              <p v-if="v.vin" class="break-all text-xs text-slate-400 font-mono">{{ v.vin }}</p>
             </div>
           </div>
 
-          <div v-if="v.role === 'OWNER'" class="flex items-center gap-1">
+          <div v-if="v.role === 'OWNER'" class="flex shrink-0 items-center gap-1">
             <button
               @click="openEditModal(v)"
               class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"

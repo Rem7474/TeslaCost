@@ -223,20 +223,23 @@ onBeforeUnmount(() => {
       </div>
     </div>
 
-    <table class="sr-only">
-      <caption>Consommation et coût de l'énergie par mois</caption>
-      <thead>
-        <tr><th>Mois</th><th>kWh/100 km</th><th>€/100 km</th><th>Moyenne 3 mois €/100 km</th></tr>
-      </thead>
-      <tbody>
-        <tr v-for="m in visibleMonths" :key="m.month">
-          <td>{{ m.month }}</td>
-          <td>{{ fmt(m.consumption_kwh_100km, 1) }}</td>
-          <td>{{ fmt(m.cost_per_100km, 2) }}</td>
-          <td>{{ fmt(m.cost_per_100km_trailing, 2) }}</td>
-        </tr>
-      </tbody>
-    </table>
+    <!-- A table is not clipped by sr-only (its width ignores the 1px), so the class goes on a wrapper -->
+    <div class="sr-only">
+      <table>
+        <caption>Consommation et coût de l'énergie par mois</caption>
+        <thead>
+          <tr><th>Mois</th><th>kWh/100 km</th><th>€/100 km</th><th>Moyenne 3 mois €/100 km</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="m in visibleMonths" :key="m.month">
+            <td>{{ m.month }}</td>
+            <td>{{ fmt(m.consumption_kwh_100km, 1) }}</td>
+            <td>{{ fmt(m.cost_per_100km, 2) }}</td>
+            <td>{{ fmt(m.cost_per_100km_trailing, 2) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
 
     <div v-if="stats && stats.charge_classes.length > 0">
       <h4 class="mb-2 text-xs font-bold text-slate-200">Comment la voiture est rechargée</h4>
