@@ -87,6 +87,10 @@ services:
       - "host.docker.internal:host-gateway"
 
   backup:
+    # Published alongside the api image with the same tag, so this file works on its own
+    # (no repo checkout needed). The build section is only used for local development.
+    image: ghcr.io/rem7474/teslacost-backup:${TESLACOST_VERSION:-latest}
+    pull_policy: missing
     build:
       context: ./backup
       dockerfile: Dockerfile
