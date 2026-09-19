@@ -6,6 +6,7 @@ import DrivesView from '@/views/DrivesView.vue'
 import TiresView from '@/views/TiresView.vue'
 import ExpensesView from '@/views/ExpensesView.vue'
 import VehiclesView from '@/views/VehiclesView.vue'
+import AccountView from '@/views/AccountView.vue'
 import CarpoolView from '@/views/CarpoolView.vue'
 import ComparisonView from '@/views/ComparisonView.vue'
 import ManualTrackingView from '@/views/ManualTrackingView.vue'
@@ -63,6 +64,12 @@ const router = createRouter({
       path: '/vehicles',
       name: 'vehicles',
       component: VehiclesView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/account',
+      name: 'account',
+      component: AccountView,
       meta: { requiresAuth: true },
     },
     {
