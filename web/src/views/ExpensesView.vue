@@ -1285,9 +1285,9 @@ async function handleDeleteWebhook() {
 
     <!-- Segmented Navigation: Frais de Route vs Flotte & Entretien -->
     <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-      <div class="flex flex-wrap items-center gap-3">
+      <div class="flex min-w-0 max-w-full flex-wrap items-center gap-3">
         <!-- Groupe 1: Route & Trajets -->
-        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
+        <div class="flex max-w-full items-center overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
           <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1 select-none flex items-center gap-1.5">
             <Navigation class="w-3 h-3 text-amber-400" />
             <span class="hidden sm:inline">Route & Trajets</span>
@@ -1315,7 +1315,7 @@ async function handleDeleteWebhook() {
         </div>
 
         <!-- Groupe 2: Flotte & Entretien -->
-        <div class="flex items-center bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
+        <div class="flex max-w-full items-center overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
           <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1 select-none flex items-center gap-1.5">
             <Wrench class="w-3 h-3 text-pink-400" />
             <span class="hidden sm:inline">Flotte & Véhicule</span>
