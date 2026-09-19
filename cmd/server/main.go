@@ -314,11 +314,13 @@ func main() {
 			// a legitimate user retrying a typo but blocks automated guessing.
 			r.With(httprate.LimitByIP(10, time.Minute)).Post("/register", authHandler.Register)
 			r.With(httprate.LimitByIP(10, time.Minute)).Post("/login", authHandler.Login)
-			r.Post("/refresh", authHandler.RefreshToken)
+			// A refresh token is a credential too: guessing is pointless (256 random bits) but the route does a
+			// database write, so it gets a generous limit rather than none.
+			r.With(httprate.LimitByIP(30, time.Minute)).Post("/refresh", authHandler.RefreshToken)
 			r.Post("/logout", authHandler.Logout)
 			// OIDC Authorization Code Flow endpoints (public — no JWT required)
-			r.Get("/oidc/login", authHandler.OIDCLogin)
-			r.Get("/oidc/callback", authHandler.OIDCCallback)
+			r.With(httprate.LimitByIP(20, time.Minute)).Get("/oidc/login", authHandler.OIDCLogin)
+			r.With(httprate.LimitByIP(20, time.Minute)).Get("/oidc/callback", authHandler.OIDCCallback)
 		})
 
 		// Protected Routes

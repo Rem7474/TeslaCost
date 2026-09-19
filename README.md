@@ -24,13 +24,13 @@
 ## 🚀 Fonctionnalités détaillées
 
 ### 1. Authentification & Sécurité
-- **Authentification locale** : inscription/connexion sécurisée par mot de passe (bcrypt) et émission de tokens JWT HS256.
+- **Authentification locale** : inscription/connexion par mot de passe (bcrypt, 72 octets maximum), jeton d'accès JWT HS256 de 15 minutes et jeton de rafraîchissement rotatif de 30 jours, ce dernier uniquement dans un cookie `HttpOnly` (jamais dans le corps des réponses). Un compte est fermé aux tentatives après 10 échecs en 15 minutes ; un e-mail inconnu et un mot de passe erroné reçoivent la même réponse dans le même délai.
 - **Support OIDC / OAuth2 (SSO)** : délégation d'authentification à votre IdP homelab (Authentik, Keycloak, Authelia, Kanidm).
-  - Flux standard *Authorization Code Flow* avec vérification anti-CSRF (`state`) et anti-rejeu (`nonce` chiffré SHA-256).
-  - Just-In-Time (JIT) provisioning : création automatique du compte ou liaison avec un compte local existant partageant le même email.
-  - Whitelist optionnelle (`OIDC_ALLOWED_EMAILS`) et désactivation possible de l'authentification locale (`OIDC_DISABLE_LOCAL_AUTH`).
+  - Flux standard *Authorization Code Flow* avec PKCE (S256), vérification anti-CSRF (`state`) et anti-rejeu (`nonce` chiffré SHA-256).
+  - Just-In-Time (JIT) provisioning : création automatique du compte ou liaison avec un compte local partageant le même e-mail. L'adresse ne doit pas être signalée non vérifiée par le fournisseur (`email_verified: false` est refusé), et seul un compte local qui n'a pas encore d'identité SSO est lié : un compte déjà lié n'est jamais rattaché à une autre identité.
+  - Whitelist optionnelle (`OIDC_ALLOWED_EMAILS`, sans distinction de casse) et désactivation possible de l'authentification locale (`OIDC_DISABLE_LOCAL_AUTH`).
 - **Chiffrement au repos** : chiffrement symétrique AES-256-GCM des identifiants et tokens de connexion TeslaMate dans PostgreSQL.
-- **Rate limiting** : `/api/auth/login` et `/api/auth/register` sont limités à 10 tentatives/minute par IP pour ralentir le brute force et l'énumération de comptes.
+- **Rate limiting** : `/api/auth/login` et `/api/auth/register` sont limités à 10 tentatives/minute par adresse client (voir `TRUSTED_PROXIES` derrière un reverse proxy), `/api/auth/refresh` et les routes SSO à des seuils plus larges.
 
 ### 2. Synchronisation TeslaMate API
 - **Odomètre temps réel** : actualisation en direct de l'odomètre du véhicule dès que TeslaMate le remonte.

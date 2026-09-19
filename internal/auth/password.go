@@ -16,6 +16,9 @@ func HashPassword(password string) (string, error) {
 	if len(password) < 8 {
 		return "", ErrPasswordTooShort
 	}
+	if len(password) > MaxPasswordBytes {
+		return "", ErrPasswordTooLong
+	}
 	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return "", fmt.Errorf("failed to hash password: %w", err)
@@ -27,4 +30,26 @@ func HashPassword(password string) (string, error) {
 func CheckPassword(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+// MaxPasswordBytes is the longest password bcrypt takes into account: it silently ignores what follows, so a longer
+// one would give a false sense of strength.
+const MaxPasswordBytes = 72
+
+// ErrPasswordTooLong is returned for a password bcrypt would truncate.
+var ErrPasswordTooLong = errors.New("password must be at most 72 bytes")
+
+// dummyHash is compared against when no account matches, so that an unknown address takes as long to refuse as a
+// wrong password and the response time does not reveal which addresses have an account.
+var dummyHash = func() []byte {
+	h, err := bcrypt.GenerateFromPassword([]byte("teslacost-timing-equalizer"), 12)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}()
+
+// CheckPasswordAgainstNobody spends the time of a password check without any account.
+func CheckPasswordAgainstNobody(password string) {
+	_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 }
