@@ -152,6 +152,11 @@ export const api = {
   refresh: () => request<any>('/auth/refresh', { method: 'POST' }),
   logout: () => request<any>('/auth/logout', { method: 'POST' }),
   getMe: () => request<any>('/auth/me'),
+  getSessions: () => request<any[]>('/auth/sessions'),
+  revokeSession: (id: string) => request<any>(`/auth/sessions/${id}`, { method: 'DELETE' }),
+  logoutAll: () => request<any>('/auth/logout-all', { method: 'POST' }),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    request<any>('/auth/password', { method: 'POST', body: JSON.stringify(data) }),
   getAuthConfig: () => request<AuthConfig>('/auth/config'),
 
   // Vehicles
