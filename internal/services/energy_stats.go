@@ -33,10 +33,12 @@ const (
 	minDistanceForTrailing     = 100.0
 	trailingMonths             = 3
 
-	// The energy drawn from the grid always exceeds the energy stored: ratios outside this range come from
-	// upstream data gaps (missing or truncated readings) and would distort the average.
+	// The energy drawn from the grid always exceeds the energy stored, so a genuine ratio is below 1. TeslaMateApi
+	// reports GREATEST(energy used, energy added): when the grid energy was not measured (typically DC charging)
+	// both are equal and the ratio is exactly 1, which means "unknown" rather than a lossless charge. Ratios
+	// under the minimum come from truncated readings.
 	minPlausibleChargeEfficiency = 0.6
-	maxPlausibleChargeEfficiency = 1.0
+	maxPlausibleChargeEfficiency = 1.0 // exclusive
 )
 
 // EnergyMonth is the energy activity of one calendar month.
@@ -128,7 +130,7 @@ func efficiencyRatio(added float64, used *float64) (ratio float64, ok bool) {
 		return 0, false
 	}
 	r := added / *used
-	if r < minPlausibleChargeEfficiency || r > maxPlausibleChargeEfficiency {
+	if r < minPlausibleChargeEfficiency || r >= maxPlausibleChargeEfficiency {
 		return 0, false
 	}
 	return r, true

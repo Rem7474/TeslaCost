@@ -77,11 +77,12 @@ func TestEfficiencyRatioRejectsImplausibleReadings(t *testing.T) {
 		t.Errorf("typical AC session: got (%v, %v)", r, ok)
 	}
 	for name, used := range map[string]*float64{
-		"grid energy missing":              nil,
-		"grid energy zero":                 ptrF(0),
-		"stored more than drawn":           ptrF(25),
-		"far more drawn than stored":       ptrF(60),
-		"just below the plausible minimum": ptrF(30 / 0.59),
+		"grid energy missing":                              nil,
+		"grid energy zero":                                 ptrF(0),
+		"stored more than drawn":                           ptrF(25),
+		"grid energy equal to energy added (not measured)": ptrF(30),
+		"far more drawn than stored":                       ptrF(60),
+		"just below the plausible minimum":                 ptrF(30 / 0.59),
 	} {
 		if _, ok := efficiencyRatio(30, used); ok {
 			t.Errorf("%s: reading accepted", name)
