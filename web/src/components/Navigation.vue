@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useQuickAddStore } from '@/stores/quickAdd'
 import { useVehicleStore } from '@/stores/vehicle'
 import {
   LayoutDashboard,
@@ -14,6 +15,9 @@ import {
   Zap,
   Scale,
   ClipboardList,
+  Plus,
+  Ellipsis,
+  X,
 } from 'lucide-vue-next'
 import { APP_VERSION } from '@/version'
 
@@ -21,9 +25,10 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const vehicleStore = useVehicleStore()
+const quickAdd = useQuickAddStore()
 
 const allNavItems = [
-  { name: 'dashboard', label: 'Tableau de bord', path: '/', icon: LayoutDashboard },
+  { name: 'dashboard', label: 'Tableau de bord', mobileLabel: 'Accueil', path: '/', icon: LayoutDashboard },
   { name: 'drives', label: 'Trajets', path: '/drives', icon: NavIcon },
   { name: 'carpools', label: 'Covoiturage', path: '/carpools', icon: Users },
   { name: 'tires', label: 'Pneus', path: '/tires', icon: Disc },
@@ -39,7 +44,33 @@ const navItems = computed(() => allNavItems.filter((item) => !(vehicleStore.isIc
 
 const currentRouteName = computed(() => route.name)
 
+// Phone bar: the everyday pages, the quick entry button in the middle, everything else behind "Plus".
+// Combustion vehicles have no trips, so their manual tracking (fill-ups, mileage) takes that slot.
+const primaryNames = computed(() => (vehicleStore.isIce ? ['dashboard', 'expenses', 'manual'] : ['dashboard', 'drives', 'expenses']))
+const primaryItems = computed(() =>
+  primaryNames.value.map((name) => navItems.value.find((item) => item.name === name)).filter((item) => !!item),
+)
+const secondaryItems = computed(() => navItems.value.filter((item) => !primaryNames.value.includes(item.name)))
+const leftItems = computed(() => primaryItems.value.slice(0, 2))
+const rightItems = computed(() => primaryItems.value.slice(2))
+const moreActive = computed(() => secondaryItems.value.some((item) => item.name === currentRouteName.value))
+
+const canQuickAdd = computed(() => !!vehicleStore.activeVehicle && vehicleStore.canEdit)
+const showMore = ref(false)
+
+watch(() => route.path, () => {
+  showMore.value = false
+})
+
+function onKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') showMore.value = false
+}
+
+onMounted(() => document.addEventListener('keydown', onKeydown))
+onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
+
 function handleLogout() {
+  showMore.value = false
   authStore.logout()
   router.push('/login')
 }
@@ -64,6 +95,16 @@ function handleLogout() {
         <p class="text-xs text-slate-400">TCO & Fleet Manager</p>
       </div>
     </div>
+
+    <button
+      v-if="canQuickAdd"
+      type="button"
+      class="mb-3 flex items-center justify-center gap-2 rounded-xl bg-rose-600 px-3 py-2.5 text-sm font-bold text-white shadow-lg shadow-rose-600/20 transition-colors hover:bg-rose-500"
+      @click="quickAdd.open()"
+    >
+      <Plus class="h-4 w-4" aria-hidden="true" />
+      Saisie rapide
+    </button>
 
     <nav class="flex-1 space-y-1">
       <router-link
@@ -104,22 +145,97 @@ function handleLogout() {
   </aside>
 
   <!-- Mobile Bottom Navigation Bar -->
-  <nav class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/90 backdrop-blur-md border-t border-slate-800 px-2 py-1 safe-area-pb">
-    <div class="flex items-center justify-around">
-      <router-link
-        v-for="item in navItems"
-        :key="item.name"
-        :to="item.path"
-        class="flex flex-col items-center py-1.5 px-3 rounded-lg text-[10px] font-medium transition-colors"
-        :class="
-          currentRouteName === item.name
-            ? 'text-rose-400 font-semibold'
-            : 'text-slate-400 hover:text-slate-200'
-        "
-      >
-        <component :is="item.icon" class="w-5 h-5 mb-0.5" />
-        <span>{{ item.label }}</span>
-      </router-link>
-    </div>
+  <nav aria-label="Navigation principale" class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-1 safe-area-pb">
+    <ul class="flex items-stretch">
+      <li v-for="item in leftItems" :key="item.name" class="flex-1">
+        <router-link
+          :to="item.path"
+          class="flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors"
+          :class="currentRouteName === item.name ? 'text-rose-400 font-semibold' : 'text-slate-400 hover:text-slate-200'"
+          :aria-current="currentRouteName === item.name ? 'page' : undefined"
+        >
+          <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
+          <span>{{ item.mobileLabel ?? item.label }}</span>
+        </router-link>
+      </li>
+
+      <li class="flex flex-1 items-center justify-center">
+        <button
+          v-if="canQuickAdd"
+          type="button"
+          class="-mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-600/40 ring-4 ring-slate-950 transition-colors hover:bg-rose-500 active:bg-rose-700"
+          aria-label="Saisie rapide"
+          @click="quickAdd.open()"
+        >
+          <Plus class="h-7 w-7" aria-hidden="true" />
+        </button>
+      </li>
+
+      <li v-for="item in rightItems" :key="item.name" class="flex-1">
+        <router-link
+          :to="item.path"
+          class="flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors"
+          :class="currentRouteName === item.name ? 'text-rose-400 font-semibold' : 'text-slate-400 hover:text-slate-200'"
+          :aria-current="currentRouteName === item.name ? 'page' : undefined"
+        >
+          <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
+          <span>{{ item.mobileLabel ?? item.label }}</span>
+        </router-link>
+      </li>
+
+      <li class="flex-1">
+        <button
+          type="button"
+          class="flex min-h-14 w-full flex-col items-center justify-center gap-0.5 rounded-lg text-[11px] font-medium transition-colors"
+          :class="moreActive || showMore ? 'text-rose-400 font-semibold' : 'text-slate-400 hover:text-slate-200'"
+          aria-haspopup="dialog"
+          :aria-expanded="showMore"
+          @click="showMore = true"
+        >
+          <Ellipsis class="h-5 w-5" aria-hidden="true" />
+          <span>Plus</span>
+        </button>
+      </li>
+    </ul>
   </nav>
+
+  <!-- Mobile "Plus" sheet -->
+  <div
+    v-if="showMore"
+    class="md:hidden fixed inset-0 z-[60] flex items-end bg-black/70"
+    @click.self="showMore = false"
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Autres pages"
+      class="w-full rounded-t-3xl border border-slate-800 bg-slate-900 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
+    >
+      <div class="mb-2 flex items-center justify-between">
+        <p class="truncate text-xs text-slate-400">{{ authStore.user?.email }}</p>
+        <button type="button" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Fermer" @click="showMore = false">
+          <X class="h-5 w-5" aria-hidden="true" />
+        </button>
+      </div>
+      <ul class="space-y-1">
+        <li v-for="item in secondaryItems" :key="item.name">
+          <router-link
+            :to="item.path"
+            class="flex min-h-12 items-center gap-3 rounded-xl px-3 text-base font-medium"
+            :class="currentRouteName === item.name ? 'bg-rose-500/10 text-rose-300' : 'text-slate-200 hover:bg-slate-800'"
+            :aria-current="currentRouteName === item.name ? 'page' : undefined"
+          >
+            <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
+            {{ item.label }}
+          </router-link>
+        </li>
+        <li>
+          <button type="button" class="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-base font-medium text-slate-300 hover:bg-slate-800" @click="handleLogout">
+            <LogOut class="h-5 w-5" aria-hidden="true" />
+            Déconnexion
+          </button>
+        </li>
+      </ul>
+    </div>
+  </div>
 </template>

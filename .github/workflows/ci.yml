@@ -82,6 +82,9 @@ jobs:
       - name: Run TypeScript Typecheck
         run: cd web && npm run typecheck
 
+      - name: Run Frontend Unit Tests
+        run: cd web && npm test
+
       - name: Build Frontend Assets
         run: cd web && npm run build
 

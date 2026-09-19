@@ -1,0 +1,141 @@
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { ChevronDown } from 'lucide-vue-next'
+import { api } from '@/services/api'
+import QuickFormShell from './QuickFormShell.vue'
+import QuickPhotoField from './QuickPhotoField.vue'
+import {
+  buildChargePayload,
+  costFromTariff,
+  effectivePricePerKwh,
+  isQueued,
+  loadMemory,
+  rememberCharge,
+  toLocalDateTimeInput,
+  toNumber,
+} from '@/utils/quickAdd'
+
+const props = defineProps<{ vehicle: any }>()
+const emit = defineEmits<{ saved: [result: { queued: boolean; message: string }] }>()
+
+const memory = loadMemory(props.vehicle.id)
+const odometer = props.vehicle.current_odometer ? String(Math.round(props.vehicle.current_odometer)) : ''
+
+const form = reactive({
+  date: toLocalDateTimeInput(new Date()),
+  kwh: '',
+  cost: '',
+  address: memory.address ?? '',
+  odometer,
+  notes: '',
+  documentId: null as string | null,
+  documentFilename: null as string | null,
+})
+
+const saving = ref(false)
+const error = ref('')
+const showDetails = ref(false)
+const costTouched = ref(false)
+const kwhInput = ref<HTMLInputElement | null>(null)
+
+onMounted(() => kwhInput.value?.focus())
+
+// Until the cost is typed by hand it follows the energy at the last tariff used on this vehicle.
+watch(
+  () => form.kwh,
+  (value) => {
+    if (costTouched.value) return
+    const cost = costFromTariff(toNumber(value), memory.pricePerKwh)
+    form.cost = cost === null ? '' : cost.toFixed(2)
+  },
+)
+
+const pricePerKwh = computed(() => effectivePricePerKwh(toNumber(form.kwh), toNumber(form.cost)))
+const fmtPrice = (v: number) => v.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })
+const followsTariff = computed(() => !costTouched.value && memory.pricePerKwh !== undefined && form.cost !== '')
+
+function setFree() {
+  costTouched.value = true
+  form.cost = '0'
+}
+
+async function submit() {
+  error.value = ''
+  let payload: ReturnType<typeof buildChargePayload>
+  try {
+    payload = buildChargePayload({ ...form })
+  } catch (err: any) {
+    error.value = err.message
+    return
+  }
+  saving.value = true
+  try {
+    const result = await api.createCharge(props.vehicle.id, payload)
+    rememberCharge(props.vehicle.id, { kwh: payload.kwh_added, cost: payload.cost, address: payload.address })
+    emit('saved', { queued: isQueued(result), message: `Recharge de ${payload.kwh_added} kWh` })
+  } catch (err: any) {
+    error.value = err?.message || "Impossible d'enregistrer la recharge."
+  } finally {
+    saving.value = false
+  }
+}
+</script>
+
+<template>
+  <QuickFormShell submit-label="Enregistrer la recharge" :saving="saving" :error="error" @submit="submit">
+    <p class="text-xs text-slate-400">Recharge hors TeslaMate (borne chez un tiers, prise non suivie).</p>
+
+    <div>
+      <label for="qc-kwh" class="quick-label">Énergie ajoutée (kWh)</label>
+      <input id="qc-kwh" ref="kwhInput" v-model="form.kwh" type="number" inputmode="decimal" step="any" min="0" class="quick-input" />
+    </div>
+
+    <div>
+      <label for="qc-cost" class="quick-label">Coût (€)</label>
+      <div class="flex gap-2">
+        <input id="qc-cost" v-model="form.cost" type="number" inputmode="decimal" step="any" min="0" class="quick-input min-w-0" @input="costTouched = true" />
+        <button type="button" class="quick-chip shrink-0 border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700" @click="setFree">Gratuit</button>
+      </div>
+      <p class="mt-1.5 min-h-4 text-[11px] text-slate-400" aria-live="polite">
+        <template v-if="followsTariff">Calculé au dernier tarif ({{ fmtPrice(memory.pricePerKwh!) }} €/kWh). Modifiez le coût si besoin.</template>
+        <template v-else-if="pricePerKwh !== null">Soit {{ fmtPrice(pricePerKwh) }} €/kWh.</template>
+      </p>
+    </div>
+
+    <button
+      type="button"
+      class="flex min-h-11 w-full items-center justify-between rounded-xl px-1 text-sm font-semibold text-slate-300"
+      :aria-expanded="showDetails"
+      aria-controls="qc-details"
+      @click="showDetails = !showDetails"
+    >
+      Plus de détails
+      <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': showDetails }" aria-hidden="true" />
+    </button>
+
+    <div v-show="showDetails" id="qc-details" class="space-y-4">
+      <div>
+        <label for="qc-date" class="quick-label">Date et heure</label>
+        <input id="qc-date" v-model="form.date" type="datetime-local" class="quick-input" />
+      </div>
+      <div>
+        <label for="qc-address" class="quick-label">Lieu</label>
+        <input id="qc-address" v-model="form.address" placeholder="Borne, domicile…" autocomplete="off" class="quick-input" />
+      </div>
+      <div>
+        <label for="qc-odometer" class="quick-label">Odomètre (km)</label>
+        <input id="qc-odometer" v-model="form.odometer" type="number" inputmode="numeric" min="0" class="quick-input" />
+      </div>
+      <div>
+        <label for="qc-notes" class="quick-label">Notes</label>
+        <input id="qc-notes" v-model="form.notes" autocomplete="off" class="quick-input" />
+      </div>
+    </div>
+
+    <QuickPhotoField
+      v-model:document-id="form.documentId"
+      v-model:filename="form.documentFilename"
+      :vehicle-id="vehicle.id"
+    />
+  </QuickFormShell>
+</template>

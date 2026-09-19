@@ -7,6 +7,7 @@ import { useOfflineStore } from '@/stores/offline'
 import Navigation from '@/components/Navigation.vue'
 import TopBar from '@/components/TopBar.vue'
 import ConfirmModal from '@/components/ConfirmModal.vue'
+import QuickAddSheet from '@/components/quickadd/QuickAddSheet.vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -53,5 +54,6 @@ onMounted(async () => {
     <router-view />
   </div>
 
+  <QuickAddSheet v-if="showDashboardLayout" />
   <ConfirmModal />
 </template>

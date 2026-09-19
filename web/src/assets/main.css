@@ -159,3 +159,16 @@
     min-height: 3rem;
   }
 }
+
+/* Field of the quick entry sheet: one size everywhere, large enough for a thumb. */
+@layer components {
+  .quick-input {
+    @apply w-full min-h-12 rounded-xl border border-slate-700 bg-slate-800 px-4 text-base text-white placeholder:text-slate-500 focus:border-rose-500 focus:outline-none;
+  }
+  .quick-label {
+    @apply mb-1.5 block text-xs font-semibold text-slate-300;
+  }
+  .quick-chip {
+    @apply min-h-12 rounded-xl border px-3 text-sm font-semibold transition-colors;
+  }
+}
