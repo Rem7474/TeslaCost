@@ -1,3 +1,5 @@
+import { todayIso } from '@/utils/dates'
+
 export const ACQUISITION_LABELS: Record<string, string> = {
   CASH: 'Achat comptant',
   LOAN: 'Achat à crédit',
@@ -10,8 +12,6 @@ export const OWNERSHIP_STEPS = [
   { step: 2, title: 'Modalités Financières', description: 'Coûts et mensualités' },
   { step: 3, title: 'Conditions & Fin', description: 'Kilométrage, options et clôture' },
 ]
-
-export const todayIso = (): string => new Date().toISOString().substring(0, 10)
 
 export function emptyOwnership() {
   return {

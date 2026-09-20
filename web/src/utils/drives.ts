@@ -45,15 +45,6 @@ export function tollApplyStatusLabel(status: string) {
   }
 }
 
-export function formatDriveDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
-
 export function formatTripDates(tg: any) {
   if (!tg.start_time) return 'Aucun trajet'
   const start = new Date(tg.start_time).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })

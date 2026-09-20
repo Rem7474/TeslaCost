@@ -4,7 +4,8 @@ import { Archive, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { getLastDismountInfo, isMountedPosition, todayIso } from '@/utils/tires'
+import { getLastDismountInfo, isMountedPosition } from '@/utils/tires'
+import { todayIso } from '@/utils/dates'
 
 // Dispose (worn out, damaged, sold) keeps history and cost; deleting a tire removes an erroneous entry
 const props = defineProps<{ vehicleId: string; selectedTire: any | null; tires: any[]; currentOdometer: number }>()

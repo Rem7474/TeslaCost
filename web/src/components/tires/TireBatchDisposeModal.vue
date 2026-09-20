@@ -3,7 +3,8 @@ import { ref, watch } from 'vue'
 import { Archive, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { getLastDismountInfo, isMountedPosition, todayIso } from '@/utils/tires'
+import { getLastDismountInfo, isMountedPosition } from '@/utils/tires'
+import { todayIso } from '@/utils/dates'
 
 const props = defineProps<{ vehicleId: string; selectedTireIds: string[]; tires: any[]; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()

@@ -4,7 +4,7 @@ import { Check, History, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { todayIso } from '@/utils/tires'
+import { todayIso } from '@/utils/dates'
 
 // Records the same past session on several tires stored in the garage
 const props = defineProps<{ vehicleId: string; storageTires: any[]; selectedTireIds: string[]; currentOdometer: number }>()

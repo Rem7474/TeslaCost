@@ -4,7 +4,7 @@ import { api, type MaintenanceReminder } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { X, CheckCircle2 } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
-import { todayIso } from '@/utils/expenses'
+import { todayIso } from '@/utils/dates'
 
 // Marks a reminder as done, optionally logging the maintenance expense. saved carries whether an expense was logged.
 const props = defineProps<{ vehicleId: string; reminder: MaintenanceReminder | null; currentOdometer: number }>()

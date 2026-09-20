@@ -4,7 +4,8 @@ import { Pencil, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { isMountedPosition, toIsoDay } from '@/utils/tires'
+import { isMountedPosition } from '@/utils/tires'
+import { toIsoDay } from '@/utils/dates'
 
 // Empty fields are left unchanged. fallbackTire / fallbackStats stand in for a tire the list does not carry (opened from its history).
 const props = defineProps<{ vehicleId: string; tires: any[]; tireIds: string[]; fallbackTire: any | null; fallbackStats: any | null }>()

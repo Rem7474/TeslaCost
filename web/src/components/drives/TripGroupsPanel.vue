@@ -2,7 +2,8 @@
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Layers, X, Users, Coins, Pencil, Trash2 } from 'lucide-vue-next'
-import { formatDriveDate, formatTripDates } from '@/utils/drives'
+import { formatTripDates } from '@/utils/drives'
+import { formatDayTime } from '@/utils/dates'
 
 // The trip groups ("voyages") list; a trip can be expanded to show its drives.
 defineProps<{ loadingTrips: boolean; tripGroups: any[]; expandedTripId: string | null; tripDrives: any[] }>()
@@ -15,7 +16,7 @@ const emit = defineEmits<{
 }>()
 const router = useRouter()
 const vehicleStore = useVehicleStore()
-const formatDate = formatDriveDate
+const formatDate = formatDayTime
 </script>
 
 <template>

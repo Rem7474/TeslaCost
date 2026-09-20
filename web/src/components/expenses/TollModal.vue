@@ -6,7 +6,8 @@ import { useDocumentAttach } from '@/composables/useDocumentAttach'
 import { Receipt, X, CheckSquare, Square, Paperclip, FileText, Eye } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
-import { CURRENCIES, countUnlistedDrives, currencyPayload, formatDate, formatDriveTime, toLocalDateTimeInput } from '@/utils/expenses'
+import { CURRENCIES, countUnlistedDrives, currencyPayload, formatDate, toLocalDateTimeInput } from '@/utils/expenses'
+import { formatDayTime } from '@/utils/dates'
 
 // Adds a toll / parking expense, or edits it when `editing` is set. Its form is seeded when the modal opens.
 const props = defineProps<{ vehicleId: string; editing: any | null; documents: ExpenseDocumentHeader[] }>()
@@ -254,7 +255,7 @@ async function handleCreateToll() {
             >
               <option value="">-- Sélectionner un trajet récent --</option>
               <option v-for="d in recentDrives" :key="d.id" :value="d.id">
-                {{ formatDriveTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }} ({{ d.distance_km.toFixed(1) }} km)
+                {{ formatDayTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }} ({{ d.distance_km.toFixed(1) }} km)
               </option>
             </select>
           </div>
@@ -278,7 +279,7 @@ async function handleCreateToll() {
                 <div class="flex items-center gap-2">
                   <CheckSquare v-if="selectedDriveIds.includes(d.id)" class="w-4 h-4 text-amber-400" />
                   <Square v-else class="w-4 h-4 text-slate-500" />
-                  <span>{{ formatDriveTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}</span>
+                  <span>{{ formatDayTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}</span>
                 </div>
                 <span class="font-mono text-[11px] text-slate-400">{{ d.distance_km.toFixed(0) }} km</span>
               </div>

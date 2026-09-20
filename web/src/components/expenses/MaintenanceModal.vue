@@ -6,7 +6,8 @@ import { useDocumentAttach } from '@/composables/useDocumentAttach'
 import { Wrench, X, Paperclip, FileText, Eye } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
-import { CURRENCIES, currencyPayload, findCloseCandidate, formatDate, todayIso } from '@/utils/expenses'
+import { CURRENCIES, currencyPayload, findCloseCandidate, formatDate } from '@/utils/expenses'
+import { todayIso } from '@/utils/dates'
 
 // Adds a maintenance / fixed expense, or edits it when `editing` is set. maintenanceExpenses lets a new one close an earlier revision.
 const props = defineProps<{
