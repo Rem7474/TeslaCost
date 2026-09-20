@@ -33,17 +33,17 @@ const vehicleStore = useVehicleStore()
       <div class="flex items-center gap-2">
         <Zap class="w-4 h-4 shrink-0 text-sky-400" />
         <span>
-          Estimation d'énergie active :
-          <strong>{{ vehicleStore.activeVehicle.estimated_kwh_100km }} kWh/100km</strong> à
-          <strong>{{ Number(vehicleStore.activeVehicle.estimated_price_per_kwh).toFixed(4) }} €/kWh</strong>
-          (intégrée automatiquement dans le TCO).
+          {{ $t('expenses.chargesPanel.energyEstimateActive') }}
+          <strong>{{ $t('expenses.chargesPanel.kwh100km', { estimated_kwh_100km: vehicleStore.activeVehicle.estimated_kwh_100km }) }}</strong> à
+          <strong>{{ $t('expenses.chargesPanel.kwh3', { estimated_price_per_kwh: Number(vehicleStore.activeVehicle.estimated_price_per_kwh).toFixed(4) }) }}</strong>
+          {{ $t('expenses.chargesPanel.automaticallyIncludedInTheTco') }}
         </span>
       </div>
       <button
         @click="router.push('/vehicles')"
         class="shrink-0 font-medium underline hover:text-sky-200 transition-colors ml-2"
       >
-        Modifier
+        {{ $t('common.edit') }}
       </button>
     </div>
 
@@ -54,12 +54,12 @@ const vehicleStore = useVehicleStore()
       :class="missingCostOnly ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-amber-500/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/15'"
     >
       <AlertTriangle class="w-4 h-4 shrink-0" />
-      <span v-if="missingCostOnly">Affichage des recharges sans coût uniquement — cliquer pour tout afficher</span>
-      <span v-else>{{ chargesWithoutCost }} recharge(s) sans coût : le TCO est sous-estimé. Cliquer pour les compléter.</span>
+      <span v-if="missingCostOnly">{{ $t('expenses.chargesPanel.showingOnlyTheChargesWithout') }}</span>
+      <span v-else>{{ $t('expenses.chargesPanel.chargeSWithoutACost', { chargesWithoutCost }) }}</span>
     </button>
-    <div v-if="loading" class="text-center py-12 text-slate-400">Chargement...</div>
+    <div v-if="loading" class="text-center py-12 text-slate-400">{{ $t('common.loading') }}</div>
     <div v-else-if="!charges.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-      {{ vehicleStore.hasTeslaMate ? 'Aucune recharge enregistrée. Synchronisez votre véhicule avec TeslaMate ou ajoutez une recharge manuelle.' : 'Aucune recharge enregistrée. Ajoutez une recharge pour suivre le coût de l\'énergie.' }}
+      {{ vehicleStore.hasTeslaMate ? $t('expenses.chargesPanel.emptyWithTeslamate') : $t('expenses.chargesPanel.empty') }}
     </div>
     <div v-else class="space-y-3">
       <div
@@ -71,40 +71,40 @@ const vehicleStore = useVehicleStore()
         <div class="min-w-0 flex-1">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-xs px-2 py-0.5 rounded-full font-bold bg-sky-500/10 text-sky-400 border border-sky-500/20 shrink-0">
-              +{{ c.kwh_added }} kWh
+              {{ $t('expenses.chargesPanel.kwh2', { kwh_added: c.kwh_added }) }}
             </span>
             <span class="text-xs text-slate-400 shrink-0">{{ formatDate(c.date) }}</span>
-            <span v-if="c.is_manual" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0">Manuelle</span>
-            <span v-else-if="c.cost_source === 'MANUAL'" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0">Coût corrigé</span>
+            <span v-if="c.is_manual" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0">{{ $t('expenses.chargesPanel.manual') }}</span>
+            <span v-else-if="c.cost_source === 'MANUAL'" class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700 shrink-0">{{ $t('expenses.chargesPanel.correctedCost') }}</span>
             <button
               v-if="c.document_id"
               @click="emit('view-document', c.document_id, c.document_filename, false)"
               class="text-xs px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 flex items-center gap-1 transition-colors max-w-[200px] truncate"
-              title="Voir le justificatif"
+              :title="$t('expenses.chargesPanel.viewTheReceipt')"
             >
               <Paperclip class="w-3 h-3 shrink-0" />
-              <span class="truncate">{{ c.document_filename || 'Facture' }}</span>
+              <span class="truncate">{{ c.document_filename || $t('expenses.invoice') }}</span>
             </button>
           </div>
-          <p class="text-sm text-slate-300 mt-1 truncate" :title="c.address">{{ c.address || 'Lieu de recharge inconnu' }}</p>
+          <p class="text-sm text-slate-300 mt-1 truncate" :title="c.address">{{ c.address || $t('expenses.chargesPanel.unknownPlace') }}</p>
         </div>
         <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
           <div class="text-left sm:text-right">
             <template v-if="c.cost !== null">
               <span class="text-lg font-extrabold text-sky-400">{{ c.cost.toFixed(2) }} {{ c.currency }}</span>
               <p v-if="c.kwh_added > 0" class="text-[11px] text-slate-400">
-                {{ (c.cost / c.kwh_added).toFixed(3) }} {{ c.currency }}/kWh
+                {{ $t('expenses.chargesPanel.kwh', { cost: (c.cost / c.kwh_added).toFixed(3), currency: c.currency }) }}
               </p>
             </template>
             <span v-else class="text-xs font-bold text-amber-400 flex items-center gap-1">
-              <AlertTriangle class="w-3.5 h-3.5" /> Coût manquant
+              <AlertTriangle class="w-3.5 h-3.5" /> {{ $t('expenses.chargesPanel.missingCost') }}
             </span>
           </div>
           <div v-if="vehicleStore.canEdit" class="flex items-center gap-1.5">
             <button
               @click="emit('edit', c)"
               class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-sky-400 rounded-xl transition-colors border border-slate-700/60"
-              :title="c.is_manual ? 'Modifier cette recharge' : 'Renseigner / corriger le coût'"
+              :title="c.is_manual ? $t('expenses.chargesPanel.editThisCharge') : $t('expenses.chargesPanel.fixCost')"
             >
               <Pencil class="w-3.5 h-3.5" />
             </button>
@@ -112,7 +112,7 @@ const vehicleStore = useVehicleStore()
               v-if="c.is_manual"
               @click="emit('delete', c)"
               class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
-              title="Supprimer cette recharge"
+              :title="$t('expenses.chargesPanel.deleteThisCharge')"
             >
               <Trash2 class="w-3.5 h-3.5" />
             </button>
@@ -120,14 +120,14 @@ const vehicleStore = useVehicleStore()
         </div>
       </div>
       <div class="flex items-center justify-between text-xs text-slate-400 px-1">
-        <span>{{ charges.length }} recharge(s) affichée(s) sur {{ chargesTotal }}</span>
+        <span>{{ $t('expenses.chargesPanel.chargeSShownOutOf', { length: charges.length, chargesTotal }) }}</span>
         <button
           v-if="charges.length < chargesTotal"
           @click="emit('load-more')"
           :disabled="loadingMoreCharges"
           class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold rounded-xl border border-slate-700 disabled:opacity-50"
         >
-          {{ loadingMoreCharges ? 'Chargement...' : 'Charger plus' }}
+          {{ loadingMoreCharges ? $t('common.loading') : $t('expenses.chargesPanel.loadMore') }}
         </button>
       </div>
     </div>

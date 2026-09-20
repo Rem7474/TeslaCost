@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -37,14 +38,14 @@ const insuranceAnnualPremium = ref<number | ''>('')
 function applyMonthlyPremium() {
   const annual = Number(insuranceAnnualPremium.value)
   if (!annual || annual <= 0) {
-    showAlert('Veuillez saisir la prime annuelle', 'Champ requis', 'warning')
+    showAlert(t('expenses.maintenanceModal.enterAnnualPremium'), t('common.requiredField'), 'warning')
     return
   }
   maintForm.value.amount = (Math.round((annual / 12) * 100) / 100).toFixed(2)
   maintForm.value.is_recurring = true
   maintForm.value.recurrence_interval_months = 1
   if (!maintForm.value.description) {
-    maintForm.value.description = `Prime d'assurance (${annual.toFixed(2)} €/an)`
+    maintForm.value.description = t('expenses.maintenanceModal.premiumDescription', { amount: annual.toFixed(2) })
   }
 }
 
@@ -186,7 +187,7 @@ async function handleCreateMaint() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -201,7 +202,7 @@ async function handleCreateMaint() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Wrench class="w-5 h-5 text-pink-400" />
-          {{ editingMaintId ? 'Modifier Entretien / Dépense Fixe' : 'Ajouter Entretien / Dépense Fixe' }}
+          {{ editingMaintId ? $t('expenses.maintenanceModal.edit') : $t('expenses.maintenanceModal.add') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -210,23 +211,23 @@ async function handleCreateMaint() {
 
       <form id="maint-modal-form" @submit.prevent="handleCreateMaint" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <div>
-          <label for="expense-maint-category" class="block text-xs font-semibold text-slate-300 mb-1">Catégorie</label>
+          <label for="expense-maint-category" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.category') }}</label>
           <select id="expense-maint-category" v-model="maintForm.category" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
-            <option value="MAINTENANCE">Entretien / Révision</option>
-            <option value="REPAIR">Réparation / sinistre (franchise)</option>
-            <option value="INSURANCE">Assurance (prime)</option>
-            <option value="SUBSCRIPTION">Abonnement (Connectivité...)</option>
-            <option value="TAX">Taxe / Carte grise</option>
-            <option value="FINANCING">Autre financement (hors contrat du véhicule)</option>
-            <option value="ACCESSORY">Accessoire</option>
-            <option value="OTHER">Autre</option>
+            <option value="MAINTENANCE">{{ $t('expenses.maintenanceModal.maintenanceService') }}</option>
+            <option value="REPAIR">{{ $t('expenses.maintenanceModal.repairClaimExcess') }}</option>
+            <option value="INSURANCE">{{ $t('expenses.maintenanceModal.insurancePremium') }}</option>
+            <option value="SUBSCRIPTION">{{ $t('expenses.maintenanceModal.subscriptionConnectivity') }}</option>
+            <option value="TAX">{{ $t('expenses.maintenanceModal.taxRegistration') }}</option>
+            <option value="FINANCING">{{ $t('expenses.maintenanceModal.otherFinancingOutsideTheVehicle') }}</option>
+            <option value="ACCESSORY">{{ $t('expenses.maintenanceModal.accessory') }}</option>
+            <option value="OTHER">{{ $t('expenses.maintenanceModal.other') }}</option>
           </select>
         </div>
         <!-- Insurance: annual premium paid monthly -->
         <div v-if="maintForm.category === 'INSURANCE'" class="bg-indigo-500/10 border border-indigo-500/20 rounded-xl p-3 space-y-2">
           <div class="flex items-end gap-2">
             <div class="flex-1">
-              <label for="expense-insurance-annual" class="block text-xs font-semibold text-indigo-200 mb-1">Prime annuelle (€)</label>
+              <label for="expense-insurance-annual" class="block text-xs font-semibold text-indigo-200 mb-1">{{ $t('expenses.maintenanceModal.annualPremium') }}</label>
               <input
                 id="expense-insurance-annual"
                 v-model="insuranceAnnualPremium"
@@ -238,33 +239,32 @@ async function handleCreateMaint() {
               />
             </div>
             <button type="button" @click="applyMonthlyPremium" class="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl">
-              Mensualiser
+              {{ $t('expenses.maintenanceModal.spreadMonthly') }}
             </button>
           </div>
           <p class="text-[11px] text-indigo-200/80">
-            Crée une dépense récurrente mensuelle de prime / 12, à compter de la date de début de la couverture.
-            L'assurance est un coût fixe dans le temps : elle n'est répartie au kilomètre que pour le coût d'un trajet, sur les kilomètres réellement parcourus.
+            {{ $t('expenses.maintenanceModal.createsAMonthlyRecurringExpense') }}
           </p>
         </div>
         <p v-else-if="maintForm.category === 'FINANCING'" class="text-[11px] text-amber-300/90">
-          Les loyers de LOA/LLD, l'apport et les intérêts d'un crédit sont générés automatiquement depuis « Acquisition & financement » du véhicule : ne les saisissez pas ici.
+          {{ $t('expenses.maintenanceModal.leasePaymentsTheDownPayment') }}
         </p>
 
         <div>
-          <label for="expense-maint-description" class="block text-xs font-semibold text-slate-300 mb-1">Description</label>
-          <input id="expense-maint-description" v-model="maintForm.description" required placeholder="ex: Remplacement filtre habitacle" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <label for="expense-maint-description" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.description') }}</label>
+          <input id="expense-maint-description" v-model="maintForm.description" required :placeholder="$t('expenses.maintenanceModal.eGCabinFilterReplacement')" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="expense-maint-date" class="block text-xs font-semibold text-slate-300 mb-1">Date</label>
+            <label for="expense-maint-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('common.date') }}</label>
             <AppDatePicker id="expense-maint-date" v-model="maintForm.date" required size="sm" />
           </div>
           <div>
-            <label for="maint-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
+            <label for="maint-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.amount') }}</label>
             <div class="flex gap-1.5">
               <input id="maint-form-amount" v-model="maintForm.amount" type="number" step="0.01" min="0.01" required class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-              <label for="maint-form-currency" class="sr-only">Devise</label>
+              <label for="maint-form-currency" class="sr-only">{{ $t('expenses.maintenanceModal.currency') }}</label>
               <select id="maint-form-currency" v-model="maintForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
                 <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
               </select>
@@ -272,25 +272,25 @@ async function handleCreateMaint() {
           </div>
         </div>
         <div v-if="maintForm.currency !== 'EUR'">
-          <label for="maint-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ maintForm.currency }} = ? €)</label>
+          <label for="maint-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.conversionRate1', { currency: maintForm.currency }) }}</label>
           <input id="maint-form-fx-rate" v-model="maintForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
 
         <div>
           <div class="flex items-center justify-between mb-1">
-            <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300">Odomètre (km)</label>
-            <span v-if="detectingOdometer" class="text-[11px] text-slate-400">Détection du kilométrage...</span>
+            <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300">{{ $t('expenses.maintenanceModal.odometerKm') }}</label>
+            <span v-if="detectingOdometer" class="text-[11px] text-slate-400">{{ $t('expenses.maintenanceModal.detectingTheMileage') }}</span>
           </div>
           <input id="expense-maint-odometer" v-model.number="maintForm.odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           <div v-if="detectedOdometer !== null && detectedOdometer > 0" class="flex items-center justify-between text-[11px] text-emerald-400 mt-1">
-            <span>✓ Kilométrage détecté : {{ Math.round(detectedOdometer) }} km</span>
+            <span>{{ $t('expenses.maintenanceModal.mileageDetectedKm', { detectedOdometer: Math.round(detectedOdometer) }) }}</span>
             <button
               type="button"
               v-if="maintForm.odometer !== Math.round(detectedOdometer)"
               @click="maintForm.odometer = Math.round(detectedOdometer)"
               class="underline hover:text-emerald-300 transition-colors ml-2"
             >
-              Appliquer
+              {{ $t('expenses.maintenanceModal.apply') }}
             </button>
           </div>
         </div>
@@ -298,7 +298,7 @@ async function handleCreateMaint() {
         <!-- Lissage du coût pour dépenses non-récurrentes -->
         <div v-if="!maintForm.is_recurring" class="space-y-2.5 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60">
           <span class="block text-xs font-semibold text-slate-200">
-            Lissage du coût de revient au km
+            {{ $t('expenses.maintenanceModal.costPerKmSmoothing') }}
           </span>
 
           <div class="grid grid-cols-4 gap-1.5 pt-1">
@@ -308,7 +308,7 @@ async function handleCreateMaint() {
               class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="maintForm.amortization_mode === 'NONE' ? 'bg-pink-500/20 text-pink-300 border-pink-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              Immédiat
+              {{ $t('expenses.maintenanceModal.immediate') }}
             </button>
             <button
               type="button"
@@ -324,7 +324,7 @@ async function handleCreateMaint() {
               class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="maintForm.amortization_mode === 'DURATION' ? 'bg-purple-500/20 text-purple-300 border-purple-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              À la durée
+              {{ $t('expenses.maintenanceModal.byDuration') }}
             </button>
             <button
               type="button"
@@ -332,13 +332,13 @@ async function handleCreateMaint() {
               class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="maintForm.amortization_mode === 'HYBRID' ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              Mixte
+              {{ $t('expenses.maintenanceModal.mixed') }}
             </button>
           </div>
 
           <!-- Distance parameter -->
           <div v-if="maintForm.amortization_mode === 'DISTANCE' || maintForm.amortization_mode === 'HYBRID'" class="pt-1">
-            <label for="maint-coverage-km" class="block text-xs text-slate-300 mb-1">Kilométrage couvert (km)</label>
+            <label for="maint-coverage-km" class="block text-xs text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.distanceCoveredKm') }}</label>
             <input
               id="maint-coverage-km"
               v-model.number="maintForm.coverage_km"
@@ -352,7 +352,7 @@ async function handleCreateMaint() {
 
           <!-- Duration parameter -->
           <div v-if="maintForm.amortization_mode === 'DURATION' || maintForm.amortization_mode === 'HYBRID'" class="pt-1">
-            <label for="maint-coverage-months" class="block text-xs text-slate-300 mb-1">Durée couverte (mois)</label>
+            <label for="maint-coverage-months" class="block text-xs text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.durationCoveredMonths') }}</label>
             <input
               id="maint-coverage-months"
               v-model.number="maintForm.coverage_months"
@@ -374,7 +374,7 @@ async function handleCreateMaint() {
                 class="mt-0.5 rounded border-slate-700 bg-slate-800 text-rose-600 focus:ring-rose-500"
               />
               <label for="close-candidate" class="text-xs text-slate-300 leading-snug cursor-pointer">
-                Clôturer la révision précédente en cours
+                {{ $t('expenses.maintenanceModal.closeThePreviousServiceIn') }}
                 <span class="block text-[11px] text-amber-400 font-normal">
                   {{ closeCandidateMaintenance.description }} ({{ formatDate(closeCandidateMaintenance.date) }} — {{ Number(closeCandidateMaintenance.amount).toFixed(2) }} €)
                 </span>
@@ -386,15 +386,15 @@ async function handleCreateMaint() {
         <div class="space-y-2 pt-1">
           <div class="flex items-center gap-2">
             <input v-model="maintForm.is_recurring" type="checkbox" id="rec" class="rounded border-slate-700 bg-slate-800 text-rose-600 focus:ring-rose-500" />
-            <label for="rec" class="text-xs text-slate-300 font-medium">Dépense récurrente</label>
+            <label for="rec" class="text-xs text-slate-300 font-medium">{{ $t('expenses.maintenanceModal.recurringExpense') }}</label>
           </div>
           <div v-if="maintForm.is_recurring" class="pt-1 grid grid-cols-2 gap-3">
             <div>
-              <label for="maint-form-recurrence-interval-months" class="block text-xs font-semibold text-slate-300 mb-1">Intervalle (mois)</label>
+              <label for="maint-form-recurrence-interval-months" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.intervalMonths') }}</label>
               <input id="maint-form-recurrence-interval-months" v-model.number="maintForm.recurrence_interval_months" type="number" min="1" max="120" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="maint-form-recurrence-end-date" class="block text-xs font-semibold text-slate-300 mb-1">Fin (optionnelle)</label>
+              <label for="maint-form-recurrence-end-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.endOptional') }}</label>
               <AppDatePicker id="maint-form-recurrence-end-date" v-model="maintForm.recurrence_end_date" size="sm" :clearable="true" />
             </div>
           </div>
@@ -405,22 +405,22 @@ async function handleCreateMaint() {
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <Paperclip class="w-3.5 h-3.5 text-indigo-400" />
-              Justificatif / Facture
+              {{ $t('expenses.maintenanceModal.receiptInvoice') }}
             </span>
-            <span v-if="maintForm.document_id" class="text-[11px] text-emerald-400 font-medium">Lié</span>
+            <span v-if="maintForm.document_id" class="text-[11px] text-emerald-400 font-medium">{{ $t('expenses.maintenanceModal.linked') }}</span>
           </div>
 
           <div v-if="maintForm.document_id" class="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/30 rounded-xl">
             <div class="flex items-center gap-2 min-w-0">
               <FileText class="w-4 h-4 text-indigo-400 shrink-0" />
-              <span class="text-xs text-white truncate font-medium">{{ maintForm.document_filename || 'Facture liée' }}</span>
+              <span class="text-xs text-white truncate font-medium">{{ maintForm.document_filename || $t('expenses.linkedInvoice') }}</span>
             </div>
             <div class="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 @click="emit('view-document', maintForm.document_id, maintForm.document_filename, false)"
                 class="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800"
-                title="Voir le document"
+                :title="$t('expenses.maintenanceModal.viewTheDocument')"
               >
                 <Eye class="w-3.5 h-3.5" />
               </button>
@@ -428,7 +428,7 @@ async function handleCreateMaint() {
                 type="button"
                 @click="maintForm.document_id = null; maintForm.document_filename = null"
                 class="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
-                title="Détacher le justificatif"
+                :title="$t('expenses.maintenanceModal.detachTheReceipt')"
               >
                 <X class="w-3.5 h-3.5" />
               </button>
@@ -437,13 +437,13 @@ async function handleCreateMaint() {
 
           <div v-else class="space-y-2.5">
             <div v-if="documents.length > 0">
-              <label for="maint-existing-doc" class="block text-[11px] text-slate-400 mb-1">Rattacher une facture existante</label>
+              <label for="maint-existing-doc" class="block text-[11px] text-slate-400 mb-1">{{ $t('expenses.maintenanceModal.attachAnExistingInvoice') }}</label>
               <select
                 id="maint-existing-doc"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
                 @change="(e: any) => onSelectExistingDoc(e.target.value, maintForm)"
               >
-                <option value="">-- Sélectionner un justificatif existant --</option>
+                <option value="">{{ $t('expenses.maintenanceModal.selectAnExistingReceipt') }}</option>
                 <option v-for="d in documents" :key="d.id" :value="d.id">
                   {{ d.filename }} ({{ formatDate(d.created_at) }})
                 </option>
@@ -451,12 +451,12 @@ async function handleCreateMaint() {
             </div>
 
             <div>
-              <span class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</span>
+              <span class="block text-[11px] text-slate-400 mb-1">{{ $t('expenses.maintenanceModal.orDropANewInvoice') }}</span>
               <AppDropzone
                 :model-value="null"
                 :disabled="isUploadingDocument"
-                label="Déposez la facture ici ou cliquez pour parcourir"
-                helperText="PDF ou image (téléversé et rattaché automatiquement à cette dépense)"
+                :label="$t('expenses.maintenanceModal.dropTheInvoiceHereOr')"
+                :helperText="$t('expenses.maintenanceModal.uploadHelper')"
                 @update:model-value="(f) => onDropzoneDirectUpload(f, maintForm)"
               />
             </div>
@@ -466,10 +466,10 @@ async function handleCreateMaint() {
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="maint-modal-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
-          {{ editingMaintId ? 'Mettre à jour' : 'Enregistrer' }}
+          {{ editingMaintId ? $t('expenses.update') : $t('common.save') }}
         </button>
       </div>
     </div>

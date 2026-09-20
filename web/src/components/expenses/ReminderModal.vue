@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api, type MaintenanceReminder } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { X, Bell, Sparkles } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
-import { REMINDER_PRESETS, type ReminderPreset } from '@/utils/expenses'
+import { reminderPresets, type ReminderPreset } from '@/utils/expenses'
 import { todayIso } from '@/utils/dates'
 
 // Creates a maintenance reminder, or edits `editing`. `preset` pre-fills a new one from a suggestion.
@@ -71,11 +72,11 @@ watch(open, (isOpen) => {
 async function handleSaveReminder() {
   if (!props.vehicleId) return
   if (!reminderForm.value.title.trim()) {
-    showAlert('Le titre du rappel est requis', 'Champ requis', 'warning')
+    showAlert(t('expenses.reminderModal.titleRequired'), t('common.requiredField'), 'warning')
     return
   }
   if (!reminderForm.value.interval_km && !reminderForm.value.interval_months) {
-    showAlert('Spécifiez au moins un intervalle en km ou en mois', 'Champ requis', 'warning')
+    showAlert(t('expenses.reminderModal.intervalRequired'), t('common.requiredField'), 'warning')
     return
   }
   try {
@@ -92,15 +93,15 @@ async function handleSaveReminder() {
     }
     if (editingReminderId.value) {
       await api.updateReminder(props.vehicleId, editingReminderId.value, payload)
-      showAlert('Rappel mis à jour', 'Succès', 'success')
+      showAlert(t('expenses.reminderModal.updated'), t('common.success'), 'success')
     } else {
       await api.createReminder(props.vehicleId, payload)
-      showAlert('Rappel créé avec succès', 'Succès', 'success')
+      showAlert(t('expenses.reminderModal.created'), t('common.success'), 'success')
     }
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -115,7 +116,7 @@ async function handleSaveReminder() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Bell class="w-5 h-5 text-violet-400" />
-          {{ editingReminderId ? 'Modifier le rappel d\'entretien' : 'Nouveau rappel d\'entretien' }}
+          {{ editingReminderId ? $t('expenses.reminderModal.edit') : $t('expenses.reminderModal.new') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -125,10 +126,10 @@ async function handleSaveReminder() {
       <form id="reminder-modal-form" @submit.prevent="handleSaveReminder" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <!-- Preset chips (only when adding new) -->
         <div v-if="!editingReminderId" class="space-y-1.5">
-          <span class="block text-xs font-semibold text-slate-300">Modèles rapides</span>
+          <span class="block text-xs font-semibold text-slate-300">{{ $t('expenses.reminderModal.quickTemplates') }}</span>
           <div class="flex flex-wrap gap-1.5">
             <button
-              v-for="preset in REMINDER_PRESETS"
+              v-for="preset in reminderPresets()"
               :key="preset.title"
               type="button"
               @click="applyReminderPreset(preset)"
@@ -143,54 +144,54 @@ async function handleSaveReminder() {
         <!-- Title & Category -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div class="sm:col-span-2">
-            <label for="reminder-form-title" class="block text-xs font-semibold text-slate-300 mb-1">Titre de l'entretien</label>
+            <label for="reminder-form-title" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.maintenanceTitle') }}</label>
             <input
               id="reminder-form-title"
               v-model="reminderForm.title"
               type="text"
               required
-              placeholder="ex. Permutation des pneus"
+              :placeholder="$t('expenses.reminderModal.eGTireRotation')"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
             />
           </div>
           <div>
-            <label for="reminder-form-category" class="block text-xs font-semibold text-slate-300 mb-1">Catégorie</label>
+            <label for="reminder-form-category" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.category') }}</label>
             <select
               id="reminder-form-category"
               v-model="reminderForm.category"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
             >
-              <option value="MAINTENANCE">Entretien</option>
-              <option value="TIRES">Pneumatiques</option>
+              <option value="MAINTENANCE">{{ $t('expenses.reminderModal.maintenance') }}</option>
+              <option value="TIRES">{{ $t('expenses.reminderModal.tires') }}</option>
             </select>
           </div>
         </div>
 
         <!-- Periodicities -->
         <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-3">
-          <span class="block text-xs font-semibold text-slate-200">Périodicité (au moins l'un des deux)</span>
+          <span class="block text-xs font-semibold text-slate-200">{{ $t('expenses.reminderModal.frequencyAtLeastOneOf') }}</span>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="reminder-form-interval-km" class="block text-xs font-semibold text-slate-300 mb-1">Intervalle en km</label>
+              <label for="reminder-form-interval-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.intervalInKm') }}</label>
               <input
                 id="reminder-form-interval-km"
                 v-model="reminderForm.interval_km"
                 type="number"
                 min="500"
                 step="500"
-                placeholder="ex. 10000 (vide = ignoré)"
+                :placeholder="$t('expenses.reminderModal.eG10000EmptyIgnored')"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
             </div>
             <div>
-              <label for="reminder-form-interval-months" class="block text-xs font-semibold text-slate-300 mb-1">Intervalle en mois</label>
+              <label for="reminder-form-interval-months" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.intervalInMonths') }}</label>
               <input
                 id="reminder-form-interval-months"
                 v-model="reminderForm.interval_months"
                 type="number"
                 min="1"
                 max="120"
-                placeholder="ex. 12 (vide = ignoré)"
+                :placeholder="$t('expenses.reminderModal.eG12EmptyIgnored')"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
             </div>
@@ -199,10 +200,10 @@ async function handleSaveReminder() {
 
         <!-- Last service date & odometer -->
         <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-3">
-          <span class="block text-xs font-semibold text-slate-200">Point de départ (dernier entretien)</span>
+          <span class="block text-xs font-semibold text-slate-200">{{ $t('expenses.reminderModal.startingPointLastMaintenance') }}</span>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="reminder-form-last-odo" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre dernier entretien (km)</label>
+              <label for="reminder-form-last-odo" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.odometerAtLastMaintenanceKm') }}</label>
               <input
                 id="reminder-form-last-odo"
                 v-model="reminderForm.last_service_odometer"
@@ -213,7 +214,7 @@ async function handleSaveReminder() {
               />
             </div>
             <div>
-              <label for="reminder-form-last-date" class="block text-xs font-semibold text-slate-300 mb-1">Date dernier entretien</label>
+              <label for="reminder-form-last-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.dateOfLastMaintenance') }}</label>
               <AppDatePicker
                 id="reminder-form-last-date"
                 v-model="reminderForm.last_service_date"
@@ -226,10 +227,10 @@ async function handleSaveReminder() {
 
         <!-- Alert lead thresholds -->
         <div class="p-3.5 bg-slate-800/40 rounded-xl border border-slate-800 space-y-3">
-          <span class="block text-xs font-semibold text-slate-200">Seuil d'anticipation de l'alerte</span>
+          <span class="block text-xs font-semibold text-slate-200">{{ $t('expenses.reminderModal.alertLeadThreshold') }}</span>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="reminder-form-lead-km" class="block text-xs font-semibold text-slate-300 mb-1">Alerter avant (km)</label>
+              <label for="reminder-form-lead-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.alertBeforeKm') }}</label>
               <input
                 id="reminder-form-lead-km"
                 v-model.number="reminderForm.lead_km"
@@ -241,7 +242,7 @@ async function handleSaveReminder() {
               />
             </div>
             <div>
-              <label for="reminder-form-lead-days" class="block text-xs font-semibold text-slate-300 mb-1">Alerter avant (jours)</label>
+              <label for="reminder-form-lead-days" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.alertBeforeDays') }}</label>
               <input
                 id="reminder-form-lead-days"
                 v-model.number="reminderForm.lead_days"
@@ -263,17 +264,17 @@ async function handleSaveReminder() {
             class="rounded border-slate-700 bg-slate-800 text-violet-600 focus:ring-violet-500"
           />
           <label for="reminder-form-webhook-toggle" class="text-xs text-slate-300 cursor-pointer">
-            Envoyer une notification webhook automatique (Discord / Telegram / Gotify) lors du franchissement du seuil
+            {{ $t('expenses.reminderModal.sendAnAutomaticWebhookNotification') }}
           </label>
         </div>
       </form>
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="reminder-modal-form" class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl transition-colors">
-          {{ editingReminderId ? 'Mettre à jour' : 'Créer le rappel' }}
+          {{ editingReminderId ? $t('expenses.update') : $t('expenses.reminderModal.create') }}
         </button>
       </div>
     </div>

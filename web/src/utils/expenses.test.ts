@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  REMINDER_PRESETS,
+  reminderPresets,
   countUnlistedDrives,
   currencyPayload,
   findCloseCandidate,
@@ -72,9 +72,9 @@ describe('findCloseCandidate', () => {
   })
 })
 
-describe('REMINDER_PRESETS', () => {
+describe('reminderPresets', () => {
   it('gives every preset a title and at least one interval', () => {
-    for (const p of REMINDER_PRESETS) {
+    for (const p of reminderPresets()) {
       expect(p.title).not.toBe('')
       expect(p.interval_km !== '' || p.interval_months !== '').toBe(true)
     }

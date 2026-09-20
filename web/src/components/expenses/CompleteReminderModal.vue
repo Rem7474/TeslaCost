@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api, type MaintenanceReminder } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -30,7 +31,7 @@ watch(open, (isOpen) => {
     service_odometer: currentOdo,
     log_expense: false,
     expense_amount: '',
-    expense_description: `Entretien effectué : ${props.reminder.title}`,
+    expense_description: t('expenses.completeReminderModal.expenseDescription', { title: props.reminder.title }),
   }
 })
 
@@ -57,11 +58,11 @@ async function handleCompleteReminder() {
       })
     }
 
-    showAlert('Entretien marqué comme fait et intervalle réinitialisé !', 'Succès', 'success')
+    showAlert(t('expenses.completeReminderModal.done'), t('common.success'), 'success')
     open.value = false
     emit('saved', completeForm.value.log_expense)
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -76,7 +77,7 @@ async function handleCompleteReminder() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <CheckCircle2 class="w-5 h-5 text-emerald-400" />
-          Valider la réalisation : {{ completingReminder?.title }}
+          {{ $t('expenses.completeReminderModal.confirmCompletion', { title: completingReminder?.title }) }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -85,12 +86,12 @@ async function handleCompleteReminder() {
 
       <form id="complete-reminder-form" @submit.prevent="handleCompleteReminder" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <p class="text-xs text-slate-400">
-          Valider cette intervention réinitialise le compteur d'intervalle et repart sur le nouvel odomètre et la date renseignés ci-dessous.
+          {{ $t('expenses.completeReminderModal.confirmingThisWorkResetsThe') }}
         </p>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="complete-form-date" class="block text-xs font-semibold text-slate-300 mb-1">Date d'intervention</label>
+            <label for="complete-form-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.workDate') }}</label>
             <AppDatePicker
               id="complete-form-date"
               v-model="completeForm.service_date"
@@ -99,7 +100,7 @@ async function handleCompleteReminder() {
             />
           </div>
           <div>
-            <label for="complete-form-odo" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre de l'intervention (km)</label>
+            <label for="complete-form-odo" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.odometerAtTheWorkKm') }}</label>
             <input
               id="complete-form-odo"
               v-model="completeForm.service_odometer"
@@ -121,29 +122,29 @@ async function handleCompleteReminder() {
               class="rounded border-slate-700 bg-slate-800 text-emerald-600 focus:ring-emerald-500"
             />
             <label for="complete-form-log-expense" class="text-xs font-semibold text-slate-200 cursor-pointer">
-              Enregistrer simultanément une dépense d'entretien financière
+              {{ $t('expenses.completeReminderModal.alsoRecordAMaintenanceExpense') }}
             </label>
           </div>
 
           <div v-if="completeForm.log_expense" class="space-y-3 pt-1">
             <div>
-              <label for="complete-form-expense-amount" class="block text-xs font-semibold text-slate-300 mb-1">Coût de la facture (€)</label>
+              <label for="complete-form-expense-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.invoiceCost') }}</label>
               <input
                 id="complete-form-expense-amount"
                 v-model="completeForm.expense_amount"
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="0.00 si gratuit"
+                :placeholder="$t('expenses.completeReminderModal.000IfFree')"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
             </div>
             <div>
-              <label for="complete-form-expense-desc" class="block text-xs font-semibold text-slate-300 mb-1">Libellé de la dépense</label>
+              <label for="complete-form-expense-desc" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.expenseLabel') }}</label>
               <input
                 id="complete-form-expense-desc"
                 v-model="completeForm.expense_description"
-                placeholder="ex. Révision atelier / Permutation pneus"
+                :placeholder="$t('expenses.completeReminderModal.eGWorkshopServiceTire')"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
             </div>
@@ -153,10 +154,10 @@ async function handleCompleteReminder() {
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="complete-reminder-form" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition-colors">
-          Confirmer l'entretien
+          {{ $t('expenses.completeReminderModal.confirmTheMaintenance') }}
         </button>
       </div>
     </div>

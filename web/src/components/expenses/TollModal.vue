@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -109,9 +110,9 @@ function onSingleDriveChange() {
   if (d) {
     tollForm.value.date = new Date(d.start_time).toISOString().substring(0, 16)
     if (!tollForm.value.notes) {
-      const from = (d.start_address || 'Départ').split(',')[0]
-      const to = (d.end_address || 'Arrivée').split(',')[0]
-      tollForm.value.notes = `Péage ${from} → ${to}`
+      const from = (d.start_address || t('expenses.tollModal.start')).split(',')[0]
+      const to = (d.end_address || t('expenses.tollModal.destination')).split(',')[0]
+      tollForm.value.notes = `${t('expenses.tollModal.notesPrefix')} ${from} → ${to}`
     }
   }
 }
@@ -130,10 +131,10 @@ function toggleMultiDrive(id: string) {
 
   if (selected.length > 0) {
     tollForm.value.date = new Date(selected[0].start_time).toISOString().substring(0, 16)
-    if (!tollForm.value.notes || tollForm.value.notes.startsWith('Péage ')) {
-      const first = (selected[0].start_address || 'Départ').split(',')[0]
-      const last = (selected[selected.length - 1].end_address || 'Arrivée').split(',')[0]
-      tollForm.value.notes = `Péage ${first} → ${last} (${selected.length} étapes)`
+    if (!tollForm.value.notes || tollForm.value.notes.startsWith(`${t('expenses.tollModal.notesPrefix')} `)) {
+      const first = (selected[0].start_address || t('expenses.tollModal.start')).split(',')[0]
+      const last = (selected[selected.length - 1].end_address || t('expenses.tollModal.destination')).split(',')[0]
+      tollForm.value.notes = `${t('expenses.tollModal.notesPrefix')} ${first} → ${last} ${t('expenses.tollModal.legsCount', { count: selected.length })}`
     }
   }
 }
@@ -166,7 +167,7 @@ async function handleCreateToll() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -181,7 +182,7 @@ async function handleCreateToll() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Receipt class="w-5 h-5 text-amber-400" />
-          {{ editingTollId ? 'Modifier le Péage / Parking' : 'Ajouter un Péage / Parking' }}
+          {{ editingTollId ? $t('expenses.tollModal.edit') : $t('expenses.tollModal.add') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -191,19 +192,19 @@ async function handleCreateToll() {
       <form id="toll-modal-form" @submit.prevent="handleCreateToll" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="expense-toll-type" class="block text-xs font-semibold text-slate-300 mb-1">Type</label>
+            <label for="expense-toll-type" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.tollModal.type') }}</label>
             <select id="expense-toll-type" v-model="tollForm.type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
-              <option value="TOLL">Péage</option>
-              <option value="PARKING">Parking</option>
-              <option value="FERRY">Ferry</option>
-              <option value="OTHER">Autre</option>
+              <option value="TOLL">{{ $t('expenses.tollModal.toll') }}</option>
+              <option value="PARKING">{{ $t('expenses.tollModal.parking') }}</option>
+              <option value="FERRY">{{ $t('expenses.tollModal.ferry') }}</option>
+              <option value="OTHER">{{ $t('expenses.tollModal.other') }}</option>
             </select>
           </div>
           <div>
-            <label for="toll-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant</label>
+            <label for="toll-form-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.tollModal.amount') }}</label>
             <div class="flex gap-1.5">
               <input id="toll-form-amount" v-model="tollForm.amount" type="number" step="0.01" min="0.01" required placeholder="0.00" class="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-              <label for="toll-form-currency" class="sr-only">Devise</label>
+              <label for="toll-form-currency" class="sr-only">{{ $t('expenses.tollModal.currency') }}</label>
               <select id="toll-form-currency" v-model="tollForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
                 <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
               </select>
@@ -211,14 +212,14 @@ async function handleCreateToll() {
           </div>
         </div>
         <div v-if="tollForm.currency !== 'EUR'">
-          <label for="toll-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ tollForm.currency }} = ? €)</label>
+          <label for="toll-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.tollModal.conversionRate1', { currency: tollForm.currency }) }}</label>
           <input id="toll-form-fx-rate" v-model="tollForm.fx_rate" type="number" step="0.000001" min="0.000001" required placeholder="ex: 1.05" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
 
         <!-- Association à un/des trajets TeslaMate -->
         <div v-if="vehicleStore.hasTeslaMate || associationMode !== 'NONE'" class="space-y-2 bg-slate-800/50 p-3.5 rounded-xl border border-slate-700/60">
           <span class="block text-xs font-semibold text-slate-200">
-            Associer à un trajet TeslaMate
+            {{ $t('expenses.tollModal.attachToATeslamateDrive') }}
           </span>
 
           <div class="grid grid-cols-3 gap-1.5 pt-1">
@@ -228,7 +229,7 @@ async function handleCreateToll() {
               class="py-1.5 px-2 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="associationMode === 'NONE' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              Sans trajet
+              {{ $t('expenses.tollModal.noDrive') }}
             </button>
             <button
               type="button"
@@ -236,7 +237,7 @@ async function handleCreateToll() {
               class="py-1.5 px-2 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="associationMode === 'SINGLE' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              Trajet unique
+              {{ $t('expenses.tollModal.singleDrive') }}
             </button>
             <button
               type="button"
@@ -244,21 +245,21 @@ async function handleCreateToll() {
               class="py-1.5 px-2 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="associationMode === 'MULTI' ? 'bg-amber-500/20 text-amber-300 border-amber-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              Multi-étapes
+              {{ $t('expenses.tollModal.multiLeg') }}
             </button>
           </div>
 
           <!-- Single drive selection -->
           <div v-if="associationMode === 'SINGLE'" class="pt-2 space-y-1.5">
-            <label for="expense-selected-drive-id" class="block text-xs text-slate-400">Choisir le trajet :</label>
+            <label for="expense-selected-drive-id" class="block text-xs text-slate-400">{{ $t('expenses.tollModal.pickTheDrive') }}</label>
             <select id="expense-selected-drive-id"
               v-model="selectedDriveId"
               @change="onSingleDriveChange"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
             >
-              <option value="">-- Sélectionner un trajet récent --</option>
+              <option value="">{{ $t('expenses.tollModal.selectARecentDrive') }}</option>
               <option v-for="d in recentDrives" :key="d.id" :value="d.id">
-                {{ formatDayTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }} ({{ d.distance_km.toFixed(1) }} km)
+                {{ formatDayTime(d.start_time) }}{{ $t('expenses.tollModal.dateSeparator') }}{{ (d.start_address || $t('expenses.tollModal.start')).split(',')[0] }} → {{ (d.end_address || $t('expenses.tollModal.destination')).split(',')[0] }} ({{ d.distance_km.toFixed(1) }} km)
               </option>
             </select>
           </div>
@@ -266,9 +267,9 @@ async function handleCreateToll() {
           <!-- Multi drives selection -->
           <div v-if="associationMode === 'MULTI'" class="pt-2 space-y-1.5">
             <div class="flex items-center justify-between">
-              <span class="text-xs text-slate-400">Cocher les étapes composant le voyage :</span>
+              <span class="text-xs text-slate-400">{{ $t('expenses.tollModal.tickTheLegsThatMake') }}</span>
               <span class="text-[11px] text-amber-400 font-semibold">
-                {{ selectedDriveIds.length }} étape(s)<template v-if="selectedDrivesNotListed"> dont {{ selectedDrivesNotListed }} plus ancienne(s) que les 200 derniers trajets</template>
+                {{ $t('expenses.tollModal.legS', { length: selectedDriveIds.length }) }}<template v-if="selectedDrivesNotListed"> {{ $t('expenses.tollModal.ofWhichOlderThanThe', { selectedDrivesNotListed }) }}</template>
               </span>
             </div>
             <div class="max-h-40 overflow-y-auto space-y-1.5 pr-1">
@@ -282,7 +283,7 @@ async function handleCreateToll() {
                 <div class="flex items-center gap-2">
                   <CheckSquare v-if="selectedDriveIds.includes(d.id)" class="w-4 h-4 text-amber-400" />
                   <Square v-else class="w-4 h-4 text-slate-500" />
-                  <span>{{ formatDayTime(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}</span>
+                  <span>{{ formatDayTime(d.start_time) }}{{ $t('expenses.tollModal.dateSeparator') }}{{ (d.start_address || $t('expenses.tollModal.start')).split(',')[0] }} → {{ (d.end_address || $t('expenses.tollModal.destination')).split(',')[0] }}</span>
                 </div>
                 <span class="font-mono text-[11px] text-slate-400">{{ d.distance_km.toFixed(0) }} km</span>
               </div>
@@ -292,12 +293,12 @@ async function handleCreateToll() {
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label for="expense-toll-date" class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
+            <label for="expense-toll-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.tollModal.dateAndTime') }}</label>
             <AppDatePicker id="expense-toll-date" v-model="tollForm.date" enable-time-picker size="xs" />
           </div>
           <div>
-            <label for="expense-toll-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes / Description</label>
-            <input id="expense-toll-notes" v-model="tollForm.notes" placeholder="A10 Paris-Bordeaux..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+            <label for="expense-toll-notes" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.tollModal.notesDescription') }}</label>
+            <input id="expense-toll-notes" v-model="tollForm.notes" :placeholder="$t('expenses.tollModal.a10ParisBordeaux')" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
           </div>
         </div>
 
@@ -306,22 +307,22 @@ async function handleCreateToll() {
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <Paperclip class="w-3.5 h-3.5 text-indigo-400" />
-              Justificatif / Facture
+              {{ $t('expenses.tollModal.receiptInvoice') }}
             </span>
-            <span v-if="tollForm.document_id" class="text-[11px] text-emerald-400 font-medium">Lié</span>
+            <span v-if="tollForm.document_id" class="text-[11px] text-emerald-400 font-medium">{{ $t('expenses.tollModal.linked') }}</span>
           </div>
 
           <div v-if="tollForm.document_id" class="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/30 rounded-xl">
             <div class="flex items-center gap-2 min-w-0">
               <FileText class="w-4 h-4 text-indigo-400 shrink-0" />
-              <span class="text-xs text-white truncate font-medium">{{ tollForm.document_filename || 'Facture liée' }}</span>
+              <span class="text-xs text-white truncate font-medium">{{ tollForm.document_filename || $t('expenses.linkedInvoice') }}</span>
             </div>
             <div class="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 @click="emit('view-document', tollForm.document_id, tollForm.document_filename, false)"
                 class="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800"
-                title="Voir le document"
+                :title="$t('expenses.tollModal.viewTheDocument')"
               >
                 <Eye class="w-3.5 h-3.5" />
               </button>
@@ -329,7 +330,7 @@ async function handleCreateToll() {
                 type="button"
                 @click="tollForm.document_id = null; tollForm.document_filename = null"
                 class="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
-                title="Détacher le justificatif"
+                :title="$t('expenses.tollModal.detachTheReceipt')"
               >
                 <X class="w-3.5 h-3.5" />
               </button>
@@ -338,13 +339,13 @@ async function handleCreateToll() {
 
           <div v-else class="space-y-2.5">
             <div v-if="documents.length > 0">
-              <label for="toll-existing-doc" class="block text-[11px] text-slate-400 mb-1">Rattacher une facture existante</label>
+              <label for="toll-existing-doc" class="block text-[11px] text-slate-400 mb-1">{{ $t('expenses.tollModal.attachAnExistingInvoice') }}</label>
               <select
                 id="toll-existing-doc"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
                 @change="(e: any) => onSelectExistingDoc(e.target.value, tollForm)"
               >
-                <option value="">-- Sélectionner un justificatif existant --</option>
+                <option value="">{{ $t('expenses.tollModal.selectAnExistingReceipt') }}</option>
                 <option v-for="d in documents" :key="d.id" :value="d.id">
                   {{ d.filename }} ({{ formatDate(d.created_at) }})
                 </option>
@@ -352,12 +353,12 @@ async function handleCreateToll() {
             </div>
 
             <div>
-              <span class="block text-[11px] text-slate-400 mb-1">Ou déposer une nouvelle facture :</span>
+              <span class="block text-[11px] text-slate-400 mb-1">{{ $t('expenses.tollModal.orDropANewInvoice') }}</span>
               <AppDropzone
                 :model-value="null"
                 :disabled="isUploadingDocument"
-                label="Déposez la facture ici ou cliquez pour parcourir"
-                helperText="PDF ou image (téléversé et lié automatiquement au péage)"
+                :label="$t('expenses.tollModal.dropTheInvoiceHereOr')"
+                :helperText="$t('expenses.tollModal.uploadHelper')"
                 @update:model-value="(f) => onDropzoneDirectUpload(f, tollForm)"
               />
             </div>
@@ -367,10 +368,10 @@ async function handleCreateToll() {
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="toll-modal-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
-          {{ editingTollId ? 'Mettre à jour' : 'Enregistrer' }}
+          {{ editingTollId ? $t('expenses.update') : $t('common.save') }}
         </button>
       </div>
     </div>

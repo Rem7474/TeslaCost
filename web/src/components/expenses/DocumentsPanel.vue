@@ -20,24 +20,24 @@ const vehicleStore = useVehicleStore()
       <div class="flex items-center gap-2.5">
         <Paperclip class="w-4 h-4 text-indigo-400 shrink-0" />
         <span>
-          Les justificatifs (factures, tickets, rapports d'atelier) sont stockés directement dans la base de données. Plusieurs dépenses peuvent être rattachées au même fichier.
+          {{ $t('expenses.documentsPanel.receiptsInvoicesTicketsWorkshopReports') }}
         </span>
       </div>
       <span class="font-semibold shrink-0">
-        {{ documents.length }} document(s)
+        {{ $t('expenses.documentsPanel.documentS', { length: documents.length }) }}
       </span>
     </div>
 
-    <div v-if="loading" class="text-center py-12 text-slate-400">Chargement...</div>
+    <div v-if="loading" class="text-center py-12 text-slate-400">{{ $t('common.loading') }}</div>
     <div v-else-if="!documents.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400 space-y-3">
-      <p>Aucun justificatif ou facture téléversé pour ce véhicule.</p>
+      <p>{{ $t('expenses.documentsPanel.noReceiptOrInvoiceUploaded') }}</p>
       <button
         v-if="vehicleStore.canEdit"
         @click="emit('upload')"
         class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl inline-flex items-center gap-2 shadow-lg shadow-indigo-600/20"
       >
         <UploadCloud class="w-4 h-4" />
-        Téléverser un premier document
+        {{ $t('expenses.documentsPanel.uploadAFirstDocument') }}
       </button>
     </div>
 
@@ -66,7 +66,7 @@ const vehicleStore = useVehicleStore()
               class="text-[10px] px-2 py-0.5 rounded-full font-bold shrink-0 border"
               :class="d.linked_expenses_count > 0 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-400 border-slate-700'"
             >
-              {{ d.linked_expenses_count > 0 ? `${d.linked_expenses_count} dépense(s) liée(s)` : 'Non associé' }}
+              {{ d.linked_expenses_count > 0 ? $t('expenses.documentsPanel.linkedExpenses', { count: d.linked_expenses_count }) : $t('expenses.documentsPanel.notLinked') }}
             </span>
           </div>
 
@@ -81,19 +81,19 @@ const vehicleStore = useVehicleStore()
               @click="emit('view-document', d.id, d.filename, false)"
               :disabled="loadingDocId === d.id"
               class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors disabled:opacity-50"
-              title="Consulter le fichier"
+              :title="$t('expenses.documentsPanel.viewTheFile')"
             >
               <Loader2 v-if="loadingDocId === d.id" class="w-3.5 h-3.5 text-indigo-400 animate-spin" />
               <Eye v-else class="w-3.5 h-3.5 text-indigo-400" />
-              <span>Ouvrir</span>
+              <span>{{ $t('expenses.documentsPanel.open') }}</span>
             </button>
             <button
               @click="emit('view-document', d.id, d.filename, true)"
               class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
-              title="Télécharger le fichier"
+              :title="$t('expenses.documentsPanel.downloadTheFile')"
             >
               <Download class="w-3.5 h-3.5 text-indigo-400" />
-              <span>Télécharger</span>
+              <span>{{ $t('expenses.documentsPanel.download') }}</span>
             </button>
           </div>
 
@@ -101,7 +101,7 @@ const vehicleStore = useVehicleStore()
             v-if="vehicleStore.canEdit"
             @click="emit('delete', d)"
             class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
-            title="Supprimer ce document"
+            :title="$t('expenses.documentsPanel.deleteThisDocument')"
           >
             <Trash2 class="w-3.5 h-3.5" />
           </button>

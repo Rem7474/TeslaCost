@@ -16,9 +16,9 @@ const vehicleStore = useVehicleStore()
 
 <template>
   <div>
-    <div v-if="loading" class="text-center py-12 text-slate-400">Chargement...</div>
+    <div v-if="loading" class="text-center py-12 text-slate-400">{{ $t('common.loading') }}</div>
     <div v-else-if="!driveExpenses.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-      Aucun péage ou parking enregistré.
+      {{ $t('expenses.tollsPanel.noTollOrParkingRecorded') }}
     </div>
     <div v-else class="space-y-3">
       <div
@@ -42,10 +42,10 @@ const vehicleStore = useVehicleStore()
               v-if="e.document_id"
               @click="emit('view-document', e.document_id, e.document_filename, false)"
               class="text-xs px-2 py-0.5 rounded-lg bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 flex items-center gap-1 transition-colors max-w-[200px] truncate"
-              title="Voir le justificatif"
+              :title="$t('expenses.tollsPanel.viewTheReceipt')"
             >
               <Paperclip class="w-3 h-3 shrink-0" />
-              <span class="truncate">{{ e.document_filename || 'Facture' }}</span>
+              <span class="truncate">{{ e.document_filename || $t('expenses.invoice') }}</span>
             </button>
           </div>
           <p v-if="e.notes" class="text-sm text-slate-300">{{ e.notes }}</p>
@@ -59,22 +59,22 @@ const vehicleStore = useVehicleStore()
               v-if="e.drive_id || e.trip_group_id"
               @click="router.push({ path: '/carpools', query: e.drive_id ? { new_drive_id: e.drive_id } : { new_trip_group_id: e.trip_group_id } })"
               class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
-              title="Créer un covoiturage pour ce trajet"
+              :title="$t('expenses.tollsPanel.createACarpoolForThis')"
             >
               <Users class="w-3.5 h-3.5 text-cyan-400" />
-              <span>Covoiturer</span>
+              <span>{{ $t('expenses.tollsPanel.carpool') }}</span>
             </button>
             <button
               @click="emit('edit', e)"
               class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-xl transition-colors border border-slate-700/60"
-              title="Modifier ce péage"
+              :title="$t('expenses.tollsPanel.editThisToll')"
             >
               <Pencil class="w-3.5 h-3.5" />
             </button>
             <button
               @click="emit('delete', e)"
               class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-xl transition-colors border border-slate-700/60"
-              title="Supprimer ce péage"
+              :title="$t('expenses.tollsPanel.deleteThisToll')"
             >
               <Trash2 class="w-3.5 h-3.5" />
             </button>

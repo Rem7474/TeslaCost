@@ -1,15 +1,11 @@
+import { intlLocale, t } from '@/i18n'
 export const CURRENCIES = ['EUR', 'CHF', 'GBP', 'USD']
 
-export const CATEGORY_LABELS: Record<string, string> = {
-  MAINTENANCE: 'Entretien',
-  REPAIR: 'Réparation / sinistre',
-  INSURANCE: 'Assurance',
-  SUBSCRIPTION: 'Abonnement',
-  TAX: 'Taxe',
-  FINANCING: 'Financement',
-  ACCESSORY: 'Accessoire',
-  OTHER: 'Autre',
-}
+/** Label of an expense category in the current language. */
+export const categoryLabel = (category: string): string =>
+  ['MAINTENANCE', 'REPAIR', 'INSURANCE', 'SUBSCRIPTION', 'TAX', 'FINANCING', 'ACCESSORY', 'OTHER'].includes(category)
+    ? t(`expenses.categories.${category}`)
+    : category
 
 export interface ReminderPreset {
   title: string
@@ -20,9 +16,9 @@ export interface ReminderPreset {
   lead_days: number
 }
 
-export const REMINDER_PRESETS: ReminderPreset[] = [
+export const reminderPresets = (): ReminderPreset[] => [
   {
-    title: 'Permutation des pneus',
+    title: t('expenses.presets.tireRotation'),
     category: 'TIRES',
     interval_km: 10000,
     interval_months: 12,
@@ -30,7 +26,7 @@ export const REMINDER_PRESETS: ReminderPreset[] = [
     lead_days: 15,
   },
   {
-    title: 'Filtre d\'habitacle',
+    title: t('expenses.presets.cabinFilter'),
     category: 'MAINTENANCE',
     interval_km: 40000,
     interval_months: 24,
@@ -38,7 +34,7 @@ export const REMINDER_PRESETS: ReminderPreset[] = [
     lead_days: 30,
   },
   {
-    title: 'Contrôle liquide de frein',
+    title: t('expenses.presets.brakeFluid'),
     category: 'MAINTENANCE',
     interval_km: '',
     interval_months: 24,
@@ -46,7 +42,7 @@ export const REMINDER_PRESETS: ReminderPreset[] = [
     lead_days: 30,
   },
   {
-    title: 'Contrôle technique',
+    title: t('expenses.presets.inspection'),
     category: 'MAINTENANCE',
     interval_km: '',
     interval_months: 24,
@@ -54,7 +50,7 @@ export const REMINDER_PRESETS: ReminderPreset[] = [
     lead_days: 30,
   },
   {
-    title: 'Balais d\'essuie-glace',
+    title: t('expenses.presets.wipers'),
     category: 'MAINTENANCE',
     interval_km: '',
     interval_months: 12,
@@ -62,7 +58,7 @@ export const REMINDER_PRESETS: ReminderPreset[] = [
     lead_days: 15,
   },
   {
-    title: 'Nettoyage & graissage des étriers',
+    title: t('expenses.presets.calipers'),
     category: 'MAINTENANCE',
     interval_km: 20000,
     interval_months: 12,
@@ -84,15 +80,15 @@ export function currencyPayload(form: { currency: string; fx_rate: string }) {
 }
 
 export function formatFileSize(bytes: number): string {
-  if (!bytes || bytes <= 0) return '0 o'
+  const sizes = t('shell.appDropzone.byteUnits').split(',')
+  if (!bytes || bytes <= 0) return `0 ${sizes[0]}`
   const k = 1024
-  const sizes = ['o', 'Ko', 'Mo', 'Go']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
 
 export function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('fr-FR', {
+  return new Date(dateStr).toLocaleDateString(intlLocale(), {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
