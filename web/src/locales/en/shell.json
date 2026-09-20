@@ -1,0 +1,96 @@
+{
+  "navigation": {
+    "signOut": "Sign out",
+    "otherPages": "Other pages",
+    "more": "More",
+    "quickAdd": "Quick add",
+    "mainNavigation": "Main navigation",
+    "version": "Version",
+    "signedIn": "Signed in"
+  },
+  "topBar": {
+    "syncFinishedWithWarnings": "Sync finished with warnings:",
+    "syncError": "Sync error:",
+    "offlineEntriesRejected": "Offline entries rejected:",
+    "savedOfflineItWillBe": "saved offline: it will be sent automatically when the network is back.",
+    "syncWithTeslamate": "Sync with TeslaMate",
+    "pending": "pending",
+    "offline": "Offline",
+    "addAVehicle": "Add a vehicle",
+    "addAVehicle2": "+ Add a vehicle",
+    "activeVehicle": "Active vehicle",
+    "offlineSendingTitle": "Sending the entries saved offline",
+    "offlineKeptTitle": "Entries are kept and will be sent when the network is back",
+    "offlineSentence": "Offline.",
+    "pendingEntries": "{count} entries pending",
+    "driveCount": "+{count} drive | +{count} drives",
+    "chargeCount": "+{count} charge | +{count} charges",
+    "upToDate": "Up to date (no new drive)",
+    "syncing": "Syncing...",
+    "sync": "Sync"
+  },
+  "appDropzone": {
+    "removeThisFile": "Remove this file",
+    "replace": "Replace",
+    "defaultLabel": "Drag your receipt here or click to browse",
+    "defaultHelper": "Accepted formats: PDF, PNG, JPG, WEBP (max. {max} MB)",
+    "dropHere": "Drop the file here",
+    "byteUnits": "B,KB,MB,GB",
+    "tooLarge": "The file exceeds the maximum allowed size of {max} MB ({size})",
+    "unsupportedFormat": "Unsupported file format. Accepted formats: {accept}"
+  },
+  "bulkSelectionBar": {
+    "clearTheSelectionEsc": "Clear the selection (Esc)",
+    "outOfView": "({offScreenCount} out of view)",
+    "selected": {
+      "item": "item selected | items selected",
+      "tire": "tire selected | tires selected",
+      "carpool": "carpool selected | carpools selected",
+      "drive": "drive selected | drives selected"
+    }
+  },
+  "app": {
+    "loadingYourVehicle": "Loading your vehicle..."
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "home": "Home",
+    "drives": "Drives",
+    "carpools": "Carpooling",
+    "tires": "Tires",
+    "manual": "Manual tracking",
+    "expenses": "Expenses",
+    "comparison": "Comparison",
+    "vehicles": "Vehicles",
+    "account": "Account"
+  },
+  "confirm": {
+    "title": "Confirmation",
+    "deleteTitle": "Deletion",
+    "error": "Error",
+    "information": "Information",
+    "gotIt": "Got it"
+  },
+  "datePicker": {
+    "selectMonth": "Select a month",
+    "dayPlaceholder": "DD/MM/YYYY",
+    "dateTimePlaceholder": "DD/MM/YYYY HH:mm",
+    "today": "Today",
+    "confirm": "Apply"
+  },
+  "language": {
+    "label": "Language"
+  },
+  "sync": {
+    "unknownError": "Unknown error during the synchronization",
+    "takesLonger": "The synchronization is taking longer than expected, it keeps running in the background"
+  },
+  "offline": {
+    "httpError": "Error {status}"
+  },
+  "documents": {
+    "attached": "File “{filename}” uploaded and attached",
+    "uploadError": "Upload failed: {message}",
+    "accessError": "Could not open the document: {message}"
+  }
+}

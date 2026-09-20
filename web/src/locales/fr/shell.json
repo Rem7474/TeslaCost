@@ -1,0 +1,96 @@
+{
+  "navigation": {
+    "signOut": "Déconnexion",
+    "otherPages": "Autres pages",
+    "more": "Plus",
+    "quickAdd": "Saisie rapide",
+    "mainNavigation": "Navigation principale",
+    "version": "Version",
+    "signedIn": "Connecté"
+  },
+  "topBar": {
+    "syncFinishedWithWarnings": "Synchronisation terminée avec remarques :",
+    "syncError": "Erreur de synchronisation :",
+    "offlineEntriesRejected": "Saisies hors ligne refusées :",
+    "savedOfflineItWillBe": "enregistré hors ligne : envoi automatique au retour du réseau.",
+    "syncWithTeslamate": "Synchroniser avec TeslaMate",
+    "pending": "en attente",
+    "offline": "Hors ligne",
+    "addAVehicle": "Ajouter un véhicule",
+    "addAVehicle2": "+ Ajouter un véhicule",
+    "activeVehicle": "Véhicule actif",
+    "offlineSendingTitle": "Envoi des saisies enregistrées hors ligne",
+    "offlineKeptTitle": "Les saisies sont conservées et seront envoyées au retour du réseau",
+    "offlineSentence": "Hors ligne.",
+    "pendingEntries": "{count} saisie(s) en attente",
+    "driveCount": "+{count} trajet | +{count} trajets",
+    "chargeCount": "+{count} charge | +{count} charges",
+    "upToDate": "À jour (aucun nouveau trajet)",
+    "syncing": "Synchronisation...",
+    "sync": "Synchroniser"
+  },
+  "appDropzone": {
+    "removeThisFile": "Supprimer ce fichier",
+    "replace": "Remplacer",
+    "defaultLabel": "Glissez votre justificatif ou cliquez pour parcourir",
+    "defaultHelper": "Formats acceptés : PDF, PNG, JPG, WEBP (max. {max} Mo)",
+    "dropHere": "Déposez le fichier ici",
+    "byteUnits": "o,Ko,Mo,Go",
+    "tooLarge": "Le fichier dépasse la taille maximale autorisée de {max} Mo ({size})",
+    "unsupportedFormat": "Format de fichier non pris en charge. Formats acceptés : {accept}"
+  },
+  "bulkSelectionBar": {
+    "clearTheSelectionEsc": "Annuler la sélection (Échap)",
+    "outOfView": "(dont {offScreenCount} hors de la vue)",
+    "selected": {
+      "item": "élément sélectionné | éléments sélectionnés",
+      "tire": "pneu sélectionné | pneus sélectionnés",
+      "carpool": "covoiturage sélectionné | covoiturages sélectionnés",
+      "drive": "trajet sélectionné | trajets sélectionnés"
+    }
+  },
+  "app": {
+    "loadingYourVehicle": "Chargement de votre véhicule..."
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "home": "Accueil",
+    "drives": "Trajets",
+    "carpools": "Covoiturage",
+    "tires": "Pneus",
+    "manual": "Suivi manuel",
+    "expenses": "Dépenses",
+    "comparison": "Comparatif",
+    "vehicles": "Véhicules",
+    "account": "Compte"
+  },
+  "confirm": {
+    "title": "Confirmation",
+    "deleteTitle": "Suppression",
+    "error": "Erreur",
+    "information": "Information",
+    "gotIt": "Compris"
+  },
+  "datePicker": {
+    "selectMonth": "Sélectionner un mois",
+    "dayPlaceholder": "JJ/MM/AAAA",
+    "dateTimePlaceholder": "JJ/MM/AAAA HH:mm",
+    "today": "Aujourd'hui",
+    "confirm": "Valider"
+  },
+  "language": {
+    "label": "Langue"
+  },
+  "sync": {
+    "unknownError": "Erreur inconnue lors de la synchronisation",
+    "takesLonger": "La synchronisation prend plus de temps que prévu, elle continue en arrière-plan"
+  },
+  "offline": {
+    "httpError": "Erreur {status}"
+  },
+  "documents": {
+    "attached": "Fichier « {filename} » téléversé et rattaché",
+    "uploadError": "Erreur lors du téléversement : {message}",
+    "accessError": "Erreur lors de l'accès au document : {message}"
+  }
+}

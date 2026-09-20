@@ -5,13 +5,14 @@ import { X } from 'lucide-vue-next'
 const props = withDefaults(
   defineProps<{
     count: number
-    itemLabel?: string
+    // What is selected: picks the wording of the counter
+    noun?: 'item' | 'tire' | 'carpool' | 'drive'
     offScreenCount?: number
     metricsSummary?: string
     disabled?: boolean
   }>(),
   {
-    itemLabel: 'élément',
+    noun: 'item',
     offScreenCount: 0,
     disabled: false,
   }
@@ -47,7 +48,7 @@ onUnmounted(() => {
         {{ count }}
       </span>
       <span class="text-xs sm:text-sm font-semibold text-slate-200">
-        {{ itemLabel }}{{ count > 1 ? 's' : '' }} sélectionné{{ count > 1 ? 's' : '' }}
+        {{ $t(`shell.bulkSelectionBar.selected.${noun}`, count) }}
       </span>
 
       <!-- Optional metrics preview (e.g. unified trip metrics) -->
@@ -60,7 +61,7 @@ onUnmounted(() => {
 
       <!-- Off-page indicator -->
       <span v-if="offScreenCount > 0" class="text-xs text-slate-400">
-        (dont {{ offScreenCount }} hors de la vue)
+        {{ $t('shell.bulkSelectionBar.outOfView', { offScreenCount }) }}
       </span>
     </div>
 
@@ -73,10 +74,10 @@ onUnmounted(() => {
         @click="emit('clear')"
         :disabled="disabled"
         class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
-        title="Annuler la sélection (Échap)"
+        :title="$t('shell.bulkSelectionBar.clearTheSelectionEsc')"
       >
         <X class="w-3.5 h-3.5" />
-        <span>Annuler</span>
+        <span>{{ $t('common.cancel') }}</span>
       </button>
     </div>
   </div>

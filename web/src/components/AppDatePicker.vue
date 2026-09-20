@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
-import { fr } from 'date-fns/locale'
+import { enGB, fr } from 'date-fns/locale'
 import { format } from 'date-fns'
+import { currentLocale, t } from '@/i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -33,6 +34,8 @@ const emit = defineEmits<{
   (e: 'update:modelValue', value: string): void
   (e: 'change', value: string): void
 }>()
+
+const dateLocale = computed(() => (currentLocale() === 'fr' ? fr : enGB))
 
 const internalValue = computed({
   get: () => {
@@ -93,11 +96,11 @@ const formatsConfig = computed(() => {
   if (props.monthPicker) {
     return {
       input: (d: Date) => {
-        const str = format(d, 'MMMM yyyy', { locale: fr })
+        const str = format(d, 'MMMM yyyy', { locale: dateLocale.value })
         return str.charAt(0).toUpperCase() + str.slice(1)
       },
       preview: (d: Date) => {
-        const str = format(d, 'MMMM yyyy', { locale: fr })
+        const str = format(d, 'MMMM yyyy', { locale: dateLocale.value })
         return str.charAt(0).toUpperCase() + str.slice(1)
       },
     }
@@ -111,15 +114,15 @@ const formatsConfig = computed(() => {
 
 const effectivePlaceholder = computed(() => {
   if (props.placeholder) return props.placeholder
-  if (props.monthPicker) return 'Sélectionner un mois'
-  return props.enableTimePicker ? 'JJ/MM/AAAA HH:mm' : 'JJ/MM/AAAA'
+  if (props.monthPicker) return t('shell.datePicker.selectMonth')
+  return props.enableTimePicker ? t('shell.datePicker.dateTimePlaceholder') : t('shell.datePicker.dayPlaceholder')
 })
 
 const actionRowConfig = computed(() => ({
   showNow: true,
-  nowBtnLabel: "Aujourd'hui",
-  selectBtnLabel: 'Valider',
-  cancelBtnLabel: 'Annuler',
+  nowBtnLabel: t('shell.datePicker.today'),
+  selectBtnLabel: t('shell.datePicker.confirm'),
+  cancelBtnLabel: t('common.cancel'),
 }))
 </script>
 
@@ -129,7 +132,7 @@ const actionRowConfig = computed(() => ({
       :uid="id"
       v-model="internalValue"
       :dark="true"
-      :locale="fr"
+      :locale="dateLocale"
       :month-picker="monthPicker"
       :time-config="timeConfig"
       :auto-apply="!enableTimePicker"

@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { t } from '@/i18n'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 
@@ -39,9 +40,9 @@ export function useDocumentAttach(
       onAdded(doc)
       form.document_id = doc.id
       form.document_filename = doc.filename
-      showAlert(`Fichier « ${doc.filename} » téléversé et rattaché`, 'Succès', 'success')
+      showAlert(t('shell.documents.attached', { filename: doc.filename }), t('common.success'), 'success')
     } catch (err: any) {
-      showAlert(`Erreur lors du téléversement : ${err.message}`, 'Erreur', 'danger')
+      showAlert(t('shell.documents.uploadError', { message: err.message }), t('shell.confirm.error'), 'danger')
     } finally {
       isUploadingDocument.value = false
     }

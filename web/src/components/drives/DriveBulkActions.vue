@@ -21,7 +21,7 @@ const vehicleStore = useVehicleStore()
   <BulkSelectionBar
     v-if="vehicleStore.canEdit"
     :count="selectedDriveIds.length"
-    item-label="trajet"
+    noun="drive"
     :off-screen-count="selectedOffPage"
     :metrics-summary="selectedSummaryMetrics"
     @clear="emit('clear')"

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/services/api'
+import { t } from '@/i18n'
 import { hasTeslaMate as vehicleHasTeslaMate } from '@/utils/vehicles'
 
 export const useVehicleStore = defineStore('vehicle', () => {
@@ -63,20 +64,20 @@ export const useVehicleStore = defineStore('vehicle', () => {
     try {
       while (job?.status === 'RUNNING') {
         if (Date.now() - startedAt > SYNC_POLL_MAX_MS) {
-          throw new Error('La synchronisation prend plus de temps que prévu, elle continue en arrière-plan')
+          throw new Error(t('shell.sync.takesLonger'))
         }
         await sleep(SYNC_POLL_INTERVAL_MS)
         job = await api.getSyncStatus(vehicleId)
       }
       if (job?.status === 'FAILED') {
-        syncError.value = job.error || 'Erreur inconnue lors de la synchronisation'
+        syncError.value = job.error || t('shell.sync.unknownError')
       } else if (job?.status === 'SUCCEEDED') {
         syncResult.value = job.result
         await fetchVehicles()
         lastSyncTimestamp.value = Date.now()
       }
     } catch (err: any) {
-      syncError.value = err.message || 'Erreur inconnue lors de la synchronisation'
+      syncError.value = err.message || t('shell.sync.unknownError')
     } finally {
       isSyncing.value = false
     }
@@ -89,7 +90,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
       const job = await api.syncVehicle(vehicleId)
       await followSyncJob(vehicleId, job)
     } catch (err: any) {
-      syncError.value = err.message || 'Erreur inconnue lors de la synchronisation'
+      syncError.value = err.message || t('shell.sync.unknownError')
     }
   }
 
