@@ -260,6 +260,27 @@ type DisposeTireRequest struct {
 	Odometer *float64 `json:"odometer"`
 }
 
+// parseDisposal reads the date (today when empty) and the optional odometer of a disposal request. It writes the
+// error response and returns false when either is invalid.
+func parseDisposal(w http.ResponseWriter, date string, odometer *float64) (time.Time, bool) {
+	at := time.Now().UTC()
+	if date != "" {
+		parsed, err := parseDate(date)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err.Error())
+			return time.Time{}, false
+		}
+		at = parsed
+	}
+	if odometer != nil {
+		if err := validateQuantity(*odometer, 2_000_000); err != nil {
+			writeError(w, http.StatusBadRequest, "odomètre invalide")
+			return time.Time{}, false
+		}
+	}
+	return at, true
+}
+
 // Dispose retires a worn out or damaged tire while keeping its history and cost.
 func (h *TireHandler) Dispose(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
@@ -271,20 +292,9 @@ func (h *TireHandler) Dispose(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
-	at := time.Now().UTC()
-	if req.Date != "" {
-		parsed, err := parseDate(req.Date)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		at = parsed
-	}
-	if req.Odometer != nil {
-		if err := validateQuantity(*req.Odometer, 2_000_000); err != nil {
-			writeError(w, http.StatusBadRequest, "odomètre invalide")
-			return
-		}
+	at, ok := parseDisposal(w, req.Date, req.Odometer)
+	if !ok {
+		return
 	}
 	if err := h.repo.DisposeTire(r.Context(), vehicleID, chi.URLParam(r, "tireId"), at, req.Odometer); err != nil {
 		writeRepoError(w, r, err, "Failed to dispose tire")

@@ -46,27 +46,22 @@ func parseSessionPayload(req *MountSessionPayload) (time.Time, *time.Time, error
 	return mountedDate, dismountedDate, nil
 }
 
-func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
-	vehicleID := chi.URLParam(r, "vehicleId")
-	tireID := chi.URLParam(r, "tireId")
-
-	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
-		return
-	}
-
+// decodeMountSession reads a mount session of the given tire from the request body. It writes the error response
+// and returns false when the payload is invalid.
+func decodeMountSession(w http.ResponseWriter, r *http.Request, vehicleID, tireID string) (*models.TireMountSession, bool) {
 	var req MountSessionPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
-		return
+		return nil, false
 	}
 
 	mountedDate, dismountedDate, err := parseSessionPayload(&req)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
-		return
+		return nil, false
 	}
 
-	session := &models.TireMountSession{
+	return &models.TireMountSession{
 		TireID:             tireID,
 		VehicleID:          vehicleID,
 		Position:           req.Position,
@@ -76,6 +71,20 @@ func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		DismountedOdometer: req.DismountedOdometer,
 		DistanceKm:         req.DistanceKm,
 		Notes:              req.Notes,
+	}, true
+}
+
+func (h *TireHandler) CreateSession(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+	tireID := chi.URLParam(r, "tireId")
+
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+		return
+	}
+
+	session, ok := decodeMountSession(w, r, vehicleID, tireID)
+	if !ok {
+		return
 	}
 
 	if err := h.repo.CreateTireMountSession(r.Context(), session); err != nil {
@@ -95,30 +104,11 @@ func (h *TireHandler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req MountSessionPayload
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+	session, ok := decodeMountSession(w, r, vehicleID, tireID)
+	if !ok {
 		return
 	}
-
-	mountedDate, dismountedDate, err := parseSessionPayload(&req)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
-	session := &models.TireMountSession{
-		ID:                 sessionID,
-		TireID:             tireID,
-		VehicleID:          vehicleID,
-		Position:           req.Position,
-		MountedDate:        mountedDate,
-		MountedOdometer:    req.MountedOdometer,
-		DismountedDate:     dismountedDate,
-		DismountedOdometer: req.DismountedOdometer,
-		DistanceKm:         req.DistanceKm,
-		Notes:              req.Notes,
-	}
+	session.ID = sessionID
 
 	if err := h.repo.UpdateTireMountSession(r.Context(), session); err != nil {
 		writeRepoError(w, r, err, "Failed to update mount session")

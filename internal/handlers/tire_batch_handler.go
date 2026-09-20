@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -264,20 +263,9 @@ func (h *TireHandler) BatchDispose(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "tire_ids requis")
 		return
 	}
-	at := time.Now().UTC()
-	if req.Date != "" {
-		parsed, err := parseDate(req.Date)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		at = parsed
-	}
-	if req.Odometer != nil {
-		if err := validateQuantity(*req.Odometer, 2_000_000); err != nil {
-			writeError(w, http.StatusBadRequest, "odomètre invalide")
-			return
-		}
+	at, ok := parseDisposal(w, req.Date, req.Odometer)
+	if !ok {
+		return
 	}
 	if err := h.repo.BatchDisposeTires(r.Context(), vehicleID, req.TireIDs, at, req.Odometer); err != nil {
 		writeRepoError(w, r, err, "Failed to batch dispose tires")
