@@ -8,5 +8,8 @@
   "edit": "Edit",
   "delete": "Delete",
   "confirm": "Confirm",
-  "success": "Success"
+  "success": "Success",
+  "errorWithMessage": "Error: {message}",
+  "requiredField": "Required field",
+  "deleteError": "Deletion failed: {message}"
 }

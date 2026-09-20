@@ -8,5 +8,8 @@
   "edit": "Modifier",
   "delete": "Supprimer",
   "confirm": "Confirmer",
-  "success": "Succès"
+  "success": "Succès",
+  "errorWithMessage": "Erreur : {message}",
+  "requiredField": "Champ requis",
+  "deleteError": "Erreur lors de la suppression : {message}"
 }
