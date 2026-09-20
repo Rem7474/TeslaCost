@@ -108,24 +108,34 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 	}, nil
 }
 
+// decodeCharge reads and validates a charge from the request body. It writes the error response and returns
+// false when the payload is invalid or carries no cost (costRequired is the message for that case).
+func decodeCharge(w http.ResponseWriter, r *http.Request, vehicleID, costRequired string) (*models.ChargeLog, bool) {
+	var req SaveChargeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		return nil, false
+	}
+	c, err := buildCharge(vehicleID, &req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return nil, false
+	}
+	if c.Cost == nil {
+		writeError(w, http.StatusBadRequest, costRequired)
+		return nil, false
+	}
+	return c, true
+}
+
 func (h *ExpenseHandler) CreateManualCharge(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
 	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
 	}
 
-	var req SaveChargeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
-	c, err := buildCharge(vehicleID, &req)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if c.Cost == nil {
-		writeError(w, http.StatusBadRequest, "le coût d'une recharge manuelle est requis")
+	c, ok := decodeCharge(w, r, vehicleID, "le coût d'une recharge manuelle est requis")
+	if !ok {
 		return
 	}
 	if c.KwhAdded <= 0 {
@@ -147,18 +157,8 @@ func (h *ExpenseHandler) UpdateCharge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req SaveChargeRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
-		return
-	}
-	c, err := buildCharge(vehicleID, &req)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-	if c.Cost == nil {
-		writeError(w, http.StatusBadRequest, "le coût est requis")
+	c, ok := decodeCharge(w, r, vehicleID, "le coût est requis")
+	if !ok {
 		return
 	}
 	c.ID = chargeID
