@@ -28,8 +28,8 @@ Integration tests (services, handlers, database) need PostgreSQL. Use your own c
 ```bash
 docker run -d --rm --name tc-pg -e POSTGRES_USER=teslacost -e POSTGRES_PASSWORD=test \
   -e POSTGRES_DB=teslacost_test -p 55433:5432 postgres:16-alpine
-# wait until a TCP connection works, pg_isready alone is not enough:
-until PGPASSWORD=test psql -h 127.0.0.1 -p 55433 -U teslacost -d teslacost_test -c 'select 1' >/dev/null 2>&1; do sleep 1; done
+# wait until a TCP connection works, pg_isready alone is not enough (psql is not installed on the host):
+until docker exec -e PGPASSWORD=test tc-pg psql -h 127.0.0.1 -U teslacost -d teslacost_test -c 'select 1' >/dev/null 2>&1; do sleep 1; done
 TEST_DATABASE_URL='postgres://teslacost:test@localhost:55433/teslacost_test?sslmode=disable' go test -timeout 20m ./...
 docker rm -f tc-pg
 ```
@@ -64,7 +64,7 @@ backup/                     sidecar image: pg_dump + documents archive on a sche
 ## Domain notes
 
 - Money is stored and computed in integer cents (`internal/money`); convert at the edges only.
-- A vehicle has a `Powertrain` (`EV` or `ICE`). ICE vehicles are tracked through fuel logs and have no TeslaMate link. EV vehicles may or may not have a TeslaMate connection (`teslamate_api_url`, `teslamate_car_id`, credentials stored encrypted).
+- A vehicle has a `Powertrain` (`EV` or `ICE`). ICE vehicles are tracked through fuel logs and have no TeslaMate link. EV vehicles may or may not have a TeslaMate connection (`teslamate_api_url`, `teslamate_car_id`, credentials stored encrypted). TeslaMate-fed features (drives, energy/battery/temperature panels, sync button, Tesla tire presets) are shown only when `hasTeslaMate` is true (`web/src/utils/vehicles.ts`, exposed by the vehicle store): electric and a teslamateapi URL set. New UI that depends on TeslaMate data must use it.
 - `cost_ledger` is the single view the TCO engine reads; charges, fuel, tolls, maintenance, insurance, tire amortization and acquisition cost all flow into it.
 - TeslaMate sync (`internal/services/sync_*.go`): per-vehicle background jobs, resumable full import, a 30-day sliding re-read, reconciliation of deleted drives/charges, and a per-vehicle circuit breaker. Changing what is read from TeslaMate means resetting `sync_state.full_import_completed_at` in a migration so the next sync re-reads the history.
 - teslamateapi facts (verified in its source, its README has no field docs): drives/charges carry `battery_details{start_battery_level,end_battery_level}` and `outside_temp_avg` in `units.unit_of_temperature` (F is possible); `charge_energy_used` is `GREATEST(used, added)`, so used == added means "not measured" (DC); missing levels arrive as 0; `/battery-health` reports current capacity over the best capacity ever observed.
