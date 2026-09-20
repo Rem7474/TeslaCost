@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info } from 'lucide-vue-next'
@@ -74,7 +75,7 @@ function renderMonthDonutChart() {
     data = activeItems.map((it) => it.displayAmount)
     backgroundColors = activeItems.map((it) => it.color)
   } else {
-    labels = ['Aucune dépense']
+    labels = [t('dashboard.monthDetailModal.noExpense')]
     data = [1]
     backgroundColors = ['#334155']
   }
@@ -107,7 +108,7 @@ function renderMonthDonutChart() {
         tooltip: {
           callbacks: {
             label: (ctx) => {
-              if (activeItems.length === 0) return ' Aucune dépense enregistrée'
+              if (activeItems.length === 0) return ' ' + t('dashboard.monthDetailModal.noExpenseRecorded')
               const val = Number(ctx.raw || 0).toFixed(2)
               const total = breakdown.activeTotal
               const pct = total > 0 ? ((Number(ctx.raw || 0) / total) * 100).toFixed(1) : '0'
@@ -171,10 +172,10 @@ onUnmounted(() => {
           </div>
           <div class="min-w-0 truncate">
             <h3 class="text-base sm:text-lg font-bold text-white flex items-center gap-2 truncate">
-              <span class="truncate">Détail des coûts — {{ formatMonthName(selectedMonthBreakdown.month) }}</span>
+              <span class="truncate">{{ $t('dashboard.monthDetailModal.costDetails', { value: formatMonthName(selectedMonthBreakdown.month) }) }}</span>
             </h3>
             <p class="text-xs text-slate-400 truncate">
-              Ventilation complète des postes de dépenses et coût kilométrique
+              {{ $t('dashboard.monthDetailModal.fullBreakdownOfTheExpense') }}
             </p>
           </div>
         </div>
@@ -186,7 +187,7 @@ onUnmounted(() => {
               :disabled="!hasPrevMonth"
               @click="selectPrevMonth"
               class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 rounded-lg hover:bg-slate-700/50 transition-colors"
-              title="Mois précédent (←)"
+              :title="$t('dashboard.monthDetailModal.previousMonth')"
             >
               <ChevronLeft class="w-4 h-4" />
             </button>
@@ -195,7 +196,7 @@ onUnmounted(() => {
               :disabled="!hasNextMonth"
               @click="selectNextMonth"
               class="p-1.5 text-slate-400 hover:text-white disabled:opacity-30 disabled:hover:text-slate-400 rounded-lg hover:bg-slate-700/50 transition-colors"
-              title="Mois suivant (→)"
+              :title="$t('dashboard.monthDetailModal.nextMonth')"
             >
               <ChevronRight class="w-4 h-4" />
             </button>
@@ -204,7 +205,7 @@ onUnmounted(() => {
             type="button"
             @click="closeMonthDetail"
             class="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
-            title="Fermer (Échap)"
+            :title="$t('dashboard.monthDetailModal.closeEsc')"
           >
             <X class="w-5 h-5" />
           </button>
@@ -217,38 +218,38 @@ onUnmounted(() => {
       <!-- 4 KPI Summary Cards for the Month -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
-          <span class="text-[11px] font-medium text-slate-400 block">Distance totale</span>
+          <span class="text-[11px] font-medium text-slate-400 block">{{ $t('dashboard.monthDetailModal.totalDistance') }}</span>
           <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
-            {{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString('fr-FR') }} <span class="text-xs font-normal text-slate-400">km</span>
+            {{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString(intlLocale()) }} <span class="text-xs font-normal text-slate-400">km</span>
           </div>
           <span v-if="selectedMonthBreakdown.smoothedKm > 0" class="text-[10px] text-slate-400 block truncate">
-            dont {{ Math.round(selectedMonthBreakdown.smoothedKm).toLocaleString('fr-FR') }} km lissés
+            {{ $t('dashboard.monthDetailModal.ofWhichKmSmoothed', { smoothedKm: Math.round(selectedMonthBreakdown.smoothedKm).toLocaleString(intlLocale()) }) }}
           </span>
-          <span v-else class="text-[10px] text-slate-500 block truncate">100% trajets GPS</span>
+          <span v-else class="text-[10px] text-slate-500 block truncate">{{ $t('dashboard.monthDetailModal.100GpsDrives') }}</span>
         </div>
 
         <div class="bg-emerald-500/5 border border-emerald-500/30 p-3 rounded-xl">
-          <span class="text-[11px] font-medium text-emerald-400 block">Coût kilométrique</span>
+          <span class="text-[11px] font-medium text-emerald-400 block">{{ $t('dashboard.monthDetailModal.costPerKilometre') }}</span>
           <div class="text-base sm:text-lg font-extrabold text-emerald-400 mt-0.5">
             {{ selectedMonthBreakdown.costPerKm.toFixed(3) }} <span class="text-xs font-normal text-emerald-500/80">€/km</span>
           </div>
-          <span class="text-[10px] text-emerald-400/70 block">Coût de revient réel</span>
+          <span class="text-[10px] text-emerald-400/70 block">{{ $t('dashboard.monthDetailModal.actualCostPrice') }}</span>
         </div>
 
         <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
-          <span class="text-[11px] font-medium text-slate-400 block">Coût d'usage calculé</span>
+          <span class="text-[11px] font-medium text-slate-400 block">{{ $t('dashboard.monthDetailModal.calculatedRunningCost') }}</span>
           <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
             {{ selectedMonthBreakdown.economicTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
           </div>
-          <span class="text-[10px] text-slate-400 block">Base coût au km</span>
+          <span class="text-[10px] text-slate-400 block">{{ $t('dashboard.monthDetailModal.costPerKmBasis') }}</span>
         </div>
 
         <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
-          <span class="text-[11px] font-medium text-slate-400 block">Total décaissé (cash)</span>
+          <span class="text-[11px] font-medium text-slate-400 block">{{ $t('dashboard.monthDetailModal.totalPaidOutCash') }}</span>
           <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
             {{ selectedMonthBreakdown.cashTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
           </div>
-          <span class="text-[10px] text-slate-400 block">Règlements du mois</span>
+          <span class="text-[10px] text-slate-400 block">{{ $t('dashboard.monthDetailModal.paymentsThisMonth') }}</span>
         </div>
       </div>
 
@@ -256,7 +257,7 @@ onUnmounted(() => {
       <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-slate-800/40 border border-slate-700/50 rounded-xl text-xs">
         <span class="text-slate-300 font-medium flex items-center gap-1.5">
           <Info class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-          <span>Mode de calcul de la répartition :</span>
+          <span>{{ $t('dashboard.monthDetailModal.breakdownCalculationMode') }}</span>
         </span>
         <div class="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-700/70">
           <button
@@ -267,7 +268,7 @@ onUnmounted(() => {
               monthDetailViewMode === 'economic' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
             ]"
           >
-            Coût de revient (€/km)
+            {{ $t('dashboard.monthDetailModal.costPriceKm') }}
           </button>
           <button
             type="button"
@@ -277,7 +278,7 @@ onUnmounted(() => {
               monthDetailViewMode === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
             ]"
           >
-            Dépenses décaissées (€)
+            {{ $t('dashboard.monthDetailModal.cashExpenses') }}
           </button>
         </div>
       </div>
@@ -288,19 +289,19 @@ onUnmounted(() => {
         <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
           <h4 class="text-xs font-bold text-white mb-2 self-start flex items-center gap-1.5">
             <PieChart class="w-3.5 h-3.5 text-indigo-400" />
-            <span>Répartition du mois</span>
+            <span>{{ $t('dashboard.monthDetailModal.breakdownOfTheMonth') }}</span>
           </h4>
           <div class="w-full h-56 sm:h-64 relative">
-            <canvas ref="monthDonutRef" role="img" aria-label="Répartition des coûts du mois sélectionné"></canvas>
+            <canvas ref="monthDonutRef" role="img" :aria-label="$t('dashboard.monthDetailModal.costBreakdownOfTheSelected')"></canvas>
           </div>
         </div>
 
         <!-- Right (3 cols): Itemized Table / List -->
         <div class="md:col-span-3 space-y-2">
           <h4 class="text-xs font-bold text-white mb-2 flex items-center justify-between">
-            <span>Détail chiffré par poste de dépense</span>
+            <span>{{ $t('dashboard.monthDetailModal.figuresByExpenseCategory') }}</span>
             <span class="text-[11px] text-slate-400 font-normal">
-              {{ monthDetailViewMode === 'economic' ? 'Lissage d\'usage inclus' : 'Montants comptants' }}
+              {{ monthDetailViewMode === 'economic' ? $t('dashboard.monthDetailModal.smoothingIncluded') : $t('dashboard.monthDetailModal.cashAmounts') }}
             </span>
           </h4>
 
@@ -348,8 +349,8 @@ onUnmounted(() => {
           <!-- Total Row -->
           <div class="p-3 bg-indigo-500/10 border border-indigo-500/30 rounded-xl flex items-center justify-between text-xs mt-2">
             <div class="font-bold text-white flex items-center gap-2">
-              <span>Total du mois</span>
-              <span class="text-[11px] text-slate-400 font-normal">({{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString('fr-FR') }} km)</span>
+              <span>{{ $t('dashboard.monthDetailModal.monthTotal') }}</span>
+              <span class="text-[11px] text-slate-400 font-normal">({{ Math.round(selectedMonthBreakdown.distanceKm).toLocaleString(intlLocale()) }} km)</span>
             </div>
             <div class="text-right">
               <div class="font-extrabold text-white text-sm sm:text-base">
@@ -372,14 +373,14 @@ onUnmounted(() => {
             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5"
           >
             <Activity class="w-3.5 h-3.5 text-indigo-400" />
-            <span>Trajets du véhicule</span>
+            <span>{{ $t('dashboard.monthDetailModal.vehicleDrives') }}</span>
           </router-link>
           <router-link
             to="/expenses"
             class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold border border-slate-700 transition-colors flex items-center gap-1.5"
           >
             <Receipt class="w-3.5 h-3.5 text-amber-400" />
-            <span>Dépenses & Factures</span>
+            <span>{{ $t('dashboard.monthDetailModal.expensesAndInvoices') }}</span>
           </router-link>
         </div>
 
@@ -388,7 +389,7 @@ onUnmounted(() => {
           @click="closeMonthDetail"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors self-end sm:self-auto"
         >
-          Fermer
+          {{ $t('common.close') }}
         </button>
       </div>
     </div>

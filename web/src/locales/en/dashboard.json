@@ -1,0 +1,263 @@
+{
+  "dashboardView": {
+    "createYourFirstVehicle": "Create your first vehicle",
+    "noVehicleConfigured": "No vehicle configured.",
+    "viewDrives": "View drives",
+    "expense": "+ Expense",
+    "tcoDashboard": "TCO dashboard",
+    "subtitle": "Actual cost of ownership and cost per kilometre for {name}",
+    "yourVehicle": "your vehicle"
+  },
+  "costBreakdownDonut": {
+    "fullCostBreakdownByCategory": "Full cost breakdown by category",
+    "fullCostBreakdown": "Full cost breakdown"
+  },
+  "currentMonthBanner": {
+    "drives": "Drives",
+    "viewTheBreakdown": "View the breakdown",
+    "spent": "{value} € spent",
+    "activityThisMonth": "Activity this month ({month})",
+    "kmDriven": "{distance_km} km driven"
+  },
+  "dataQualityCard": {
+    "estimateTheUntrackedEnergy": "Estimate the untracked energy",
+    "enterAFillUp": "Enter a fill-up",
+    "enterTheAcquisition": "Enter the acquisition",
+    "enterTheInsurance": "Enter the insurance",
+    "qualifyTheDrives": "Qualify the drives",
+    "completeTheCharges": "Complete the charges",
+    "tcoComplete": "TCO {score_pct}% complete",
+    "hideIssues": "Hide the odometer inconsistencies",
+    "showIssues": "View the odometer inconsistencies",
+    "odometerGap": "Odometer gap before this drive",
+    "odometerRegression": "Odometer lower than at the previous drive",
+    "distanceMismatch": "Distance differs from the odometer reading"
+  },
+  "energyBatterySection": {
+    "teslamateGrafana": "TeslaMate Grafana",
+    "detailedCurvesIn": "Detailed curves in",
+    "estimatedKwh": "Estimated (kWh)",
+    "teslamateKwh": "TeslaMate (kWh)",
+    "month": "Month",
+    "batteryCapacityPerMonth": "Battery capacity per month",
+    "batteryCapacityPerMonthTeslamate": "Battery capacity per month: TeslaMate measurement and estimate from the charges",
+    "estimatedCapacity": "Estimated capacity",
+    "readAtEachSynchronizationIf": "Read at each synchronization if TeslaMateApi exposes",
+    "kwhOutOfKwhThe": "{value} kWh out of {value2} kWh, the best capacity observed (not the new-car capacity).",
+    "noMeasurementYet": "No measurement yet",
+    "healthAccordingToTeslamate": "Health according to TeslaMate",
+    "battery": "Battery",
+    "medianOfTheLastCharges": "Median of the last {capacity_samples} charges of at least 30 battery points: energy added over percentage gained. A rough order of magnitude only.",
+    "teslamateCapacity": "TeslaMate capacity",
+    "estimatedFromCharges": "Estimated from the charges",
+    "tooltip": "{label}: {value} kWh"
+  },
+  "energyEfficiencyPanel": {
+    "theEnergyEfficiencyStatisticsCould": "The energy efficiency statistics could not be loaded.",
+    "rankedByTheAveragePower": "Ranked by the average power of each charge (energy added over its duration).",
+    "kwhKwhEfficiency": "{value} kWh · {value2} €/kWh · efficiency {value3}",
+    "ofTheEnergyChargeS": "{value}% of the energy · {sessions} charge(s)",
+    "howTheCarIsCharged": "How the car is charged",
+    "3MonthAverage100Km": "3-month average €/100 km",
+    "month": "Month",
+    "consumptionAndEnergyCostPer": "Consumption and energy cost per month",
+    "monthlyEnergyCostPer100": "Monthly energy cost per 100 km, with a 3-month average",
+    "energyCostPer100Km": "Energy cost per 100 km",
+    "monthlyConsumptionInKwhPer": "Monthly consumption in kWh per 100 km",
+    "monthlyConsumption": "Monthly consumption",
+    "completeThem": "Complete them",
+    "extrapolatedFromTheChargesWhose": "Extrapolated from the charges whose cost and battery level are known.",
+    "fullCharge": "Full charge",
+    "energyStoredInTheBattery": "Energy stored in the battery over energy drawn from the grid.",
+    "chargingEfficiency": "Charging efficiency",
+    "energyCost": "Energy cost",
+    "energyUsedWhileDrivingMeasured": "Energy used while driving, measured by TeslaMate.",
+    "actualConsumption": "Actual consumption",
+    "all": "All",
+    "12Months": "12 months",
+    "period": "Period",
+    "whatTheCarUsesAnd": "What the car uses and what the energy really costs.",
+    "energyEfficiency": "Energy efficiency",
+    "chargeSWithoutAKnown": "{sessions_without_cost} charge(s) without a known cost: they are not counted in the cost per 100 km.",
+    "thatIsKwhOnAverage": "That is {price_per_kwh} €/kWh on average when charging.",
+    "chargeClass": {
+      "SLOW": {
+        "label": "Household socket",
+        "hint": "under 3.5 kW on average"
+      },
+      "AC": {
+        "label": "Wallbox / AC charger",
+        "hint": "3.5 to 25 kW on average"
+      },
+      "DC": {
+        "label": "DC fast charging",
+        "hint": "over 25 kW on average"
+      },
+      "UNKNOWN": {
+        "label": "Unknown duration",
+        "hint": "manual entries"
+      }
+    },
+    "consumption": "Consumption",
+    "threeMonthAverage": "3-month average"
+  },
+  "energyTemperatureSection": {
+    "drivesOfAtLeast5": "Drives of at least 5 km, grouped by average outside temperature; bands under 50 km are hidden.",
+    "distanceKm": "Distance (km)",
+    "drives": "Drives",
+    "temperature": "Temperature",
+    "consumptionByOutsideTemperature": "Consumption by outside temperature",
+    "averageConsumptionPer100Km": "Average consumption per 100 km by outside temperature",
+    "aboutMorePer100Km": ", about {value} € more per 100 km",
+    "againstInMildWeather15": "against {value} in mild weather (15 to 25 °C):",
+    "kwh100Km": "{value} kWh/100 km",
+    "below5CTheCar": "Below 5 °C, the car uses",
+    "effectOfTemperature": "Effect of temperature",
+    "consumption": "Consumption",
+    "drivesAndDistance": "{drives} drive(s), {distance} km"
+  },
+  "leaseContractCard": {
+    "estimatedEndOfContractPenalty": "Estimated end-of-contract penalty: {value} €",
+    "overageToDate": "Overage to date: {value} €",
+    "tiresIncluded": "Tires included",
+    "insuranceIncluded": "Insurance included",
+    "maintenanceIncluded": "Maintenance included",
+    "finalPurchaseOption": "Final purchase option:",
+    "plannedKmMonth": "(planned: {contractualPaceKmMonth} km/month)",
+    "kmMonth": "{actualPaceKmMonth} km/month",
+    "pace": "Pace:",
+    "mileageAllowance": "Mileage allowance",
+    "months": "{elapsedMonths} / {totalMonths} months",
+    "contractDuration": "Contract duration",
+    "month": "/ month",
+    "contract": "{acquisitionType} contract",
+    "kmToDate": "/ {kmAllowanceToDate} km to date",
+    "end": "End: {endDate}",
+    "start": "Start: {startDate}",
+    "downPayment": "(Down payment: {downPayment} €)",
+    "ended": "Contract ended",
+    "upcoming": "Contract not started",
+    "monthsLeft": "{count} months left",
+    "kmOver": "+{km} km over",
+    "kmAhead": "{km} km ahead"
+  },
+  "mileageCostChart": {
+    "monthlyMileageAndCostPer": "Monthly mileage and cost per kilometre",
+    "costKm": "Cost (€/km)",
+    "distanceKm": "Distance (km)",
+    "lastMonthSDetail": "Last month's detail",
+    "clickABarOfThe": "Click a bar of the chart to open the month's detailed figures.",
+    "monthlyMileageAndCostPer2": "Monthly mileage and cost per km (€/km)",
+    "kmDriven": "Kilometres driven (km)",
+    "averageCostPerKm": "Average cost per km (€/km)",
+    "tooltipDistance": "Distance: {distance} km",
+    "tooltipCostPerKm": "Cost price: {cost} €/km",
+    "axisDistance": "Distance (km)",
+    "axisCostPerKm": "Cost/km (€)"
+  },
+  "monthDetailModal": {
+    "expensesAndInvoices": "Expenses and invoices",
+    "vehicleDrives": "Vehicle drives",
+    "monthTotal": "Month total",
+    "figuresByExpenseCategory": "Figures by expense category",
+    "costBreakdownOfTheSelected": "Cost breakdown of the selected month",
+    "breakdownOfTheMonth": "Breakdown of the month",
+    "cashExpenses": "Cash expenses (€)",
+    "costPriceKm": "Cost price (€/km)",
+    "breakdownCalculationMode": "Breakdown calculation mode:",
+    "paymentsThisMonth": "Payments this month",
+    "totalPaidOutCash": "Total paid out (cash)",
+    "costPerKmBasis": "Cost-per-km basis",
+    "calculatedRunningCost": "Calculated running cost",
+    "actualCostPrice": "Actual cost price",
+    "costPerKilometre": "Cost per kilometre",
+    "100GpsDrives": "100% GPS drives",
+    "totalDistance": "Total distance",
+    "closeEsc": "Close (Esc)",
+    "nextMonth": "Next month (→)",
+    "previousMonth": "Previous month (←)",
+    "fullBreakdownOfTheExpense": "Full breakdown of the expense categories and cost per kilometre",
+    "costDetails": "Cost details — {value}",
+    "ofWhichKmSmoothed": "of which {smoothedKm} km smoothed",
+    "smoothingIncluded": "Usage smoothing included",
+    "cashAmounts": "Cash amounts",
+    "noExpense": "No expense",
+    "noExpenseRecorded": "No expense recorded"
+  },
+  "monthlyCostChart": {
+    "monthlyCostTrendByCategory": "Monthly cost trend by category",
+    "monthlyExpenseTrend": "Monthly expense trend (€)",
+    "tires": "Tires",
+    "maintenance": "Maintenance",
+    "financing": "Financing",
+    "monthTotal": "Month total: {total} €"
+  },
+  "tagBreakdown": {
+    "ofTollsAndParking": "{value} € of tolls and parking",
+    "breakdownByDriveCategoryWork": "Breakdown by drive category (work / personal)",
+    "kmKwh": "{distance_km} km ({energy_kwh} kWh)"
+  },
+  "tcoMetricsGrid": {
+    "tollsAndParking": "Tolls and parking",
+    "chargeSWithoutACost": "{charges_without_cost} charge(s) without a cost",
+    "depreciationKm": "• depreciation {value} €/km",
+    "fullCostPerKm": "Full cost per km",
+    "totalCost": "Total cost",
+    "kmKwh": "{energy_cost_per_km} €/km • {total_kwh_added} kWh",
+    "overKm": "Over {distance_basis_km} km",
+    "directRunningCostKm": "Direct running cost: {usage_cost_per_km} €/km",
+    "netOfCarpooling": "Net of carpooling: {full_cost_net} €",
+    "includingDepreciation": "(including {depreciation_cost} € depreciation)",
+    "fullCost": "Full cost: {full_cost} €",
+    "fuel": "Fuel (fill-ups)",
+    "energy": "Energy (charges)"
+  },
+  "urgentRemindersBanner": {
+    "viewTheReminders": "View the reminders",
+    "overdue": "Overdue maintenance",
+    "dueSoon": "Maintenance due soon"
+  },
+  "donut": {
+    "energy": "Energy",
+    "tolls": "Tolls and parking",
+    "tires": "Tires (amortized wear)",
+    "maintenance": "Maintenance and repairs",
+    "insurance": "Insurance",
+    "financing": "Financing and leasing",
+    "depreciation": "Depreciation",
+    "other": "Subscriptions, taxes and other"
+  },
+  "range": {
+    "all": "All",
+    "oneYear": "1 year",
+    "sixMonths": "6 months",
+    "threeMonths": "3 months",
+    "oneMonth": "1 month"
+  },
+  "urgentReminders": {
+    "andOthers": "{titles} and {count} more"
+  },
+  "lease": {
+    "inProgress": "In progress",
+    "optionExercised": "Purchase option exercised",
+    "finished": "Finished",
+    "endingSoon": "Ending soon"
+  },
+  "breakdown": {
+    "energy": "Energy",
+    "energyNote": "of which {amount} € estimated (untracked energy)",
+    "tolls": "Tolls and parking",
+    "tires": "Tires",
+    "tiresSub": "amortized wear",
+    "tiresCashNote": "{amount} € paid out this month (tire purchase)",
+    "tiresAmortizedNote": "Amortized over {km} km (0 € paid out)",
+    "maintenance": "Maintenance and repairs",
+    "smoothed": "smoothed",
+    "maintenanceBilledNote": "{amount} € billed by the workshop this month",
+    "maintenanceSmoothedNote": "Servicing/parts smoothed over the period",
+    "insurance": "Insurance",
+    "financing": "Financing and leasing",
+    "financingNote": "Smoothed: {smoothed} € (monthly payment made: {paid} €)",
+    "other": "Subscriptions, taxes and other"
+  }
+}

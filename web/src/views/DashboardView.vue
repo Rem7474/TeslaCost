@@ -70,10 +70,10 @@ onMounted(() => {
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
         <h2 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-          Tableau de bord TCO
+          {{ $t('dashboard.dashboardView.tcoDashboard') }}
         </h2>
         <p class="text-sm text-slate-400">
-          Coût réel de possession et rendement kilométrique pour {{ vehicleStore.activeVehicle?.name || 'votre véhicule' }}
+          {{ $t('dashboard.dashboardView.subtitle', { name: vehicleStore.activeVehicle?.name || $t('dashboard.dashboardView.yourVehicle') }) }}
         </p>
       </div>
 
@@ -82,22 +82,22 @@ onMounted(() => {
           to="/expenses"
           class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition-colors"
         >
-          + Dépense
+          {{ $t('dashboard.dashboardView.expense') }}
         </router-link>
         <router-link
           to="/drives"
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/20 transition-colors"
         >
-          Voir les trajets
+          {{ $t('dashboard.dashboardView.viewDrives') }}
         </router-link>
       </div>
     </div>
 
     <!-- Empty state if no vehicle -->
     <div v-if="!vehicleStore.activeVehicle" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl">
-      <p class="text-slate-400 mb-4">Aucun véhicule configuré.</p>
+      <p class="text-slate-400 mb-4">{{ $t('dashboard.dashboardView.noVehicleConfigured') }}</p>
       <router-link to="/vehicles" class="px-4 py-2 bg-rose-600 text-white text-sm font-semibold rounded-xl">
-        Créer un premier véhicule
+        {{ $t('dashboard.dashboardView.createYourFirstVehicle') }}
       </router-link>
     </div>
 

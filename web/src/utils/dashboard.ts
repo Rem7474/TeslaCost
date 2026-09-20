@@ -1,9 +1,10 @@
+import { intlLocale, t } from '@/i18n'
 export const monthlyRangeOptions = [
-  { key: 'ALL', label: 'Tout' },
-  { key: '1Y', label: '1 an' },
-  { key: '6M', label: '6 mois' },
-  { key: '3M', label: '3 mois' },
-  { key: '1M', label: '1 mois' },
+  { key: 'ALL', labelKey: 'dashboard.range.all' },
+  { key: '1Y', labelKey: 'dashboard.range.oneYear' },
+  { key: '6M', labelKey: 'dashboard.range.sixMonths' },
+  { key: '3M', labelKey: 'dashboard.range.threeMonths' },
+  { key: '1M', labelKey: 'dashboard.range.oneMonth' },
 ] as const
 export type MonthlyRangeKey = (typeof monthlyRangeOptions)[number]['key']
 
@@ -28,7 +29,7 @@ export function formatMonthName(monthStr: string) {
   const year = Number.parseInt(parts[0], 10)
   const month = Number.parseInt(parts[1], 10) - 1
   const d = new Date(year, month, 1)
-  const formatted = d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  const formatted = d.toLocaleDateString(intlLocale(), { month: 'long', year: 'numeric' })
   return formatted.charAt(0).toUpperCase() + formatted.slice(1)
 }
 
@@ -55,7 +56,7 @@ export function currentMonthStats(monthlyCosts: any[] | undefined, now = new Dat
 export function summarizeUrgentReminders(reminders: { title: string; status: string }[]) {
   const urgent = reminders.filter((r) => r.status === 'OVERDUE' || r.status === 'DUE_SOON')
   const titles = urgent.map((r) => r.title)
-  const summary = !titles.length ? '' : titles.length <= 2 ? titles.join(', ') : `${titles.slice(0, 2).join(', ')} et ${titles.length - 2} autre(s)`
+  const summary = !titles.length ? '' : titles.length <= 2 ? titles.join(', ') : t('dashboard.urgentReminders.andOthers', { titles: titles.slice(0, 2).join(', '), count: titles.length - 2 })
   return { urgent, hasOverdue: reminders.some((r) => r.status === 'OVERDUE'), summary }
 }
 
@@ -64,15 +65,15 @@ export function buildLeaseSummary(tco: any, now = new Date()) {
   if (!tco || !['LOA', 'LLD'].includes(tco.acquisition_type)) {
     return null
   }
-  const t = tco
-  const startDateStr = t.contract_start_date
-  const endDateStr = t.contract_end_date
-  if (!endDateStr && !t.contract_duration_months && !t.lease_duration_months) {
+  const c = tco
+  const startDateStr = c.contract_start_date
+  const endDateStr = c.contract_end_date
+  if (!endDateStr && !c.contract_duration_months && !c.lease_duration_months) {
     return null
   }
 
   const start = startDateStr ? new Date(startDateStr) : null
-  const durationMonths = t.contract_duration_months || t.lease_duration_months || 0
+  const durationMonths = c.contract_duration_months || c.lease_duration_months || 0
   let end = endDateStr ? new Date(endDateStr) : null
   if (!end && start && durationMonths > 0) {
     end = new Date(start.getFullYear(), start.getMonth() + durationMonths, start.getDate())
@@ -111,9 +112,9 @@ export function buildLeaseSummary(tco: any, now = new Date()) {
   }
 
   // Mileage
-  const kmDriven = t.lease_km_driven || 0
-  const kmAllowanceToDate = t.lease_km_allowance_to_date || 0
-  const kmAllowanceTotal = t.lease_km_allowance_total || 0
+  const kmDriven = c.lease_km_driven || 0
+  const kmAllowanceToDate = c.lease_km_allowance_to_date || 0
+  const kmAllowanceTotal = c.lease_km_allowance_total || 0
   const hasMileageAllowance = kmAllowanceToDate > 0 || kmAllowanceTotal > 0
 
   let mileageProgressPct = 0
@@ -133,21 +134,21 @@ export function buildLeaseSummary(tco: any, now = new Date()) {
     if (elapsedMonths > 0) {
       actualPaceKmMonth = Math.round(kmDriven / elapsedMonths)
     }
-    if (t.lease_km_allowance_per_year) {
-      contractualPaceKmMonth = Math.round(t.lease_km_allowance_per_year / 12)
+    if (c.lease_km_allowance_per_year) {
+      contractualPaceKmMonth = Math.round(c.lease_km_allowance_per_year / 12)
     } else if (totalMonths > 0 && kmAllowanceTotal > 0) {
       contractualPaceKmMonth = Math.round(kmAllowanceTotal / totalMonths)
     }
   }
 
   // Status
-  let status = { label: 'En cours', class: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' }
-  if (t.option_exercised_date) {
-    status = { label: "Option d'achat levée", class: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' }
+  let status = { label: t('dashboard.lease.inProgress'), class: 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30' }
+  if (c.option_exercised_date) {
+    status = { label: t('dashboard.lease.optionExercised'), class: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' }
   } else if (isEnded) {
-    status = { label: 'Terminé', class: 'bg-slate-800 text-slate-400 border-slate-700' }
+    status = { label: t('dashboard.lease.finished'), class: 'bg-slate-800 text-slate-400 border-slate-700' }
   } else if (remainingMonths <= 3 && !isNotStarted) {
-    status = { label: 'Échéance proche', class: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
+    status = { label: t('dashboard.lease.endingSoon'), class: 'bg-amber-500/15 text-amber-300 border-amber-500/30' }
   }
 
   // Color for mileage bar
@@ -159,7 +160,7 @@ export function buildLeaseSummary(tco: any, now = new Date()) {
   }
 
   return {
-    acquisitionType: t.acquisition_type,
+    acquisitionType: c.acquisition_type,
     startDate: start,
     endDate: end,
     totalMonths,
@@ -180,16 +181,16 @@ export function buildLeaseSummary(tco: any, now = new Date()) {
     contractualPaceKmMonth,
     mileageColor,
     // Financials
-    monthlyRent: t.lease_monthly_rent,
-    downPayment: t.lease_down_payment,
-    purchaseOptionPrice: t.lease_purchase_option_price,
-    excessKmCost: t.lease_excess_km_cost || 0,
-    excessKmProjected: t.lease_excess_km_projected || 0,
-    excessKmPrice: t.lease_excess_km_price,
+    monthlyRent: c.lease_monthly_rent,
+    downPayment: c.lease_down_payment,
+    purchaseOptionPrice: c.lease_purchase_option_price,
+    excessKmCost: c.lease_excess_km_cost || 0,
+    excessKmProjected: c.lease_excess_km_projected || 0,
+    excessKmPrice: c.lease_excess_km_price,
     // Included services
-    includesMaintenance: t.lease_includes_maintenance,
-    includesInsurance: t.lease_includes_insurance,
-    includesTires: t.lease_includes_tires,
+    includesMaintenance: c.lease_includes_maintenance,
+    includesInsurance: c.lease_includes_insurance,
+    includesTires: c.lease_includes_tires,
   }
 }
 
@@ -202,16 +203,16 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
   const items = [
     {
       key: 'energy',
-      label: 'Énergie',
+      label: t('dashboard.breakdown.energy'),
       subLabel: '',
       color: '#38bdf8',
       amount: m.energy || 0,
       cashAmount: m.energy || 0,
-      note: m.smoothed_energy > 0 ? `dont ${m.smoothed_energy.toFixed(2)} € estimés (énergie non suivie)` : null,
+      note: m.smoothed_energy > 0 ? t('dashboard.breakdown.energyNote', { amount: m.smoothed_energy.toFixed(2) }) : null,
     },
     {
       key: 'tolls',
-      label: 'Péages & Parkings',
+      label: t('dashboard.breakdown.tolls'),
       subLabel: '',
       color: '#f59e0b',
       amount: m.tolls || 0,
@@ -220,29 +221,29 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
     },
     {
       key: 'tires',
-      label: 'Pneus',
-      subLabel: 'usure amortie',
+      label: t('dashboard.breakdown.tires'),
+      subLabel: t('dashboard.breakdown.tiresSub'),
       color: '#10b981',
       amount: m.tires_amortized || 0,
       cashAmount: m.tires || 0,
       note: (m.tires || 0) > 0
-        ? `${Number(m.tires).toFixed(2)} € décaissés ce mois (achat pneus)`
-        : (m.tires_amortized > 0 ? `Amorti sur ${Math.round(dist).toLocaleString('fr-FR')} km (0 € décaissé)` : null),
+        ? t('dashboard.breakdown.tiresCashNote', { amount: Number(m.tires).toFixed(2) })
+        : (m.tires_amortized > 0 ? t('dashboard.breakdown.tiresAmortizedNote', { km: Math.round(dist).toLocaleString(intlLocale()) }) : null),
     },
     {
       key: 'maintenance',
-      label: 'Entretien & Réparations',
-      subLabel: 'lissé',
+      label: t('dashboard.breakdown.maintenance'),
+      subLabel: t('dashboard.breakdown.smoothed'),
       color: '#ec4899',
       amount: m.maintenance_amortized || 0,
       cashAmount: m.maintenance || 0,
       note: (m.maintenance || 0) > 0
-        ? `${Number(m.maintenance).toFixed(2)} € facturés à l'atelier ce mois`
-        : (m.maintenance_amortized > 0 ? `Lissage révisions/pièces sur la période` : null),
+        ? t('dashboard.breakdown.maintenanceBilledNote', { amount: Number(m.maintenance).toFixed(2) })
+        : (m.maintenance_amortized > 0 ? t('dashboard.breakdown.maintenanceSmoothedNote') : null),
     },
     {
       key: 'insurance',
-      label: 'Assurance',
+      label: t('dashboard.breakdown.insurance'),
       subLabel: '',
       color: '#a855f7',
       amount: m.insurance || 0,
@@ -251,18 +252,18 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
     },
     {
       key: 'financing',
-      label: 'Financement & Location',
-      subLabel: 'lissé',
+      label: t('dashboard.breakdown.financing'),
+      subLabel: t('dashboard.breakdown.smoothed'),
       color: '#f97316',
       amount: m.financing_amortized || m.financing || 0,
       cashAmount: m.financing || 0,
       note: (m.financing_amortized > 0 && Math.abs(m.financing_amortized - (m.financing || 0)) > 0.01)
-        ? `Lissé : ${m.financing_amortized.toFixed(2)} € (mensualité réglée : ${(m.financing || 0).toFixed(2)} €)`
+        ? t('dashboard.breakdown.financingNote', { smoothed: m.financing_amortized.toFixed(2), paid: (m.financing || 0).toFixed(2) })
         : null,
     },
     {
       key: 'other',
-      label: 'Abonnements, taxes & autres',
+      label: t('dashboard.breakdown.other'),
       subLabel: '',
       color: '#64748b',
       amount: m.other || 0,

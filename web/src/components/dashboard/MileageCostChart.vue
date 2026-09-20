@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Activity, PieChart } from 'lucide-vue-next'
@@ -31,7 +32,7 @@ function renderChart() {
       datasets: [
         {
           type: 'bar',
-          label: 'Kilomètres parcourus (km)',
+          label: t('dashboard.mileageCostChart.kmDriven'),
           data: distanceData,
           backgroundColor: 'rgba(99, 102, 241, 0.65)',
           hoverBackgroundColor: 'rgba(99, 102, 241, 0.9)',
@@ -40,7 +41,7 @@ function renderChart() {
         },
         {
           type: 'line',
-          label: 'Coût moyen au km (€/km)',
+          label: t('dashboard.mileageCostChart.averageCostPerKm'),
           data: costPerKmData,
           borderColor: '#10b981',
           backgroundColor: '#10b981',
@@ -88,11 +89,11 @@ function renderChart() {
           callbacks: {
             label: (context) => {
               if (context.dataset.yAxisID === 'yDistance') {
-                const dist = Number(context.raw).toLocaleString('fr-FR')
-                return `Distance : ${dist} km`
+                const dist = Number(context.raw).toLocaleString(intlLocale())
+                return t('dashboard.mileageCostChart.tooltipDistance', { distance: dist })
               }
               const costPerKm = Number(context.raw).toFixed(3)
-              return `Coût de revient : ${costPerKm} €/km`
+              return t('dashboard.mileageCostChart.tooltipCostPerKm', { cost: costPerKm })
             },
           },
         },
@@ -107,7 +108,7 @@ function renderChart() {
             color: '#818cf8',
             callback: (v) => `${v} km`,
           },
-          title: { display: true, text: 'Distance (km)', color: '#818cf8', font: { size: 11 } },
+          title: { display: true, text: t('dashboard.mileageCostChart.axisDistance'), color: '#818cf8', font: { size: 11 } },
         },
         yCost: {
           type: 'linear',
@@ -117,7 +118,7 @@ function renderChart() {
             color: '#10b981',
             callback: (v) => `${Number(v).toFixed(3)} €`,
           },
-          title: { display: true, text: 'Coût/km (€)', color: '#10b981', font: { size: 11 } },
+          title: { display: true, text: t('dashboard.mileageCostChart.axisCostPerKm'), color: '#10b981', font: { size: 11 } },
         },
       },
     },
@@ -137,9 +138,9 @@ onUnmounted(() => {
       <div>
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <Activity class="w-4 h-4 text-indigo-400" />
-          <span>Kilométrage Mensuel & Coût de Revient au Km (€/km)</span>
+          <span>{{ $t('dashboard.mileageCostChart.monthlyMileageAndCostPer2') }}</span>
         </h3>
-        <p class="text-xs text-slate-400 mt-0.5">Cliquer sur une barre du graphique pour ouvrir le détail chiffré du mois.</p>
+        <p class="text-xs text-slate-400 mt-0.5">{{ $t('dashboard.mileageCostChart.clickABarOfThe') }}</p>
       </div>
       <div class="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
         <button
@@ -149,7 +150,7 @@ onUnmounted(() => {
           class="px-2.5 py-1 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 transition-colors"
         >
           <PieChart class="w-3.5 h-3.5" />
-          <span>Détail dernier mois</span>
+          <span>{{ $t('dashboard.mileageCostChart.lastMonthSDetail') }}</span>
         </button>
         <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5">
           <button
@@ -162,24 +163,24 @@ onUnmounted(() => {
               mileageChartRange === opt.key ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white',
             ]"
           >
-            {{ opt.label }}
+            {{ $t(opt.labelKey) }}
           </button>
         </div>
         <div class="flex items-center gap-3 text-xs">
           <span class="flex items-center gap-1.5 text-indigo-300">
             <span class="w-3 h-3 rounded bg-indigo-500/80 inline-block"></span>
-            Distance (km)
+            {{ $t('dashboard.mileageCostChart.distanceKm') }}
           </span>
           <span class="flex items-center gap-1.5 text-emerald-400">
             <span class="w-3 h-1 rounded bg-emerald-400 inline-block"></span>
-            Coût (€/km)
+            {{ $t('dashboard.mileageCostChart.costKm') }}
           </span>
         </div>
       </div>
     </div>
 
     <div class="h-64 sm:h-72">
-      <canvas ref="mileageChartRef" role="img" aria-label="Kilométrage mensuel et coût au kilomètre"></canvas>
+      <canvas ref="mileageChartRef" role="img" :aria-label="$t('dashboard.mileageCostChart.monthlyMileageAndCostPer')"></canvas>
     </div>
   </div>
 </template>
