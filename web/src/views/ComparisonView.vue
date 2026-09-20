@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { intlLocale, t } from '@/i18n'
+import { intlLocale, t, te } from '@/i18n'
+import { apiMessageText } from '@/services/apiError'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Scale, Plus, Trash2, Pencil, ArrowLeft, ArrowRight, Info, TrendingDown, TrendingUp, ChevronDown, Download, Printer, GitCompare } from 'lucide-vue-next'
@@ -30,6 +31,9 @@ const result = ref<any | null>(null)
 const formError = ref('')
 
 const fuelTypes = computed<any[]>(() => defaults.value?.ice || [])
+
+// The server names each fuel in English; the catalog has the current language's name.
+const fuelLabel = (f: { fuel_type: string; label: string }) => (te(`comparison.fuelTypes.${f.fuel_type}`) ? t(`comparison.fuelTypes.${f.fuel_type}`) : f.label)
 
 // The tracked-vehicle comparison relies on an electric vehicle's real costs
 const canCompareTrackedVehicle = computed(() => !!vehicleStore.activeVehicle && !vehicleStore.isIce)
@@ -392,7 +396,7 @@ function renderChart() {
   }
 
   if (tornadoRef.value) {
-    const rows = r.sensitivity as { label: string; delta_shift: number }[]
+    const rows = (r.sensitivity as { label: any; delta_shift: number }[]).map((s) => ({ label: apiMessageText(s.label), delta_shift: s.delta_shift }))
     charts.push(new Chart(tornadoRef.value, {
       type: 'bar',
       data: {
@@ -593,7 +597,7 @@ onBeforeUnmount(destroyChart)
             <div>
               <label for="cmp-fuel" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.fuel') }}</label>
               <select id="cmp-fuel" v-model="form.ice.fuel_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" @change="applyFuelDefaults">
-                <option v-for="f in fuelTypes" :key="f.fuel_type" :value="f.fuel_type">{{ f.label }}</option>
+                <option v-for="f in fuelTypes" :key="f.fuel_type" :value="f.fuel_type">{{ fuelLabel(f) }}</option>
               </select>
             </div>
             <div>
@@ -605,7 +609,7 @@ onBeforeUnmount(destroyChart)
               <input id="cmp-ice-price" v-model.number="form.ice.fuel_price" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
-          <p class="text-[11px] text-slate-500 flex items-center gap-1"><Info class="w-3 h-3" /> {{ defaults?.source || $t('comparison.comparisonView.indicative') }}</p>
+          <p class="text-[11px] text-slate-500 flex items-center gap-1"><Info class="w-3 h-3" /> {{ defaults?.source ? apiMessageText(defaults.source) : $t('comparison.comparisonView.indicative') }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="f in iceFields" :key="f.key">
               <label :for="`cmp-ice-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t(f.label) }}</label>
@@ -771,8 +775,8 @@ onBeforeUnmount(destroyChart)
           <p class="text-xs text-slate-400 mb-3">{{ $t('comparison.comparisonView.effectOnTheElectricSaving') }}</p>
           <div class="h-48 mb-3"><canvas ref="tornadoRef" :aria-label="$t('comparison.comparisonView.sensitivityOfTheGapTo')" role="img"></canvas></div>
           <ul class="text-xs text-slate-300 space-y-1">
-            <li v-for="s in result.sensitivity" :key="s.label" class="flex justify-between">
-              <span>{{ s.label }}</span>
+            <li v-for="s in result.sensitivity" :key="s.label.code" class="flex justify-between">
+              <span>{{ apiMessageText(s.label) }}</span>
               <span>{{ s.ev_savings >= 0 ? $t('comparison.comparisonView.evLess', { amount: fmtEur(s.ev_savings) }) : $t('comparison.comparisonView.evMore', { amount: fmtEur(-s.ev_savings) }) }}</span>
             </li>
           </ul>
@@ -781,7 +785,7 @@ onBeforeUnmount(destroyChart)
         <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
           <h2 class="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5"><Info class="w-3.5 h-3.5" /> {{ $t('comparison.comparisonView.assumptions') }}</h2>
           <ul class="list-disc pl-4 text-xs text-slate-400 space-y-1">
-            <li v-for="a in result.assumptions" :key="a">{{ a }}</li>
+            <li v-for="(a, i) in result.assumptions" :key="i">{{ apiMessageText(a) }}</li>
           </ul>
         </div>
 

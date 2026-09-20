@@ -57,25 +57,25 @@ func centsOrZero(c *money.Cents) money.Cents {
 func ComputeOwnershipCosts(o *models.VehicleOwnership, now time.Time, kmSinceStart float64) OwnershipCosts {
 	var c OwnershipCosts
 	if o == nil {
-		c.Missing = append(c.Missing, "Mode d'acquisition non renseigné (achat comptant, crédit, LOA ou LLD) : décote ou loyers absents du coût complet")
+		c.Missing = append(c.Missing, "Acquisition mode not entered (cash, loan, LOA or LLD): depreciation or lease payments missing from the full cost")
 		return c
 	}
 
 	switch o.AcquisitionType {
 	case models.AcquisitionCash, models.AcquisitionLoan:
 		if o.PurchasePrice == nil || *o.PurchasePrice <= 0 {
-			c.Missing = append(c.Missing, "Prix d'achat non renseigné")
+			c.Missing = append(c.Missing, "Purchase price not entered")
 		} else {
 			base := *o.PurchasePrice + centsOrZero(o.PurchaseFees) - centsOrZero(o.Incentives)
 			dep, ok := depreciation(base, o.StartDate, o, now)
 			c.Depreciation = dep
 			if !ok {
-				c.Missing = append(c.Missing, "Valeur de revente estimée ou durée de détention non renseignée : décote exclue du coût complet")
+				c.Missing = append(c.Missing, "Estimated resale value or holding period not entered: depreciation excluded from the full cost")
 			}
 		}
 		if o.AcquisitionType == models.AcquisitionLoan && (o.LoanAmount == nil || *o.LoanAmount <= 0 ||
 			o.LoanDurationMonths == nil || *o.LoanDurationMonths <= 0 || o.LoanRatePct == nil) {
-			c.Missing = append(c.Missing, "Crédit incomplet (montant emprunté, taux ou durée) : intérêts non calculés")
+			c.Missing = append(c.Missing, "Incomplete loan (amount borrowed, rate or duration): interest not calculated")
 		}
 
 	case models.AcquisitionLOA, models.AcquisitionLLD:
@@ -110,7 +110,7 @@ func computeLease(c *OwnershipCosts, o *models.VehicleOwnership, now time.Time, 
 		c.ContractEndDate = &contractEnd
 	}
 	if o.LeaseMonthlyRent == nil || *o.LeaseMonthlyRent <= 0 || o.LeaseDurationMonths == nil || *o.LeaseDurationMonths <= 0 {
-		c.Missing = append(c.Missing, "Contrat de location incomplet (loyer mensuel ou durée) : loyers non comptés")
+		c.Missing = append(c.Missing, "Incomplete lease (monthly rent or duration): rent not counted")
 		return
 	}
 	duration := *o.LeaseDurationMonths
@@ -156,7 +156,7 @@ func computeLease(c *OwnershipCosts, o *models.VehicleOwnership, now time.Time, 
 	}
 
 	if o.LeaseKmAllowancePerYear == nil || o.LeaseExcessKmPrice == nil {
-		c.Missing = append(c.Missing, "Forfait kilométrique ou prix du kilomètre supplémentaire non renseigné : pénalité de dépassement non estimée")
+		c.Missing = append(c.Missing, "Mileage allowance or price per extra kilometre not entered: overage penalty not estimated")
 	} else if started && !optionExercised {
 		elapsed := math.Min(monthsBetween(o.StartDate, now), monthsBetween(o.StartDate, phaseEnd))
 		c.LeaseKmDriven = kmSinceStart
@@ -171,13 +171,13 @@ func computeLease(c *OwnershipCosts, o *models.VehicleOwnership, now time.Time, 
 
 	if o.AcquisitionType == models.AcquisitionLOA {
 		if o.LeasePurchaseOptionPrice == nil {
-			c.Missing = append(c.Missing, "Prix de l'option d'achat de la LOA non renseigné")
+			c.Missing = append(c.Missing, "LOA purchase option price not entered")
 		}
 		if optionExercised && o.LeasePurchaseOptionPrice != nil {
 			dep, ok := depreciation(*o.LeasePurchaseOptionPrice, *o.OptionExercisedDate, o, now)
 			c.Depreciation = dep
 			if !ok {
-				c.Missing = append(c.Missing, "Option d'achat levée : valeur de revente estimée ou durée de détention non renseignée, décote exclue")
+				c.Missing = append(c.Missing, "Purchase option exercised: estimated resale value or holding period not entered, depreciation excluded")
 			}
 		}
 	}
@@ -188,11 +188,11 @@ func (c OwnershipCosts) LeaseWarnings(now time.Time) []string {
 	var warnings []string
 	if c.LeaseExcessKmProjected > 0 {
 		warnings = append(warnings, fmt.Sprintf(
-			"Au rythme actuel, le forfait kilométrique sera dépassé : pénalité estimée de %s € en fin de contrat", c.LeaseExcessKmProjected))
+			"At the current pace the mileage allowance will be exceeded: estimated end-of-contract penalty of %s €", c.LeaseExcessKmProjected))
 	}
 	if c.ContractEndDate != nil && now.Before(*c.ContractEndDate) && monthsBetween(now, *c.ContractEndDate) <= 3 {
 		warnings = append(warnings, fmt.Sprintf(
-			"Fin du contrat de location le %s : pensez à l'option d'achat ou à la restitution", c.ContractEndDate.Format("02/01/2006")))
+			"The lease ends on %s: consider the purchase option or the return", c.ContractEndDate.Format("02/01/2006")))
 	}
 	return warnings
 }

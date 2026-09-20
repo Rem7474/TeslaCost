@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 )
@@ -31,26 +32,26 @@ type ICEDefault struct {
 
 // iceDefaults are indicative figures for the French market; users are expected to adjust them.
 var iceDefaults = []ICEDefault{
-	{"SP95_E10", "Essence SP95-E10", 6.5, 1.75},
-	{"SP98", "Essence SP98", 6.5, 1.85},
-	{"DIESEL", "Gazole", 5.5, 1.70},
-	{"E85", "Superéthanol E85", 9.0, 0.80},
-	{"GPL", "GPL", 8.0, 0.95},
+	{"SP95_E10", "Petrol SP95-E10", 6.5, 1.75},
+	{"SP98", "Petrol SP98", 6.5, 1.85},
+	{"DIESEL", "Diesel", 5.5, 1.70},
+	{"E85", "Superethanol E85", 9.0, 0.80},
+	{"GPL", "LPG", 8.0, 0.95},
 }
 
 // ComparisonDefaults prefills the comparison form. Every ICE value is an editable assumption.
 type ComparisonDefaults struct {
-	AnnualKm          float64      `json:"annual_km"`
-	AnnualKmFromData  bool         `json:"annual_km_from_data"` // False when the default mileage is a fallback
-	EVKwhPer100Km     *float64     `json:"ev_kwh_per_100km,omitempty"`
-	EVEurPerKwh       *float64     `json:"ev_eur_per_kwh,omitempty"`
-	Powertrain        string       `json:"powertrain,omitempty"`      // Of the reference vehicle
-	ICELPer100Km      *float64     `json:"ice_l_per_100km,omitempty"` // Measured on a tracked combustion vehicle
-	ICEFuelPrice      *float64     `json:"ice_fuel_price,omitempty"`  // Average EUR per litre paid
-	ICE               []ICEDefault `json:"ice"`
-	MaintenanceYearly money.Cents  `json:"maintenance_yearly"`
-	InsuranceYearly   money.Cents  `json:"insurance_yearly"`
-	Source            string       `json:"source"`
+	AnnualKm          float64           `json:"annual_km"`
+	AnnualKmFromData  bool              `json:"annual_km_from_data"` // False when the default mileage is a fallback
+	EVKwhPer100Km     *float64          `json:"ev_kwh_per_100km,omitempty"`
+	EVEurPerKwh       *float64          `json:"ev_eur_per_kwh,omitempty"`
+	Powertrain        string            `json:"powertrain,omitempty"`      // Of the reference vehicle
+	ICELPer100Km      *float64          `json:"ice_l_per_100km,omitempty"` // Measured on a tracked combustion vehicle
+	ICEFuelPrice      *float64          `json:"ice_fuel_price,omitempty"`  // Average EUR per litre paid
+	ICE               []ICEDefault      `json:"ice"`
+	MaintenanceYearly money.Cents       `json:"maintenance_yearly"`
+	InsuranceYearly   money.Cents       `json:"insurance_yearly"`
+	Source            *apierror.Message `json:"source"`
 }
 
 // ComparisonService builds EV baselines from the real TCO and evaluates comparison scenarios.
@@ -72,7 +73,7 @@ func ratePerKm(amount money.Cents, km float64) float64 {
 
 // evBaselineFromTCO derives the EV side from the tracked vehicle's real costs.
 // Insurance and depreciation are approximated per km, and financing is not included.
-func evBaselineFromTCO(sum *TCOSummary, annualKm float64, years int) (EVBaseline, []string) {
+func evBaselineFromTCO(sum *TCOSummary, annualKm float64, years int) (EVBaseline, []*apierror.Message) {
 	basis := sum.DistanceBasisKm
 	ev := EVBaseline{
 		EnergyPerKm:      ratePerKm(sum.EnergyCost, basis),
@@ -80,16 +81,16 @@ func evBaselineFromTCO(sum *TCOSummary, annualKm float64, years int) (EVBaseline
 		InsurancePerKm:   ratePerKm(sum.InsuranceCost, basis),
 		PurchaseNet:      sum.AcquisitionCost.Float(),
 	}
-	notes := []string{"Côté électrique : coûts réels du véhicule suivi ramenés au km (assurance et dépréciation incluses)"}
+	notes := []*apierror.Message{apierror.NewMessage("comparison.assumption.ev_actual", "Electric side: actual costs of the tracked vehicle per km (insurance and depreciation included)")}
 
 	if ev.PurchaseNet > 0 {
 		dep := ratePerKm(sum.DepreciationCost, basis) * annualKm * float64(years)
 		ev.ResaleValue = math.Max(ev.PurchaseNet-dep, 0)
 	} else {
-		notes = append(notes, "Prix d'achat de l'électrique inconnu (location ou saisie manquante) : dépréciation électrique non incluse")
+		notes = append(notes, apierror.NewMessage("comparison.assumption.ev_price_unknown", "Electric purchase price unknown (lease or missing entry): electric depreciation not included"))
 	}
 	if basis <= 0 {
-		notes = append(notes, "Aucun kilométrage suivi : les coûts réels de l'électrique sont nuls")
+		notes = append(notes, apierror.NewMessage("comparison.assumption.ev_no_distance", "No tracked mileage: the actual electric costs are zero"))
 	}
 	return ev, notes
 }
@@ -109,7 +110,7 @@ func evBaselineFromInputs(in *models.EVInputs, incentives money.Cents) EVBaselin
 // Compare evaluates a scenario. It reads the vehicle's TCO in RETROSPECTIVE mode and writes nothing.
 func (s *ComparisonService) Compare(ctx context.Context, sc *models.ComparisonScenario) (*ComparisonResult, error) {
 	var ev EVBaseline
-	var notes []string
+	var notes []*apierror.Message
 
 	if sc.Mode == models.ComparisonModeRetrospective {
 		if sc.VehicleID == nil {
@@ -151,7 +152,7 @@ func (s *ComparisonService) Defaults(ctx context.Context, vehicleID string) (*Co
 		ICE:               iceDefaults,
 		MaintenanceYearly: money.FromFloat(700),
 		InsuranceYearly:   money.FromFloat(650),
-		Source:            "Valeurs indicatives pour la France, à ajuster",
+		Source:            apierror.NewMessage("comparison.defaults_source", "Indicative values for France, to adjust"),
 	}
 	if vehicleID == "" {
 		return d, nil

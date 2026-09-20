@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/services/api'
 import { t } from '@/i18n'
+import { apiErrorMessage } from '@/services/apiError'
 import { hasTeslaMate as vehicleHasTeslaMate } from '@/utils/vehicles'
 
 export const useVehicleStore = defineStore('vehicle', () => {
@@ -70,7 +71,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
         job = await api.getSyncStatus(vehicleId)
       }
       if (job?.status === 'FAILED') {
-        syncError.value = job.error || t('shell.sync.unknownError')
+        syncError.value = apiErrorMessage({ error: job.error, code: job.error_code, params: job.error_params }, t('shell.sync.unknownError'))
       } else if (job?.status === 'SUCCEEDED') {
         syncResult.value = job.result
         await fetchVehicles()

@@ -48,11 +48,11 @@ func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
 	if in.basisKm > 0 {
 		distance = ratio(in.trackedKm, in.basisKm)
 	}
-	energyLabel, energyScore := "Recharges avec coût (kWh)", ratio(in.kwhPriced, in.kwhAdded)
-	distanceLabel := "Kilomètres couverts par des trajets"
+	energyLabel, energyScore := "Charges with a cost (kWh)", ratio(in.kwhPriced, in.kwhAdded)
+	distanceLabel := "Kilometres covered by drives"
 	if in.ice {
-		energyLabel, energyScore = "Pleins de carburant enregistrés", boolScore(in.iceFillUps > 0)
-		distanceLabel = "Kilomètres couverts par des relevés et des pleins"
+		energyLabel, energyScore = "Fuel fill-ups recorded", boolScore(in.iceFillUps > 0)
+		distanceLabel = "Kilometres covered by readings and fill-ups"
 	}
 	dims := []struct {
 		key, label string
@@ -61,11 +61,11 @@ func completenessScore(in completenessInputs) (int, []CompletenessDimension) {
 	}{
 		{"energy", energyLabel, 0.30, energyScore},
 		{"distance", distanceLabel, 0.20, distance},
-		{"tolls", "Trajets autoroutiers qualifiés", 0.15, completion(float64(in.unqualifiedDrives), float64(in.highwayDrives))},
-		{"insurance", "Assurance renseignée", 0.10, boolScore(in.insurancePresent)},
-		{"acquisition", "Acquisition et décote renseignées", 0.10, boolScore(in.acquisitionComplete)},
-		{"odometer", "Continuité de l'odomètre", 0.10, completion(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))},
-		{"currency", "Dépenses converties en euros", 0.05, completion(float64(in.unconvertedEntries), float64(in.pricedEntries+in.unconvertedEntries))},
+		{"tolls", "Motorway drives qualified", 0.15, completion(float64(in.unqualifiedDrives), float64(in.highwayDrives))},
+		{"insurance", "Insurance entered", 0.10, boolScore(in.insurancePresent)},
+		{"acquisition", "Acquisition and depreciation entered", 0.10, boolScore(in.acquisitionComplete)},
+		{"odometer", "Odometer continuity", 0.10, completion(float64(in.odometerAnomalies), float64(in.drivesWithOdometer))},
+		{"currency", "Expenses converted to euros", 0.05, completion(float64(in.unconvertedEntries), float64(in.pricedEntries+in.unconvertedEntries))},
 	}
 	var total float64
 	out := make([]CompletenessDimension, 0, len(dims))

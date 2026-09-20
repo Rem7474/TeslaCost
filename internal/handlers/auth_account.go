@@ -56,7 +56,7 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 
 	found, err := h.repo.RevokeUserSession(r.Context(), userID, id)
 	if err != nil {
-		writeRepoError(w, r, err, "Impossible de révoquer la session")
+		writeRepoError(w, r, err, "Could not revoke the session")
 		return
 	}
 	if !found {
@@ -67,7 +67,7 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 		h.clearRefreshTokenCookie(w)
 		h.clearAccessTokenCookie(w)
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Session révoquée"})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Session revoked"})
 }
 
 // LogoutAll signs every device out, the current one included.
@@ -75,12 +75,12 @@ func (h *AuthHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	revoked, err := h.repo.RevokeUserSessionsExcept(r.Context(), userID, "")
 	if err != nil {
-		writeRepoError(w, r, err, "Impossible de révoquer les sessions")
+		writeRepoError(w, r, err, "Could not revoke the sessions")
 		return
 	}
 	h.clearRefreshTokenCookie(w)
 	h.clearAccessTokenCookie(w)
-	writeJSON(w, http.StatusOK, map[string]any{"message": "Toutes les sessions sont révoquées", "sessions_revoked": revoked})
+	writeJSON(w, http.StatusOK, map[string]any{"message": "All sessions revoked", "sessions_revoked": revoked})
 }
 
 type ChangePasswordRequest struct {
@@ -159,5 +159,5 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusInternalServerError, apierror.New("auth.password_changed_sessions_failed", "Password changed, but the other devices could not be signed out"))
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"message": "Mot de passe modifié", "sessions_revoked": revoked})
+	writeJSON(w, http.StatusOK, map[string]any{"message": "Password changed", "sessions_revoked": revoked})
 }

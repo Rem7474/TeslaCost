@@ -11,7 +11,8 @@ func TestNewfKeepsMessageParamsAndCause(t *testing.T) {
 	if err.Message != "leg 3: inner problem" || err.Code != "outer.code" {
 		t.Fatalf("got %q / %q", err.Code, err.Message)
 	}
-	if err.Params["p0"] != 3 || err.Params["p1"] != "inner problem" {
+	nested, ok := err.Params["p1"].(*Error)
+	if err.Params["p0"] != 3 || !ok || nested.Code != "inner.code" {
 		t.Errorf("params = %v", err.Params)
 	}
 	if !errors.Is(err, inner) {

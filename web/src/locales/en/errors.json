@@ -230,5 +230,16 @@
   "internal": "Something went wrong on the server. Please try again.",
   "reminder": {
     "title_required": "Title is required"
+  },
+  "sync": {
+    "unreachable": "Cannot reach TeslaMate ({p0}): {p1}",
+    "failed": "Synchronization failed: {p0}",
+    "no_url": "The vehicle has no TeslaMate URL configured"
+  },
+  "teslamate": {
+    "docker_localhost": "{p0} (Note: inside Docker, 'localhost' is the application container itself. Use 'http://host.docker.internal:PORT' or your machine's local IP)",
+    "timeout": "{p0} (Timed out: check that the address and port are reachable and that TeslaMate is responding)",
+    "auth_refused": "TeslaMateAPI answered with status {p0}: authentication refused",
+    "not_found": "TeslaMateAPI answered with status {p0}: resource not found (wrong URL or vehicle identifier)"
   }
 }

@@ -39,7 +39,7 @@ func TestCalculateMaintenanceAmortization(t *testing.T) {
 				ID:             "wipers",
 				Date:           aprilDate,
 				Month:          "2024-04",
-				AmountEur:      4000, // 40.00 €
+				AmountEur:      4000,   // 40.00 €
 				Mode:           "NONE", // Immediate: does NOT close rev1
 				CoverageKm:     0,
 				CoverageMonths: 0,

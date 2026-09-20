@@ -2,11 +2,11 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"math"
 	"strconv"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 )
@@ -32,15 +32,15 @@ type TireWearStats struct {
 	Sessions             []models.TireMountSession `json:"sessions"`
 
 	// Dynamic TeslaMate driving telemetry analytics
-	DrivesCount            int     `json:"drives_count"`
-	DrivingStressIndex     float64 `json:"driving_stress_index"`
-	DrivingStyle           string  `json:"driving_style"` // "ECO", "BALANCED", "SPORT"
-	AvgPowerMaxKw          float64 `json:"avg_power_max_kw"`
-	AvgPowerMinKw          float64 `json:"avg_power_min_kw"`
-	AvgConsumptionKwh100km float64 `json:"avg_consumption_kwh_100km"`
-	DynamicLifespanKm      int     `json:"dynamic_lifespan_km"`
-	DynamicRemainingKm     float64 `json:"dynamic_remaining_km"`
-	WearExplanation        string  `json:"wear_explanation"`
+	DrivesCount            int               `json:"drives_count"`
+	DrivingStressIndex     float64           `json:"driving_stress_index"`
+	DrivingStyle           string            `json:"driving_style"` // "ECO", "BALANCED", "SPORT"
+	AvgPowerMaxKw          float64           `json:"avg_power_max_kw"`
+	AvgPowerMinKw          float64           `json:"avg_power_min_kw"`
+	AvgConsumptionKwh100km float64           `json:"avg_consumption_kwh_100km"`
+	DynamicLifespanKm      int               `json:"dynamic_lifespan_km"`
+	DynamicRemainingKm     float64           `json:"dynamic_remaining_km"`
+	WearExplanation        *apierror.Message `json:"wear_explanation,omitempty"`
 }
 
 // tireWearStore is the narrow slice of *database.Repository that TireWearService actually
@@ -239,7 +239,7 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 	var drivingStyle string
 	var dynamicLifespan = lifespan
 	var dynamicRemainingKm = estimatedRemainingKm
-	var wearExplanation string
+	var wearExplanation *apierror.Message
 
 	if drivesCount > 0 {
 		stressIndex = (0.45*accelFactor + 0.30*regenFactor + 0.25*consumptionFactor) * positionWeight
@@ -260,26 +260,25 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 			dynamicRemainingKm = math.Max(0, (remainingDepth/dynamicWearRatePer10k)*10000.0)
 		}
 
-		var styleDesc string
+		style := "kw:balanced"
 		switch drivingStyle {
 		case "ECO":
-			styleDesc = "Conduite douce / éco"
+			style = "kw:eco"
 		case "SPORT":
-			styleDesc = "Conduite dynamique / soutenue"
-		default:
-			styleDesc = "Conduite équilibrée"
+			style = "kw:sport"
 		}
 
-		var posDesc string
+		axle := "kw:any_axle"
 		if positionWeight > 1.0 {
-			posDesc = " (essieu arrière moteur)"
+			axle = "kw:rear_axle"
 		} else if positionWeight < 1.0 {
-			posDesc = " (essieu avant directeur)"
+			axle = "kw:front_axle"
 		}
 
-		wearExplanation = fmt.Sprintf(
-			"%s%s : pointes de puissance moyennes de +%.0f kW et %.0f kW en régénération, consommation %.1f kWh/100km. Indice de contrainte : x%.2f (longévité estimée ajustée à ~%s km).",
-			styleDesc, posDesc, avgPowerMax, avgPowerMin, avgConsumption, stressIndex, formatNumber(dynamicLifespan),
+		// Parameters: style and axle are keywords the front end translates.
+		wearExplanation = apierror.NewMessagef("tire.wear_explanation",
+			"%s driving, %s axle: average power peaks of +%.0f kW and %.0f kW in regeneration, consumption %.1f kWh/100km. Stress index: x%.2f (estimated lifespan adjusted to ~%s km).",
+			style, axle, avgPowerMax, avgPowerMin, avgConsumption, stressIndex, formatNumber(dynamicLifespan),
 		)
 	}
 

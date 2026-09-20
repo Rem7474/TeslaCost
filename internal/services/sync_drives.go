@@ -7,6 +7,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/teslamate"
 )
@@ -27,7 +28,7 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 		if err != nil {
 			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
 			slog.Warn("could not fetch drives", "component", "sync", "vehicle_id", v.ID, "page", page, "error", formattedErr)
-			st.warnings = append(st.warnings, fmt.Sprintf("Trajets (page %d) : %v — l'import reprendra à la prochaine synchronisation", page, formattedErr))
+			st.warnings = append(st.warnings, apierror.NewMessagef("sync.page_failed", "%s (page %d): %v - the import resumes at the next synchronization", "kw:drives", page, formattedErr))
 			break
 		}
 		if len(driveList) == 0 {
@@ -39,7 +40,7 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 		for _, td := range driveList {
 			startTime, err := td.ParsedStartTime()
 			if err != nil || startTime.IsZero() {
-				st.recordUpsert(false, fmt.Errorf("date de début invalide (%q)", td.StartDate), fmt.Sprintf("Trajet TeslaMate #%d", td.DriveID))
+				st.recordUpsert(false, fmt.Errorf("invalid start date (%q)", td.StartDate), "kw:drive", td.DriveID)
 				continue
 			}
 			endTime, _ := td.ParsedEndTime()
@@ -53,7 +54,7 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 			st.see(td.DriveID, startTime)
 
 			isInserted, err := s.repo.UpsertTeslaMateDrive(ctx, buildDrive(v.ID, td, driveUnits, startTime, endTime))
-			st.recordUpsert(isInserted, err, fmt.Sprintf("Trajet TeslaMate #%d", td.DriveID))
+			st.recordUpsert(isInserted, err, "kw:drive", td.DriveID)
 		}
 
 		if len(driveList) < syncPageSize || reachedKnownHistory {
@@ -61,11 +62,11 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 			break
 		}
 		if page == syncMaxPages {
-			st.warnings = append(st.warnings, fmt.Sprintf("Trajets : limite de %d pages atteinte, historique partiellement importé", syncMaxPages))
+			st.warnings = append(st.warnings, apierror.NewMessagef("sync.page_limit", "%s: limit of %d pages reached, history partially imported", "kw:drives", syncMaxPages))
 		}
 	}
 
-	s.finishResourceSync(ctx, &st, v.ID, "drives", "Trajets", completed, stopBefore == nil)
+	s.finishResourceSync(ctx, &st, v.ID, "drives", completed, stopBefore == nil)
 	return st
 }
 

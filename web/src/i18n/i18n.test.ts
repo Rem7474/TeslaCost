@@ -75,7 +75,7 @@ describe('message keys used in the source', () => {
   const catalog = i18n.global.getLocaleMessage('en') as Record<string, unknown>
   const defined = (key: string) => key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalog) !== undefined
   // Every namespace of the application, so a key borrowed from another area is reported even when that catalog is absent.
-  const namespaces = new Set(['common', 'shell', 'auth', 'onboarding', 'account', 'dashboard', 'drives', 'expenses', 'tires', 'vehicles', 'carpool', 'manual', 'comparison', 'quickadd', 'errors'])
+  const namespaces = new Set(['common', 'shell', 'auth', 'onboarding', 'account', 'dashboard', 'drives', 'expenses', 'tires', 'vehicles', 'carpool', 'manual', 'comparison', 'quickadd', 'errors', 'messages'])
 
   it('all exist in the catalogs', () => {
     const missing: string[] = []
@@ -98,16 +98,18 @@ describe('API error codes', () => {
       return name.endsWith('.go') && !name.endsWith('_test.go') ? [path] : []
     })
   const catalogs = ['en', 'fr'].map((l) => i18n.global.getLocaleMessage(l) as Record<string, unknown>)
-  const defined = (catalog: Record<string, unknown>, code: string) =>
-    code.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), (catalog.errors ?? {}) as Record<string, unknown>) !== undefined
+  // Failures are looked up in "errors", warnings, labels and explanations (NewMessage) in "messages".
+  const defined = (catalog: Record<string, unknown>, namespace: string, code: string) =>
+    code.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), (catalog[namespace] ?? {}) as Record<string, unknown>) !== undefined
 
   it('have a message in both languages', () => {
     const missing: string[] = []
     for (const file of walk(join(__dirname, '../../../internal'))) {
       const source = readFileSync(file, 'utf8')
-      for (const match of source.matchAll(/apierror\.Newf?\(\s*"([a-z_]+(?:\.[a-z_]+)+)"/g)) {
+      for (const match of source.matchAll(/apierror\.(Newf?|NewMessagef?)\(\s*"([a-z_]+(?:\.[a-z_]+)+)"/g)) {
+        const namespace = match[1].startsWith('NewMessage') ? 'messages' : 'errors'
         catalogs.forEach((catalog, i) => {
-          if (!defined(catalog, match[1])) missing.push(`${['en', 'fr'][i]}: ${match[1]}`)
+          if (!defined(catalog, namespace, match[2])) missing.push(`${['en', 'fr'][i]}: ${namespace}.${match[2]}`)
         })
       }
     }

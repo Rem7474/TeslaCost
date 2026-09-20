@@ -9,12 +9,22 @@ import (
 
 // Error is a user-facing error. Code identifies the message in the front-end catalogs ("vehicle.not_found").
 type Error struct {
-	Code    string
-	Message string
+	Code    string `json:"code"`
+	Message string `json:"message"`
 	// Params holds the interpolated values, named p0, p1, ... in the order of the format verbs.
-	Params map[string]any
+	Params map[string]any `json:"params,omitempty"`
 	cause  error
 }
+
+// Message is what a payload carries when it holds text for the user that is not a failure (a warning, an
+// assumption, a label): the same code, English text and parameters as an error, serialized as an object.
+type Message = Error
+
+// NewMessage is New under the name that fits a payload text.
+func NewMessage(code, text string) *Message { return New(code, text) }
+
+// NewMessagef is Newf under the name that fits a payload text.
+func NewMessagef(code, format string, args ...any) *Message { return Newf(code, format, args...) }
 
 func (e *Error) Error() string { return e.Message }
 
@@ -32,7 +42,12 @@ func Newf(code, format string, args ...any) *Error {
 	params := make(map[string]any, len(args))
 	for i, arg := range args {
 		if err, ok := arg.(error); ok {
-			params[fmt.Sprintf("p%d", i)] = err.Error()
+			// A nested user-facing error keeps its code so the front end can translate it too.
+			if nested, isAPI := As(err); isAPI {
+				params[fmt.Sprintf("p%d", i)] = nested
+			} else {
+				params[fmt.Sprintf("p%d", i)] = err.Error()
+			}
 		} else {
 			params[fmt.Sprintf("p%d", i)] = arg
 		}

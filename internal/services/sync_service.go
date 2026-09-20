@@ -2,12 +2,12 @@ package services
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/crypto"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
@@ -16,17 +16,17 @@ import (
 
 // SyncResult returns metrics about what was synchronized.
 type SyncResult struct {
-	CurrentOdometer float64  `json:"current_odometer"`
-	DrivesSynced    int      `json:"drives_synced"`
-	DrivesAdded     int      `json:"drives_added"`
-	DrivesUpdated   int      `json:"drives_updated"`
-	ChargesSynced   int      `json:"charges_synced"`
-	ChargesAdded    int      `json:"charges_added"`
-	ChargesUpdated  int      `json:"charges_updated"`
-	DrivesDeleted   int      `json:"drives_deleted_upstream"`
-	ChargesDeleted  int      `json:"charges_deleted_upstream"`
-	SyncedAt        string   `json:"synced_at"`
-	Warnings        []string `json:"warnings,omitempty"`
+	CurrentOdometer float64             `json:"current_odometer"`
+	DrivesSynced    int                 `json:"drives_synced"`
+	DrivesAdded     int                 `json:"drives_added"`
+	DrivesUpdated   int                 `json:"drives_updated"`
+	ChargesSynced   int                 `json:"charges_synced"`
+	ChargesAdded    int                 `json:"charges_added"`
+	ChargesUpdated  int                 `json:"charges_updated"`
+	DrivesDeleted   int                 `json:"drives_deleted_upstream"`
+	ChargesDeleted  int                 `json:"charges_deleted_upstream"`
+	SyncedAt        string              `json:"synced_at"`
+	Warnings        []*apierror.Message `json:"warnings,omitempty"`
 }
 
 const (
@@ -112,7 +112,7 @@ func (s *SyncService) SetCircuitBreaker(vehicleID string, cb *CircuitBreaker) {
 // SyncVehicle runs a full sync cycle for a specific vehicle.
 func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*SyncResult, error) {
 	if v.TeslaMateAPIURL == nil || *v.TeslaMateAPIURL == "" {
-		return nil, fmt.Errorf("le véhicule n'a pas d'URL TeslaMate configurée")
+		return nil, apierror.New("sync.no_url", "The vehicle has no TeslaMate URL configured")
 	}
 
 	client, err := s.buildClient(v)
@@ -125,14 +125,14 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		carID = *v.TeslaMateCarID
 	}
 
-	var syncWarnings []string
+	var syncWarnings []*apierror.Message
 
 	// 1. Sync live Status & Odometer
 	status, units, err := client.GetCarStatus(ctx, carID)
 	if err != nil {
 		formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
 		slog.Error("error fetching car status", "component", "sync", "vehicle_id", v.ID, "error", formattedErr)
-		return nil, fmt.Errorf("impossible de joindre TeslaMate (%s) : %w", *v.TeslaMateAPIURL, formattedErr)
+		return nil, apierror.Newf("sync.unreachable", "Cannot reach TeslaMate (%s): %w", *v.TeslaMateAPIURL, formattedErr)
 	} else if status != nil {
 		odometer := status.Odometer
 		if units != nil {
@@ -141,7 +141,7 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		if odometer > v.CurrentOdometer {
 			if s.repo != nil {
 				if err := s.repo.UpdateVehicleOdometer(ctx, v.ID, odometer); err != nil {
-					syncWarnings = append(syncWarnings, fmt.Sprintf("Odomètre : %v", err))
+					syncWarnings = append(syncWarnings, apierror.NewMessagef("sync.odometer_failed", "Odometer: %v", err))
 				}
 			}
 			v.CurrentOdometer = odometer
@@ -156,8 +156,8 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 				}(*v, odometer)
 			}
 		} else if odometer > 0 && odometer+1 < v.CurrentOdometer {
-			syncWarnings = append(syncWarnings, fmt.Sprintf(
-				"Odomètre TeslaMate (%.0f km) inférieur à l'odomètre enregistré (%.0f km) : vérifiez la saisie manuelle du véhicule",
+			syncWarnings = append(syncWarnings, apierror.NewMessagef("sync.odometer_lower",
+				"TeslaMate odometer (%.0f km) is lower than the recorded odometer (%.0f km): check the vehicle's manual entries",
 				odometer, v.CurrentOdometer))
 		}
 	}
@@ -170,7 +170,11 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 
 	// If there were warnings and 0 items synced at all: report as error
 	if len(syncWarnings) > 0 && drives.count == 0 && charges.count == 0 {
-		return nil, fmt.Errorf("échec de la synchronisation : %s", strings.Join(syncWarnings, " ; "))
+		texts := make([]string, len(syncWarnings))
+		for i, w := range syncWarnings {
+			texts[i] = w.Message
+		}
+		return nil, apierror.Newf("sync.failed", "Synchronization failed: %s", strings.Join(texts, "; "))
 	}
 
 	return &SyncResult{

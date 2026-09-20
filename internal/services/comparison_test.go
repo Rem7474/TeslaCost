@@ -164,14 +164,14 @@ func TestComputeComparisonSensitivity(t *testing.T) {
 	res := ComputeComparison(baseScenario(), baseEV())
 	byLabel := map[string]SensitivityRow{}
 	for _, r := range res.Sensitivity {
-		byLabel[r.Label] = r
+		byLabel[r.Label.Code] = r
 	}
 	// More expensive fuel makes the EV relatively better.
-	if byLabel["Carburant +20 %"].DeltaShift <= 0 || byLabel["Carburant −20 %"].DeltaShift >= 0 {
+	if byLabel["comparison.sensitivity.fuel_up"].DeltaShift <= 0 || byLabel["comparison.sensitivity.fuel_down"].DeltaShift >= 0 {
 		t.Errorf("unexpected fuel sensitivity: %+v", res.Sensitivity)
 	}
 	// Driving more favours the EV here (lower per-km energy).
-	if byLabel["Kilométrage +20 %"].DeltaShift <= 0 {
+	if byLabel["comparison.sensitivity.km_up"].DeltaShift <= 0 {
 		t.Errorf("unexpected mileage sensitivity: %+v", res.Sensitivity)
 	}
 	if res.AnnualKm != 10000 {

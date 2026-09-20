@@ -4,6 +4,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -106,13 +107,13 @@ func TestTelemetryEmptyWhenNoDrives(t *testing.T) {
 	var stressIndex float64
 	var drivingStyle string
 	var dynamicLifespan = lifespan
-	var wearExplanation string
+	var wearExplanation *apierror.Message
 
 	if drivesCount > 0 {
 		stressIndex = 1.15
 		drivingStyle = "SPORT"
 		dynamicLifespan = int(math.Round(float64(lifespan) / stressIndex))
-		wearExplanation = "Conduite dynamique"
+		wearExplanation = apierror.NewMessage("tire.wear_explanation", "Sporty")
 	}
 
 	if stressIndex != 0 {
@@ -124,7 +125,7 @@ func TestTelemetryEmptyWhenNoDrives(t *testing.T) {
 	if dynamicLifespan != lifespan {
 		t.Errorf("expected dynamicLifespan to equal base lifespan (%d), got %d", lifespan, dynamicLifespan)
 	}
-	if wearExplanation != "" {
-		t.Errorf("expected empty wearExplanation when drivesCount == 0, got %s", wearExplanation)
+	if wearExplanation != nil {
+		t.Errorf("expected empty wearExplanation when drivesCount == 0, got %v", wearExplanation)
 	}
 }

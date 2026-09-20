@@ -182,4 +182,3 @@ func TestAllocateSmoothingForInterval_NoTeslaMateData(t *testing.T) {
 		t.Errorf("expected 500 preTm km, got %f", preTm["2023-01"])
 	}
 }
-

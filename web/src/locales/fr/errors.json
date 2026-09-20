@@ -230,5 +230,16 @@
   "internal": "Une erreur est survenue côté serveur. Veuillez réessayer.",
   "reminder": {
     "title_required": "Le titre est requis"
+  },
+  "sync": {
+    "unreachable": "Impossible de joindre TeslaMate ({p0}) : {p1}",
+    "failed": "Échec de la synchronisation : {p0}",
+    "no_url": "Le véhicule n'a pas d'URL TeslaMate configurée"
+  },
+  "teslamate": {
+    "docker_localhost": "{p0} (Remarque : dans Docker, 'localhost' désigne le conteneur de l'application lui-même. Utilisez 'http://host.docker.internal:PORT' ou l'IP locale de votre machine)",
+    "timeout": "{p0} (Délai d'attente dépassé : vérifiez que l'adresse et le port sont joignables et que TeslaMate répond)",
+    "auth_refused": "TeslaMateAPI a répondu avec le statut {p0} : authentification refusée",
+    "not_found": "TeslaMateAPI a répondu avec le statut {p0} : ressource introuvable (URL ou identifiant de véhicule incorrect)"
   }
 }
