@@ -88,6 +88,14 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 		firstTrackingTime = firstChargeTime
 	}
 
+	if firstTrackingTime == nil {
+		// No TeslaMate record: the charges typed by hand are the only energy data, so tracking starts with the first one.
+		// Without this, the whole distance would be estimated on top of the energy already entered.
+		_ = s.pool.QueryRow(ctx, `
+			SELECT MIN(date) FROM charge_logs WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
+		`, vehicleID).Scan(&firstTrackingTime)
+	}
+
 	if firstDriveTime != nil && firstDriveOdo != nil && *firstDriveOdo > 0 {
 		hasPriorPoint := false
 		for _, p := range points {

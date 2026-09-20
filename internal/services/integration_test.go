@@ -1950,3 +1950,60 @@ func TestIntegrationVehicleGrafanaURL(t *testing.T) {
 		t.Errorf("Grafana URL must be cleared, got %q", *again.TeslaMateGrafanaURL)
 	}
 }
+
+// A vehicle without any TeslaMate record has its hand-typed charges as its only energy data: the energy estimate
+// covers the distance before the first charge, not the whole odometer span on top of the charges.
+func TestIntegrationEstimatedEnergyStartsWithFirstManualCharge(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	tco := NewTCOService(db.Pool, "Europe/Paris")
+
+	day := time.Now().UTC().Truncate(24 * time.Hour)
+	at := func(daysAgo int) time.Time { return day.AddDate(0, 0, -daysAgo) }
+	kwh100, price := 15.0, 0.20
+
+	newVehicle := func(email string) *models.Vehicle {
+		u, err := repo.CreateUser(ctx, email, "hash")
+		if err != nil {
+			t.Fatal(err)
+		}
+		v := &models.Vehicle{UserID: u.ID, Name: "EV", TeslaMateAuthType: models.AuthModeNone, CurrentOdometer: 11000,
+			EstimatedKwh100km: &kwh100, EstimatedPricePerKwh: &price}
+		if err := repo.CreateVehicle(ctx, v); err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range []models.OdometerCheckpoint{
+			{VehicleID: v.ID, Date: at(100), Odometer: 10000},
+			{VehicleID: v.ID, Date: at(20), Odometer: 11000},
+		} {
+			if err := repo.CreateOdometerCheckpoint(ctx, &r); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return v
+	}
+
+	// No charge at all: the whole 1000 km is estimated.
+	none := newVehicle("est-none@example.com")
+	sum, err := tco.ComputeVehicleTCO(ctx, none.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.EstimatedEnergyDistanceKm < 999 || sum.EstimatedEnergyDistanceKm > 1001 {
+		t.Errorf("without charges the estimate covers %v km, want 1000", sum.EstimatedEnergyDistanceKm)
+	}
+
+	// First manual charge 60 days ago, halfway through the interval: only the first half is estimated.
+	charged := newVehicle("est-charged@example.com")
+	cost := money.Cents(1000)
+	if err := repo.CreateManualCharge(ctx, &models.ChargeLog{VehicleID: charged.ID, Date: at(60), KwhAdded: 50, Cost: &cost, Currency: "EUR"}); err != nil {
+		t.Fatal(err)
+	}
+	sum, err = tco.ComputeVehicleTCO(ctx, charged.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sum.EstimatedEnergyDistanceKm < 499 || sum.EstimatedEnergyDistanceKm > 501 {
+		t.Errorf("with a charge halfway the estimate covers %v km, want 500", sum.EstimatedEnergyDistanceKm)
+	}
+}
