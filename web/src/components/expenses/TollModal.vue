@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { useDocumentAttach } from '@/composables/useDocumentAttach'
+import { useVehicleStore } from '@/stores/vehicle'
 import { Receipt, X, CheckSquare, Square, Paperclip, FileText, Eye } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
@@ -23,6 +24,8 @@ const { isUploadingDocument, onSelectExistingDoc, onDropzoneDirectUpload } = use
   () => props.documents,
   (doc) => emit('document-added', doc)
 )
+
+const vehicleStore = useVehicleStore()
 
 const editingTollId = computed(() => props.editing?.id ?? null)
 
@@ -213,7 +216,7 @@ async function handleCreateToll() {
         </div>
 
         <!-- Association à un/des trajets TeslaMate -->
-        <div class="space-y-2 bg-slate-800/50 p-3.5 rounded-xl border border-slate-700/60">
+        <div v-if="vehicleStore.hasTeslaMate || associationMode !== 'NONE'" class="space-y-2 bg-slate-800/50 p-3.5 rounded-xl border border-slate-700/60">
           <span class="block text-xs font-semibold text-slate-200">
             Associer à un trajet TeslaMate
           </span>

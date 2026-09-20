@@ -20,7 +20,7 @@ const adminPassword = ref('')
 const adminConfirmPassword = ref('')
 
 // Step 2: Vehicle Setup
-const vehicleName = ref('Tesla Model 3')
+const vehicleName = ref('')
 const vehicleVin = ref('')
 const vehiclePowertrain = ref<'EV' | 'ICE'>('EV')
 const vehicleOdometer = ref(15000)
@@ -259,7 +259,7 @@ function finishOnboarding() {
               v-model="vehicleName"
               type="text"
               required
-              placeholder="Ex: Model 3 Grande Autonomie"
+              placeholder="Ex: Ma voiture"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
           </div>

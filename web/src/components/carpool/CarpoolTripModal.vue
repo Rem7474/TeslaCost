@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
+import { useVehicleStore } from '@/stores/vehicle'
 import { Users, Plus, Trash2, X, CheckSquare, Square, Navigation, Calculator, Lock, RotateCw, ChevronDown, ChevronUp } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import {
@@ -41,7 +42,10 @@ const { showAlert } = useConfirm()
 const editingTripId = computed<string | null>(() => props.editing?.id ?? null)
 const modalSubmitting = ref(false)
 const estimating = ref(false)
-const sourceMode = ref<'DRIVES' | 'MANUAL'>('DRIVES')
+const vehicleStore = useVehicleStore()
+// Trips are built from TeslaMate drives when the vehicle has them, from a typed distance otherwise
+const defaultSourceMode = (): 'DRIVES' | 'MANUAL' => (vehicleStore.hasTeslaMate ? 'DRIVES' : 'MANUAL')
+const sourceMode = ref<'DRIVES' | 'MANUAL'>(defaultSourceMode())
 const recentDrives = ref<any[]>([])
 const selectedDriveIds = ref<string[]>([])
 const titleTouched = ref(false)
@@ -185,7 +189,7 @@ function resetForm() {
   currentRates.value = null
   expandedPassengerIndex.value = null
   selectedDriveIds.value = []
-  sourceMode.value = 'DRIVES'
+  sourceMode.value = defaultSourceMode()
   form.value = {
     title: '',
     date: toDateInputString(new Date()),
@@ -199,7 +203,11 @@ function resetForm() {
 
 async function initCreate(options: { driveIds?: string[]; tripGroupId?: string }) {
   resetForm()
-  await loadRecentDrives()
+  if (sourceMode.value === 'MANUAL') {
+    addManualLeg()
+  } else {
+    await loadRecentDrives()
+  }
   if (!props.vehicleId) return
 
   if (options.tripGroupId) {
@@ -350,7 +358,7 @@ async function handleModalRecalculate() {
 
       <!-- Source -->
       <div class="space-y-3">
-        <div class="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl w-fit text-xs font-semibold">
+        <div v-if="vehicleStore.hasTeslaMate || sourceMode === 'DRIVES'" class="flex items-center gap-1 bg-slate-950 border border-slate-800 p-1 rounded-xl w-fit text-xs font-semibold">
           <button
             @click="switchSource('DRIVES')"
             class="px-3 py-1.5 rounded-lg"

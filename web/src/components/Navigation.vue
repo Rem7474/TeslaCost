@@ -40,15 +40,20 @@ const allNavItems = [
   { name: 'account', label: 'Compte', path: '/account', icon: UserRound },
 ]
 
-// Drives and carpooling rely on TeslaMate trips, which a combustion vehicle does not have
-const tripPages = ['drives', 'carpools']
-const navItems = computed(() => allNavItems.filter((item) => !(vehicleStore.isIce && tripPages.includes(item.name))))
+// Drives come from TeslaMate only, and carpooling needs trips or a distance that a combustion vehicle does not track
+const navItems = computed(() =>
+  allNavItems.filter((item) => {
+    if (item.name === 'drives') return vehicleStore.hasTeslaMate
+    if (item.name === 'carpools') return !vehicleStore.isIce
+    return true
+  }),
+)
 
 const currentRouteName = computed(() => route.name)
 
 // Phone bar: the everyday pages, the quick entry button in the middle, everything else behind "Plus".
-// Combustion vehicles have no trips, so their manual tracking (fill-ups, mileage) takes that slot.
-const primaryNames = computed(() => (vehicleStore.isIce ? ['dashboard', 'expenses', 'manual'] : ['dashboard', 'drives', 'expenses']))
+// Without TeslaMate there are no trips, so manual tracking (fill-ups, mileage, energy) takes that slot.
+const primaryNames = computed(() => (vehicleStore.hasTeslaMate ? ['dashboard', 'drives', 'expenses'] : ['dashboard', 'expenses', 'manual']))
 const primaryItems = computed(() =>
   primaryNames.value.map((name) => navItems.value.find((item) => item.name === name)).filter((item) => !!item),
 )

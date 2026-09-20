@@ -111,7 +111,7 @@ async function handleDeleteWebhook() {
 
       <form id="webhook-modal-form" @submit.prevent="handleSaveWebhook" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <p class="text-xs text-slate-400">
-          Configurez un webhook sortant vers votre serveur domotique ou de messagerie (Discord, Telegram, Gotify). Dès que TeslaMate remonte un kilométrage franchissant le seuil d'alerte, une notification est automatiquement expédiée.
+          Configurez un webhook sortant vers votre serveur domotique ou de messagerie (Discord, Telegram, Gotify). Dès qu'une échéance approche (date ou kilométrage), une notification est automatiquement expédiée.
         </p>
 
         <div>

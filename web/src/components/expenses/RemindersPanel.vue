@@ -41,7 +41,7 @@ const vehicleStore = useVehicleStore()
             </span>
           </div>
           <p class="text-slate-400 text-[11px] mt-0.5">
-            {{ vehicleWebhook?.enabled ? 'Les alertes sont automatiquement envoyées dès qu\'une synchronisation TeslaMate franchit le seuil.' : 'Recevez automatiquement des alertes sur Discord, Telegram ou Gotify dès qu\'une échéance approche.' }}
+            {{ vehicleWebhook?.enabled ? 'Les alertes sont automatiquement envoyées dès qu\'une échéance franchit son seuil d\'alerte.' : 'Recevez automatiquement des alertes sur Discord, Telegram ou Gotify dès qu\'une échéance approche.' }}
           </p>
         </div>
       </div>

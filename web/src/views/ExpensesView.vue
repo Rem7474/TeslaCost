@@ -413,7 +413,7 @@ async function openWebhookModal() {
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          Recharge hors TeslaMate
+          {{ vehicleStore.hasTeslaMate ? 'Recharge hors TeslaMate' : 'Ajouter une recharge' }}
         </button>
         <button
           v-if="activeTab === 'DOCUMENTS'"

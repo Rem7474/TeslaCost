@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { Plus, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
+import { useVehicleStore } from '@/stores/vehicle'
 import { todayIso } from '@/utils/dates'
 
 const props = defineProps<{ vehicleId: string; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
 const { showAlert } = useConfirm()
+const vehicleStore = useVehicleStore()
 
 const addType = ref<'SET_4' | 'SET_4_STORAGE' | 'SET_2_FRONT' | 'SET_2_REAR' | 'SET_2_STORAGE' | 'SINGLE'>('SET_4')
 const dimensionPreset = ref('235/40 R19 96W')
@@ -46,8 +48,12 @@ const teslaDimensionPresets = [
   { group: 'Tesla Model S', label: '21" Arachnid Av — 265/35 R21', value: '265/35 R21' },
   { group: 'Tesla Model S', label: '21" Arachnid Ar — 295/30 R21', value: '295/30 R21' },
   { group: 'Tesla Model X', label: '20" Cyberstream — 265/45 R20 / 275/45 R20', value: '265/45 R20' },
-  { group: 'Autre', label: 'Dimension personnalisée...', value: 'CUSTOM' },
 ]
+const customDimensionPreset = { group: 'Autre', label: 'Dimension personnalisée...', value: 'CUSTOM' }
+// The Tesla model presets are offered to vehicles linked to TeslaMate; any other vehicle types its dimension
+const dimensionPresets = computed(() =>
+  vehicleStore.hasTeslaMate ? [...teslaDimensionPresets, customDimensionPreset] : [customDimensionPreset],
+)
 
 function onDimensionPresetChange() {
   if (dimensionPreset.value === 'CUSTOM') {
@@ -61,7 +67,12 @@ function onDimensionPresetChange() {
 
 // Mounted tires start at the vehicle's current odometer
 watch(open, (isOpen) => {
-  if (isOpen && props.currentOdometer) addTireForm.value.mounted_odometer = Math.round(props.currentOdometer)
+  if (!isOpen) return
+  if (props.currentOdometer) addTireForm.value.mounted_odometer = Math.round(props.currentOdometer)
+  if (!vehicleStore.hasTeslaMate) {
+    dimensionPreset.value = 'CUSTOM'
+    onDimensionPresetChange()
+  }
 })
 
 async function handleCreateTires() {
@@ -212,7 +223,7 @@ async function handleCreateTires() {
           @change="onDimensionPresetChange"
           class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500 font-mono"
         >
-          <option v-for="p in teslaDimensionPresets" :key="p.value" :value="p.value">
+          <option v-for="p in dimensionPresets" :key="p.value" :value="p.value">
             {{ p.label }}
           </option>
         </select>

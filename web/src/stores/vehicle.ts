@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/services/api'
+import { hasTeslaMate as vehicleHasTeslaMate } from '@/utils/vehicles'
 
 export const useVehicleStore = defineStore('vehicle', () => {
   const vehicles = ref<any[]>([])
@@ -24,6 +25,8 @@ export const useVehicleStore = defineStore('vehicle', () => {
   const canEdit = computed(() => isOwner.value || isEditor.value)
   // Combustion vehicles are tracked manually (fuel fill-ups) and have no TeslaMate link
   const isIce = computed(() => activeVehicle.value?.powertrain === 'ICE')
+  // TeslaMate-fed data (drives, battery, temperature, synchronization) only exists for a vehicle linked to a teslamateapi
+  const hasTeslaMate = computed(() => vehicleHasTeslaMate(activeVehicle.value))
 
   async function fetchVehicles() {
     isLoading.value = true
@@ -118,6 +121,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
     isViewer,
     canEdit,
     isIce,
+    hasTeslaMate,
     isSyncing,
     syncResult,
     syncError,
