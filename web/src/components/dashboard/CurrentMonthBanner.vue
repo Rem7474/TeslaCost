@@ -1,0 +1,48 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { ArrowRight, Calendar, PieChart } from 'lucide-vue-next'
+import { currentMonthStats as buildCurrentMonthStats } from '@/utils/dashboard'
+
+// Highlight of the current month; opens its cost detail
+const props = defineProps<{ monthlyCosts: any[] | undefined }>()
+const emit = defineEmits<{ 'open-month': [month: any] }>()
+const currentMonthStats = computed(() => buildCurrentMonthStats(props.monthlyCosts))
+</script>
+
+<template>
+  <div v-if="currentMonthStats" class="bg-slate-900/80 border border-indigo-500/30 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div class="flex items-center gap-3 min-w-0 flex-1">
+      <div class="p-2.5 bg-indigo-500/10 text-indigo-400 rounded-xl shrink-0">
+        <Calendar class="w-5 h-5" />
+      </div>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Activité du mois ({{ currentMonthStats.month }})</span>
+        </div>
+        <div class="text-base sm:text-lg font-bold text-white flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
+          <span>{{ Math.round(currentMonthStats.distance_km).toLocaleString('fr-FR') }} km roulés</span>
+          <span class="text-slate-500">•</span>
+          <span class="text-emerald-400">{{ currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km.toFixed(3) + ' €/km' : '0.000 €/km' }}</span>
+          <span class="text-slate-500">•</span>
+          <span class="text-slate-300">{{ currentMonthStats.total.toFixed(2) }} € dépensés</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 self-start sm:self-auto">
+      <button
+        type="button"
+        @click="emit('open-month', currentMonthStats.raw)"
+        class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
+      >
+        <PieChart class="w-3.5 h-3.5" />
+        <span>Voir la répartition</span>
+      </button>
+      <router-link
+        to="/drives"
+        class="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1 px-2 py-1.5"
+      >
+        Trajets <ArrowRight class="w-3.5 h-3.5" />
+      </router-link>
+    </div>
+  </div>
+</template>
