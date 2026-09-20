@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+import { APP_NAME } from '@/brand'
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
@@ -8,7 +10,7 @@ import CarpoolSummaryGrid from '@/components/carpool/CarpoolSummaryGrid.vue'
 import CarpoolTripList from '@/components/carpool/CarpoolTripList.vue'
 import CarpoolTripModal from '@/components/carpool/CarpoolTripModal.vue'
 import { downloadCsv } from '@/utils/csv'
-import { CARPOOL_CSV_HEADERS, carpoolCsvRows } from '@/utils/carpool'
+import { carpoolCsvHeaders, carpoolCsvRows } from '@/utils/carpool'
 import { Users, Plus } from 'lucide-vue-next'
 
 // The page loads the trips and owns the selection and which trip the modal edits; the summary, the list and the
@@ -71,7 +73,7 @@ function clearTripSelection() {
 function exportSelectedCarpools() {
   const selected = trips.value.filter((t) => selectedTripIds.value.includes(t.id))
   if (!selected.length) return
-  downloadCsv(`covoiturages_export_${new Date().toISOString().slice(0, 10)}.csv`, CARPOOL_CSV_HEADERS, carpoolCsvRows(selected))
+  downloadCsv(`${t('carpool.carpoolView.csvFileName')}_${new Date().toISOString().slice(0, 10)}.csv`, carpoolCsvHeaders(), carpoolCsvRows(selected))
 }
 
 async function loadData() {
@@ -104,9 +106,9 @@ function openEditModal(trip: any) {
 async function handleDelete(trip: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Supprimer le covoiturage',
-    message: `Confirmez-vous la suppression du covoiturage "${trip.title}" ?`,
-    confirmText: 'Supprimer',
+    title: t('carpool.carpoolView.deleteTitle'),
+    message: t('carpool.carpoolView.deleteMessage', { title: trip.title }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -115,16 +117,16 @@ async function handleDelete(trip: any) {
     await api.deleteCarpool(vehicleStore.activeVehicle.id, trip.id)
     await loadData()
   } catch (err: any) {
-    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.deleteError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
 async function handleRecalculateSingle(trip: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Recalculer le covoiturage',
-    message: `Voulez-vous recalculer les coûts réels de "${trip.title}" selon les tarifs et péages actuels ?\n(Les montants perçus des passagers restent inchangés)`,
-    confirmText: 'Recalculer',
+    title: t('carpool.carpoolView.recalcTitle'),
+    message: t('carpool.carpoolView.recalcMessage', { title: trip.title }),
+    confirmText: t('carpool.carpoolView.recalc'),
     type: 'info',
   })
   if (!ok) return
@@ -132,10 +134,10 @@ async function handleRecalculateSingle(trip: any) {
   recalculating.value = true
   try {
     await api.recalculateCarpools(vehicleStore.activeVehicle.id, [trip.id])
-    showAlert(`Le covoiturage "${trip.title}" a été recalculé avec succès.`, 'Recalcul terminé', 'success')
+    showAlert(t('carpool.carpoolView.recalcDone', { title: trip.title }), t('carpool.carpoolView.recalcDoneTitle'), 'success')
     await loadData()
   } catch (err: any) {
-    showAlert(`Erreur lors du recalcul : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('carpool.carpoolView.recalcError', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     recalculating.value = false
   }
@@ -145,9 +147,9 @@ async function handleBatchRecalculate() {
   if (!vehicleStore.activeVehicle || !selectedTripIds.value.length) return
   const count = selectedTripIds.value.length
   const ok = await showConfirm({
-    title: 'Recalculer les covoiturages sélectionnés',
-    message: `Voulez-vous recalculer les coûts réels de ${count} covoiturage(s) selon les tarifs d'électricité, péages, pneus et entretien actuels ?\n(Les montants perçus des passagers restent inchangés)`,
-    confirmText: 'Recalculer',
+    title: t('carpool.carpoolView.recalcSelectedTitle'),
+    message: t('carpool.carpoolView.recalcSelectedMessage', { count }),
+    confirmText: t('carpool.carpoolView.recalc'),
     type: 'info',
   })
   if (!ok) return
@@ -155,11 +157,11 @@ async function handleBatchRecalculate() {
   recalculating.value = true
   try {
     const res = await api.recalculateCarpools(vehicleStore.activeVehicle.id, selectedTripIds.value)
-    showAlert(`${res.updated_count || count} covoiturage(s) recalculé(s) avec succès.`, 'Recalcul terminé', 'success')
+    showAlert(t('carpool.carpoolView.recalcSelectedDone', { count: res.updated_count || count }), t('carpool.carpoolView.recalcDoneTitle'), 'success')
     clearTripSelection()
     await loadData()
   } catch (err: any) {
-    showAlert(`Erreur lors du recalcul : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('carpool.carpoolView.recalcError', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     recalculating.value = false
   }
@@ -202,10 +204,10 @@ onMounted(() => {
       <div>
         <h2 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
           <Users class="w-6 h-6 text-rose-500" />
-          Covoiturage & BlaBlaCar
+          {{ $t('carpool.carpoolView.carpoolingAndBlablacar') }}
         </h2>
         <p class="text-sm text-slate-400">
-          Trajets en plusieurs étapes, passagers qui montent et descendent en route : chacun paie sa part des étapes parcourues
+          {{ $t('carpool.carpoolView.multiLegTripsPassengersGetting') }}
         </p>
       </div>
       <button
@@ -214,7 +216,7 @@ onMounted(() => {
         class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20 transition-all self-start sm:self-auto"
       >
         <Plus class="w-4 h-4" />
-        Nouveau covoiturage
+        {{ $t('carpool.carpoolView.newCarpool') }}
       </button>
     </div>
 
@@ -224,7 +226,7 @@ onMounted(() => {
       class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center gap-3 text-xs text-slate-400"
     >
       <Users class="w-4 h-4 text-slate-400 shrink-0" />
-      <span>Vous consultez ce véhicule en mode <strong>Lecteur seul</strong>. La création et modification de covoiturages sont désactivées.</span>
+      <span>{{ $t('carpool.carpoolView.youAreViewingThisVehicle') }} <strong>{{ $t('carpool.carpoolView.readOnly') }}</strong>{{ $t('carpool.carpoolView.modeCreatingAndEditingCarpools') }}</span>
     </div>
 
     <!-- KPI Summary Grid -->
@@ -241,9 +243,9 @@ onMounted(() => {
         <Users class="w-8 h-8" />
       </div>
       <div>
-        <h3 class="text-lg font-bold text-white">Aucun trajet covoituré pour le moment</h3>
+        <h3 class="text-lg font-bold text-white">{{ $t('carpool.carpoolView.noCarpooledTripYet') }}</h3>
         <p class="text-sm text-slate-400 mt-1 max-w-md mx-auto">
-          Sélectionnez les étapes de votre trajet, indiquez où chaque passager monte et descend : TeslaCost calcule la part réelle de chacun.
+          {{ $t('carpool.carpoolView.selectTheLegsOfYour', { APP_NAME }) }}
         </p>
       </div>
       <button
@@ -252,7 +254,7 @@ onMounted(() => {
         class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2.5 rounded-xl inline-flex items-center gap-2 shadow-lg shadow-rose-600/20"
       >
         <Plus class="w-4 h-4" />
-        Créer mon premier covoiturage
+        {{ $t('carpool.carpoolView.createMyFirstCarpool') }}
       </button>
     </div>
 
