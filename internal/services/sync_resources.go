@@ -79,3 +79,15 @@ func (s *SyncService) incrementalStopBefore(ctx context.Context, vehicleID, reso
 	stop := latestTime.Add(-resyncOverlap)
 	return &stop
 }
+
+// finishResourceSync closes the sync of one resource: it summarizes the results and, when every page was read
+// without failure, reconciles the local rows and records the success of the sync.
+func (s *SyncService) finishResourceSync(ctx context.Context, st *resourceSyncStats, vehicleID, resource, label string, completed, fullPass bool) {
+	st.finalize(label)
+	if completed && st.failed == 0 {
+		s.reconcile(ctx, st, vehicleID, resource, label, fullPass)
+		if err := s.repo.MarkSyncSuccess(ctx, vehicleID, resource, true); err != nil {
+			st.warnings = append(st.warnings, fmt.Sprintf("%s : état de synchronisation non enregistré (%v)", label, err))
+		}
+	}
+}

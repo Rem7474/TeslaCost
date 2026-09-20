@@ -65,13 +65,7 @@ func (s *SyncService) syncDrives(ctx context.Context, client *teslamate.Client, 
 		}
 	}
 
-	st.finalize("Trajets")
-	if completed && st.failed == 0 {
-		s.reconcile(ctx, &st, v.ID, "drives", "Trajets", stopBefore == nil)
-		if err := s.repo.MarkSyncSuccess(ctx, v.ID, "drives", true); err != nil {
-			st.warnings = append(st.warnings, fmt.Sprintf("Trajets : état de synchronisation non enregistré (%v)", err))
-		}
-	}
+	s.finishResourceSync(ctx, &st, v.ID, "drives", "Trajets", completed, stopBefore == nil)
 	return st
 }
 

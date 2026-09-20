@@ -60,13 +60,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 		}
 	}
 
-	st.finalize("Recharges")
-	if completed && st.failed == 0 {
-		s.reconcile(ctx, &st, v.ID, "charges", "Recharges", stopBefore == nil)
-		if err := s.repo.MarkSyncSuccess(ctx, v.ID, "charges", true); err != nil {
-			st.warnings = append(st.warnings, fmt.Sprintf("Recharges : état de synchronisation non enregistré (%v)", err))
-		}
-	}
+	s.finishResourceSync(ctx, &st, v.ID, "charges", "Recharges", completed, stopBefore == nil)
 	return st
 }
 
