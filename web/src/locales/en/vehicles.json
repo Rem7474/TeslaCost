@@ -196,5 +196,6 @@
     "rent": "Please enter the monthly rent",
     "leaseDuration": "Please enter the lease duration in months"
   },
-  "testSuccess": "Connection successful! Status: {state} ({odometer} km)"
+  "testSuccess": "Connection successful! Status: {state} ({odometer} km)",
+  "leaseSummary": "{rent} €/month over {months} months"
 }

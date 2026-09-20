@@ -196,5 +196,6 @@
     "rent": "Veuillez renseigner le loyer mensuel",
     "leaseDuration": "Veuillez renseigner la durée de la location en mois"
   },
-  "testSuccess": "Connexion réussie ! Statut : {state} ({odometer} km)"
+  "testSuccess": "Connexion réussie ! Statut : {state} ({odometer} km)",
+  "leaseSummary": "{rent} €/mois sur {months} mois"
 }

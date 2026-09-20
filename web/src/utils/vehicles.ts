@@ -155,7 +155,7 @@ export function ownershipSummary(o: any) {
   if (o.acquisition_type === 'CASH' || o.acquisition_type === 'LOAN') {
     return `${acquisitionLabel(o.acquisition_type)} • ${fmt(o.purchase_price)} €`
   }
-  return `${o.acquisition_type} • ${fmt(o.lease_monthly_rent)} €/mois sur ${o.lease_duration_months} mois`
+  return `${o.acquisition_type} • ${t('vehicles.leaseSummary', { rent: fmt(o.lease_monthly_rent), months: o.lease_duration_months })}`
 }
 
 /** The message to show when a wizard step is incomplete, or null when it can be left. */
