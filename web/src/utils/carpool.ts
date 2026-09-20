@@ -1,3 +1,4 @@
+import { intlLocale, t } from '@/i18n'
 export interface LegForm {
   drive_id: string | null
   start_label: string
@@ -21,12 +22,12 @@ export interface PassengerForm {
 }
 
 export const COST_FIELDS: Array<{ key: keyof LegForm; label: string }> = [
-  { key: 'electricity_cost', label: 'Électricité' },
-  { key: 'tolls_cost', label: 'Péages' },
-  { key: 'tires_cost', label: 'Pneus' },
-  { key: 'maintenance_cost', label: 'Entretien' },
-  { key: 'insurance_cost', label: 'Assurance' },
-  { key: 'other_cost', label: 'Divers' },
+  { key: 'electricity_cost', label: 'electricity' },
+  { key: 'tolls_cost', label: 'tolls' },
+  { key: 'tires_cost', label: 'tires' },
+  { key: 'maintenance_cost', label: 'maintenance' },
+  { key: 'insurance_cost', label: 'insurance' },
+  { key: 'other_cost', label: 'other' },
 ]
 
 export const cents = (v: number | string) => Math.round((Number(v) || 0) * 100)
@@ -44,11 +45,11 @@ export function toDateInputString(dateVal: string | Date | null | undefined): st
 }
 
 export function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })
+  return new Date(dateStr).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export function formatDriveTime(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return new Date(dateStr).toLocaleDateString(intlLocale(), { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 export function emptyLeg(): LegForm {
@@ -69,7 +70,7 @@ export function emptyLeg(): LegForm {
 /** A passenger riding the whole trip; legCount is the number of legs the form has so far. */
 export function newPassenger(index: number, legCount: number): PassengerForm {
   return {
-    passenger_name: `Passager ${index + 1}`,
+    passenger_name: t('carpool.passenger', { n: index + 1 }),
     seats: 1,
     amount_paid: 0,
     board_stop_index: 0,
@@ -84,9 +85,9 @@ export function legTotalCents(leg: any) {
 
 // Stop names: stop i starts leg i, the last stop ends the last leg
 export function stopNames(legs: any[]) {
-  if (!legs.length) return ['Départ', 'Arrivée']
-  const names = legs.map((l, i) => l.start_label || (i > 0 && legs[i - 1].end_label) || (i === 0 ? 'Départ' : `Arrêt ${i}`))
-  names.push(legs[legs.length - 1].end_label || 'Arrivée')
+  if (!legs.length) return [t('carpool.start'), t('carpool.destination')]
+  const names = legs.map((l, i) => l.start_label || (i > 0 && legs[i - 1].end_label) || (i === 0 ? t('carpool.start') : t('carpool.stop', { n: i })))
+  names.push(legs[legs.length - 1].end_label || t('carpool.destination'))
   return names
 }
 
@@ -201,7 +202,7 @@ export function remapPassengerStops(previousLegs: LegForm[], newLegs: LegForm[],
 
 /** Default title of a trip: first stop to last stop, with the number of legs when there are several. */
 export function estimateTitle(names: string[], legCount: number) {
-  return `${names[0]} → ${names[names.length - 1]}${legCount > 1 ? ` (${legCount} étapes)` : ''}`
+  return `${names[0]} → ${names[names.length - 1]}${legCount > 1 ? ` (${t('carpool.legCount', { count: legCount })})` : ''}`
 }
 
 /** Date of the earliest selected drive, used when an estimate carries no start date. */
@@ -212,7 +213,7 @@ export function earliestSelectedDriveDate(drives: any[], selectedIds: string[]):
   return first ? toDateInputString(first.start_time) : ''
 }
 
-export const CARPOOL_CSV_HEADERS = ['ID', 'Date', 'Titre', 'Distance_km', 'Passagers', 'Cout_Reel_EUR', 'Revenus_EUR', 'Cout_Net_EUR', 'Amortissement_pct']
+export const carpoolCsvHeaders = () => t('carpool.csvHeaders').split(',')
 
 export function carpoolCsvRows(trips: any[]) {
   return trips.map((t) => [
