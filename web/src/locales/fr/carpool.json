@@ -63,7 +63,8 @@
     "recalculateActualCosts": "Recalculer coûts réels ({length})",
     "recalculateTheActualCostsOf2": "Recalculer les coûts réels des covoiturages sélectionnés",
     "fullyRecovered": "Trajet 100% rentabilisé !",
-    "recovered": "Amorti à {percent}%"
+    "recovered": "Amorti à {percent}%",
+    "seats": "{count} place | {count} places"
   },
   "carpoolTripModal": {
     "notesOptional": "Notes (optionnel)",

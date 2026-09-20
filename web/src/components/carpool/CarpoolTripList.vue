@@ -167,7 +167,7 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
               <MapPin class="w-3 h-3 shrink-0 text-slate-500" />
               <span class="truncate">
                 {{ stopNames(trip.legs)[p.board_stop_index] }} → {{ stopNames(trip.legs)[p.alight_stop_index] }}
-                • {{ p.seats }} place{{ p.seats > 1 ? 's' : '' }}
+                • {{ $t('carpool.carpoolTripList.seats', p.seats) }}
               </span>
             </div>
             <div class="flex items-center justify-between text-[11px]">
