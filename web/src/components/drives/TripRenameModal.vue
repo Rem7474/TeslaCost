@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -26,7 +27,7 @@ async function handleSaveTripEdit() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -41,7 +42,7 @@ async function handleSaveTripEdit() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Layers class="w-5 h-5 text-indigo-400" />
-          Modifier le voyage
+          {{ $t('drives.tripRenameModal.editTheTrip') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -50,21 +51,21 @@ async function handleSaveTripEdit() {
 
       <form id="trip-edit-form" @submit.prevent="handleSaveTripEdit" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <div>
-          <label for="trip-edit-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom</label>
+          <label for="trip-edit-name" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('drives.tripRenameModal.name') }}</label>
           <input id="trip-edit-name" v-model="tripEditForm.name" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
         </div>
         <div>
-          <label for="trip-edit-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes</label>
+          <label for="trip-edit-notes" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('common.notes') }}</label>
           <input id="trip-edit-notes" v-model="tripEditForm.notes" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500" />
         </div>
       </form>
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="trip-edit-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
-          Enregistrer
+          {{ $t('common.save') }}
         </button>
       </div>
     </div>

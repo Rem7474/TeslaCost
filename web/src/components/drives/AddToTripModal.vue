@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -25,7 +26,7 @@ async function handleAddToTrip() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -40,7 +41,7 @@ async function handleAddToTrip() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2 truncate pr-2">
           <Plus class="w-5 h-5 text-indigo-400 shrink-0" />
-          <span class="truncate">Ajouter {{ selectedDriveIds.length }} trajet(s) à un voyage</span>
+          <span class="truncate">{{ $t('drives.addToTripModal.addDriveSToA', { length: selectedDriveIds.length }) }}</span>
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0">
           <X class="w-5 h-5" />
@@ -48,21 +49,21 @@ async function handleAddToTrip() {
       </div>
 
       <form id="add-to-trip-form" @submit.prevent="handleAddToTrip" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
-        <p v-if="!tripGroups.length" class="text-xs text-slate-400">Aucun voyage existant : utilisez « Fusionner & Péage » pour en créer un.</p>
+        <p v-if="!tripGroups.length" class="text-xs text-slate-400">{{ $t('drives.addToTripModal.noExistingTripUseMerge') }}</p>
         <div v-else>
-          <label for="add-to-trip" class="block text-xs font-semibold text-slate-300 mb-1">Voyage</label>
+          <label for="add-to-trip" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('drives.addToTripModal.trip') }}</label>
           <select id="add-to-trip" v-model="addToTripId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500">
-            <option v-for="tg in tripGroups" :key="tg.id" :value="tg.id">{{ tg.name }} ({{ tg.drive_ids.length }} trajets)</option>
+            <option v-for="tg in tripGroups" :key="tg.id" :value="tg.id">{{ $t('drives.addToTripModal.drives', { name: tg.name, length: tg.drive_ids.length }) }}</option>
           </select>
         </div>
       </form>
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="add-to-trip-form" :disabled="!tripGroups.length" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-colors">
-          Ajouter
+          {{ $t('drives.addToTripModal.add') }}
         </button>
       </div>
     </div>

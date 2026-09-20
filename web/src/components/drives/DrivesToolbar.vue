@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 import { computed } from 'vue'
 import { ChevronLeft, ChevronRight, X, Search, Calendar } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -77,7 +78,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
             class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors"
             :class="periodMode === 'ALL' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
           >
-            Tous
+            {{ $t('drives.drivesToolbar.all') }}
           </button>
           <button
             @click="setPeriodMode('MONTH')"
@@ -85,14 +86,14 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
             :class="periodMode === 'MONTH' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
           >
             <Calendar class="w-3.5 h-3.5" />
-            Par mois
+            {{ $t('drives.drivesToolbar.byMonth') }}
           </button>
           <button
             @click="setPeriodMode('CUSTOM')"
             class="px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors"
             :class="periodMode === 'CUSTOM' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
           >
-            Période
+            {{ $t('drives.drivesToolbar.period') }}
           </button>
         </div>
 
@@ -101,11 +102,11 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
           <button
             @click="prevMonth"
             class="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            title="Mois précédent"
+            :title="$t('drives.drivesToolbar.previousMonth')"
           >
             <ChevronLeft class="w-4 h-4" />
           </button>
-          <label for="drives-month-select" class="sr-only">Sélectionner le mois</label>
+          <label for="drives-month-select" class="sr-only">{{ $t('drives.drivesToolbar.selectTheMonth') }}</label>
           <div class="w-40 sm:w-44">
             <AppDatePicker
               id="drives-month-select"
@@ -119,7 +120,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
           <button
             @click="nextMonth"
             class="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            title="Mois suivant"
+            :title="$t('drives.drivesToolbar.nextMonth')"
           >
             <ChevronRight class="w-4 h-4" />
           </button>
@@ -127,9 +128,9 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
             v-if="!isCurrentMonth"
             @click="resetToCurrentMonth"
             class="text-[11px] text-rose-400 hover:text-rose-300 font-medium ml-1 px-1.5 py-0.5 bg-rose-500/10 rounded-md border border-rose-500/20"
-            title="Revenir au mois en cours"
+            :title="$t('drives.drivesToolbar.backToTheCurrentMonth')"
           >
-            Ce mois
+            {{ $t('drives.drivesToolbar.thisMonth') }}
           </button>
         </div>
 
@@ -158,21 +159,21 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
 
       <!-- Search Bar -->
       <div class="relative min-w-[240px] max-w-sm flex-1">
-        <label for="drives-search-input" class="sr-only">Rechercher une ville ou une adresse</label>
+        <label for="drives-search-input" class="sr-only">{{ $t('drives.drivesToolbar.searchForACityOr') }}</label>
         <Search class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input
           id="drives-search-input"
           type="text"
           v-model="searchQuery"
           @input="onSearchInput"
-          placeholder="Rechercher une ville, adresse..."
+          :placeholder="$t('drives.drivesToolbar.searchForACityAddress')"
           class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
         />
         <button
           v-if="searchQuery"
           @click="clearSearch"
           class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white p-0.5"
-          title="Effacer la recherche"
+          :title="$t('drives.drivesToolbar.clearTheSearch')"
         >
           <X class="w-3.5 h-3.5" />
         </button>
@@ -182,15 +183,15 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
     <!-- Quick Metrics Summary for Current Selection -->
     <div v-if="total > 0 && !loading" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
       <span class="font-medium text-slate-300">
-        <strong class="text-white">{{ total }}</strong> trajet(s) trouvé(s)
+        <strong class="text-white">{{ total }}</strong> {{ $t('drives.drivesToolbar.driveSFound') }}
         <span v-if="periodMode === 'MONTH'">en <span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></span>
       </span>
       <span class="text-slate-600">•</span>
-      <span>Distance page : <strong class="text-white">{{ Math.round(pageDistance).toLocaleString('fr-FR') }} km</strong></span>
+      <span>{{ $t('drives.drivesToolbar.pageDistance') }} <strong class="text-white">{{ Math.round(pageDistance).toLocaleString(intlLocale()) }} km</strong></span>
       <span class="text-slate-600">•</span>
-      <span>Énergie page : <strong class="text-white">{{ Math.round(pageEnergy).toLocaleString('fr-FR') }} kWh</strong></span>
+      <span>{{ $t('drives.drivesToolbar.pageEnergy') }} <strong class="text-white">{{ $t('drives.drivesToolbar.kwh', { pageEnergy: Math.round(pageEnergy).toLocaleString(intlLocale()) }) }}</strong></span>
       <span class="text-slate-600">•</span>
-      <span>Coût page : <strong class="text-white">{{ pageCost.toFixed(2) }} €</strong></span>
+      <span>{{ $t('drives.drivesToolbar.pageCost') }} <strong class="text-white">{{ pageCost.toFixed(2) }} €</strong></span>
     </div>
   </div>
 </template>

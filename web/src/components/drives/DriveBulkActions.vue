@@ -33,7 +33,7 @@ const vehicleStore = useVehicleStore()
       class="px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-lg shadow-rose-600/25 transition-all"
     >
       <Users class="w-3.5 h-3.5" />
-      <span>{{ selectedDriveIds.length > 1 ? `Covoiturer (${selectedDriveIds.length})` : 'Covoiturer' }}</span>
+      <span>{{ selectedDriveIds.length > 1 ? $t('drives.driveBulkActions.carpoolMany', { count: selectedDriveIds.length }) : $t('drives.driveBulkActions.carpool') }}</span>
     </button>
 
     <!-- Fusion Voyage Group -->
@@ -43,7 +43,7 @@ const vehicleStore = useVehicleStore()
       class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
     >
       <Layers class="w-3.5 h-3.5" />
-      <span>Fusionner & Péage</span>
+      <span>{{ $t('drives.driveBulkActions.mergeToll') }}</span>
     </button>
 
     <!-- Auto toll -->
@@ -53,10 +53,10 @@ const vehicleStore = useVehicleStore()
       @click="emit('bulk-toll')"
       :disabled="bulkApplyingToll"
       class="px-3 py-1.5 bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors disabled:opacity-50"
-      title="Détecte les péages et enregistre le tarif estimé (sans toucher aux péages manuels)"
+      :title="$t('drives.driveBulkActions.detectsTheTollsAndRecords')"
     >
       <Receipt class="w-3.5 h-3.5" />
-      <span>{{ bulkApplyingToll ? 'Application...' : `Péage auto (${selectedDriveIds.length})` }}</span>
+      <span>{{ bulkApplyingToll ? $t('drives.driveBulkActions.applying') : $t('drives.driveBulkActions.autoToll', { count: selectedDriveIds.length }) }}</span>
     </button>
 
     <!-- Batch Tag actions -->
@@ -64,28 +64,28 @@ const vehicleStore = useVehicleStore()
       type="button"
       @click="emit('tag', 'Pro')"
       class="px-2.5 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-semibold rounded-xl flex items-center gap-1 transition-colors"
-      title="Marquer la sélection comme trajets Pro"
+      :title="$t('drives.driveBulkActions.markTheSelectionAsWork')"
     >
-      <span>Pro</span>
+      <span>{{ $t('drives.driveBulkActions.work') }}</span>
     </button>
 
     <button
       type="button"
       @click="emit('tag', 'Perso')"
       class="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold rounded-xl flex items-center gap-1 transition-colors"
-      title="Marquer la sélection comme trajets Perso"
+      :title="$t('drives.driveBulkActions.markTheSelectionAsPersonal')"
     >
-      <span>Perso</span>
+      <span>{{ $t('drives.driveBulkActions.personal') }}</span>
     </button>
 
     <button
       type="button"
       @click="emit('export')"
       class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors border border-slate-700/60"
-      title="Exporter la sélection en CSV"
+      :title="$t('drives.driveBulkActions.exportTheSelectionAsCsv')"
     >
       <Download class="w-3.5 h-3.5 text-slate-300" />
-      <span>Export</span>
+      <span>{{ $t('drives.driveBulkActions.export') }}</span>
     </button>
 
     <button
@@ -94,7 +94,7 @@ const vehicleStore = useVehicleStore()
       class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors"
     >
       <Plus class="w-3.5 h-3.5" />
-      <span>Ajouter voyage</span>
+      <span>{{ $t('drives.driveBulkActions.addToTrip') }}</span>
     </button>
   </BulkSelectionBar>
 </template>

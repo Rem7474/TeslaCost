@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -17,7 +18,7 @@ const expenseType = ref('TOLL')
 async function handleCreateGroupAndExpense() {
   if (!props.vehicleId || !props.selectedDriveIds.length) return
   if (!groupName.value) {
-    showAlert('Veuillez donner un nom au groupe de trajets (ex: Voyage Paris-Lyon)', 'Champ requis', 'warning')
+    showAlert(t('drives.driveGroupModal.nameRequired'), t('drives.driveGroupModal.requiredField'), 'warning')
     return
   }
 
@@ -40,13 +41,13 @@ async function handleCreateGroupAndExpense() {
       })
     }
 
-    showAlert('Groupe de trajets créé avec succès !', 'Succès', 'success')
+    showAlert(t('drives.driveGroupModal.created'), t('common.success'), 'success')
     open.value = false
     groupName.value = ''
     tollAmount.value = ''
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -61,9 +62,9 @@ async function handleCreateGroupAndExpense() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <div class="flex items-center gap-2">
           <Layers class="w-5 h-5 text-rose-400" />
-          <h3 class="text-base font-bold text-white">Créer un Voyage / Fusion</h3>
+          <h3 class="text-base font-bold text-white">{{ $t('drives.driveGroupModal.createATripMerge') }}</h3>
           <span class="px-2 py-0.5 bg-rose-500/10 text-rose-300 text-xs font-semibold rounded-lg border border-rose-500/20">
-            {{ selectedDriveIds.length }} trajets
+            {{ $t('drives.driveGroupModal.drives', { length: selectedDriveIds.length }) }}
           </span>
         </div>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
@@ -74,29 +75,29 @@ async function handleCreateGroupAndExpense() {
       <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
 
         <div>
-          <label for="drive-group-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du voyage / groupe</label>
+          <label for="drive-group-name" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('drives.driveGroupModal.tripGroupName') }}</label>
           <input id="drive-group-name"
             v-model="groupName"
             type="text"
-            placeholder="ex: Vacances Bretagne - Aller"
+            :placeholder="$t('drives.driveGroupModal.eGBrittanyHolidayOutbound')"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
           />
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="drive-expense-type" class="block text-xs font-semibold text-slate-300 mb-1">Type de frais</label>
+            <label for="drive-expense-type" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('drives.driveGroupModal.costType') }}</label>
             <select id="drive-expense-type"
               v-model="expenseType"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
             >
-              <option value="TOLL">Péage</option>
-              <option value="PARKING">Parking</option>
-              <option value="FERRY">Ferry</option>
+              <option value="TOLL">{{ $t('drives.driveGroupModal.toll') }}</option>
+              <option value="PARKING">{{ $t('drives.driveGroupModal.parking') }}</option>
+              <option value="FERRY">{{ $t('drives.driveGroupModal.ferry') }}</option>
             </select>
           </div>
           <div>
-            <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
+            <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('drives.driveGroupModal.amount') }}</label>
             <input id="drive-toll-amount"
               v-model="tollAmount"
               type="number"
@@ -114,14 +115,14 @@ async function handleCreateGroupAndExpense() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
           @click="handleCreateGroupAndExpense"
           class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/20 transition-colors"
         >
-          Enregistrer le groupe
+          {{ $t('drives.driveGroupModal.saveTheGroup') }}
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Layers, X, Users, Coins, Pencil, Trash2 } from 'lucide-vue-next'
@@ -21,9 +22,9 @@ const formatDate = formatDayTime
 
 <template>
   <div class="space-y-3">
-    <div v-if="loadingTrips" class="text-center py-12 text-slate-400">Chargement...</div>
+    <div v-if="loadingTrips" class="text-center py-12 text-slate-400">{{ $t('common.loading') }}</div>
     <div v-else-if="!tripGroups.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-      Aucun voyage. Sélectionnez plusieurs trajets puis « Fusionner & Péage » pour en créer un.
+      {{ $t('drives.tripGroupsPanel.noTripsSelectSeveralDrives') }}
     </div>
     <template v-else>
     <template
@@ -45,13 +46,13 @@ const formatDate = formatDayTime
             <div class="flex items-center gap-2 flex-wrap mb-1.5">
               <span class="text-xs font-semibold text-slate-400 shrink-0">{{ formatTripDates(tg) }}</span>
               <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-800 text-slate-200 border border-slate-700/60 shrink-0">
-                {{ Math.round(tg.distance_km).toLocaleString('fr-FR') }} km
+                {{ Math.round(tg.distance_km).toLocaleString(intlLocale()) }} km
               </span>
               <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 shrink-0">
-                {{ tg.drive_ids?.length || 0 }} étape(s)
+                {{ $t('drives.tripGroupsPanel.legS', { length: tg.drive_ids?.length || 0 }) }}
               </span>
               <span v-if="tg.carpool_count" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/30 shrink-0">
-                {{ tg.carpool_count }} covoit
+                {{ $t('drives.tripGroupsPanel.carpoolS', { carpool_count: tg.carpool_count }) }}
               </span>
             </div>
 
@@ -68,14 +69,14 @@ const formatDate = formatDayTime
           <!-- Real Cost Badge -->
           <div
             class="px-3 py-1.5 bg-slate-800/80 border border-slate-700/70 rounded-xl flex items-center gap-2 text-left shadow-sm"
-            title="Coût consolidé du voyage (cliquez sur la ligne pour le détail)"
+            :title="$t('drives.tripGroupsPanel.consolidatedCostOfTheTrip')"
           >
             <div class="p-1 rounded-lg bg-emerald-500/10 text-emerald-400">
               <Coins class="w-3.5 h-3.5" />
             </div>
             <div>
               <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
-                <span>{{ Number(tg.expenses_total || 0) > 0 ? `${Number(tg.expenses_total).toFixed(2)} € frais` : 'Détail coûts' }}</span>
+                <span>{{ Number(tg.expenses_total || 0) > 0 ? $t('drives.tripGroupsPanel.costsAmount', { amount: Number(tg.expenses_total).toFixed(2) }) : $t('drives.tripGroupsPanel.costDetail') }}</span>
                 <span v-if="tg.distance_km > 0 && tg.expenses_total" class="text-[10px] font-normal text-emerald-400 font-mono">
                   {{ (Number(tg.expenses_total) / tg.distance_km).toFixed(3) }} €/km
                 </span>
@@ -88,7 +89,7 @@ const formatDate = formatDayTime
             @click="emit('toggle-details', tg)"
             class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-white transition-colors"
           >
-            {{ expandedTripId === tg.id ? 'Masquer' : 'Étapes' }}
+            {{ expandedTripId === tg.id ? $t('drives.tripGroupsPanel.hide') : $t('drives.tripGroupsPanel.legs') }}
           </button>
 
           <!-- Quick Carpool Button -->
@@ -96,10 +97,10 @@ const formatDate = formatDayTime
             v-if="vehicleStore.canEdit"
             @click="router.push({ path: '/carpools', query: { new_trip_group_id: tg.id } })"
             class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40 flex items-center gap-1.5 transition-all"
-            title="Covoiturer ce voyage"
+            :title="$t('drives.tripGroupsPanel.carpoolThisTrip')"
           >
             <Users class="w-3.5 h-3.5 text-rose-500" />
-            <span class="hidden md:inline">Covoiturer</span>
+            <span class="hidden md:inline">{{ $t('drives.tripGroupsPanel.carpool') }}</span>
           </button>
 
           <!-- Edit & Delete -->
@@ -107,14 +108,14 @@ const formatDate = formatDayTime
             <button
               @click="emit('edit', tg)"
               class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-indigo-400 rounded-lg border border-slate-700/60 transition-colors"
-              title="Renommer le voyage"
+              :title="$t('drives.tripGroupsPanel.renameTheTrip')"
             >
               <Pencil class="w-3.5 h-3.5" />
             </button>
             <button
               @click="emit('delete', tg)"
               class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg border border-slate-700/60 transition-colors"
-              title="Supprimer le voyage"
+              :title="$t('drives.tripGroupsPanel.deleteTheTrip')"
             >
               <Trash2 class="w-3.5 h-3.5" />
             </button>
@@ -125,14 +126,14 @@ const formatDate = formatDayTime
       <div v-if="expandedTripId === tg.id" class="space-y-1.5 bg-slate-950/40 border border-slate-800/80 rounded-2xl p-3 -mt-1 ml-4 mr-4">
         <div v-for="d in tripDrives" :key="d.id" class="flex items-center justify-between gap-3 text-xs text-slate-300 bg-slate-800/40 rounded-lg px-2.5 py-1.5 min-w-0">
           <span class="truncate min-w-0 flex-1">
-            {{ formatDate(d.start_time) }} : {{ (d.start_address || 'Départ').split(',')[0] }} → {{ (d.end_address || 'Arrivée').split(',')[0] }}
+            {{ formatDate(d.start_time) }}{{ $t('drives.tripGroupsPanel.dateSeparator') }}{{ (d.start_address || $t('drives.driveCostModal.start')).split(',')[0] }} → {{ (d.end_address || $t('drives.driveCostModal.end')).split(',')[0] }}
             <span class="text-slate-500">({{ d.distance_km }} km)</span>
           </span>
-          <button v-if="vehicleStore.canEdit" @click="emit('remove-drive', tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0 p-1" title="Retirer ce trajet du voyage">
+          <button v-if="vehicleStore.canEdit" @click="emit('remove-drive', tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0 p-1" :title="$t('drives.tripGroupsPanel.removeThisDriveFromThe')">
             <X class="w-3.5 h-3.5" />
           </button>
         </div>
-        <p v-if="!tripDrives.length" class="text-xs text-slate-500">Chargement des trajets...</p>
+        <p v-if="!tripDrives.length" class="text-xs text-slate-500">{{ $t('drives.tripGroupsPanel.loadingTheDrives') }}</p>
       </div>
     </template>
     </template>

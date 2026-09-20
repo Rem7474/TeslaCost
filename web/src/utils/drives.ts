@@ -1,3 +1,4 @@
+import { intlLocale, t } from '@/i18n'
 /** Same speed heuristic as the backend's HighwayDrivePredicate / Drive.IsHighway() (which also counts drives whose
  * GPS detection found a toll). It favours recall: a false positive only adds the drive to the review queue. */
 export function isHighwayDrive(d: any) {
@@ -33,22 +34,22 @@ export function teslamateDriveUrl(vehicle: any, d: any): string | null {
 export function tollApplyStatusLabel(status: string) {
   switch (status) {
     case 'skipped_manual':
-      return 'Un péage saisi manuellement existe déjà : il n\'est pas remplacé.'
+      return t('drives.toll.skippedManual')
     case 'skipped_trip_group':
-      return 'Ce trajet fait partie d\'un voyage avec un péage : il n\'est pas modifié.'
+      return t('drives.toll.skippedTripGroup')
     case 'skipped_no_price':
-      return 'Aucun tarif estimé disponible pour ce trajet.'
+      return t('drives.toll.skippedNoPrice')
     case 'skipped_no_gps':
-      return 'Pas de tracé GPS disponible pour ce trajet.'
+      return t('drives.toll.skippedNoGps')
     default:
-      return 'Le tarif n\'a pas pu être appliqué.'
+      return t('drives.toll.failed')
   }
 }
 
 export function formatTripDates(tg: any) {
-  if (!tg.start_time) return 'Aucun trajet'
-  const start = new Date(tg.start_time).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-  const end = tg.end_time ? new Date(tg.end_time).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }) : start
+  if (!tg.start_time) return t('drives.noDrive')
+  const start = new Date(tg.start_time).toLocaleDateString(intlLocale(), { day: '2-digit', month: 'short', year: 'numeric' })
+  const end = tg.end_time ? new Date(tg.end_time).toLocaleDateString(intlLocale(), { day: '2-digit', month: 'short', year: 'numeric' }) : start
   return start === end ? start : `${start} → ${end}`
 }
 
@@ -76,7 +77,7 @@ export function monthRange(yearMonth: string) {
 export function formatMonthLabel(yearMonth: string) {
   if (!yearMonth) return ''
   const [y, m] = yearMonth.split('-').map(Number)
-  const str = new Date(y, m - 1, 1).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  const str = new Date(y, m - 1, 1).toLocaleDateString(intlLocale(), { month: 'long', year: 'numeric' })
   return str.charAt(0).toUpperCase() + str.slice(1)
 }
 
@@ -133,10 +134,10 @@ export function selectionSummary(list: any[]): string {
   const totalKm = list.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
   const totalKwh = list.reduce((s, d) => s + (Number(d.costs?.electricity_kwh) || 0), 0)
   const totalCost = list.reduce((s, d) => s + (Number(d.costs?.total_cost) || 0), 0)
-  return `${Math.round(totalKm).toLocaleString('fr-FR')} km • ${Math.round(totalKwh)} kWh • ${totalCost.toFixed(2)} €`
+  return `${Math.round(totalKm).toLocaleString(intlLocale())} km • ${Math.round(totalKwh)} kWh • ${totalCost.toFixed(2)} €`
 }
 
-export const DRIVE_CSV_HEADERS = ['ID', 'Date', 'Depart', 'Arrivee', 'Distance_km', 'Duree_min', 'Conso_kWh_100km', 'Energie_kWh', 'Cout_Total_EUR', 'Cout_km_EUR', 'Tags']
+export const driveCsvHeaders = () => t('drives.csvHeaders').split(',')
 
 export function driveCsvRows(list: any[]) {
   return list.map((d) => [
@@ -183,8 +184,8 @@ export function buildTripCostDrive(tg: any, tgDrives: any[]) {
     id: tg.id,
     is_trip_group: true,
     start_time: tg.start_time || firstDrive?.start_time || tg.created_at,
-    start_address: firstDrive ? (firstDrive.start_address || 'Départ').split(',')[0] : 'Départ',
-    end_address: lastDrive ? (lastDrive.end_address || 'Arrivée').split(',')[0] : 'Arrivée',
+    start_address: firstDrive ? (firstDrive.start_address || t('drives.driveCostModal.start')).split(',')[0] : t('drives.driveCostModal.start'),
+    end_address: lastDrive ? (lastDrive.end_address || t('drives.driveCostModal.end')).split(',')[0] : t('drives.driveCostModal.end'),
     distance_km: Math.round(totalKm),
     duration_min: totalDuration,
     tags: [],

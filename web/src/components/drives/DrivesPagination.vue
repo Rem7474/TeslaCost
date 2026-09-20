@@ -40,10 +40,10 @@ const paginationPages = computed(() => buildPaginationPages(props.page, props.to
     <!-- Left: Range display & Page size buttons -->
     <div class="flex flex-wrap items-center gap-3 text-xs text-slate-400">
       <span>
-        Affichage <strong class="text-white">{{ itemRangeStart }}</strong>–<strong class="text-white">{{ itemRangeEnd }}</strong> sur <strong class="text-white">{{ total }}</strong> trajets
+        {{ $t('drives.drivesPagination.display') }} <strong class="text-white">{{ itemRangeStart }}</strong>–<strong class="text-white">{{ itemRangeEnd }}</strong> {{ $t('drives.drivesPagination.of') }} <strong class="text-white">{{ total }}</strong> {{ $t('drives.drivesPagination.drives') }}
       </span>
       <div class="flex items-center gap-1.5 border-l border-slate-800 pl-3">
-        <span class="text-slate-500">Par page :</span>
+        <span class="text-slate-500">{{ $t('drives.drivesPagination.perPage') }}</span>
         <button
           v-for="s in [20, 50, 100]"
           :key="s"
@@ -62,7 +62,7 @@ const paginationPages = computed(() => buildPaginationPages(props.page, props.to
       <button
         @click="goToPage(1)"
         :disabled="page <= 1"
-        title="Première page"
+        :title="$t('drives.drivesPagination.firstPage')"
         class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronsLeft class="w-4 h-4" />
@@ -71,7 +71,7 @@ const paginationPages = computed(() => buildPaginationPages(props.page, props.to
       <button
         @click="goToPage(page - 1)"
         :disabled="page <= 1"
-        title="Page précédente"
+        :title="$t('drives.drivesPagination.previousPage')"
         class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronLeft class="w-4 h-4" />
@@ -94,7 +94,7 @@ const paginationPages = computed(() => buildPaginationPages(props.page, props.to
       <button
         @click="goToPage(page + 1)"
         :disabled="page >= totalPages"
-        title="Page suivante"
+        :title="$t('drives.drivesPagination.nextPage')"
         class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronRight class="w-4 h-4" />
@@ -103,7 +103,7 @@ const paginationPages = computed(() => buildPaginationPages(props.page, props.to
       <button
         @click="goToPage(totalPages)"
         :disabled="page >= totalPages"
-        title="Dernière page"
+        :title="$t('drives.drivesPagination.lastPage')"
         class="p-1.5 bg-slate-900 border border-slate-800 rounded-xl text-slate-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
       >
         <ChevronsRight class="w-4 h-4" />
@@ -111,7 +111,7 @@ const paginationPages = computed(() => buildPaginationPages(props.page, props.to
 
       <!-- Direct jump input -->
       <div v-if="totalPages > 1" class="flex items-center gap-1 ml-2 border-l border-slate-800 pl-2">
-        <label for="drives-jump-page" class="text-xs text-slate-500">Page</label>
+        <label for="drives-jump-page" class="text-xs text-slate-500">{{ $t('drives.drivesPagination.page') }}</label>
         <input
           id="drives-jump-page"
           type="number"
@@ -127,7 +127,7 @@ const paginationPages = computed(() => buildPaginationPages(props.page, props.to
           :disabled="!jumpInput"
           class="px-2 py-1 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg disabled:opacity-30 disabled:cursor-not-allowed transition-colors font-medium"
         >
-          Aller
+          {{ $t('drives.drivesPagination.go') }}
         </button>
       </div>
     </div>
