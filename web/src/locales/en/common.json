@@ -11,5 +11,8 @@
   "success": "Success",
   "errorWithMessage": "Error: {message}",
   "requiredField": "Required field",
-  "deleteError": "Deletion failed: {message}"
+  "deleteError": "Deletion failed: {message}",
+  "selectAll": "Select all",
+  "deselectAll": "Deselect all",
+  "deleteForever": "Delete permanently"
 }

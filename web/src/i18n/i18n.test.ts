@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { detectLocale, i18n, intlLocale, setLocale, SUPPORTED_LOCALES, t } from './index'
 
@@ -50,5 +52,29 @@ describe('setLocale', () => {
     expect(t('common.cancel')).toBe('Annuler')
     expect(t('shell.topBar.driveCount', 3)).toBe('+3 trajets')
     expect(intlLocale()).toBe('fr-FR')
+  })
+})
+
+// A key typed in a template or a script that no catalog defines would show up as raw text on screen.
+describe('message keys used in the source', () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name)
+      if (statSync(path).isDirectory()) return name === 'locales' ? [] : walk(path)
+      return /\.(vue|ts)$/.test(name) && !name.endsWith('.test.ts') ? [path] : []
+    })
+  const catalog = i18n.global.getLocaleMessage('en') as Record<string, unknown>
+  const defined = (key: string) => key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalog) !== undefined
+  const namespaces = new Set(Object.keys(catalog))
+
+  it('all exist in the catalogs', () => {
+    const missing: string[] = []
+    for (const file of walk(join(__dirname, '..'))) {
+      const source = readFileSync(file, 'utf8')
+      for (const match of source.matchAll(/(?<![\w.])\$?t\(\s*'([a-zA-Z]+(?:\.[a-zA-Z0-9]+)+)'/g)) {
+        if (namespaces.has(match[1].split('.')[0]) && !defined(match[1])) missing.push(`${file.split('/src/')[1]}: ${match[1]}`)
+      }
+    }
+    expect(missing).toEqual([])
   })
 })

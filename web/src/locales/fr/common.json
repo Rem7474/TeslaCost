@@ -11,5 +11,8 @@
   "success": "Succès",
   "errorWithMessage": "Erreur : {message}",
   "requiredField": "Champ requis",
-  "deleteError": "Erreur lors de la suppression : {message}"
+  "deleteError": "Erreur lors de la suppression : {message}",
+  "selectAll": "Tout sélectionner",
+  "deselectAll": "Tout désélectionner",
+  "deleteForever": "Supprimer définitivement"
 }
