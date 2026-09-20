@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 )
@@ -36,7 +37,7 @@ type TirePatch struct {
 func (r *Repository) BatchUpdateTires(ctx context.Context, vehicleID string, tireIDs []string, p TirePatch) error {
 	ids := uniqueStrings(tireIDs)
 	if len(ids) == 0 {
-		return validationErrorf("aucun pneu sélectionné")
+		return apierror.New("tire.none_selected", "No tire selected")
 	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -120,7 +121,7 @@ func setActiveMount(ctx context.Context, tx pgx.Tx, t *models.Tire, vehicleID st
 	switch {
 	case errors.Is(err, pgx.ErrNoRows):
 		if date == nil || odometer == nil {
-			return validationErrorf("le pneu %s %s n'a pas de montage en cours : date et odomètre de montage requis", t.Brand, t.CurrentPosition)
+			return apierror.Newf("tire.no_current_mount", "The tire %s %s has no current fitting: fitting date and odometer required", t.Brand, t.CurrentPosition)
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO tire_mount_sessions (tire_id, vehicle_id, position, mounted_date, mounted_odometer)
@@ -169,10 +170,10 @@ func (r *Repository) BatchDisposeTires(ctx context.Context, vehicleID string, ti
 		}
 		if isMountedPosition(t.CurrentPosition) {
 			if odometer == nil {
-				return validationErrorf("l'odomètre de démontage est requis pour le pneu monté %s", t.Brand)
+				return apierror.Newf("tire.dismount_odometer_required_for", "The removal odometer is required for the fitted tire %s", t.Brand)
 			}
 			if t.MountedOdometer != nil && *odometer < *t.MountedOdometer {
-				return validationErrorf("l'odomètre (%.0f km) est inférieur à l'odomètre de montage (%.0f km) pour %s", *odometer, *t.MountedOdometer, t.Brand)
+				return apierror.Newf("tire.odometer_below_mount_for", "The odometer (%.0f km) is lower than the fitting odometer (%.0f km) for %s", *odometer, *t.MountedOdometer, t.Brand)
 			}
 			if _, err := tx.Exec(ctx, `
 				UPDATE tire_mount_sessions
@@ -224,14 +225,14 @@ func (r *Repository) CreateTiresBatch(ctx context.Context, tires []*models.Tire)
 			lifespan = 40000
 		}
 		if !isValidTirePosition(t.CurrentPosition) {
-			return validationErrorf("position de pneu invalide : %s", t.CurrentPosition)
+			return apierror.Newf("tire.position_invalid", "Invalid tire position: %s", t.CurrentPosition)
 		}
 		if isMountedPosition(t.CurrentPosition) && (t.MountedOdometer == nil || t.VehicleID == nil) {
-			return validationErrorf("un pneu monté requiert l'odomètre de montage")
+			return apierror.New("tire.mounted_needs_odometer", "A fitted tire needs the fitting odometer")
 		}
 		if isMountedPosition(t.CurrentPosition) {
 			if other, taken := occupied[t.CurrentPosition]; taken {
-				return validationErrorf("la position %s est déjà occupée par %s : mettez-le au rebut ou changez sa position avant d'en monter un nouveau", t.CurrentPosition, other)
+				return apierror.Newf("tire.position_taken", "The position %s is already occupied by %s: scrap it or change its position before fitting a new one", t.CurrentPosition, other)
 			}
 			occupied[t.CurrentPosition] = t.Brand + " " + t.Model
 		}

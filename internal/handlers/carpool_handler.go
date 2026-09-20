@@ -2,8 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
@@ -89,7 +88,7 @@ func nonEmptyLabel(s *string) *string {
 // buildCarpool validates the payload and returns the trip, its legs and its passengers.
 func buildCarpool(vehicleID string, req *UpsertCarpoolRequest) (*models.CarpoolTrip, []models.CarpoolLeg, []models.CarpoolPassenger, error) {
 	if strings.TrimSpace(req.Title) == "" {
-		return nil, nil, nil, errors.New("le titre du covoiturage est requis")
+		return nil, nil, nil, apierror.New("carpool.title_required", "The carpool title is required")
 	}
 	date := time.Now().UTC()
 	if req.Date != "" {
@@ -109,17 +108,17 @@ func buildCarpool(vehicleID string, req *UpsertCarpoolRequest) (*models.CarpoolT
 		}}
 	}
 	if len(payloads) > 30 {
-		return nil, nil, nil, errors.New("un covoiturage est limité à 30 étapes")
+		return nil, nil, nil, apierror.New("carpool.too_many_legs", "A carpool is limited to 30 legs")
 	}
 
 	legs := make([]models.CarpoolLeg, len(payloads))
 	for i, lp := range payloads {
 		if err := validateQuantity(lp.DistanceKm, 5000); err != nil {
-			return nil, nil, nil, fmt.Errorf("distance invalide pour l'étape %d", i+1)
+			return nil, nil, nil, apierror.Newf("carpool.leg_distance", "Invalid distance for leg %d", i+1)
 		}
 		for _, c := range []money.Cents{lp.ElectricityCost, lp.TollsCost, lp.TiresCost, lp.MaintenanceCost, lp.InsuranceCost, lp.OtherCost} {
 			if err := validateAmount(c, true); err != nil {
-				return nil, nil, nil, fmt.Errorf("étape %d : %w", i+1, err)
+				return nil, nil, nil, apierror.Newf("carpool.leg_error", "Leg %d: %w", i+1, err)
 			}
 		}
 		driveID := lp.DriveID
@@ -161,12 +160,12 @@ func buildCarpool(vehicleID string, req *UpsertCarpoolRequest) (*models.CarpoolT
 			alight = *p.AlightStopIndex
 		}
 		if board < 0 || alight <= board || alight > len(legs) {
-			return nil, nil, nil, fmt.Errorf("%s : l'arrêt de descente doit suivre l'arrêt de montée", name)
+			return nil, nil, nil, apierror.Newf("carpool.alight_after_board", "%s: the drop-off stop must come after the pick-up stop", name)
 		}
 		for i := board; i < alight; i++ {
 			seatsPerLeg[i] += seats
 			if seatsPerLeg[i] > maxCarpoolSeatsPerLeg {
-				return nil, nil, nil, fmt.Errorf("plus de %d places occupées sur l'étape %d", maxCarpoolSeatsPerLeg, i+1)
+				return nil, nil, nil, apierror.Newf("carpool.too_many_seats", "More than %d seats taken on leg %d", maxCarpoolSeatsPerLeg, i+1)
 			}
 		}
 		origin, destination := nonEmptyLabel(p.Origin), nonEmptyLabel(p.Destination)
@@ -252,12 +251,12 @@ func (h *CarpoolHandler) save(w http.ResponseWriter, r *http.Request, tripID str
 
 	var req UpsertCarpoolRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	trip, legs, passengers, err := buildCarpool(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -353,7 +352,7 @@ func (h *CarpoolHandler) Recalculate(w http.ResponseWriter, r *http.Request) {
 	var req RecalculateCarpoolsRequest
 	if r.Body != nil && r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			writeError(w, http.StatusBadRequest, "Invalid request payload")
+			writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 			return
 		}
 	}
@@ -369,4 +368,3 @@ func (h *CarpoolHandler) Recalculate(w http.ResponseWriter, r *http.Request) {
 		"trips":         trips,
 	})
 }
-

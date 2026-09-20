@@ -75,7 +75,7 @@ describe('message keys used in the source', () => {
   const catalog = i18n.global.getLocaleMessage('en') as Record<string, unknown>
   const defined = (key: string) => key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalog) !== undefined
   // Every namespace of the application, so a key borrowed from another area is reported even when that catalog is absent.
-  const namespaces = new Set(['common', 'shell', 'auth', 'onboarding', 'account', 'dashboard', 'drives', 'expenses', 'tires', 'vehicles', 'carpool', 'manual', 'comparison', 'quickadd'])
+  const namespaces = new Set(['common', 'shell', 'auth', 'onboarding', 'account', 'dashboard', 'drives', 'expenses', 'tires', 'vehicles', 'carpool', 'manual', 'comparison', 'quickadd', 'errors'])
 
   it('all exist in the catalogs', () => {
     const missing: string[] = []
@@ -86,5 +86,31 @@ describe('message keys used in the source', () => {
       }
     }
     expect(missing).toEqual([])
+  })
+})
+
+// The backend sends a code with each user-facing error: the front end needs a message for every code it can send.
+describe('API error codes', () => {
+  const walk = (dir: string): string[] =>
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name)
+      if (statSync(path).isDirectory()) return walk(path)
+      return name.endsWith('.go') && !name.endsWith('_test.go') ? [path] : []
+    })
+  const catalogs = ['en', 'fr'].map((l) => i18n.global.getLocaleMessage(l) as Record<string, unknown>)
+  const defined = (catalog: Record<string, unknown>, code: string) =>
+    code.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), (catalog.errors ?? {}) as Record<string, unknown>) !== undefined
+
+  it('have a message in both languages', () => {
+    const missing: string[] = []
+    for (const file of walk(join(__dirname, '../../../internal'))) {
+      const source = readFileSync(file, 'utf8')
+      for (const match of source.matchAll(/apierror\.Newf?\(\s*"([a-z_]+(?:\.[a-z_]+)+)"/g)) {
+        catalogs.forEach((catalog, i) => {
+          if (!defined(catalog, match[1])) missing.push(`${['en', 'fr'][i]}: ${match[1]}`)
+        })
+      }
+    }
+    expect([...new Set(missing)]).toEqual([])
   })
 })

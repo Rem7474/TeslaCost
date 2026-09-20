@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
@@ -49,22 +50,22 @@ func positiveOrNil(v *float64) *float64 {
 func buildFuelLog(vehicleID string, req *SaveFuelLogRequest) (*models.FuelLog, error) {
 	date, err := parseDate(req.Date)
 	if err != nil {
-		return nil, errors.New("Date invalide")
+		return nil, apierror.New("request.invalid_date", "Invalid date")
 	}
 	if req.Odometer != nil {
-		if err := validateRange(*req.Odometer, 0, 2_000_000, "Kilométrage invalide (0 à 2 000 000 km)"); err != nil {
+		if err := validateRange(*req.Odometer, 0, 2_000_000, apierror.New("odometer.range", "Invalid mileage (0 to 2,000,000 km)")); err != nil {
 			return nil, err
 		}
 	}
 
 	liters, price := positiveOrNil(req.Liters), positiveOrNil(req.PricePerLiter)
 	if liters != nil {
-		if err := validateRange(*liters, 0.01, 500, "Quantité invalide (0,01 à 500 L)"); err != nil {
+		if err := validateRange(*liters, 0.01, 500, apierror.New("fuel.liters_range", "Invalid quantity (0.01 to 500 L)")); err != nil {
 			return nil, err
 		}
 	}
 	if price != nil {
-		if err := validateRange(*price, 0.001, 10, "Prix au litre invalide (0 à 10 €/L)"); err != nil {
+		if err := validateRange(*price, 0.001, 10, apierror.New("fuel.price_range", "Invalid price per litre (0 to 10 €/L)")); err != nil {
 			return nil, err
 		}
 	}
@@ -84,13 +85,13 @@ func buildFuelLog(vehicleID string, req *SaveFuelLogRequest) (*models.FuelLog, e
 		liters = &l
 	}
 	if err := validateAmount(amount, false); err != nil {
-		return nil, errors.New("Montant du plein requis (ou litres et prix au litre)")
+		return nil, apierror.New("fuel.amount_required", "The fill-up amount is required (or litres and price per litre)")
 	}
 
 	var fuelType *string
 	if req.FuelType != nil && *req.FuelType != "" {
 		if !models.FuelTypes[*req.FuelType] {
-			return nil, errors.New("Carburant invalide")
+			return nil, apierror.New("fuel.type_invalid", "Invalid fuel")
 		}
 		fuelType = req.FuelType
 	}
@@ -118,10 +119,10 @@ func checkOdometerOrder(others []models.OdometerPoint, id string, date time.Time
 			continue
 		}
 		if o.Date.Before(date) && o.Odometer > odometer {
-			return errors.New("Kilométrage incohérent : un relevé ou un plein plus ancien affiche déjà un kilométrage supérieur")
+			return apierror.New("odometer.inconsistent_older", "Inconsistent mileage: an older reading or fill-up already shows a higher mileage")
 		}
 		if o.Date.After(date) && o.Odometer < odometer {
-			return errors.New("Kilométrage incohérent : un relevé ou un plein plus récent affiche un kilométrage inférieur")
+			return apierror.New("odometer.inconsistent_newer", "Inconsistent mileage: a newer reading or fill-up shows a lower mileage")
 		}
 	}
 	return nil
@@ -134,7 +135,7 @@ func (h *FuelHandler) requireICE(w http.ResponseWriter, r *http.Request, vehicle
 		return false
 	}
 	if v.Powertrain != models.PowertrainICE {
-		writeError(w, http.StatusBadRequest, "Les pleins de carburant ne concernent que les véhicules thermiques")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("fuel.combustion_only", "Fuel fill-ups only apply to combustion vehicles"))
 		return false
 	}
 	return true
@@ -144,12 +145,12 @@ func (h *FuelHandler) requireICE(w http.ResponseWriter, r *http.Request, vehicle
 func (h *FuelHandler) buildChecked(w http.ResponseWriter, r *http.Request, vehicleID, id string) (*models.FuelLog, bool) {
 	var req SaveFuelLogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return nil, false
 	}
 	f, err := buildFuelLog(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return nil, false
 	}
 	if f.Odometer != nil {
@@ -159,7 +160,7 @@ func (h *FuelHandler) buildChecked(w http.ResponseWriter, r *http.Request, vehic
 			return nil, false
 		}
 		if err := checkOdometerOrder(points, id, f.Date, *f.Odometer); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return nil, false
 		}
 	}

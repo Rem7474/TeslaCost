@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -30,11 +31,11 @@ func (r *Repository) UpdateCarpoolTrip(ctx context.Context, trip *models.Carpool
 // reference existing stops (0..len(legs)).
 func (r *Repository) saveCarpoolTrip(ctx context.Context, trip *models.CarpoolTrip, legs []models.CarpoolLeg, passengers []models.CarpoolPassenger) error {
 	if len(legs) == 0 {
-		return validationErrorf("un covoiturage doit comporter au moins une étape")
+		return apierror.New("carpool.needs_leg", "A carpool needs at least one leg")
 	}
 	for _, p := range passengers {
 		if p.BoardStopIndex < 0 || p.AlightStopIndex <= p.BoardStopIndex || p.AlightStopIndex > len(legs) {
-			return validationErrorf("arrêts de montée et de descente invalides pour %s", p.PassengerName)
+			return apierror.Newf("carpool.invalid_stops", "Invalid pick-up and drop-off stops for %s", p.PassengerName)
 		}
 	}
 

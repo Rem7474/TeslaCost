@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"math"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
@@ -38,9 +38,9 @@ type SaveComparisonRequest struct {
 	Options   models.ScenarioOptions `json:"options"`
 }
 
-func validateRange(v, min, max float64, message string) error {
+func validateRange(v, min, max float64, failure *apierror.Error) error {
 	if math.IsNaN(v) || math.IsInf(v, 0) || v < min || v > max {
-		return errors.New(message)
+		return failure
 	}
 	return nil
 }
@@ -58,26 +58,26 @@ func validateAmounts(amounts ...money.Cents) error {
 func validateComparisonRequest(req *SaveComparisonRequest) error {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || len(req.Name) > 100 {
-		return errors.New("Nom invalide (1 à 100 caractères)")
+		return apierror.New("comparison.name_invalid", "Invalid name (1 to 100 characters)")
 	}
 	if req.Mode != models.ComparisonModeRetrospective && req.Mode != models.ComparisonModeProjection {
-		return errors.New("Mode invalide (RETROSPECTIVE ou PROJECTION)")
+		return apierror.New("comparison.mode_invalid", "Invalid mode (RETROSPECTIVE or PROJECTION)")
 	}
-	if err := validateRange(req.AnnualKm, 1, 200_000, "Kilométrage annuel invalide (1 à 200 000 km)"); err != nil {
+	if err := validateRange(req.AnnualKm, 1, 200_000, apierror.New("comparison.annual_km", "Invalid yearly mileage (1 to 200,000 km)")); err != nil {
 		return err
 	}
 	if req.Years < 1 || req.Years > 15 {
-		return errors.New("Durée invalide (1 à 15 ans)")
+		return apierror.New("comparison.years", "Invalid duration (1 to 15 years)")
 	}
 
 	ice := req.ICE
 	if !models.FuelTypes[ice.FuelType] {
-		return errors.New("Carburant invalide")
+		return apierror.New("fuel.type_invalid", "Invalid fuel")
 	}
-	if err := validateRange(ice.LPer100Km, 0.1, 50, "Consommation thermique invalide (0,1 à 50 L/100 km)"); err != nil {
+	if err := validateRange(ice.LPer100Km, 0.1, 50, apierror.New("comparison.ice_consumption", "Invalid combustion consumption (0.1 to 50 L/100 km)")); err != nil {
 		return err
 	}
-	if err := validateRange(ice.FuelPrice, 0, 10, "Prix du carburant invalide (0 à 10 €/L)"); err != nil {
+	if err := validateRange(ice.FuelPrice, 0, 10, apierror.New("comparison.fuel_price", "Invalid fuel price (0 to 10 €/L)")); err != nil {
 		return err
 	}
 	if err := validateAmounts(ice.PurchasePrice, ice.ResaleValue, ice.MaintenanceYearly, ice.InsuranceYearly, ice.TaxYearly); err != nil {
@@ -85,7 +85,7 @@ func validateComparisonRequest(req *SaveComparisonRequest) error {
 	}
 
 	for _, pct := range []float64{req.Options.FuelInflationPct, req.Options.ElectricityInflationPct, req.Options.CostInflationPct} {
-		if err := validateRange(pct, -10, 30, "Inflation invalide (−10 à 30 %)"); err != nil {
+		if err := validateRange(pct, -10, 30, apierror.New("comparison.inflation", "Invalid inflation (−10 to 30%)")); err != nil {
 			return err
 		}
 	}
@@ -96,18 +96,18 @@ func validateComparisonRequest(req *SaveComparisonRequest) error {
 	switch req.Mode {
 	case models.ComparisonModeRetrospective:
 		if req.VehicleID == nil || *req.VehicleID == "" {
-			return errors.New("Un véhicule est requis en mode rétrospectif")
+			return apierror.New("comparison.vehicle_required", "A vehicle is required in retrospective mode")
 		}
 		req.EV = nil
 	case models.ComparisonModeProjection:
 		req.VehicleID = nil
 		if req.EV == nil {
-			return errors.New("Les données du véhicule électrique sont requises en mode projection")
+			return apierror.New("comparison.ev_required", "The electric vehicle data is required in projection mode")
 		}
-		if err := validateRange(req.EV.KwhPer100Km, 0.1, 100, "Consommation électrique invalide (0,1 à 100 kWh/100 km)"); err != nil {
+		if err := validateRange(req.EV.KwhPer100Km, 0.1, 100, apierror.New("comparison.ev_consumption", "Invalid electric consumption (0.1 to 100 kWh/100 km)")); err != nil {
 			return err
 		}
-		if err := validateRange(req.EV.EurPerKwh, 0, 5, "Prix de l'électricité invalide (0 à 5 €/kWh)"); err != nil {
+		if err := validateRange(req.EV.EurPerKwh, 0, 5, apierror.New("comparison.electricity_price", "Invalid electricity price (0 to 5 €/kWh)")); err != nil {
 			return err
 		}
 		if err := validateAmounts(req.EV.PurchasePrice, req.EV.ResaleValue, req.EV.MaintenanceYearly, req.EV.InsuranceYearly, req.EV.TaxYearly); err != nil {
@@ -135,11 +135,11 @@ func (r *SaveComparisonRequest) toScenario(userID string) *models.ComparisonScen
 func (h *ComparisonHandler) decodeAndCheck(w http.ResponseWriter, r *http.Request) (*SaveComparisonRequest, bool) {
 	var req SaveComparisonRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return nil, false
 	}
 	if err := validateComparisonRequest(&req); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return nil, false
 	}
 	if req.VehicleID != nil {
@@ -148,7 +148,7 @@ func (h *ComparisonHandler) decodeAndCheck(w http.ResponseWriter, r *http.Reques
 			return nil, false
 		}
 		if v.Powertrain == models.PowertrainICE {
-			writeError(w, http.StatusBadRequest, "Le comparatif « véhicule suivi » s'appuie sur un véhicule électrique ; utilisez le mode projection")
+			writeAPIError(w, http.StatusBadRequest, apierror.New("comparison.needs_ev", "The “tracked vehicle” comparison relies on an electric vehicle; use the projection mode"))
 			return nil, false
 		}
 	}

@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
@@ -28,7 +29,7 @@ func (h *EnergyHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 
 	vehicle, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if vehicle.Powertrain == models.PowertrainICE {

@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
@@ -212,7 +212,7 @@ func (h *DriveHandler) UpdateTags(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateTagsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
@@ -246,7 +246,7 @@ func (h *DriveHandler) SetTollReview(w http.ResponseWriter, r *http.Request) {
 
 	var req TollReviewRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
@@ -295,15 +295,15 @@ func (h *DriveHandler) DetectTolls(w http.ResponseWriter, r *http.Request) {
 	detection, err := h.tollDetectionService.DetectTolls(r.Context(), vehicle, driveID)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Trajet introuvable")
+			writeAPIError(w, http.StatusNotFound, apierror.New("drive.not_found", "Drive not found"))
 			return
 		}
 		if errors.Is(err, services.ErrNoGPSTrace) {
-			writeError(w, http.StatusBadRequest, services.ErrNoGPSTrace.Error())
+			writeErr(w, http.StatusBadRequest, services.ErrNoGPSTrace)
 			return
 		}
 		slog.ErrorContext(r.Context(), "toll detection failed", "component", "api", "error", err)
-		writeError(w, http.StatusBadGateway, "Échec de la détection des péages (TeslaMateAPI injoignable ou trajet non disponible)")
+		writeAPIError(w, http.StatusBadGateway, apierror.New("toll.detection_failed", "Toll detection failed (TeslaMateAPI unreachable or drive unavailable)"))
 		return
 	}
 
@@ -323,11 +323,11 @@ func (h *DriveHandler) ApplyTollEstimate(w http.ResponseWriter, r *http.Request)
 	result, err := h.tollDetectionService.ApplyTollEstimate(r.Context(), vehicle, driveID)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Trajet introuvable")
+			writeAPIError(w, http.StatusNotFound, apierror.New("drive.not_found", "Drive not found"))
 			return
 		}
 		slog.ErrorContext(r.Context(), "apply toll estimate failed", "component", "api", "error", err)
-		writeError(w, http.StatusBadGateway, "Échec de l'application du tarif de péage")
+		writeAPIError(w, http.StatusBadGateway, apierror.New("toll.apply_failed", "Could not apply the toll fare"))
 		return
 	}
 
@@ -349,15 +349,15 @@ func (h *DriveHandler) ApplyTollEstimatesBulk(w http.ResponseWriter, r *http.Req
 
 	var req ApplyTollEstimatesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	if len(req.DriveIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "Sélectionnez au moins un trajet")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("trip.drive_required", "Select at least one drive"))
 		return
 	}
 	if len(req.DriveIDs) > services.MaxBulkTollDrives {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("Maximum %d trajets à la fois", services.MaxBulkTollDrives))
+		writeAPIError(w, http.StatusBadRequest, apierror.Newf("toll.bulk_limit", "At most %d drives at a time", services.MaxBulkTollDrives))
 		return
 	}
 
@@ -379,12 +379,12 @@ func (h *DriveHandler) CreateTripGroup(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateTripGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "Trip group name is required")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("trip.name_required", "The trip name is required"))
 		return
 	}
 
@@ -395,7 +395,7 @@ func (h *DriveHandler) CreateTripGroup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(req.DriveIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "Un groupe doit contenir au moins un trajet")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("trip.group_needs_drive", "A group must contain at least one drive"))
 		return
 	}
 
@@ -416,7 +416,7 @@ func (h *DriveHandler) ListTripGroups(w http.ResponseWriter, r *http.Request) {
 
 	groups, err := h.repo.ListTripGroups(r.Context(), vehicleID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list trip groups")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to list trip groups"))
 		return
 	}
 	if groups == nil {
@@ -440,11 +440,11 @@ func (h *DriveHandler) UpdateTripGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateTripGroupRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" {
-		writeError(w, http.StatusBadRequest, "Le nom du voyage est requis")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("trip.name_required", "The trip name is required"))
 		return
 	}
 	tg := &models.TripGroup{ID: chi.URLParam(r, "groupId"), VehicleID: vehicleID, Name: req.Name, Notes: req.Notes}

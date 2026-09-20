@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
 )
@@ -26,24 +27,24 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 	const maxUploadSize = 15 << 20 // 15 MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		writeError(w, http.StatusBadRequest, "Fichier trop volumineux (max 15 Mo) ou formulaire invalide")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("document.too_large", "File too large (max 15 MB) or invalid form"))
 		return
 	}
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Fichier manquant (champ 'file' requis)")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("document.file_required", "Missing file ('file' field required)"))
 		return
 	}
 	defer file.Close()
 
 	data, err := io.ReadAll(file)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("document.read_failed", "Could not read the file"))
 		return
 	}
 	if len(data) == 0 {
-		writeError(w, http.StatusBadRequest, "Le fichier est vide")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("document.empty", "The file is empty"))
 		return
 	}
 
@@ -51,7 +52,7 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 	// receipt.pdf that is really HTML would otherwise be stored and served under a document type.
 	mimeType, ok := documentMimeType(data)
 	if !ok {
-		writeError(w, http.StatusBadRequest, "Format de fichier non supporté. Formats acceptés : PDF, PNG, JPEG, WEBP")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("document.unsupported_format", "Unsupported file format. Accepted formats: PDF, PNG, JPEG, WEBP"))
 		return
 	}
 
@@ -90,7 +91,7 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 	if err != nil {
 		// Roll back DB record on storage failure.
 		_ = h.repo.DeleteExpenseDocument(r.Context(), doc.ID, vehicleID, userID)
-		writeError(w, http.StatusInternalServerError, "Erreur lors de l'écriture du fichier sur le volume")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("document.write_failed", "Could not write the file to the volume"))
 		return
 	}
 
@@ -98,7 +99,7 @@ func (h *ExpenseHandler) UploadDocument(w http.ResponseWriter, r *http.Request) 
 	if err := h.repo.UpdateDocumentStoragePath(r.Context(), doc.ID, storagePath); err != nil {
 		_ = h.storageService.Delete(storagePath)
 		_ = h.repo.DeleteExpenseDocument(r.Context(), doc.ID, vehicleID, userID)
-		writeError(w, http.StatusInternalServerError, "Erreur lors de la mise à jour du chemin de stockage")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("document.path_update_failed", "Could not update the storage path"))
 		return
 	}
 	doc.StoragePath = &storagePath
@@ -175,7 +176,7 @@ func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request
 			}
 			fileData = doc.Data
 		} else {
-			writeError(w, http.StatusNotFound, "Fichier introuvable sur le volume de stockage")
+			writeAPIError(w, http.StatusNotFound, apierror.New("document.file_missing", "File not found on the storage volume"))
 			return
 		}
 	} else {
@@ -187,11 +188,11 @@ func (h *ExpenseHandler) DownloadDocument(w http.ResponseWriter, r *http.Request
 				if saveErr == nil {
 					fileData = doc.Data
 				} else {
-					writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
+					writeAPIError(w, http.StatusInternalServerError, apierror.New("document.read_failed", "Could not read the file"))
 					return
 				}
 			} else {
-				writeError(w, http.StatusInternalServerError, "Erreur lors de la lecture du fichier")
+				writeAPIError(w, http.StatusInternalServerError, apierror.New("document.read_failed", "Could not read the file"))
 				return
 			}
 		} else {

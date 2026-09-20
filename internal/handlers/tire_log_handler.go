@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -31,16 +32,16 @@ func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
 
 	var req AddTireLogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if req.DepthMm <= 0 || req.DepthMm > 20 {
-		writeError(w, http.StatusBadRequest, "La profondeur doit être comprise entre 0 et 20 mm")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("tire.depth_range", "The depth must be between 0 and 20 mm"))
 		return
 	}
 	if req.Odometer <= 0 {
-		writeError(w, http.StatusBadRequest, "Le relevé d'usure requiert l'odomètre du véhicule")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("tire.log_needs_odometer", "A wear reading needs the vehicle odometer"))
 		return
 	}
 
@@ -48,7 +49,7 @@ func (h *TireHandler) AddLog(w http.ResponseWriter, r *http.Request) {
 	if req.Date != "" {
 		parsed, err := parseDate(req.Date)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		logDate = parsed
@@ -78,16 +79,16 @@ func (h *TireHandler) UpdateLog(w http.ResponseWriter, r *http.Request) {
 	}
 	var req AddTireLogRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	if req.DepthMm <= 0 || req.DepthMm > 20 || req.Odometer <= 0 {
-		writeError(w, http.StatusBadRequest, "Profondeur (0 à 20 mm) et odomètre requis")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("tire.log_depth_odometer_required", "Depth (0 to 20 mm) and odometer required"))
 		return
 	}
 	date, err := parseDate(req.Date)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	l := &models.TireLog{ID: chi.URLParam(r, "logId"), TireID: chi.URLParam(r, "tireId"), Date: date, Odometer: req.Odometer, DepthMm: req.DepthMm, Notes: req.Notes}

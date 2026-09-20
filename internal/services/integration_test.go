@@ -13,6 +13,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
@@ -270,7 +271,7 @@ func TestIntegrationTiresAndManualCharges(t *testing.T) {
 	}
 
 	// Rotation with an odometer lower than the mount odometer is rejected.
-	var vErr *database.ValidationError
+	var vErr *apierror.Error
 	if err := repo.QuickRotateTires(ctx, v.ID, "FRONT_BACK", 9000, nil); !errors.As(err, &vErr) {
 		t.Fatalf("expected a validation error, got %v", err)
 	}
@@ -652,7 +653,7 @@ func TestIntegrationEditCapabilities(t *testing.T) {
 
 	// Dispose a mounted tire: session closed, DISPOSED, amortized cost fully counted.
 	at, disposeOdo := time.Now().UTC(), 1100.0
-	var vErr *database.ValidationError
+	var vErr *apierror.Error
 	if err := repo.DisposeTire(ctx, v.ID, ids[0], at, &disposeOdo); !errors.As(err, &vErr) {
 		t.Fatalf("odometer below the mount odometer must be rejected, got %v", err)
 	}
@@ -814,7 +815,7 @@ func TestIntegrationCarpoolLegsAndStops(t *testing.T) {
 	}
 
 	// Invalid stops and foreign drives are rejected
-	var vErr *database.ValidationError
+	var vErr *apierror.Error
 	bad := []models.CarpoolPassenger{{PassengerName: "Zoé", Seats: 1, BoardStopIndex: 2, AlightStopIndex: 4}}
 	if err := repo.UpdateCarpoolTrip(ctx, trip, est.Legs, bad); !errors.As(err, &vErr) {
 		t.Fatalf("expected invalid stops to be rejected, got %v", err)
@@ -1089,16 +1090,16 @@ func TestIntegrationMaintenanceAmortizationAndOdometer(t *testing.T) {
 
 	// m3: Revision 80,000 km (600 €) amortized over 50,000 km which closes m1
 	m3 := &models.MaintenanceExpense{
-		VehicleID:            v.ID,
-		Category:             "MAINTENANCE",
-		Amount:               60000, // 600.00 €
-		Currency:             "EUR",
-		Date:                 base.Add(180 * 24 * time.Hour), // September 2024
-		AmortizationMode:     "DISTANCE",
-		CoverageKm:           &covKm,
-		CoverageMonths:       &covMonths,
+		VehicleID:           v.ID,
+		Category:            "MAINTENANCE",
+		Amount:              60000, // 600.00 €
+		Currency:            "EUR",
+		Date:                base.Add(180 * 24 * time.Hour), // September 2024
+		AmortizationMode:    "DISTANCE",
+		CoverageKm:          &covKm,
+		CoverageMonths:      &covMonths,
 		ClosesMaintenanceID: &m1.ID,
-		Description:          "Révision 80k",
+		Description:         "Révision 80k",
 	}
 	if err := repo.CreateMaintenanceExpense(ctx, m3); err != nil {
 		t.Fatal(err)
@@ -1427,8 +1428,6 @@ func TestRecordSyncFailureAlertsOnlyOnTransitionToOpen(t *testing.T) {
 		t.Fatalf("expected circuit breaker to be OPEN, got %s", cb.State())
 	}
 }
-
-
 
 func TestIntegrationTollSourceAndHasTollFilter(t *testing.T) {
 	_, repo := setupIntegrationDB(t, false)
@@ -1919,7 +1918,6 @@ func TestIntegrationHighwayPredicateMatchesGoHeuristic(t *testing.T) {
 		t.Error("a drive with a detected toll segment must be highway")
 	}
 }
-
 
 func TestIntegrationVehicleGrafanaURL(t *testing.T) {
 	_, repo := setupIntegrationDB(t, false)

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"errors"
-	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/money"
 )
@@ -37,18 +37,22 @@ var driveExpenseTypes = map[string]bool{
 // writeRepoError maps repository errors to HTTP responses without leaking internal details.
 // The 500 case is logged with the request ID (via the context-aware requestIDHandler set up
 // in main.go) so it can be correlated with the corresponding chi access log line.
+func isAPIError(err error) bool {
+	_, ok := apierror.As(err)
+	return ok
+}
+
 func writeRepoError(w http.ResponseWriter, r *http.Request, err error, fallback string) {
-	var validationErr *database.ValidationError
 	switch {
-	case errors.As(err, &validationErr):
-		writeError(w, http.StatusBadRequest, validationErr.Message)
+	case isAPIError(err):
+		writeErr(w, http.StatusBadRequest, err)
 	case errors.Is(err, database.ErrNotFound):
-		writeError(w, http.StatusNotFound, "Élément introuvable")
+		writeAPIError(w, http.StatusNotFound, apierror.New("request.not_found", "Item not found"))
 	case errors.Is(err, database.ErrForeignReference):
-		writeError(w, http.StatusBadRequest, "Référence invalide : trajet, groupe ou pneu inexistant pour ce véhicule")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_reference", "Invalid reference: the drive, group or tire does not exist for this vehicle"))
 	default:
 		slog.ErrorContext(r.Context(), fallback, "component", "api", "error", err)
-		writeError(w, http.StatusInternalServerError, fallback)
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", fallback))
 	}
 }
 
@@ -61,7 +65,7 @@ func parseDate(value string) (time.Time, error) {
 	if t, err := time.Parse("2006-01-02", value); err == nil {
 		return t, nil
 	}
-	return time.Time{}, fmt.Errorf("date invalide : %q", value)
+	return time.Time{}, apierror.Newf("request.invalid_date_value", "Invalid date: %q", value)
 }
 
 // parseOptionalDate parses an optional date; empty values yield nil.
@@ -78,10 +82,10 @@ func parseOptionalDate(value *string) (*time.Time, error) {
 
 func validateAmount(amount money.Cents, allowZero bool) error {
 	if amount > money.Max {
-		return errors.New("montant invalide")
+		return apierror.New("expense.amount_invalid", "Invalid amount")
 	}
 	if amount < 0 || (!allowZero && amount == 0) {
-		return errors.New("le montant doit être positif")
+		return apierror.New("expense.amount_positive", "The amount must be positive")
 	}
 	return nil
 }
@@ -89,7 +93,7 @@ func validateAmount(amount money.Cents, allowZero bool) error {
 // validateQuantity validates a non-monetary positive quantity (kWh, km).
 func validateQuantity(v float64, max float64) error {
 	if math.IsNaN(v) || math.IsInf(v, 0) || v < 0 || v > max {
-		return errors.New("valeur invalide")
+		return apierror.New("request.invalid_value", "Invalid value")
 	}
 	return nil
 }
@@ -101,13 +105,13 @@ func normalizeCurrency(currency string, fxRate *float64) (string, *float64, erro
 		cur = "EUR"
 	}
 	if !currencyPattern.MatchString(cur) {
-		return "", nil, fmt.Errorf("devise invalide : %q", currency)
+		return "", nil, apierror.Newf("expense.currency_invalid", "Invalid currency: %q", currency)
 	}
 	if cur == "EUR" {
 		return cur, nil, nil
 	}
 	if fxRate == nil || math.IsNaN(*fxRate) || math.IsInf(*fxRate, 0) || *fxRate <= 0 {
-		return "", nil, fmt.Errorf("un taux de conversion vers l'euro est requis pour une dépense en %s", cur)
+		return "", nil, apierror.Newf("expense.fx_required", "A conversion rate to the euro is required for an expense in %s", cur)
 	}
 	return cur, fxRate, nil
 }

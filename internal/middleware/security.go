@@ -81,7 +81,7 @@ func OriginCheck(allowed []string) func(http.Handler) http.Handler {
 			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusForbidden)
-			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Origine de la requête non autorisée"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "Request origin not allowed", "code": "request.origin_denied"})
 		})
 	}
 }

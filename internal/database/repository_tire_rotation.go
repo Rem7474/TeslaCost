@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -51,7 +52,7 @@ func (r *Repository) QuickRotateTires(ctx context.Context, vehicleID string, mod
 	case "SWAP_PACK":
 		ids := uniqueStrings(swapWithPackTireIDs)
 		if len(ids) == 0 || len(ids) > 4 {
-			return validationErrorf("un échange de train requiert entre 1 et 4 pneus")
+			return apierror.New("tire.swap_count", "An axle swap needs between 1 and 4 tires")
 		}
 		for _, t := range mountedMap {
 			newPositions[t.ID] = models.TirePosStorage
@@ -63,12 +64,12 @@ func (r *Repository) QuickRotateTires(ctx context.Context, vehicleID string, mod
 				return ErrForeignReference
 			}
 			if isMountedPosition(t.CurrentPosition) || t.CurrentPosition == models.TirePosDisposed {
-				return validationErrorf("le pneu %s n'est pas en stockage", tireID)
+				return apierror.Newf("tire.not_in_storage", "The tire %s is not in storage", tireID)
 			}
 			newPositions[tireID] = positions[i]
 		}
 	default:
-		return validationErrorf("mode de permutation inconnu : %s", mode)
+		return apierror.Newf("tire.rotation_mode", "Unknown rotation mode: %s", mode)
 	}
 
 	notes := fmt.Sprintf("Permutation rapide: %s", mode)
@@ -96,7 +97,7 @@ func (r *Repository) AddTireRotation(ctx context.Context, rot *models.TireRotati
 			continue
 		}
 		if !isValidTirePosition(pos) {
-			return validationErrorf("position de pneu invalide : %s", posStr)
+			return apierror.Newf("tire.position_invalid", "Invalid tire position: %s", posStr)
 		}
 		if _, owned := current[tireID]; !owned {
 			return ErrForeignReference
@@ -134,14 +135,14 @@ func lockVehicleTires(ctx context.Context, tx pgx.Tx, vehicleID string) (map[str
 // recomputes distances and records the rotation, all inside the caller's transaction.
 func (r *Repository) applyTirePositions(ctx context.Context, tx pgx.Tx, vehicleID string, current map[string]*models.Tire, newPositions map[string]models.TirePosition, at time.Time, odometer float64, notes *string) error {
 	if len(newPositions) == 0 {
-		return validationErrorf("aucun pneu à déplacer")
+		return apierror.New("tire.nothing_to_move", "No tire to move")
 	}
 	if odometer <= 0 {
-		return validationErrorf("un relevé d'odomètre valide est requis")
+		return apierror.New("odometer.valid_required", "A valid odometer reading is required")
 	}
 	for tireID := range newPositions {
 		if t := current[tireID]; t.MountedOdometer != nil && odometer < *t.MountedOdometer {
-			return validationErrorf("l'odomètre (%.0f km) est inférieur à l'odomètre de montage du pneu %s (%.0f km)", odometer, tireID, *t.MountedOdometer)
+			return apierror.Newf("tire.odometer_below_mount_tire", "The odometer (%.0f km) is lower than the fitting odometer of the tire %s (%.0f km)", odometer, tireID, *t.MountedOdometer)
 		}
 	}
 
@@ -154,7 +155,7 @@ func (r *Repository) applyTirePositions(ctx context.Context, tx pgx.Tx, vehicleI
 		}
 		if isMountedPosition(pos) {
 			if other, taken := finalPositions[pos]; taken {
-				return validationErrorf("la position %s serait occupée par deux pneus (%s et %s)", pos, other, id)
+				return apierror.Newf("tire.position_double", "The position %s would be occupied by two tires (%s and %s)", pos, other, id)
 			}
 			finalPositions[pos] = id
 		}

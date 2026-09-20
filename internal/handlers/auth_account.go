@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/auth"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
@@ -59,7 +60,7 @@ func (h *AuthHandler) RevokeSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !found {
-		writeError(w, http.StatusNotFound, "Session introuvable")
+		writeAPIError(w, http.StatusNotFound, apierror.New("auth.session_not_found", "Session not found"))
 		return
 	}
 	if id == current {
@@ -92,59 +93,59 @@ type ChangePasswordRequest struct {
 // which the frontend would take for an expired session.
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.OIDCEnabled && h.cfg.OIDCDisableLocalAuth {
-		writeError(w, http.StatusForbidden, "L'authentification locale est désactivée : le mot de passe se gère chez votre fournisseur SSO")
+		writeAPIError(w, http.StatusForbidden, apierror.New("auth.local_disabled_password", "Local authentication is disabled: manage your password with your SSO provider"))
 		return
 	}
 	userID := middleware.GetUserID(r.Context())
 
 	var req ChangePasswordRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.unauthorized", "Unauthorized"))
 		return
 	}
 	if user.PasswordHash == nil {
-		writeError(w, http.StatusBadRequest, "Ce compte n'a pas de mot de passe local : il se connecte par SSO")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.no_local_password", "This account has no local password: it signs in with SSO"))
 		return
 	}
 
 	// Checking the current password is a guessing surface for a stolen session, so it shares the sign-in limit.
 	if blocked, retryAfter := h.throttle.Blocked(user.Email); blocked {
 		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
-		writeError(w, http.StatusTooManyRequests, "Trop de tentatives : réessayez plus tard")
+		writeAPIError(w, http.StatusTooManyRequests, apierror.New("auth.too_many_attempts", "Too many attempts: try again later"))
 		return
 	}
 	if !auth.CheckPassword(req.CurrentPassword, *user.PasswordHash) {
 		h.throttle.Fail(user.Email)
-		writeError(w, http.StatusForbidden, "Mot de passe actuel incorrect")
+		writeAPIError(w, http.StatusForbidden, apierror.New("auth.current_password_wrong", "Current password is incorrect"))
 		return
 	}
 	h.throttle.Reset(user.Email)
 
 	switch {
 	case len(req.NewPassword) < 8:
-		writeError(w, http.StatusBadRequest, "Le nouveau mot de passe doit faire au moins 8 caractères")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.new_password_too_short", "The new password must be at least 8 characters long"))
 		return
 	case len(req.NewPassword) > auth.MaxPasswordBytes:
-		writeError(w, http.StatusBadRequest, "Le nouveau mot de passe ne doit pas dépasser 72 octets")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.new_password_too_long", "The new password must not exceed 72 bytes"))
 		return
 	case req.NewPassword == req.CurrentPassword:
-		writeError(w, http.StatusBadRequest, "Le nouveau mot de passe doit différer de l'actuel")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.password_unchanged", "The new password must differ from the current one"))
 		return
 	}
 
 	hash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := h.repo.UpdatePasswordHash(r.Context(), userID, hash); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
-			writeError(w, http.StatusUnauthorized, "Unauthorized")
+			writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.unauthorized", "Unauthorized"))
 			return
 		}
 		writeRepoError(w, r, err, "Impossible de modifier le mot de passe")
@@ -155,7 +156,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	revoked, err := h.repo.RevokeUserSessionsExcept(r.Context(), userID, h.currentFamily(r))
 	if err != nil {
 		slog.ErrorContext(r.Context(), "password changed but the other sessions could not be revoked", "component", "auth", "error", err)
-		writeError(w, http.StatusInternalServerError, "Mot de passe modifié, mais les autres appareils n'ont pas pu être déconnectés")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("auth.password_changed_sessions_failed", "Password changed, but the other devices could not be signed out"))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"message": "Mot de passe modifié", "sessions_revoked": revoked})

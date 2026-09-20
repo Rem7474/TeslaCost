@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
@@ -61,15 +62,15 @@ func validateOptionalAmounts(amounts ...*money.Cents) error {
 	return nil
 }
 
-func validateMonths(v *int, label string, required bool) error {
+func validateMonths(v *int, kind string, required bool) error {
 	if v == nil {
 		if required {
-			return errors.New(label + " est requise")
+			return apierror.New("ownership."+kind+"_months_required", "A duration is required")
 		}
 		return nil
 	}
 	if *v <= 0 || *v > 360 {
-		return errors.New(label + " doit être comprise entre 1 et 360 mois")
+		return apierror.New("ownership."+kind+"_months_range", "The duration must be between 1 and 360 months")
 	}
 	return nil
 }
@@ -80,17 +81,17 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 	switch o.AcquisitionType {
 	case models.AcquisitionCash, models.AcquisitionLoan, models.AcquisitionLOA, models.AcquisitionLLD:
 	default:
-		return nil, errors.New("mode d'acquisition invalide (CASH, LOAN, LOA ou LLD)")
+		return nil, apierror.New("ownership.mode_invalid", "Invalid acquisition mode (CASH, LOAN, LOA or LLD)")
 	}
 
 	start, err := parseDate(req.StartDate)
 	if err != nil {
-		return nil, errors.New("la date de début (achat ou contrat) est requise")
+		return nil, apierror.New("ownership.start_required", "The start date (purchase or contract) is required")
 	}
 	o.StartDate = start
 	if req.StartOdometer != nil {
 		if err := validateQuantity(*req.StartOdometer, 2_000_000); err != nil {
-			return nil, errors.New("odomètre de début invalide")
+			return nil, apierror.New("ownership.start_odometer", "Invalid starting odometer")
 		}
 		o.StartOdometer = req.StartOdometer
 	}
@@ -100,7 +101,7 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 		return nil, err
 	}
 	if end != nil && end.Before(start) {
-		return nil, errors.New("la fin de détention précède le début du contrat")
+		return nil, apierror.New("ownership.end_before_start", "The end of ownership is before the start of the contract")
 	}
 	o.EndDate = end
 	if err := validateOptionalAmounts(req.SalePrice, req.ExpectedResaleValue); err != nil {
@@ -108,13 +109,13 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 	}
 
 	owned := func() error {
-		if err := validateMonths(req.ExpectedHoldingMonths, "La durée de détention", false); err != nil {
+		if err := validateMonths(req.ExpectedHoldingMonths, "holding", false); err != nil {
 			return err
 		}
 		o.ExpectedResaleValue, o.ExpectedHoldingMonths = req.ExpectedResaleValue, req.ExpectedHoldingMonths
 		if req.SalePrice != nil {
 			if end == nil {
-				return errors.New("un prix de revente requiert la date de fin de détention")
+				return apierror.New("ownership.resale_needs_end", "A resale price needs the end of ownership date")
 			}
 			o.SalePrice = req.SalePrice
 		}
@@ -124,7 +125,7 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 	switch o.AcquisitionType {
 	case models.AcquisitionCash, models.AcquisitionLoan:
 		if req.PurchasePrice == nil || *req.PurchasePrice <= 0 {
-			return nil, errors.New("le prix d'achat est requis")
+			return nil, apierror.New("ownership.price_required", "The purchase price is required")
 		}
 		if err := validateOptionalAmounts(req.PurchasePrice, req.PurchaseFees, req.Incentives); err != nil {
 			return nil, err
@@ -132,7 +133,7 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 		o.PurchasePrice, o.PurchaseFees, o.Incentives = req.PurchasePrice, req.PurchaseFees, req.Incentives
 		net := *req.PurchasePrice + centsValue(req.PurchaseFees) - centsValue(req.Incentives)
 		if req.ExpectedResaleValue != nil && *req.ExpectedResaleValue > net {
-			return nil, errors.New("la valeur de revente estimée dépasse le coût d'achat net des aides")
+			return nil, apierror.New("ownership.resale_above_cost", "The estimated resale value exceeds the purchase cost net of grants")
 		}
 		if err := owned(); err != nil {
 			return nil, err
@@ -140,18 +141,18 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 
 		if o.AcquisitionType == models.AcquisitionLoan {
 			if req.LoanAmount == nil || *req.LoanAmount <= 0 {
-				return nil, errors.New("le montant emprunté est requis")
+				return nil, apierror.New("ownership.loan_required", "The amount borrowed is required")
 			}
 			if err := validateOptionalAmounts(req.LoanAmount, req.LoanFees, req.LoanInsuranceMonthly); err != nil {
 				return nil, err
 			}
 			if *req.LoanAmount > *req.PurchasePrice+centsValue(req.PurchaseFees) {
-				return nil, errors.New("le montant emprunté dépasse le coût d'achat")
+				return nil, apierror.New("ownership.loan_above_cost", "The amount borrowed exceeds the purchase cost")
 			}
 			if req.LoanRatePct == nil || *req.LoanRatePct < 0 || *req.LoanRatePct > 30 {
-				return nil, errors.New("le taux du crédit doit être compris entre 0 et 30 %")
+				return nil, apierror.New("ownership.loan_rate", "The loan rate must be between 0 and 30%")
 			}
-			if err := validateMonths(req.LoanDurationMonths, "La durée du crédit", true); err != nil {
+			if err := validateMonths(req.LoanDurationMonths, "loan", true); err != nil {
 				return nil, err
 			}
 			o.LoanAmount, o.LoanRatePct, o.LoanDurationMonths = req.LoanAmount, req.LoanRatePct, req.LoanDurationMonths
@@ -160,9 +161,9 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 
 	case models.AcquisitionLOA, models.AcquisitionLLD:
 		if req.LeaseMonthlyRent == nil || *req.LeaseMonthlyRent <= 0 {
-			return nil, errors.New("le loyer mensuel est requis")
+			return nil, apierror.New("ownership.rent_required", "The monthly rent is required")
 		}
-		if err := validateMonths(req.LeaseDurationMonths, "La durée du contrat", true); err != nil {
+		if err := validateMonths(req.LeaseDurationMonths, "lease", true); err != nil {
 			return nil, err
 		}
 		if err := validateOptionalAmounts(req.LeaseMonthlyRent, req.LeaseDownPayment, req.LeaseFees, req.LeaseDeposit,
@@ -171,12 +172,12 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 		}
 		if req.LeaseKmAllowancePerYear != nil {
 			if err := validateQuantity(*req.LeaseKmAllowancePerYear, 200_000); err != nil {
-				return nil, errors.New("forfait kilométrique invalide")
+				return nil, apierror.New("ownership.allowance_invalid", "Invalid mileage allowance")
 			}
 		}
 		if req.LeaseExcessKmPrice != nil {
 			if err := validateQuantity(*req.LeaseExcessKmPrice, 5); err != nil {
-				return nil, errors.New("prix du kilomètre supplémentaire invalide (0 à 5 €/km)")
+				return nil, apierror.New("ownership.excess_price", "Invalid price per extra kilometre (0 to 5 €/km)")
 			}
 		}
 		o.LeaseMonthlyRent, o.LeaseDurationMonths, o.LeaseDownPayment = req.LeaseMonthlyRent, req.LeaseDurationMonths, req.LeaseDownPayment
@@ -193,10 +194,10 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 			}
 			if exercised != nil {
 				if exercised.Before(start) || (end != nil && end.Before(*exercised)) {
-					return nil, errors.New("la date de levée de l'option doit être comprise dans la période de détention")
+					return nil, apierror.New("ownership.option_date_range", "The option exercise date must fall within the ownership period")
 				}
 				if req.LeasePurchaseOptionPrice == nil {
-					return nil, errors.New("la levée de l'option requiert le prix de l'option d'achat")
+					return nil, apierror.New("ownership.option_needs_price", "Exercising the option needs the purchase option price")
 				}
 				o.OptionExercisedDate = exercised
 				if err := owned(); err != nil {
@@ -205,7 +206,7 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 			}
 		}
 		if o.OptionExercisedDate == nil && req.SalePrice != nil {
-			return nil, errors.New("un véhicule loué sans levée d'option ne peut pas avoir de prix de revente")
+			return nil, apierror.New("ownership.leased_no_resale", "A leased vehicle without an exercised option cannot have a resale price")
 		}
 	}
 	return o, nil
@@ -224,11 +225,11 @@ func (h *VehicleHandler) GetOwnership(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "id")
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if v.Role != models.RoleOwner {
-		writeError(w, http.StatusForbidden, "Seul le propriétaire du véhicule peut consulter ou modifier le contrat d'acquisition")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.owner_only_contract", "Only the vehicle owner can view or change the acquisition contract"))
 		return
 	}
 	o, err := h.repo.GetVehicleOwnership(r.Context(), vehicleID)
@@ -245,22 +246,22 @@ func (h *VehicleHandler) SaveOwnership(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "id")
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if v.Role != models.RoleOwner {
-		writeError(w, http.StatusForbidden, "Seul le propriétaire du véhicule peut consulter ou modifier le contrat d'acquisition")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.owner_only_contract", "Only the vehicle owner can view or change the acquisition contract"))
 		return
 	}
 
 	var req SaveOwnershipRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	o, err := buildOwnership(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := h.repo.SaveVehicleOwnership(r.Context(), o); err != nil {
@@ -276,11 +277,11 @@ func (h *VehicleHandler) DeleteOwnership(w http.ResponseWriter, r *http.Request)
 	vehicleID := chi.URLParam(r, "id")
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if v.Role != models.RoleOwner {
-		writeError(w, http.StatusForbidden, "Seul le propriétaire du véhicule peut consulter ou modifier le contrat d'acquisition")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.owner_only_contract", "Only the vehicle owner can view or change the acquisition contract"))
 		return
 	}
 	if err := h.repo.DeleteVehicleOwnership(r.Context(), vehicleID); err != nil && !errors.Is(err, database.ErrNotFound) {

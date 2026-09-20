@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -358,7 +359,7 @@ func (r *Repository) UpdateTripGroup(ctx context.Context, tg *models.TripGroup, 
 	}
 	if driveIDs != nil {
 		if len(uniqueStrings(driveIDs)) == 0 {
-			return validationErrorf("un voyage doit contenir au moins un trajet")
+			return apierror.New("trip.needs_drive", "A trip must contain at least one drive")
 		}
 		if err := ensureDrivesOwned(ctx, tx, tg.VehicleID, driveIDs); err != nil {
 			return err

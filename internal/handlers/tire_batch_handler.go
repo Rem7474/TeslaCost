@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
@@ -39,26 +39,26 @@ func (h *TireHandler) BatchCreate(w http.ResponseWriter, r *http.Request) {
 
 	var req BatchCreateTiresRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if req.Brand == "" || req.Model == "" || req.Dimension == "" {
-		writeError(w, http.StatusBadRequest, "Brand, model and dimension are required")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("tire.fields_required", "Brand, model and size are required"))
 		return
 	}
 
 	purchaseDate, err := parseDate(req.PurchaseDate)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := validateAmount(req.TotalPrice, true); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := validateAmount(req.UnitPrice, true); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -177,7 +177,7 @@ func buildTirePatch(req *BatchUpdateTiresRequest) (database.TirePatch, error) {
 		case models.TireSeasonSummer, models.TireSeasonWinter, models.TireSeasonAllSeason:
 			p.Season = req.Season
 		default:
-			return p, errors.New("saison invalide")
+			return p, apierror.New("tire.season_invalid", "Invalid season")
 		}
 	}
 	var err error
@@ -198,21 +198,21 @@ func buildTirePatch(req *BatchUpdateTiresRequest) (database.TirePatch, error) {
 	for _, q := range []struct {
 		v   *float64
 		max float64
-		msg string
+		err *apierror.Error
 	}{
-		{req.InitialDepthMm, 20, "profondeur initiale invalide"},
-		{req.MinLegalDepthMm, 20, "profondeur minimale invalide"},
-		{req.InitialDistanceKm, 500_000, "kilométrage initial invalide"},
-		{req.MountedOdometer, 2_000_000, "odomètre de montage invalide"},
+		{req.InitialDepthMm, 20, apierror.New("tire.initial_depth_invalid", "Invalid initial depth")},
+		{req.MinLegalDepthMm, 20, apierror.New("tire.min_depth_invalid", "Invalid minimum depth")},
+		{req.InitialDistanceKm, 500_000, apierror.New("tire.initial_distance_invalid", "Invalid initial mileage")},
+		{req.MountedOdometer, 2_000_000, apierror.New("tire.mount_odometer_invalid", "Invalid fitting odometer")},
 	} {
 		if q.v != nil {
 			if err := validateQuantity(*q.v, q.max); err != nil {
-				return p, errors.New(q.msg)
+				return p, q.err
 			}
 		}
 	}
 	if req.EstimatedLifespanKm != nil && (*req.EstimatedLifespanKm <= 0 || *req.EstimatedLifespanKm > 500_000) {
-		return p, errors.New("durée de vie estimée invalide")
+		return p, apierror.New("tire.lifespan_invalid", "Invalid estimated lifespan")
 	}
 	p.InitialDepthMm, p.MinLegalDepthMm, p.InitialDistanceKm, p.MountedOdometer =
 		req.InitialDepthMm, req.MinLegalDepthMm, req.InitialDistanceKm, req.MountedOdometer
@@ -228,12 +228,12 @@ func (h *TireHandler) BatchUpdate(w http.ResponseWriter, r *http.Request) {
 
 	var req BatchUpdateTiresRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	patch, err := buildTirePatch(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := h.repo.BatchUpdateTires(r.Context(), vehicleID, req.TireIDs, patch); err != nil {
@@ -256,11 +256,11 @@ func (h *TireHandler) BatchDispose(w http.ResponseWriter, r *http.Request) {
 	}
 	var req BatchDisposeTiresRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	if len(req.TireIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "tire_ids requis")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("tire.ids_required", "tire_ids required"))
 		return
 	}
 	at, ok := parseDisposal(w, req.Date, req.Odometer)

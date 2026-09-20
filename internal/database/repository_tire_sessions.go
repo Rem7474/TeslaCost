@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -177,7 +178,7 @@ func (r *Repository) ListTireMountSessions(ctx context.Context, tireID string) (
 func normalizeSessionDistance(s *models.TireMountSession) error {
 	if s.DismountedOdometer != nil {
 		if *s.DismountedOdometer < s.MountedOdometer {
-			return validationErrorf("l'odomètre de démontage est inférieur à celui du montage")
+			return apierror.New("tire.dismount_odometer_lower", "The removal odometer is lower than the fitting odometer")
 		}
 		// Odometers win over a manual distance; a manual distance is kept when odometers are unknown.
 		if *s.DismountedOdometer > s.MountedOdometer {
@@ -187,7 +188,7 @@ func normalizeSessionDistance(s *models.TireMountSession) error {
 		s.DistanceKm = 0
 	}
 	if s.DistanceKm < 0 {
-		return validationErrorf("la distance d'une session ne peut pas être négative")
+		return apierror.New("tire.session_distance_negative", "A session distance cannot be negative")
 	}
 	return nil
 }

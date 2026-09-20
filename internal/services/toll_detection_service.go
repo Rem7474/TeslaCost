@@ -2,9 +2,9 @@ package services
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/crypto"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
@@ -13,7 +13,7 @@ import (
 
 // ErrNoGPSTrace is returned when a drive has no TeslaMate GPS trace to detect tolls from
 // (e.g. a manually-entered drive).
-var ErrNoGPSTrace = errors.New("ce trajet n'a pas de tracé GPS TeslaMate disponible")
+var ErrNoGPSTrace = apierror.New("toll.no_gps", "This drive has no TeslaMate GPS trace available")
 
 // TollDetectionService matches a drive's GPS trace against the vendored OpenTollData
 // toll station reference to detect which toll gates it crossed.

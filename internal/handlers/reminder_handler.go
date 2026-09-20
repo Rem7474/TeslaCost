@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/services"
@@ -60,7 +60,7 @@ func (h *ReminderHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *ReminderHandler) buildReminder(req ReminderPayload, vehicleID, reminderID string) (*models.MaintenanceReminder, error) {
 	title := strings.TrimSpace(req.Title)
 	if title == "" {
-		return nil, errors.New("Title is required")
+		return nil, apierror.New("reminder.title_required", "Title is required")
 	}
 
 	leadKm := req.LeadKm
@@ -109,13 +109,13 @@ func (h *ReminderHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req ReminderPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	rem, err := h.buildReminder(req, vehicleID, "")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -139,13 +139,13 @@ func (h *ReminderHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req ReminderPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	rem, err := h.buildReminder(req, vehicleID, reminderID)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -174,7 +174,7 @@ func (h *ReminderHandler) Complete(w http.ResponseWriter, r *http.Request) {
 
 	var req CompletePayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
@@ -253,13 +253,13 @@ func (h *ReminderHandler) SaveWebhook(w http.ResponseWriter, r *http.Request) {
 
 	var req WebhookPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	url := strings.TrimSpace(req.URL)
 	if url == "" {
-		writeError(w, http.StatusBadRequest, "URL is required")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("vehicle.url_required", "URL is required"))
 		return
 	}
 
@@ -308,13 +308,13 @@ func (h *ReminderHandler) TestWebhook(w http.ResponseWriter, r *http.Request) {
 
 	var req WebhookPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	url := strings.TrimSpace(req.URL)
 	if url == "" {
-		writeError(w, http.StatusBadRequest, "URL is required")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("vehicle.url_required", "URL is required"))
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *ReminderHandler) TestWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.notifications.TestWebhook(r.Context(), webhook, veh.Name); err != nil {
-		writeError(w, http.StatusBadGateway, "Webhook test failed: "+err.Error())
+		writeAPIError(w, http.StatusBadGateway, apierror.Newf("webhook.test_failed", "Webhook test failed: %s", err.Error()))
 		return
 	}
 
