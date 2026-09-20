@@ -1,9 +1,12 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Zap, Lock, Mail, AlertCircle, Shield } from 'lucide-vue-next'
+import { APP_NAME } from '@/brand'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { APP_VERSION } from '@/version'
 
 const router = useRouter()
@@ -33,7 +36,7 @@ onMounted(async () => {
   // Show OIDC error if redirected back after a failure
   const params = new URLSearchParams(window.location.search)
   if (params.get('error') === 'oidc_failed') {
-    error.value = 'Échec de la connexion SSO. Veuillez réessayer ou utiliser votre mot de passe local.'
+    error.value = t('auth.loginView.ssoFailed')
   }
 })
 
@@ -46,7 +49,7 @@ async function handleSubmit() {
     await vehicleStore.fetchVehicles()
     router.push('/')
   } catch (err: any) {
-    error.value = err.message || 'Identifiants invalides'
+    error.value = err.message || t('auth.loginView.invalidCredentials')
   } finally {
     loading.value = false
   }
@@ -60,8 +63,8 @@ async function handleSubmit() {
         <div class="inline-flex p-3 bg-gradient-to-tr from-rose-500 to-amber-500 rounded-2xl shadow-lg shadow-rose-500/20 mb-3">
           <Zap class="w-8 h-8 text-white" />
         </div>
-        <h1 class="text-2xl font-bold tracking-tight text-white">Connexion à TeslaCost</h1>
-        <p class="text-sm text-slate-400 mt-1">Suivi du coût total de possession (TCO) & entretien</p>
+        <h1 class="text-2xl font-bold tracking-tight text-white">{{ $t('auth.loginView.signInTo', { APP_NAME }) }}</h1>
+        <p class="text-sm text-slate-400 mt-1">{{ $t('auth.loginView.totalCostOfOwnershipTco') }}</p>
       </div>
 
       <div v-if="error" class="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-sm text-rose-400">
@@ -76,7 +79,7 @@ async function handleSubmit() {
         class="w-full flex items-center justify-center gap-2 py-3 px-4 border border-slate-600 rounded-xl text-white hover:bg-slate-800 transition-all font-medium text-sm mb-4"
       >
         <Shield class="w-4 h-4 text-rose-400" />
-        Se connecter avec {{ oidcProviderName }}
+        {{ $t('auth.loginView.signInWith', { oidcProviderName }) }}
       </a>
 
       <!-- Separator: shown only when OIDC is enabled AND local form is still visible -->
@@ -88,21 +91,21 @@ async function handleSubmit() {
 
       <form @submit.prevent="handleSubmit" class="space-y-4">
         <div>
-          <label for="login-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email</label>
+          <label for="login-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('auth.loginView.email') }}</label>
           <div class="relative">
             <Mail class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input id="login-email"
               v-model="email"
               type="email"
               required
-              placeholder="votre@email.com"
+              :placeholder="$t('auth.loginView.youExampleCom')"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
           </div>
         </div>
 
         <div>
-          <label for="login-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe</label>
+          <label for="login-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('auth.loginView.password') }}</label>
           <div class="relative">
             <Lock class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input id="login-password"
@@ -120,17 +123,18 @@ async function handleSubmit() {
           :disabled="loading"
           class="w-full py-3 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {{ loading ? 'Connexion en cours...' : 'Se connecter' }}
+          {{ loading ? $t('auth.loginView.signingIn') : $t('auth.loginView.signIn') }}
         </button>
       </form>
 
       <div v-if="registrationEnabled" class="mt-6 text-center text-sm text-slate-400">
-        Pas encore de compte ?
-        <router-link to="/register" class="text-rose-400 hover:text-rose-300 font-medium">Créer un compte</router-link>
+        {{ $t('auth.loginView.noAccountYet') }}
+        <router-link to="/register" class="text-rose-400 hover:text-rose-300 font-medium">{{ $t('auth.loginView.createAnAccount') }}</router-link>
       </div>
 
-      <div class="mt-6 pt-4 border-t border-slate-800 text-center">
-        <span class="text-[11px] font-mono text-slate-400">TeslaCost {{ APP_VERSION }}</span>
+      <div class="mt-6 pt-4 border-t border-slate-800 flex flex-col items-center gap-2">
+        <LanguageSwitcher />
+        <span class="text-[11px] font-mono text-slate-400">{{ APP_NAME }} {{ APP_VERSION }}</span>
       </div>
     </div>
   </div>
