@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { BatteryMedium } from 'lucide-vue-next'
@@ -50,8 +51,8 @@ function draw() {
     data: {
       labels: months,
       datasets: [
-        { label: 'Capacité TeslaMate', data: teslamate, borderColor: '#34d399', backgroundColor: '#34d399', spanGaps: true, tension: 0.25, pointRadius: 4 },
-        { label: 'Estimée d’après les recharges', data: estimated, borderColor: '#a78bfa', backgroundColor: '#a78bfa', borderDash: [5, 4], spanGaps: true, tension: 0.25, pointRadius: 3 },
+        { label: t('dashboard.energyBatterySection.teslamateCapacity'), data: teslamate, borderColor: '#34d399', backgroundColor: '#34d399', spanGaps: true, tension: 0.25, pointRadius: 4 },
+        { label: t('dashboard.energyBatterySection.estimatedFromCharges'), data: estimated, borderColor: '#a78bfa', backgroundColor: '#a78bfa', borderDash: [5, 4], spanGaps: true, tension: 0.25, pointRadius: 3 },
       ],
     },
     options: {
@@ -60,7 +61,7 @@ function draw() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: { position: 'top', labels: { color: AXIS_TEXT, font: { size: 11 } } },
-        tooltip: { callbacks: { label: (ctx) => (ctx.raw == null ? '' : `${ctx.dataset.label} : ${fmt(Number(ctx.raw), 1)} kWh`) } },
+        tooltip: { callbacks: { label: (ctx) => (ctx.raw == null ? '' : t('dashboard.energyBatterySection.tooltip', { label: ctx.dataset.label, value: fmt(Number(ctx.raw), 1) })) } },
       },
       scales: {
         x: { grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT } },
@@ -82,37 +83,37 @@ onBeforeUnmount(() => chart?.destroy())
   <div v-if="hasContent" class="space-y-3" aria-labelledby="energy-battery-title" role="group">
     <h4 id="energy-battery-title" class="flex items-center gap-2 text-xs font-bold text-slate-200">
       <BatteryMedium class="h-4 w-4 text-emerald-400" aria-hidden="true" />
-      Batterie
+      {{ $t('dashboard.energyBatterySection.battery') }}
     </h4>
 
     <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2">
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Santé selon TeslaMate</dt>
+        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyBatterySection.healthAccordingToTeslamate') }}</dt>
         <dd v-if="latest" class="mt-1 text-xl font-bold text-white">
           {{ fmt(latest.health_percent, 1) }} <span class="text-xs font-medium text-slate-400">%</span>
         </dd>
-        <dd v-else class="mt-1 text-sm text-slate-400">Pas encore de mesure</dd>
+        <dd v-else class="mt-1 text-sm text-slate-400">{{ $t('dashboard.energyBatterySection.noMeasurementYet') }}</dd>
         <p class="mt-0.5 text-[11px] text-slate-400">
-          <template v-if="latest">{{ fmt(latest.current_capacity_kwh, 1) }} kWh sur {{ fmt(latest.max_capacity_kwh, 1) }} kWh, la meilleure capacité observée (et non la capacité neuve).</template>
-          <template v-else>Relevée à chaque synchronisation si TeslaMateApi expose <code>battery-health</code>.</template>
+          <template v-if="latest">{{ $t('dashboard.energyBatterySection.kwhOutOfKwhThe', { value: fmt(latest.current_capacity_kwh, 1), value2: fmt(latest.max_capacity_kwh, 1) }) }}</template>
+          <template v-else>{{ $t('dashboard.energyBatterySection.readAtEachSynchronizationIf') }} <code>battery-health</code>.</template>
         </p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Capacité estimée</dt>
+        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyBatterySection.estimatedCapacity') }}</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ fmt(stats.summary.estimated_capacity_kwh, 1) }} <span class="text-xs font-medium text-slate-400">kWh</span></dd>
         <p class="mt-0.5 text-[11px] text-slate-400">
-          Médiane des {{ stats.summary.capacity_samples ?? 0 }} dernières recharges d'au moins 30 points de batterie : énergie ajoutée sur pourcentage gagné. Simple ordre de grandeur.
+          {{ $t('dashboard.energyBatterySection.medianOfTheLastCharges', { capacity_samples: stats.summary.capacity_samples ?? 0 }) }}
         </p>
       </div>
     </dl>
 
     <div v-if="showChart" class="h-52">
-      <canvas ref="canvas" role="img" aria-label="Capacité de la batterie par mois : mesure TeslaMate et estimation d'après les recharges"></canvas>
+      <canvas ref="canvas" role="img" :aria-label="$t('dashboard.energyBatterySection.batteryCapacityPerMonthTeslamate')"></canvas>
     </div>
     <div v-if="showChart" class="sr-only">
       <table>
-        <caption>Capacité de la batterie par mois</caption>
-        <thead><tr><th>Mois</th><th>TeslaMate (kWh)</th><th>Estimée (kWh)</th></tr></thead>
+        <caption>{{ $t('dashboard.energyBatterySection.batteryCapacityPerMonth') }}</caption>
+        <thead><tr><th>{{ $t('dashboard.energyBatterySection.month') }}</th><th>{{ $t('dashboard.energyBatterySection.teslamateKwh') }}</th><th>{{ $t('dashboard.energyBatterySection.estimatedKwh') }}</th></tr></thead>
         <tbody>
           <tr v-for="(m, i) in series.months" :key="m">
             <td>{{ m }}</td><td>{{ fmt(series.teslamate[i] ?? undefined, 1) }}</td><td>{{ fmt(series.estimated[i] ?? undefined, 1) }}</td>
@@ -122,8 +123,8 @@ onBeforeUnmount(() => chart?.destroy())
     </div>
 
     <p v-if="grafanaUrl" class="text-[11px] text-slate-400">
-      Courbes détaillées dans
-      <a :href="grafanaUrl" target="_blank" rel="noopener noreferrer" class="font-semibold text-indigo-300 underline">Grafana TeslaMate</a>.
+      {{ $t('dashboard.energyBatterySection.detailedCurvesIn') }}
+      <a :href="grafanaUrl" target="_blank" rel="noopener noreferrer" class="font-semibold text-indigo-300 underline">{{ $t('dashboard.energyBatterySection.teslamateGrafana') }}</a>.
     </p>
   </div>
 </template>

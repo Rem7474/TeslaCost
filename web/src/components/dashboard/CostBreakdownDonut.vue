@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 
@@ -18,7 +19,7 @@ function renderChart() {
   donutChartInstance = new Chart(donutChartRef.value, {
     type: 'doughnut',
     data: {
-      labels: ['Énergie', 'Péages & Parkings', 'Pneus (usure amortie)', 'Entretien & réparations', 'Assurance', 'Financement & location', 'Décote', 'Abonnements, taxes & autres'],
+      labels: ['energy', 'tolls', 'tires', 'maintenance', 'insurance', 'financing', 'depreciation', 'other'].map((k) => t(`dashboard.donut.${k}`)),
       datasets: [
         {
           data: [
@@ -56,9 +57,9 @@ onUnmounted(() => {
 
 <template>
   <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
-    <h3 class="text-sm font-bold text-white mb-4">Répartition du coût complet</h3>
+    <h3 class="text-sm font-bold text-white mb-4">{{ $t('dashboard.costBreakdownDonut.fullCostBreakdown') }}</h3>
     <div class="h-56 sm:h-64">
-      <canvas ref="donutChartRef" role="img" aria-label="Répartition du coût complet par poste"></canvas>
+      <canvas ref="donutChartRef" role="img" :aria-label="$t('dashboard.costBreakdownDonut.fullCostBreakdownByCategory')"></canvas>
     </div>
   </div>
 </template>

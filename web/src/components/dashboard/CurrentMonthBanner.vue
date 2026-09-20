@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 import { computed } from 'vue'
 import { ArrowRight, Calendar, PieChart } from 'lucide-vue-next'
 import { currentMonthStats as buildCurrentMonthStats } from '@/utils/dashboard'
@@ -17,14 +18,14 @@ const currentMonthStats = computed(() => buildCurrentMonthStats(props.monthlyCos
       </div>
       <div class="min-w-0 flex-1">
         <div class="flex items-center gap-2 flex-wrap">
-          <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">Activité du mois ({{ currentMonthStats.month }})</span>
+          <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">{{ $t('dashboard.currentMonthBanner.activityThisMonth', { month: currentMonthStats.month }) }}</span>
         </div>
         <div class="text-base sm:text-lg font-bold text-white flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
-          <span>{{ Math.round(currentMonthStats.distance_km).toLocaleString('fr-FR') }} km roulés</span>
+          <span>{{ $t('dashboard.currentMonthBanner.kmDriven', { distance_km: Math.round(currentMonthStats.distance_km).toLocaleString(intlLocale()) }) }}</span>
           <span class="text-slate-500">•</span>
           <span class="text-emerald-400">{{ currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km.toFixed(3) + ' €/km' : '0.000 €/km' }}</span>
           <span class="text-slate-500">•</span>
-          <span class="text-slate-300">{{ currentMonthStats.total.toFixed(2) }} € dépensés</span>
+          <span class="text-slate-300">{{ $t('dashboard.currentMonthBanner.spent', { value: currentMonthStats.total.toFixed(2) }) }}</span>
         </div>
       </div>
     </div>
@@ -35,13 +36,13 @@ const currentMonthStats = computed(() => buildCurrentMonthStats(props.monthlyCos
         class="px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
       >
         <PieChart class="w-3.5 h-3.5" />
-        <span>Voir la répartition</span>
+        <span>{{ $t('dashboard.currentMonthBanner.viewTheBreakdown') }}</span>
       </button>
       <router-link
         to="/drives"
         class="text-xs font-semibold text-slate-400 hover:text-white flex items-center gap-1 px-2 py-1.5"
       >
-        Trajets <ArrowRight class="w-3.5 h-3.5" />
+        {{ $t('dashboard.currentMonthBanner.drives') }} <ArrowRight class="w-3.5 h-3.5" />
       </router-link>
     </div>
   </div>

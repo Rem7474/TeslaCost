@@ -28,7 +28,7 @@ const urgentRemindersSummary = computed(() => summary.value.summary)
       </div>
       <div>
         <div class="text-sm font-bold text-white flex items-center gap-2">
-          <span>{{ hasOverdueReminders ? 'Entretien(s) en retard' : 'Entretien(s) à prévoir prochainement' }}</span>
+          <span>{{ hasOverdueReminders ? $t('dashboard.urgentRemindersBanner.overdue') : $t('dashboard.urgentRemindersBanner.dueSoon') }}</span>
           <span
             class="px-2 py-0.5 text-xs rounded-full font-bold"
             :class="hasOverdueReminders ? 'bg-rose-500/20 text-rose-400' : 'bg-amber-500/20 text-amber-400'"
@@ -46,7 +46,7 @@ const urgentRemindersSummary = computed(() => summary.value.summary)
       class="px-3.5 py-1.5 text-xs font-semibold rounded-xl shrink-0 transition-colors inline-flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
       :class="hasOverdueReminders ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'bg-amber-600 hover:bg-amber-500 text-white'"
     >
-      Consulter les rappels
+      {{ $t('dashboard.urgentRemindersBanner.viewTheReminders') }}
       <ArrowRight class="w-3.5 h-3.5" />
     </router-link>
   </div>

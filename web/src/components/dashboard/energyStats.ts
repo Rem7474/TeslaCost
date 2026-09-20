@@ -1,3 +1,4 @@
+import { intlLocale } from '@/i18n'
 // Shape of GET /api/vehicles/{id}/energy-stats, shared by the dashboard sections.
 
 export interface EnergyMonth {
@@ -62,10 +63,10 @@ export interface EnergyStats {
 }
 
 export const fmt = (v: number | undefined, digits: number) =>
-  v === undefined ? '—' : v.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+  v === undefined ? '—' : v.toLocaleString(intlLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
 
 export const fmtPercent = (v: number | undefined) =>
-  v === undefined ? '—' : `${(v * 100).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} %`
+  v === undefined ? '—' : `${(v * 100).toLocaleString(intlLocale(), { maximumFractionDigits: 0 })} %`
 
 export const AXIS_TEXT = '#94a3b8'
 export const GRID_COLOR = '#1e293b'

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Gauge } from 'lucide-vue-next'
@@ -25,12 +26,10 @@ const costRef = ref<HTMLCanvasElement | null>(null)
 let consumptionChart: Chart | null = null
 let costChart: Chart | null = null
 
-const CLASS_LABELS: Record<ChargeClass['class'], { label: string; hint: string }> = {
-  SLOW: { label: 'Prise domestique', hint: 'moins de 3,5 kW en moyenne' },
-  AC: { label: 'Wallbox / borne AC', hint: '3,5 à 25 kW en moyenne' },
-  DC: { label: 'Recharge rapide DC', hint: 'plus de 25 kW en moyenne' },
-  UNKNOWN: { label: 'Durée inconnue', hint: 'saisies manuelles' },
-}
+const classLabel = (c: ChargeClass['class']) => ({
+  label: t(`dashboard.energyEfficiencyPanel.chargeClass.${c}.label`),
+  hint: t(`dashboard.energyEfficiencyPanel.chargeClass.${c}.hint`),
+})
 
 const visibleMonths = computed(() => {
   const months = stats.value?.months ?? []
@@ -91,7 +90,7 @@ function drawCharts() {
         labels,
         datasets: [
           {
-            label: 'Consommation',
+            label: t('dashboard.energyEfficiencyPanel.consumption'),
             data: months.map((m) => m.consumption_kwh_100km ?? null),
             borderColor: '#38bdf8',
             backgroundColor: '#38bdf8',
@@ -113,14 +112,14 @@ function drawCharts() {
         datasets: [
           {
             type: 'bar',
-            label: 'Mois',
+            label: t('dashboard.energyEfficiencyPanel.month'),
             data: months.map((m) => m.cost_per_100km ?? null),
             backgroundColor: 'rgba(99, 102, 241, 0.35)',
             borderRadius: 4,
           },
           {
             type: 'line',
-            label: 'Moyenne sur 3 mois',
+            label: t('dashboard.energyEfficiencyPanel.threeMonthAverage'),
             data: months.map((m) => m.cost_per_100km_trailing ?? null),
             borderColor: '#f59e0b',
             backgroundColor: '#f59e0b',
@@ -158,11 +157,11 @@ onBeforeUnmount(() => {
       <div>
         <h3 id="energy-efficiency-title" class="flex items-center gap-2 text-sm font-bold text-white">
           <Gauge class="h-4 w-4 text-sky-400" aria-hidden="true" />
-          Efficacité énergétique
+          {{ $t('dashboard.energyEfficiencyPanel.energyEfficiency') }}
         </h3>
-        <p class="mt-0.5 text-xs text-slate-400">Ce que consomme la voiture et ce que coûte réellement l'énergie.</p>
+        <p class="mt-0.5 text-xs text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.whatTheCarUsesAnd') }}</p>
       </div>
-      <div class="flex gap-1 self-start rounded-lg border border-slate-800 bg-slate-950 p-0.5" role="group" aria-label="Période">
+      <div class="flex gap-1 self-start rounded-lg border border-slate-800 bg-slate-950 p-0.5" role="group" :aria-label="$t('dashboard.energyEfficiencyPanel.period')">
         <button
           type="button"
           class="min-h-9 rounded-md px-3 text-[11px] font-semibold transition-colors"
@@ -170,7 +169,7 @@ onBeforeUnmount(() => {
           :aria-pressed="range === 12"
           @click="range = 12"
         >
-          12 mois
+          {{ $t('dashboard.energyEfficiencyPanel.12Months') }}
         </button>
         <button
           type="button"
@@ -179,56 +178,56 @@ onBeforeUnmount(() => {
           :aria-pressed="range === 0"
           @click="range = 0"
         >
-          Tout
+          {{ $t('dashboard.energyEfficiencyPanel.all') }}
         </button>
       </div>
     </div>
 
     <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Consommation réelle</dt>
+        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.actualConsumption') }}</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ fmt(stats?.summary.consumption_kwh_100km, 1) }} <span class="text-xs font-medium text-slate-400">kWh/100 km</span></dd>
-        <p class="mt-0.5 text-[11px] text-slate-400">Énergie consommée en roulant, mesurée par TeslaMate.</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.energyUsedWhileDrivingMeasured') }}</p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Coût de l'énergie</dt>
+        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.energyCost') }}</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ fmt(stats?.summary.cost_per_100km, 2) }} <span class="text-xs font-medium text-slate-400">€/100 km</span></dd>
-        <p class="mt-0.5 text-[11px] text-slate-400">Soit {{ fmt(stats?.summary.price_per_kwh, 3) }} €/kWh en moyenne à la recharge.</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.thatIsKwhOnAverage', { price_per_kwh: fmt(stats?.summary.price_per_kwh, 3) }) }}</p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Rendement de charge</dt>
+        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.chargingEfficiency') }}</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ fmtPercent(stats?.summary.charge_efficiency) }}</dd>
-        <p class="mt-0.5 text-[11px] text-slate-400">Énergie stockée dans la batterie sur énergie tirée du réseau.</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.energyStoredInTheBattery') }}</p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Charge complète</dt>
+        <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.fullCharge') }}</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ fmt(stats?.summary.cost_per_full_charge, 2) }} <span class="text-xs font-medium text-slate-400">€ (0 → 100 %)</span></dd>
-        <p class="mt-0.5 text-[11px] text-slate-400">Extrapolé des recharges dont le coût et le niveau de batterie sont connus.</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.extrapolatedFromTheChargesWhose') }}</p>
       </div>
     </dl>
 
     <p v-if="(stats?.summary.sessions_without_cost ?? 0) > 0" class="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-      {{ stats?.summary.sessions_without_cost }} recharge(s) sans coût connu : elles ne sont pas comptées dans le coût aux 100 km.
-      <router-link to="/expenses?tab=CHARGES" class="font-semibold underline">Les compléter</router-link>
+      {{ $t('dashboard.energyEfficiencyPanel.chargeSWithoutAKnown', { sessions_without_cost: stats?.summary.sessions_without_cost }) }}
+      <router-link to="/expenses?tab=CHARGES" class="font-semibold underline">{{ $t('dashboard.energyEfficiencyPanel.completeThem') }}</router-link>
     </p>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div>
-        <h4 class="mb-2 text-xs font-bold text-slate-200">Consommation mensuelle</h4>
-        <div class="h-56"><canvas ref="consumptionRef" role="img" aria-label="Consommation mensuelle en kWh aux 100 km"></canvas></div>
+        <h4 class="mb-2 text-xs font-bold text-slate-200">{{ $t('dashboard.energyEfficiencyPanel.monthlyConsumption') }}</h4>
+        <div class="h-56"><canvas ref="consumptionRef" role="img" :aria-label="$t('dashboard.energyEfficiencyPanel.monthlyConsumptionInKwhPer')"></canvas></div>
       </div>
       <div>
-        <h4 class="mb-2 text-xs font-bold text-slate-200">Coût de l'énergie aux 100 km</h4>
-        <div class="h-56"><canvas ref="costRef" role="img" aria-label="Coût mensuel de l'énergie aux 100 km, avec moyenne sur 3 mois"></canvas></div>
+        <h4 class="mb-2 text-xs font-bold text-slate-200">{{ $t('dashboard.energyEfficiencyPanel.energyCostPer100Km') }}</h4>
+        <div class="h-56"><canvas ref="costRef" role="img" :aria-label="$t('dashboard.energyEfficiencyPanel.monthlyEnergyCostPer100')"></canvas></div>
       </div>
     </div>
 
     <!-- A table is not clipped by sr-only (its width ignores the 1px), so the class goes on a wrapper -->
     <div class="sr-only">
       <table>
-        <caption>Consommation et coût de l'énergie par mois</caption>
+        <caption>{{ $t('dashboard.energyEfficiencyPanel.consumptionAndEnergyCostPer') }}</caption>
         <thead>
-          <tr><th>Mois</th><th>kWh/100 km</th><th>€/100 km</th><th>Moyenne 3 mois €/100 km</th></tr>
+          <tr><th>{{ $t('dashboard.energyEfficiencyPanel.month') }}</th><th>kWh/100 km</th><th>€/100 km</th><th>{{ $t('dashboard.energyEfficiencyPanel.3MonthAverage100Km') }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="m in visibleMonths" :key="m.month">
@@ -242,25 +241,25 @@ onBeforeUnmount(() => {
     </div>
 
     <div v-if="stats && stats.charge_classes.length > 0">
-      <h4 class="mb-2 text-xs font-bold text-slate-200">Comment la voiture est rechargée</h4>
+      <h4 class="mb-2 text-xs font-bold text-slate-200">{{ $t('dashboard.energyEfficiencyPanel.howTheCarIsCharged') }}</h4>
       <ul class="space-y-2">
         <li v-for="c in stats.charge_classes" :key="c.class" class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
           <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
             <span class="text-sm font-semibold text-white">
-              {{ CLASS_LABELS[c.class].label }}
-              <span class="text-[11px] font-normal text-slate-400">({{ CLASS_LABELS[c.class].hint }})</span>
+              {{ classLabel(c.class).label }}
+              <span class="text-[11px] font-normal text-slate-400">({{ classLabel(c.class).hint }})</span>
             </span>
-            <span class="text-xs text-slate-300">{{ share(c) }} % de l'énergie · {{ c.sessions }} recharge(s)</span>
+            <span class="text-xs text-slate-300">{{ $t('dashboard.energyEfficiencyPanel.ofTheEnergyChargeS', { value: share(c), sessions: c.sessions }) }}</span>
           </div>
           <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" aria-hidden="true">
             <div class="h-full rounded-full" :class="c.class === 'DC' ? 'bg-amber-400' : c.class === 'AC' ? 'bg-sky-400' : 'bg-emerald-400'" :style="{ width: `${share(c)}%` }"></div>
           </div>
           <p class="mt-2 text-xs text-slate-400">
-            {{ fmt(c.kwh_added, 0) }} kWh · {{ fmt(c.price_per_kwh, 3) }} €/kWh · rendement {{ fmtPercent(c.charge_efficiency) }}<template v-if="c.cost_per_full_charge !== undefined"> · 0 → 100 % : {{ fmt(c.cost_per_full_charge, 2) }} €</template>
+            {{ $t('dashboard.energyEfficiencyPanel.kwhKwhEfficiency', { value: fmt(c.kwh_added, 0), value2: fmt(c.price_per_kwh, 3), value3: fmtPercent(c.charge_efficiency) }) }}<template v-if="c.cost_per_full_charge !== undefined"> · 0 → 100 % : {{ fmt(c.cost_per_full_charge, 2) }} €</template>
           </p>
         </li>
       </ul>
-      <p class="mt-2 text-[11px] text-slate-500">Classement d'après la puissance moyenne de chaque recharge (énergie ajoutée sur sa durée).</p>
+      <p class="mt-2 text-[11px] text-slate-500">{{ $t('dashboard.energyEfficiencyPanel.rankedByTheAveragePower') }}</p>
     </div>
 
     <template v-if="stats">
@@ -269,6 +268,6 @@ onBeforeUnmount(() => {
     </template>
   </section>
   <p v-else-if="failed" role="alert" class="rounded-xl border border-slate-800 bg-slate-900 p-3 text-xs text-slate-400">
-    Les statistiques d'efficacité énergétique n'ont pas pu être chargées.
+    {{ $t('dashboard.energyEfficiencyPanel.theEnergyEfficiencyStatisticsCould') }}
   </p>
 </template>

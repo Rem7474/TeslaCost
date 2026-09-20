@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { filterMonthsByRange, monthlyRangeOptions, type MonthlyRangeKey } from '@/utils/dashboard'
@@ -33,13 +34,13 @@ function renderChart() {
     data: {
       labels: filteredLabels,
       datasets: [
-        { label: 'Énergie (€)', data: energyData, backgroundColor: '#38bdf8', borderRadius: 4 },
-        { label: 'Péages & Parkings (€)', data: tollsData, backgroundColor: '#f59e0b', borderRadius: 4 },
-        { label: 'Pneus (€)', data: tiresData, backgroundColor: '#10b981', borderRadius: 4 },
-        { label: 'Entretien (€)', data: maintData, backgroundColor: '#ec4899', borderRadius: 4 },
-        { label: 'Assurance (€)', data: insuranceData, backgroundColor: '#a855f7', borderRadius: 4 },
-        { label: 'Financement (€)', data: financingData, backgroundColor: '#f97316', borderRadius: 4 },
-        { label: 'Abonnements, taxes & autres (€)', data: otherData, backgroundColor: '#64748b', borderRadius: 4 },
+        { label: `${t('dashboard.donut.energy')} (€)`, data: energyData, backgroundColor: '#38bdf8', borderRadius: 4 },
+        { label: `${t('dashboard.donut.tolls')} (€)`, data: tollsData, backgroundColor: '#f59e0b', borderRadius: 4 },
+        { label: `${t('dashboard.monthlyCostChart.tires')} (€)`, data: tiresData, backgroundColor: '#10b981', borderRadius: 4 },
+        { label: `${t('dashboard.monthlyCostChart.maintenance')} (€)`, data: maintData, backgroundColor: '#ec4899', borderRadius: 4 },
+        { label: `${t('dashboard.donut.insurance')} (€)`, data: insuranceData, backgroundColor: '#a855f7', borderRadius: 4 },
+        { label: `${t('dashboard.monthlyCostChart.financing')} (€)`, data: financingData, backgroundColor: '#f97316', borderRadius: 4 },
+        { label: `${t('dashboard.donut.other')} (€)`, data: otherData, backgroundColor: '#64748b', borderRadius: 4 },
       ],
     },
     options: {
@@ -81,7 +82,7 @@ function renderChart() {
             },
             footer: (items) => {
               const total = items.reduce((sum, item) => sum + (Number(item.raw) || 0), 0)
-              return `Total mois : ${total.toFixed(2)} €`
+              return t('dashboard.monthlyCostChart.monthTotal', { total: total.toFixed(2) })
             },
           },
         },
@@ -109,7 +110,7 @@ onUnmounted(() => {
   <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
       <h3 class="text-sm font-bold text-white flex items-center gap-2">
-        <span>Évolution mensuelle des dépenses (€)</span>
+        <span>{{ $t('dashboard.monthlyCostChart.monthlyExpenseTrend') }}</span>
       </h3>
       <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5 self-start sm:self-auto">
         <button
@@ -122,12 +123,12 @@ onUnmounted(() => {
             monthlyChartRange === opt.key ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white',
           ]"
         >
-          {{ opt.label }}
+          {{ $t(opt.labelKey) }}
         </button>
       </div>
     </div>
     <div class="h-64 sm:h-72">
-      <canvas ref="monthlyChartRef" role="img" aria-label="Évolution mensuelle du coût par poste"></canvas>
+      <canvas ref="monthlyChartRef" role="img" :aria-label="$t('dashboard.monthlyCostChart.monthlyCostTrendByCategory')"></canvas>
     </div>
   </div>
 </template>
