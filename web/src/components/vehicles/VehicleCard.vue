@@ -219,7 +219,7 @@ function clearCardTestResult() {
         <AlertCircle v-else class="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
         <div>
           <span v-if="cardTest.success">
-            {{ $t('onboarding.testSuccess', { state: cardTest.status?.state || $t('onboarding.online'), odometer: Math.round(cardTest.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
+            {{ $t('vehicles.testSuccess', { state: cardTest.status?.state || $t('vehicles.vehicleCard.online'), odometer: Math.round(cardTest.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
           </span>
           <span v-else>{{ cardTest.error }}</span>
         </div>

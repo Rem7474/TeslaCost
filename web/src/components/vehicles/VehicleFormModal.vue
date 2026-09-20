@@ -173,7 +173,7 @@ async function testModalConnection() {
             >
               <RefreshCw v-if="modalTestLoading" class="w-3.5 h-3.5 animate-spin text-rose-400" />
               <Link2 v-else class="w-3.5 h-3.5 text-rose-400" />
-              <span>{{ modalTestLoading ? $t('onboarding.testing') : $t('onboarding.testConnection') }}</span>
+              <span>{{ modalTestLoading ? $t('vehicles.vehicleFormModal.testing') : $t('vehicles.vehicleFormModal.testConnection') }}</span>
             </button>
 
             <div
@@ -187,7 +187,7 @@ async function testModalConnection() {
                 <div v-if="modalTestResult.success">
                   <strong class="font-semibold">{{ $t('vehicles.vehicleFormModal.connectionSuccessful') }}</strong>
                   <p class="text-[11px] text-emerald-200/80 mt-0.5">
-                    {{ $t('vehicles.vehicleFormModal.testStatus', { state: modalTestResult.status?.state || $t('onboarding.online'), odometer: Math.round(modalTestResult.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
+                    {{ $t('vehicles.vehicleFormModal.testStatus', { state: modalTestResult.status?.state || $t('vehicles.vehicleCard.online'), odometer: Math.round(modalTestResult.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
                   </p>
                 </div>
                 <div v-else>

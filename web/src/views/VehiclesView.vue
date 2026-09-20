@@ -66,7 +66,7 @@ async function handleDelete(id: string) {
   const ok = await showConfirm({
     title: t('vehicles.vehiclesView.deleteTitle'),
     message: t('vehicles.vehiclesView.deleteMessage'),
-    confirmText: t('tires.tiresView.deleteTireConfirm'),
+    confirmText: t('common.deleteForever'),
     type: 'danger',
   })
   if (!ok) return

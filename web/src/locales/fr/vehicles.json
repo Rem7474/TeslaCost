@@ -58,7 +58,9 @@
     "currentMileage": "Kilométrage actuel (km)",
     "initialOdometer": "Odomètre initial (km)",
     "testStatus": "Statut : {state} • Odomètre : {odometer} km",
-    "urlFirst": "Veuillez d'abord renseigner l'URL de l'API TeslaMate"
+    "urlFirst": "Veuillez d'abord renseigner l'URL de l'API TeslaMate",
+    "testing": "Test de connexion en cours...",
+    "testConnection": "Tester la connexion TeslaMate"
   },
   "vehicleMembersModal": {
     "leave": "Quitter",
@@ -94,7 +96,10 @@
   },
   "vehiclesView": {
     "deleteTitle": "Supprimer le véhicule",
-    "deleteMessage": "Supprimer ce véhicule et tout son historique ? Cette action est irréversible."
+    "deleteMessage": "Supprimer ce véhicule et tout son historique ? Cette action est irréversible.",
+    "addAVehicle": "Ajouter un véhicule",
+    "setUpYourVehiclesAnd": "Configurez vos véhicules et la synchronisation avec TeslaMateApi",
+    "vehicleManagement": "Gestion des Véhicules"
   },
   "ownershipWizardModal": {
     "leaseStart": "Début du contrat de location",
@@ -104,7 +109,58 @@
     "returnedOn": "Véhicule restitué le",
     "soldOn": "Véhicule vendu le",
     "deleteTitle": "Supprimer le contrat d'acquisition",
-    "deleteMessage": "Supprimer le contrat d'acquisition de ce véhicule ?"
+    "deleteMessage": "Supprimer le contrat d'acquisition de ce véhicule ?",
+    "saveTheContract": "Enregistrer le contrat",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "deleteTheContract": "Supprimer le contrat",
+    "actualResalePrice": "Prix de revente effectif (€)",
+    "actualClosingIfFinished": "Clôture effective (si terminée)",
+    "estimatedPlannedResale": "Revente prévisionnelle estimée (€)",
+    "depreciationAndPlannedHolding": "Décote & Détention prévisionnelle",
+    "optionExercisedOnEmptyIf": "Option levée le (vide si non levée)",
+    "residualPurchaseOptionInclTax": "Option d'achat résiduelle TTC (€)",
+    "tiresIncluded": "Pneus inclus",
+    "insuranceIncluded": "Assurance incluse",
+    "maintenanceIncluded": "Entretien inclus",
+    "servicesIncludedInTheContract": "Services inclus dans le contrat",
+    "estimatedReturnFees": "Frais de restitution estimés (€)",
+    "pricePerExtraKmKm": "Prix du km supplémentaire (€/km)",
+    "mileageAllowanceKmYear": "Forfait kilométrique (km/an)",
+    "mileageAllowanceAndInclusions": "Forfait kilométrique & Inclusions",
+    "totalMileageIncludedInThe": "Kilométrage total inclus sur le bail :",
+    "month": "{perMonth} € / mois",
+    "averageSmoothedOverTheTerm": "Moyenne lissée sur la durée :",
+    "totalRentCommitted": "Coût total des loyers engagés :",
+    "refundableSecurityDeposit": "Dépôt de garantie remboursable (€)",
+    "arrangementFees": "Frais de dossier (€)",
+    "durationMonths": "Durée (mois)",
+    "monthlyRent": "Loyer mensuel (€)",
+    "downPaymentIncreasedFirstRent": "Apport / 1er loyer majoré (€)",
+    "leaseTerms": "Modalités de location ({acquisition_type})",
+    "totalCostOfTheLoan": "Coût total du crédit (intérêts + frais + assurance) :",
+    "totalBankInterest": "Total des intérêts bancaires :",
+    "month2": "{payment} € / mois",
+    "estimatedMonthlyPayment": "Mensualité estimée :",
+    "borrowerInsuranceMonth": "Assurance emprunteur (€/mois)",
+    "annualRate": "Taux annuel (%)",
+    "amountBorrowed": "Montant emprunté (€)",
+    "loanTerms": "Modalités de l'emprunt",
+    "bonusesAndGrants": "Bonus et aides (€)",
+    "additionalFeesRegistrationSetUp": "Frais annexes (carte grise, mise en route) (€)",
+    "purchasePriceInclTax": "Prix d'achat TTC (€)",
+    "purchaseTerms": "Modalités d'achat",
+    "odometerAtTheStartKm": "Odomètre au début (km)",
+    "longTerm": "Longue durée",
+    "lld": "LLD",
+    "purchaseOption": "Option d'achat",
+    "loa": "LOA",
+    "bankLoan": "Prêt bancaire",
+    "loan": "Crédit",
+    "directPurchase": "Achat direct",
+    "cash": "Comptant",
+    "acquisitionMode": "Mode d'acquisition",
+    "acquisitionAndFinancing": "Acquisition & financement — {name}"
   },
   "acquisition": {
     "CASH": "Achat comptant",
@@ -139,5 +195,6 @@
     "loanDuration": "Veuillez renseigner la durée du crédit en mois",
     "rent": "Veuillez renseigner le loyer mensuel",
     "leaseDuration": "Veuillez renseigner la durée de la location en mois"
-  }
+  },
+  "testSuccess": "Connexion réussie ! Statut : {state} ({odometer} km)"
 }
