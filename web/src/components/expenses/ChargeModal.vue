@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { useDocumentAttach } from '@/composables/useDocumentAttach'
+import { useVehicleStore } from '@/stores/vehicle'
 import { Zap, X, Paperclip, FileText, Eye, UploadCloud } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { CURRENCIES, currencyPayload, formatDate, toLocalDateTimeInput } from '@/utils/expenses'
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 }>()
 const open = defineModel<boolean>('open', { required: true })
 const { showAlert } = useConfirm()
+const vehicleStore = useVehicleStore()
 const { isUploadingDocument, onSelectExistingDoc, onFileInputChange } = useDocumentAttach(
   () => props.vehicleId,
   () => props.documents,
@@ -106,7 +108,7 @@ async function handleSaveCharge() {
         <div class="min-w-0 pr-2">
           <h3 class="text-base font-bold text-white flex items-center gap-2 truncate">
             <Zap class="w-5 h-5 text-sky-400 shrink-0" />
-            {{ !editingCharge ? 'Recharge hors TeslaMate' : editingCharge.is_manual ? 'Modifier la recharge' : 'Coût de la recharge' }}
+            {{ !editingCharge ? (vehicleStore.hasTeslaMate ? 'Recharge hors TeslaMate' : 'Nouvelle recharge') : editingCharge.is_manual ? 'Modifier la recharge' : 'Coût de la recharge' }}
           </h3>
           <p v-if="editingCharge && !editingCharge.is_manual" class="text-[11px] text-slate-400 mt-1">
             Recharge TeslaMate du {{ formatDate(editingCharge.date) }} (+{{ editingCharge.kwh_added }} kWh). Le coût saisi ici ne sera pas écrasé par les synchronisations.

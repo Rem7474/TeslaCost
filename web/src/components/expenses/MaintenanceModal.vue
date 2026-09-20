@@ -279,11 +279,11 @@ async function handleCreateMaint() {
         <div>
           <div class="flex items-center justify-between mb-1">
             <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300">Odomètre (km)</label>
-            <span v-if="detectingOdometer" class="text-[11px] text-slate-400">Détection TeslaMate...</span>
+            <span v-if="detectingOdometer" class="text-[11px] text-slate-400">Détection du kilométrage...</span>
           </div>
           <input id="expense-maint-odometer" v-model.number="maintForm.odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           <div v-if="detectedOdometer !== null && detectedOdometer > 0" class="flex items-center justify-between text-[11px] text-emerald-400 mt-1">
-            <span>✓ Détecté via TeslaMate : {{ Math.round(detectedOdometer) }} km</span>
+            <span>✓ Kilométrage détecté : {{ Math.round(detectedOdometer) }} km</span>
             <button
               type="button"
               v-if="maintForm.odometer !== Math.round(detectedOdometer)"

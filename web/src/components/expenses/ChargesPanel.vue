@@ -59,7 +59,7 @@ const vehicleStore = useVehicleStore()
     </button>
     <div v-if="loading" class="text-center py-12 text-slate-400">Chargement...</div>
     <div v-else-if="!charges.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-      Aucune recharge enregistrée. Synchronisez votre véhicule avec TeslaMate ou ajoutez une recharge manuelle.
+      {{ vehicleStore.hasTeslaMate ? 'Aucune recharge enregistrée. Synchronisez votre véhicule avec TeslaMate ou ajoutez une recharge manuelle.' : 'Aucune recharge enregistrée. Ajoutez une recharge pour suivre le coût de l\'énergie.' }}
     </div>
     <div v-else class="space-y-3">
       <div

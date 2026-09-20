@@ -150,7 +150,7 @@ onMounted(() => {
 
       <!-- Energy efficiency: consumption, real cost per 100 km and charging habits (electric vehicles) -->
       <EnergyEfficiencyPanel
-        v-if="vehicleStore.activeVehicle && !vehicleStore.isIce"
+        v-if="vehicleStore.activeVehicle && vehicleStore.hasTeslaMate"
         :vehicle-id="vehicleStore.activeVehicle.id"
         :grafana-url="vehicleStore.activeVehicle.teslamate_grafana_url"
         :sync-key="vehicleStore.lastSyncTimestamp"

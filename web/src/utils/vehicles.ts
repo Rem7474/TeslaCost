@@ -48,9 +48,14 @@ export function emptyOwnership() {
 
 export type OwnershipForm = ReturnType<typeof emptyOwnership>
 
+/** TeslaMate features (synchronization, drives, battery and temperature data) apply to an electric vehicle with a teslamateapi URL. */
+export function hasTeslaMate(v: { powertrain?: string; teslamate_api_url?: string | null } | null | undefined): boolean {
+  return !!v && v.powertrain !== 'ICE' && !!v.teslamate_api_url?.trim()
+}
+
 export function emptyVehicleForm() {
   return {
-    name: 'Tesla Model 3',
+    name: '',
     powertrain: 'EV',
     vin: '',
     current_odometer: 0,

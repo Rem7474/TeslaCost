@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   emptyOwnership,
   emptyVehicleForm,
+  hasTeslaMate,
   isLeaseType,
   isOwnedPhase,
   isPurchaseType,
@@ -19,9 +20,9 @@ import {
 const form = (over: Record<string, any> = {}) => ({ ...emptyOwnership(), ...over })
 
 describe('vehicle form', () => {
-  it('starts from a Tesla Model 3 with no TeslaMate settings', () => {
+  it('starts blank, electric, with no TeslaMate settings', () => {
     const f = emptyVehicleForm()
-    expect(f.name).toBe('Tesla Model 3')
+    expect(f.name).toBe('')
     expect(f.powertrain).toBe('EV')
     expect(f.teslamate_auth_type).toBe('NONE')
     expect(f.pre_teslamate_kwh_100km).toBeNull()
@@ -42,6 +43,25 @@ describe('vehicle form', () => {
     expect(f.current_odometer).toBe(0)
     expect(f.teslamate_car_id).toBe(1)
     expect(f.teslamate_auth_type).toBe('NONE')
+  })
+})
+
+describe('hasTeslaMate', () => {
+  it('needs an electric vehicle with a teslamateapi URL', () => {
+    expect(hasTeslaMate({ powertrain: 'EV', teslamate_api_url: 'http://tm:8080' })).toBe(true)
+    expect(hasTeslaMate({ teslamate_api_url: 'http://tm:8080' })).toBe(true)
+  })
+
+  it('is off without a usable URL', () => {
+    expect(hasTeslaMate({ powertrain: 'EV' })).toBe(false)
+    expect(hasTeslaMate({ powertrain: 'EV', teslamate_api_url: null })).toBe(false)
+    expect(hasTeslaMate({ powertrain: 'EV', teslamate_api_url: '   ' })).toBe(false)
+  })
+
+  it('is off for a combustion vehicle and when there is no vehicle', () => {
+    expect(hasTeslaMate({ powertrain: 'ICE', teslamate_api_url: 'http://tm:8080' })).toBe(false)
+    expect(hasTeslaMate(null)).toBe(false)
+    expect(hasTeslaMate(undefined)).toBe(false)
   })
 })
 

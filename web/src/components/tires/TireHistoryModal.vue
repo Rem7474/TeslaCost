@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { Archive, ClipboardPaste, Copy, Edit2, History, Pencil, Plus, Ruler, Shuffle, Trash2, X, Zap } from 'lucide-vue-next'
+import { useVehicleStore } from '@/stores/vehicle'
 import { formatDate, type SessionForm } from '@/utils/tires'
+
+const vehicleStore = useVehicleStore()
 
 // Full history of one tire: life KPIs, TeslaMate telemetry, mount sessions and tread depth measurements.
 // It only displays: every action is emitted for the page to run.
@@ -107,7 +110,7 @@ const open = defineModel<boolean>('open', { required: true })
       </div>
 
       <!-- TeslaMate Driving Telemetry & Stress Analysis Card -->
-      <div v-if="selectedTireStats?.driving_stress_index > 0" class="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
+      <div v-if="vehicleStore.hasTeslaMate && selectedTireStats?.driving_stress_index > 0" class="bg-gradient-to-br from-slate-950 to-slate-900 border border-slate-800 p-4 rounded-2xl space-y-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <Zap class="w-4 h-4 text-amber-400" />

@@ -428,6 +428,12 @@ async function handleBulkApplyToll() {
 
 <template>
   <div class="space-y-6">
+    <!-- Drives are imported from TeslaMate: explain why the list is empty for a vehicle that is not linked to it -->
+    <div v-if="vehicleStore.activeVehicle && !vehicleStore.hasTeslaMate" class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+      <span>Les trajets sont importés depuis TeslaMate. Ce véhicule n'y est pas relié.</span>
+      <router-link to="/vehicles" class="rounded-lg bg-amber-500/20 px-2.5 py-1 text-xs font-semibold text-amber-300 hover:bg-amber-500/30">Configurer la liaison</router-link>
+    </div>
+
     <!-- Header & Filter Tabs -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
