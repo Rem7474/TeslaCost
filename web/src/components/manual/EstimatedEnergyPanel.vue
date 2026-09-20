@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Zap, CheckCircle2 } from 'lucide-vue-next'
@@ -44,11 +45,11 @@ async function save() {
   const kwh100 = form.value.kwh_100km != null ? Number(form.value.kwh_100km) : null
   const rate = form.value.price_per_kwh != null ? Number(form.value.price_per_kwh) : null
   if (kwh100 !== null && (kwh100 <= 0 || kwh100 > 100)) {
-    showAlert('Consommation moyenne invalide (doit être comprise entre 1 et 100 kWh/100km)', 'Champ invalide', 'warning')
+    showAlert(t('manual.estimatedEnergyPanel.invalidConsumption'), t('manual.estimatedEnergyPanel.invalidField'), 'warning')
     return
   }
   if (rate !== null && (rate <= 0 || rate > 10)) {
-    showAlert('Tarif électricité invalide (doit être compris entre 0.01 et 10 €/kWh)', 'Champ invalide', 'warning')
+    showAlert(t('manual.estimatedEnergyPanel.invalidRate'), t('manual.estimatedEnergyPanel.invalidField'), 'warning')
     return
   }
   saving.value = true
@@ -60,9 +61,9 @@ async function save() {
     await vehicleStore.fetchVehicles()
     await loadTco()
     vehicleStore.lastSyncTimestamp = Date.now()
-    showAlert("Estimation de l'énergie enregistrée avec succès !", 'Succès', 'info')
+    showAlert(t('manual.estimatedEnergyPanel.saved'), t('common.success'), 'info')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     saving.value = false
   }
@@ -92,23 +93,23 @@ onMounted(() => {
             <Zap class="w-4 h-4" />
           </div>
           <div>
-            <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Estimation de l'énergie</h4>
-            <p class="text-[11px] text-slate-400">Complétez automatiquement l'énergie et le coût des kilomètres non suivis</p>
+            <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">{{ $t('manual.estimatedEnergyPanel.energyEstimate') }}</h4>
+            <p class="text-[11px] text-slate-400">{{ $t('manual.estimatedEnergyPanel.automaticallyFillInTheEnergy') }}</p>
           </div>
         </div>
         <span
           v-if="vehicle?.estimated_kwh_100km && vehicle?.estimated_price_per_kwh"
           class="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1"
         >
-          <CheckCircle2 class="w-3 h-3" /> Actif
+          <CheckCircle2 class="w-3 h-3" /> {{ $t('manual.estimatedEnergyPanel.active') }}
         </span>
-        <span v-else class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">Non configuré</span>
+        <span v-else class="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">{{ $t('manual.estimatedEnergyPanel.notConfigured') }}</span>
       </div>
 
       <form class="space-y-3" @submit.prevent="save">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label for="pre-tm-kwh" class="block text-xs font-semibold text-slate-300 mb-1">Consommation moyenne (kWh/100km)</label>
+            <label for="pre-tm-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.estimatedEnergyPanel.averageConsumptionKwh100km') }}</label>
             <input
               id="pre-tm-kwh"
               v-model.number="form.kwh_100km"
@@ -122,7 +123,7 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label for="pre-tm-rate" class="block text-xs font-semibold text-slate-300 mb-1">Tarif de l'électricité (€/kWh)</label>
+            <label for="pre-tm-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.estimatedEnergyPanel.electricityRateKwh') }}</label>
             <input
               id="pre-tm-rate"
               v-model.number="form.price_per_kwh"
@@ -139,16 +140,15 @@ onMounted(() => {
 
         <div v-if="preview" class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1">
           <div class="text-slate-300 font-semibold flex items-center justify-between">
-            <span>Estimation sur {{ Math.round(preview.distance).toLocaleString('fr-FR') }} km lissés :</span>
+            <span>{{ $t('manual.estimatedEnergyPanel.estimateOverSmoothedKm', { distance: Math.round(preview.distance).toLocaleString(intlLocale()) }) }}</span>
             <span class="text-sky-400 font-bold font-mono">
-              ≈ {{ preview.cost.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+              ≈ {{ preview.cost.toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
             </span>
           </div>
           <p class="text-slate-400 text-[11px]">
-            Volume estimé :
-            <strong class="text-slate-200 font-mono">{{ Math.round(preview.kwh).toLocaleString('fr-FR') }} kWh</strong>
-            ({{ (preview.cost / (preview.distance || 1)).toFixed(3) }} €/km)
-            distribués au prorata dans chaque mois lissé.
+            {{ $t('manual.estimatedEnergyPanel.estimatedVolume') }}
+            <strong class="text-slate-200 font-mono">{{ $t('manual.estimatedEnergyPanel.kwh', { kwh: Math.round(preview.kwh).toLocaleString(intlLocale()) }) }}</strong>
+            {{ $t('manual.estimatedEnergyPanel.kmSpreadProRataAcross', { cost: (preview.cost / (preview.distance || 1)).toFixed(3) }) }}
           </p>
         </div>
 
@@ -159,7 +159,7 @@ onMounted(() => {
             class="text-xs text-slate-400 hover:text-rose-400 transition-colors"
             @click="clear"
           >
-            Réinitialiser (désactiver)
+            {{ $t('manual.estimatedEnergyPanel.resetDisable') }}
           </button>
           <span v-else></span>
 
@@ -169,20 +169,20 @@ onMounted(() => {
             class="px-4 py-2 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-lg shadow-sky-600/20"
           >
             <Zap class="w-3.5 h-3.5" />
-            <span>{{ saving ? 'Enregistrement...' : 'Enregistrer la recharge avant TM' }}</span>
+            <span>{{ saving ? $t('common.loading') : $t('manual.estimatedEnergyPanel.saveEstimate') }}</span>
           </button>
         </div>
       </form>
     </div>
 
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs text-slate-300">
-      <span>Une recharge faite hors TeslaMate (borne publique, prise externe) se saisit avec son coût dans les dépenses.</span>
+      <span>{{ $t('manual.estimatedEnergyPanel.aChargeMadeOutsideTeslamate') }}</span>
       <button
         type="button"
         class="shrink-0 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold rounded-xl"
         @click="router.push('/expenses?tab=CHARGES')"
       >
-        Recharges hors TeslaMate
+        {{ $t('manual.estimatedEnergyPanel.chargesOutsideTeslamate') }}
       </button>
     </div>
   </div>

@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 // TeslaCost API Service
 import { newIdempotencyKey } from '@/services/offlineQueue'
 
@@ -133,13 +134,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}, offlineLa
   } else {
     throw new Error(
       res.ok
-        ? 'Réponse du serveur invalide'
-        : `Erreur (${res.status}): La base de données ou le service n'est pas prêt`
+        ? t('shell.api.invalidResponse')
+        : t('shell.api.notReady', { status: res.status })
     )
   }
 
   if (!res.ok) {
-    throw new Error(data.error || `La requête a échoué (${res.status})`)
+    throw new Error(data.error || t('shell.api.requestFailed', { status: res.status }))
   }
 
   return data as T
@@ -191,7 +192,7 @@ export const api = {
   // Fuel fill-ups (combustion vehicles); the list comes with consumption figures per segment and global stats
   getFuelLogs: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/fuel-logs`),
   createFuelLog: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/fuel-logs`, { method: 'POST', body: JSON.stringify(data) }, `Plein de ${data.amount} €`),
+    request<any>(`/vehicles/${vehicleId}/fuel-logs`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.fillUp', { amount: data.amount })),
   updateFuelLog: (vehicleId: string, fuelLogId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/fuel-logs/${fuelLogId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFuelLog: (vehicleId: string, fuelLogId: string) =>
@@ -241,7 +242,7 @@ export const api = {
     request<any>(
       `/vehicles/${vehicleId}/drives/${driveId}/toll-review`,
       { method: 'PATCH', body: JSON.stringify({ reviewed }) },
-      'Trajet marqué sans péage'
+      t('shell.api.driveNoToll')
     ),
   getTollDetection: (vehicleId: string, driveId: string) =>
     request<any>(`/vehicles/${vehicleId}/drives/${driveId}/toll-detection`),
@@ -298,14 +299,14 @@ export const api = {
   // Expenses & Charges
   getDriveExpenses: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/expenses`),
   createDriveExpense: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/expenses`, { method: 'POST', body: JSON.stringify(data) }, `Péage / parking de ${data.amount} ${data.currency || 'EUR'}`),
+    request<any>(`/vehicles/${vehicleId}/expenses`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.toll', { amount: data.amount, currency: data.currency || 'EUR' })),
   updateDriveExpense: (vehicleId: string, expenseId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'PUT', body: JSON.stringify(data) }, 'Modification de péage / parking'),
+    request<any>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'PUT', body: JSON.stringify(data) }, t('shell.api.tollEdit')),
   deleteDriveExpense: (vehicleId: string, expenseId: string) =>
     request<void>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'DELETE' }),
   getMaintenance: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/maintenance`),
   createMaintenance: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/maintenance`, { method: 'POST', body: JSON.stringify(data) }, `Dépense « ${data.description} »`),
+    request<any>(`/vehicles/${vehicleId}/maintenance`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.expense', { description: data.description })),
   updateMaintenance: (vehicleId: string, maintenanceId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/maintenance/${maintenanceId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteMaintenance: (vehicleId: string, maintenanceId: string) =>
@@ -316,9 +317,9 @@ export const api = {
     return request<any>(`/vehicles/${vehicleId}/charges?${q.toString()}`)
   },
   createCharge: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/charges`, { method: 'POST', body: JSON.stringify(data) }, `Recharge de ${data.kwh_added} kWh`),
+    request<any>(`/vehicles/${vehicleId}/charges`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.charge', { kwh: data.kwh_added })),
   updateCharge: (vehicleId: string, chargeId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'PUT', body: JSON.stringify(data) }, 'Coût de recharge'),
+    request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'PUT', body: JSON.stringify(data) }, t('shell.api.chargeCost')),
   deleteCharge: (vehicleId: string, chargeId: string) =>
     request<any>(`/vehicles/${vehicleId}/charges/${chargeId}`, { method: 'DELETE' }),
 
@@ -388,7 +389,7 @@ export const api = {
       credentials: 'include',
     })
     if (!res.ok) {
-      let errorMsg = 'Impossible de charger le document'
+      let errorMsg = t('shell.api.documentLoadFailed')
       try {
         const errorData = await res.json()
         if (errorData && errorData.error) {
@@ -413,21 +414,21 @@ export const api = {
   getReminders: (vehicleId: string) =>
     request<MaintenanceReminder[]>(`/vehicles/${vehicleId}/reminders`),
   createReminder: (vehicleId: string, data: any) =>
-    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders`, { method: 'POST', body: JSON.stringify(data) }, 'Rappel créé'),
+    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.reminderCreated')),
   updateReminder: (vehicleId: string, reminderId: string, data: any) =>
-    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders/${reminderId}`, { method: 'PUT', body: JSON.stringify(data) }, 'Rappel mis à jour'),
+    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders/${reminderId}`, { method: 'PUT', body: JSON.stringify(data) }, t('shell.api.reminderUpdated')),
   deleteReminder: (vehicleId: string, reminderId: string) =>
-    request<{ success: boolean }>(`/vehicles/${vehicleId}/reminders/${reminderId}`, { method: 'DELETE' }, 'Rappel supprimé'),
+    request<{ success: boolean }>(`/vehicles/${vehicleId}/reminders/${reminderId}`, { method: 'DELETE' }, t('shell.api.reminderDeleted')),
   completeReminder: (vehicleId: string, reminderId: string, data: { completed_date: string; completed_odometer?: number }) =>
-    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders/${reminderId}/complete`, { method: 'POST', body: JSON.stringify(data) }, 'Entretien marqué comme réalisé'),
+    request<MaintenanceReminder>(`/vehicles/${vehicleId}/reminders/${reminderId}/complete`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.maintenanceDone')),
   getVehicleWebhook: (vehicleId: string) =>
     request<VehicleWebhook | null>(`/vehicles/${vehicleId}/webhook`),
   saveVehicleWebhook: (vehicleId: string, data: any) =>
-    request<VehicleWebhook>(`/vehicles/${vehicleId}/webhook`, { method: 'PUT', body: JSON.stringify(data) }, 'Webhook enregistré'),
+    request<VehicleWebhook>(`/vehicles/${vehicleId}/webhook`, { method: 'PUT', body: JSON.stringify(data) }, t('shell.api.webhookSaved')),
   deleteVehicleWebhook: (vehicleId: string) =>
-    request<{ success: boolean }>(`/vehicles/${vehicleId}/webhook`, { method: 'DELETE' }, 'Webhook supprimé'),
+    request<{ success: boolean }>(`/vehicles/${vehicleId}/webhook`, { method: 'DELETE' }, t('shell.api.webhookDeleted')),
   testVehicleWebhook: (vehicleId: string, data: any) =>
-    request<{ success: boolean; message: string }>(`/vehicles/${vehicleId}/webhook/test`, { method: 'POST', body: JSON.stringify(data) }, 'Test de notification envoyé'),
+    request<{ success: boolean; message: string }>(`/vehicles/${vehicleId}/webhook/test`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.webhookTest')),
 }
 
 export interface MaintenanceReminder {

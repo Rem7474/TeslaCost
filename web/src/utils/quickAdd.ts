@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 // Pure helpers of the quick entry sheet: payload builders, tariff memory and small numeric utilities.
 // Kept free of Vue and of the API layer so they can be unit tested.
 
@@ -75,8 +76,8 @@ export interface ChargeFormValues {
 export function buildChargePayload(f: ChargeFormValues) {
   const kwh = toNumber(f.kwh)
   const cost = toNumber(f.cost)
-  if (kwh === null || kwh <= 0) throw new Error("Indiquez l'énergie ajoutée (kWh).")
-  if (cost === null || cost < 0) throw new Error('Indiquez le coût (0 si la recharge était gratuite).')
+  if (kwh === null || kwh <= 0) throw new Error(t('quickadd.errors.kwh'))
+  if (cost === null || cost < 0) throw new Error(t('quickadd.errors.cost'))
   const odometer = toNumber(f.odometer)
   return {
     date: new Date(f.date).toISOString(),
@@ -103,7 +104,7 @@ export interface FuelFormValues {
 export function buildFuelPayload(f: FuelFormValues) {
   const amount = toNumber(f.amount)
   const liters = toNumber(f.liters)
-  if (amount === null || amount <= 0) throw new Error('Indiquez le montant du plein.')
+  if (amount === null || amount <= 0) throw new Error(t('quickadd.errors.fuelAmount'))
   const odometer = toNumber(f.odometer)
   return {
     date: f.date,
@@ -125,7 +126,7 @@ export interface ExpenseFormValues {
 
 export function buildExpensePayload(f: ExpenseFormValues) {
   const amount = toNumber(f.amount)
-  if (amount === null || amount <= 0) throw new Error('Indiquez le montant.')
+  if (amount === null || amount <= 0) throw new Error(t('quickadd.errors.amount'))
   return {
     type: f.type,
     amount,
@@ -152,7 +153,7 @@ export interface PendingCharge {
 // attachment with what it receives: both are sent back unchanged so completing the cost never wipes them.
 export function buildPendingCostPayload(charge: PendingCharge, costText: string) {
   const cost = toNumber(costText)
-  if (cost === null || cost < 0) throw new Error('Indiquez le coût (0 si la recharge était gratuite).')
+  if (cost === null || cost < 0) throw new Error(t('quickadd.errors.cost'))
   return {
     date: charge.date,
     kwh_added: charge.kwh_added,

@@ -92,5 +92,25 @@
     "attached": "File “{filename}” uploaded and attached",
     "uploadError": "Upload failed: {message}",
     "accessError": "Could not open the document: {message}"
+  },
+  "api": {
+    "invalidResponse": "Invalid server response",
+    "notReady": "Error ({status}): The database or the service is not ready",
+    "requestFailed": "The request failed ({status})",
+    "driveNoToll": "Drive marked as toll-free",
+    "toll": "Toll / parking of {amount} {currency}",
+    "tollEdit": "Toll / parking edit",
+    "expense": "Expense “{description}”",
+    "chargeCost": "Charge cost",
+    "reminderCreated": "Reminder created",
+    "reminderUpdated": "Reminder updated",
+    "reminderDeleted": "Reminder deleted",
+    "maintenanceDone": "Maintenance marked as done",
+    "webhookSaved": "Webhook saved",
+    "webhookDeleted": "Webhook deleted",
+    "webhookTest": "Notification test sent",
+    "fillUp": "Fill-up of {amount} €",
+    "charge": "Charge of {kwh} kWh",
+    "documentLoadFailed": "Could not load the document"
   }
 }

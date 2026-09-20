@@ -92,5 +92,25 @@
     "attached": "Fichier « {filename} » téléversé et rattaché",
     "uploadError": "Erreur lors du téléversement : {message}",
     "accessError": "Erreur lors de l'accès au document : {message}"
+  },
+  "api": {
+    "invalidResponse": "Réponse du serveur invalide",
+    "notReady": "Erreur ({status}): La base de données ou le service n'est pas prêt",
+    "requestFailed": "La requête a échoué ({status})",
+    "driveNoToll": "Trajet marqué sans péage",
+    "toll": "Péage / parking de {amount} {currency}",
+    "tollEdit": "Modification de péage / parking",
+    "expense": "Dépense « {description} »",
+    "chargeCost": "Coût de recharge",
+    "reminderCreated": "Rappel créé",
+    "reminderUpdated": "Rappel mis à jour",
+    "reminderDeleted": "Rappel supprimé",
+    "maintenanceDone": "Entretien marqué comme réalisé",
+    "webhookSaved": "Webhook enregistré",
+    "webhookDeleted": "Webhook supprimé",
+    "webhookTest": "Test de notification envoyé",
+    "fillUp": "Plein de {amount} €",
+    "charge": "Recharge de {kwh} kWh",
+    "documentLoadFailed": "Impossible de charger le document"
   }
 }
