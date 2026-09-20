@@ -12,10 +12,10 @@ export interface ConfirmOptions {
 
 const isOpen = ref(false)
 const options = ref<ConfirmOptions>({
-  title: 'Confirmation',
+  title: '',
   message: '',
-  confirmText: 'Confirmer',
-  cancelText: 'Annuler',
+  confirmText: '',
+  cancelText: '',
   type: 'danger',
   isAlert: false,
 })
