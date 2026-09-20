@@ -71,9 +71,6 @@ export const REMINDER_PRESETS: ReminderPreset[] = [
   },
 ]
 
-/** Today as YYYY-MM-DD, the format the date pickers and the API use. */
-export const todayIso = (): string => new Date().toISOString().substring(0, 10)
-
 /** datetime-local inputs expect local time, not UTC. */
 export function toLocalDateTimeInput(d: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -99,15 +96,6 @@ export function formatDate(dateStr: string) {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
-  })
-}
-
-export function formatDriveTime(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('fr-FR', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
   })
 }
 

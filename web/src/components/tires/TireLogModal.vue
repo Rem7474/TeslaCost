@@ -4,7 +4,8 @@ import { Ruler, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { todayIso, type TireLogForm } from '@/utils/tires'
+import { type TireLogForm } from '@/utils/tires'
+import { todayIso } from '@/utils/dates'
 
 // Adds or edits (editingLogId set) a tread depth measurement of selectedTire; initialForm seeds the fields when the modal opens
 const props = defineProps<{ vehicleId: string; selectedTire: any | null; editingLogId: string | null; initialForm: TireLogForm }>()

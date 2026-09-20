@@ -4,7 +4,8 @@ import { api, type MaintenanceReminder } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { X, Bell, Sparkles } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
-import { REMINDER_PRESETS, todayIso, type ReminderPreset } from '@/utils/expenses'
+import { REMINDER_PRESETS, type ReminderPreset } from '@/utils/expenses'
+import { todayIso } from '@/utils/dates'
 
 // Creates a maintenance reminder, or edits `editing`. `preset` pre-fills a new one from a suggestion.
 const props = defineProps<{ vehicleId: string; editing: MaintenanceReminder | null; preset: ReminderPreset | null; currentOdometer: number }>()

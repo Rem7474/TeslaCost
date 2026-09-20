@@ -2,14 +2,15 @@
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { MapPin, Clock, Users, Coins, Plus, Ban } from 'lucide-vue-next'
-import { formatDriveDate, needsTollQualification } from '@/utils/drives'
+import { needsTollQualification } from '@/utils/drives'
+import { formatDayTime } from '@/utils/dates'
 
 // One drive of the list: click opens its cost breakdown.
 defineProps<{ d: any; selected: boolean }>()
 const emit = defineEmits<{ open: [drive: any]; toggle: [drive: any]; 'toll-entry': [drive: any]; 'no-toll': [drive: any] }>()
 const router = useRouter()
 const vehicleStore = useVehicleStore()
-const formatDate = formatDriveDate
+const formatDate = formatDayTime
 </script>
 
 <template>

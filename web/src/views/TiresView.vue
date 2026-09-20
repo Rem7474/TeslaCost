@@ -27,11 +27,10 @@ import {
   formatDate,
   sessionFormFromCopy,
   sessionFormFromSession,
-  todayIso,
-  toIsoDay,
   type SessionForm,
   type TireLogForm,
 } from '@/utils/tires'
+import { todayIso, toIsoDay } from '@/utils/dates'
 
 // The page owns the tire list, the selection and which modal is open; each modal owns its form and
 // its API call and reports back with "saved".

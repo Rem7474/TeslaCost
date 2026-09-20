@@ -5,7 +5,8 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save } from 'lucide-vue-next'
-import { formatDriveDate, teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, uniqueById } from '@/utils/drives'
+import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, uniqueById } from '@/utils/drives'
+import { formatDayTime } from '@/utils/dates'
 
 // Cost breakdown of a drive, or of a trip group (drive.is_trip_group, whose drives are tripDriveIds), with its
 // expenses (edit, delete, add a toll) and the toll detection. refreshDrive reloads the drives list and returns the
@@ -22,7 +23,7 @@ const selectedCostDrive = defineModel<any | null>('drive', { required: true })
 const router = useRouter()
 const vehicleStore = useVehicleStore()
 const { showConfirm, showAlert } = useConfirm()
-const formatDate = formatDriveDate
+const formatDate = formatDayTime
 const teslamateDriveUrl = (d: any) => buildTeslamateDriveUrl(vehicleStore.activeVehicle, d)
 
 // Expense edition inside the cost modal

@@ -1,13 +1,9 @@
 import { CloudSun, Snowflake, Sun } from 'lucide-vue-next'
+import { todayIso, toIsoDay } from '@/utils/dates'
 
 export const MOUNTED_POSITIONS = ['FL', 'FR', 'RL', 'RR'] as const
 
 export const isMountedPosition = (position: string): boolean => (MOUNTED_POSITIONS as readonly string[]).includes(position)
-
-/** Today as YYYY-MM-DD, the format the date pickers and the API use. */
-export const todayIso = (): string => new Date().toISOString().substring(0, 10)
-
-export const toIsoDay = (d: string | Date): string => new Date(d).toISOString().substring(0, 10)
 
 export function getConditionBadge(condition: string) {
   switch (condition) {
