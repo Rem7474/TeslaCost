@@ -88,7 +88,7 @@ async function handleDuplicateSessionSubmit() {
       <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
         <!-- Session recap -->
         <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
-          <div class="text-slate-400">{{ $t('tires.tireDuplicateSessionModal.period') }} <strong class="text-white">{{ formatDate(sessionToDuplicate.mounted_date) }} → {{ sessionToDuplicate.dismounted_date ? formatDate(sessionToDuplicate.dismounted_date) : 'En cours' }}</strong></div>
+          <div class="text-slate-400">{{ $t('tires.tireDuplicateSessionModal.period') }} <strong class="text-white">{{ formatDate(sessionToDuplicate.mounted_date) }} → {{ sessionToDuplicate.dismounted_date ? formatDate(sessionToDuplicate.dismounted_date) : $t('tires.tireDuplicateSessionModal.ongoing') }}</strong></div>
           <div class="text-slate-400">{{ $t('tires.tireDuplicateSessionModal.distance') }} <strong class="text-rose-400">+{{ Math.round(sessionToDuplicate.distance_km || 0).toLocaleString(intlLocale()) }} km</strong></div>
           <div v-if="sessionToDuplicate.notes" class="text-slate-400 italic">"{{ sessionToDuplicate.notes }}"</div>
         </div>

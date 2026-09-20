@@ -153,7 +153,8 @@
     "duplicating": "Duplication...",
     "duplicateTo": "Dupliquer vers {count} pneu(s)",
     "duplicated": "Session dupliquée vers {count} pneu(s).",
-    "error": "Erreur lors de la duplication : {message}"
+    "error": "Erreur lors de la duplication : {message}",
+    "ongoing": "En cours"
   },
   "tireEditModal": {
     "odometerAtFittingKm": "Odomètre au montage (km)",

@@ -153,7 +153,8 @@
     "duplicating": "Duplicating...",
     "duplicateTo": "Duplicate to {count} tire(s)",
     "duplicated": "Session duplicated to {count} tire(s).",
-    "error": "Duplication failed: {message}"
+    "error": "Duplication failed: {message}",
+    "ongoing": "Ongoing"
   },
   "tireEditModal": {
     "odometerAtFittingKm": "Odometer at fitting (km)",
