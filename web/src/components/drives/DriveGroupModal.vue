@@ -1,0 +1,129 @@
+<script setup lang="ts">
+import { ref } from 'vue'
+import { api } from '@/services/api'
+import { useConfirm } from '@/composables/useConfirm'
+import { Layers, X } from 'lucide-vue-next'
+
+// Merges the selected drives into a trip group, optionally with one expense (toll, parking, ferry) for the whole trip.
+const props = defineProps<{ vehicleId: string; selectedDriveIds: string[]; selectedList: any[] }>()
+const emit = defineEmits<{ saved: [] }>()
+const open = defineModel<boolean>('open', { required: true })
+const { showAlert } = useConfirm()
+
+const groupName = ref('')
+const tollAmount = ref<number | ''>('')
+const expenseType = ref('TOLL')
+
+async function handleCreateGroupAndExpense() {
+  if (!props.vehicleId || !props.selectedDriveIds.length) return
+  if (!groupName.value) {
+    showAlert('Veuillez donner un nom au groupe de trajets (ex: Voyage Paris-Lyon)', 'Champ requis', 'warning')
+    return
+  }
+
+  try {
+    if (tollAmount.value && Number(tollAmount.value) > 0) {
+      // Group and expense are created atomically by the backend; the expense is dated at the trip start
+      const firstStart = props.selectedList.length ? new Date(props.selectedList[0].start_time).getTime() : undefined
+      await api.createDriveExpense(props.vehicleId, {
+        drive_ids: props.selectedDriveIds,
+        type: expenseType.value,
+        amount: Number(tollAmount.value),
+        currency: 'EUR',
+        date: new Date(firstStart || Date.now()).toISOString(),
+        notes: groupName.value,
+      })
+    } else {
+      await api.createTripGroup(props.vehicleId, {
+        name: groupName.value,
+        drive_ids: props.selectedDriveIds,
+      })
+    }
+
+    showAlert('Groupe de trajets créé avec succès !', 'Succès', 'success')
+    open.value = false
+    groupName.value = ''
+    tollAmount.value = ''
+    emit('saved')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+</script>
+
+<template>
+  <div
+    v-if="open"
+    class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    @click.self="open = false"
+  >
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+        <div class="flex items-center gap-2">
+          <Layers class="w-5 h-5 text-rose-400" />
+          <h3 class="text-base font-bold text-white">Créer un Voyage / Fusion</h3>
+          <span class="px-2 py-0.5 bg-rose-500/10 text-rose-300 text-xs font-semibold rounded-lg border border-rose-500/20">
+            {{ selectedDriveIds.length }} trajets
+          </span>
+        </div>
+        <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+
+        <div>
+          <label for="drive-group-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du voyage / groupe</label>
+          <input id="drive-group-name"
+            v-model="groupName"
+            type="text"
+            placeholder="ex: Vacances Bretagne - Aller"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+          />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label for="drive-expense-type" class="block text-xs font-semibold text-slate-300 mb-1">Type de frais</label>
+            <select id="drive-expense-type"
+              v-model="expenseType"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+            >
+              <option value="TOLL">Péage</option>
+              <option value="PARKING">Parking</option>
+              <option value="FERRY">Ferry</option>
+            </select>
+          </div>
+          <div>
+            <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
+            <input id="drive-toll-amount"
+              v-model="tollAmount"
+              type="number"
+              step="0.01"
+              placeholder="0.00"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-end gap-2 shrink-0 bg-slate-900/95">
+        <button
+          type="button"
+          @click="open = false"
+          class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
+        >
+          Annuler
+        </button>
+        <button
+          type="button"
+          @click="handleCreateGroupAndExpense"
+          class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/20 transition-colors"
+        >
+          Enregistrer le groupe
+        </button>
+      </div>
+    </div>
+  </div>
+</template>

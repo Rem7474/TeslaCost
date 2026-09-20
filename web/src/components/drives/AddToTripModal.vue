@@ -1,0 +1,70 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import { api } from '@/services/api'
+import { useConfirm } from '@/composables/useConfirm'
+import { X, Plus } from 'lucide-vue-next'
+
+// Adds the selected drives to an existing trip group.
+const props = defineProps<{ vehicleId: string; tripGroups: any[]; selectedDriveIds: string[] }>()
+const emit = defineEmits<{ saved: [] }>()
+const open = defineModel<boolean>('open', { required: true })
+const { showAlert } = useConfirm()
+
+const addToTripId = ref('')
+
+watch(open, (isOpen) => {
+  if (isOpen) addToTripId.value = props.tripGroups[0]?.id || ''
+})
+
+async function handleAddToTrip() {
+  const tg = props.tripGroups.find((g) => g.id === addToTripId.value)
+  if (!props.vehicleId || !tg) return
+  const driveIds = Array.from(new Set([...(tg.drive_ids || []), ...props.selectedDriveIds]))
+  try {
+    await api.updateTripGroup(props.vehicleId, tg.id, { name: tg.name, notes: tg.notes, drive_ids: driveIds })
+    open.value = false
+    emit('saved')
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+</script>
+
+<template>
+  <div
+    v-if="open"
+    class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    @click.self="open = false"
+  >
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+        <h3 class="text-base font-bold text-white flex items-center gap-2 truncate pr-2">
+          <Plus class="w-5 h-5 text-indigo-400 shrink-0" />
+          <span class="truncate">Ajouter {{ selectedDriveIds.length }} trajet(s) à un voyage</span>
+        </h3>
+        <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0">
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <form id="add-to-trip-form" @submit.prevent="handleAddToTrip" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+        <p v-if="!tripGroups.length" class="text-xs text-slate-400">Aucun voyage existant : utilisez « Fusionner & Péage » pour en créer un.</p>
+        <div v-else>
+          <label for="add-to-trip" class="block text-xs font-semibold text-slate-300 mb-1">Voyage</label>
+          <select id="add-to-trip" v-model="addToTripId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-rose-500">
+            <option v-for="tg in tripGroups" :key="tg.id" :value="tg.id">{{ tg.name }} ({{ tg.drive_ids.length }} trajets)</option>
+          </select>
+        </div>
+      </form>
+
+      <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+        <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+          Annuler
+        </button>
+        <button type="submit" form="add-to-trip-form" :disabled="!tripGroups.length" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 text-white text-xs font-semibold rounded-xl transition-colors">
+          Ajouter
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
