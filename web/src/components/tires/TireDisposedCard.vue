@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 
 // A tire that was disposed of: its cost stays in the TCO
 defineProps<{ t: any; selected: boolean }>()
@@ -14,7 +15,7 @@ const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
     <div class="flex items-start justify-between">
       <div>
         <h4 class="text-sm font-bold text-slate-300 group-hover:text-rose-300 transition-colors flex items-center gap-1.5">
-          <label :for="'disposed-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" title="Sélectionner pour une action par lot">
+          <label :for="'disposed-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" :title="$t('tires.tireDisposedCard.selectForABulkAction')">
             <input
               :id="'disposed-select-' + t.tire.id"
               type="checkbox"
@@ -28,11 +29,11 @@ const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
         <div class="text-[11px] text-slate-500 font-mono">{{ t.tire.dimension }}</div>
       </div>
       <span class="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 font-medium">
-        Au rebut
+        {{ $t('tires.tireDisposedCard.scrapped') }}
       </span>
     </div>
     <div class="text-xs text-slate-400">
-      {{ Math.round(t.total_distance_km).toLocaleString('fr-FR') }} km parcourus • Usure : {{ t.life_progress_pct }}% • {{ t.tire.purchase_price }} €
+      {{ $t('tires.tireDisposedCard.kmDrivenWear', { total_distance_km: Math.round(t.total_distance_km).toLocaleString(intlLocale()), life_progress_pct: t.life_progress_pct, purchase_price: t.tire.purchase_price }) }}
     </div>
   </div>
 </template>

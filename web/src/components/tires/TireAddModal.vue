@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { Plus, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -49,7 +50,7 @@ const teslaDimensionPresets = [
   { group: 'Tesla Model S', label: '21" Arachnid Ar — 295/30 R21', value: '295/30 R21' },
   { group: 'Tesla Model X', label: '20" Cyberstream — 265/45 R20 / 275/45 R20', value: '265/45 R20' },
 ]
-const customDimensionPreset = { group: 'Autre', label: 'Dimension personnalisée...', value: 'CUSTOM' }
+const customDimensionPreset = { group: 'Autre', label: t('tires.tireAddModal.customSize'), value: 'CUSTOM' }
 // The Tesla model presets are offered to vehicles linked to TeslaMate; any other vehicle types its dimension
 const dimensionPresets = computed(() =>
   vehicleStore.hasTeslaMate ? [...teslaDimensionPresets, customDimensionPreset] : [customDimensionPreset],
@@ -78,7 +79,7 @@ watch(open, (isOpen) => {
 async function handleCreateTires() {
   if (!props.vehicleId) return
   if (!addTireForm.value.brand || !addTireForm.value.model || !addTireForm.value.dimension) {
-    showAlert('Veuillez renseigner la marque, le modèle et la dimension', 'Champs requis', 'warning')
+    showAlert(t('tires.tireAddModal.requiredFields'), t('tires.tireAddModal.requiredFieldsTitle'), 'warning')
     return
   }
 
@@ -121,7 +122,7 @@ async function handleCreateTires() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -136,7 +137,7 @@ async function handleCreateTires() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Plus class="w-5 h-5 text-rose-500" />
-          Ajouter des pneus
+          {{ $t('tires.tireAddModal.addTires') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -147,7 +148,7 @@ async function handleCreateTires() {
 
       <!-- Add Type Selection -->
       <div class="space-y-1.5">
-        <span class="block text-xs font-semibold text-slate-300">Format d'enregistrement :</span>
+        <span class="block text-xs font-semibold text-slate-300">{{ $t('tires.tireAddModal.recordingFormat') }}</span>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
           <button
             type="button"
@@ -155,7 +156,7 @@ async function handleCreateTires() {
             class="p-2.5 rounded-xl border text-left transition-all"
             :class="addType === 'SET_4' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
           >
-            Train complet monté (4 pneus)
+            {{ $t('tires.tireAddModal.fullSetFitted4Tires') }}
           </button>
           <button
             type="button"
@@ -163,7 +164,7 @@ async function handleCreateTires() {
             class="p-2.5 rounded-xl border text-left transition-all"
             :class="addType === 'SET_4_STORAGE' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
           >
-            Pack au garage (4 pneus hiver/été)
+            {{ $t('tires.tireAddModal.setInStorage4Winter') }}
           </button>
           <button
             type="button"
@@ -171,7 +172,7 @@ async function handleCreateTires() {
             class="p-2.5 rounded-xl border text-left transition-all"
             :class="addType === 'SET_2_FRONT' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
           >
-            Essieu avant monté (2 pneus)
+            {{ $t('tires.tireAddModal.frontAxleFitted2Tires') }}
           </button>
           <button
             type="button"
@@ -179,7 +180,7 @@ async function handleCreateTires() {
             class="p-2.5 rounded-xl border text-left transition-all"
             :class="addType === 'SET_2_REAR' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
           >
-            Essieu arrière monté (2 pneus)
+            {{ $t('tires.tireAddModal.rearAxleFitted2Tires') }}
           </button>
           <button
             type="button"
@@ -187,7 +188,7 @@ async function handleCreateTires() {
             class="p-2.5 rounded-xl border text-left transition-all"
             :class="addType === 'SET_2_STORAGE' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
           >
-            Paire au garage (2 pneus)
+            {{ $t('tires.tireAddModal.pairInStorage2Tires') }}
           </button>
           <button
             type="button"
@@ -195,29 +196,29 @@ async function handleCreateTires() {
             class="p-2.5 rounded-xl border text-left transition-all"
             :class="addType === 'SINGLE' ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 font-bold' : 'bg-slate-800/60 text-slate-400 border-slate-700'"
           >
-            Pneu isolé (achat unique)
+            {{ $t('tires.tireAddModal.singleTireOnePurchase') }}
           </button>
         </div>
       </div>
 
       <!-- Position (single tire only) -->
       <div v-if="addType === 'SINGLE'" class="space-y-1">
-        <label for="tire-add-tire-position" class="block text-xs font-semibold text-slate-400">Position :</label>
+        <label for="tire-add-tire-position" class="block text-xs font-semibold text-slate-400">{{ $t('tires.tireAddModal.position') }}</label>
         <select id="tire-add-tire-position"
           v-model="addTireForm.current_position"
           class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
         >
-          <option value="FL">Avant Gauche (FL)</option>
-          <option value="FR">Avant Droit (FR)</option>
-          <option value="RL">Arrière Gauche (RL)</option>
-          <option value="RR">Arrière Droit (RR)</option>
-          <option value="STORAGE">Stock au garage (non monté)</option>
+          <option value="FL">{{ $t('tires.tireAddModal.frontLeftFl') }}</option>
+          <option value="FR">{{ $t('tires.tireAddModal.frontRightFr') }}</option>
+          <option value="RL">{{ $t('tires.tireAddModal.rearLeftRl') }}</option>
+          <option value="RR">{{ $t('tires.tireAddModal.rearRightRr') }}</option>
+          <option value="STORAGE">{{ $t('tires.tireAddModal.garageStockNotFitted') }}</option>
         </select>
       </div>
 
       <!-- Dimension Dropdown -->
       <div class="space-y-1">
-        <label for="tire-dimension-preset" class="block text-xs font-semibold text-slate-400">Dimension homologuée :</label>
+        <label for="tire-dimension-preset" class="block text-xs font-semibold text-slate-400">{{ $t('tires.tireAddModal.approvedSize') }}</label>
         <select id="tire-dimension-preset"
           v-model="dimensionPreset"
           @change="onDimensionPresetChange"
@@ -241,32 +242,32 @@ async function handleCreateTires() {
       <!-- Brand, Model, Season -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label for="tire-add-tire-brand" class="block text-xs font-semibold text-slate-400 mb-1">Marque</label>
+          <label for="tire-add-tire-brand" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.brand') }}</label>
           <input id="tire-add-tire-brand"
             v-model="addTireForm.brand"
             type="text"
-            placeholder="Michelin, Pirelli, Hankook..."
+            :placeholder="$t('tires.tireAddModal.michelinPirelliHankook')"
             class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
           />
         </div>
         <div>
-          <label for="tire-add-tire-model" class="block text-xs font-semibold text-slate-400 mb-1">Modèle</label>
+          <label for="tire-add-tire-model" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.model') }}</label>
           <input id="tire-add-tire-model"
             v-model="addTireForm.model"
             type="text"
-            placeholder="Pilot Sport EV, Winter Sottozero..."
+            :placeholder="$t('tires.tireAddModal.pilotSportEvWinterSottozero')"
             class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
           />
         </div>
         <div>
-          <label for="tire-add-tire-season" class="block text-xs font-semibold text-slate-400 mb-1">Saison</label>
+          <label for="tire-add-tire-season" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.season') }}</label>
           <select id="tire-add-tire-season"
             v-model="addTireForm.season"
             class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
           >
-            <option value="SUMMER">☀️ Été</option>
-            <option value="WINTER">❄️ Hiver</option>
-            <option value="ALL_SEASON">🌦️ 4 Saisons</option>
+            <option value="SUMMER">{{ $t('tires.tireAddModal.summer') }}</option>
+            <option value="WINTER">{{ $t('tires.tireAddModal.winter') }}</option>
+            <option value="ALL_SEASON">{{ $t('tires.tireAddModal.allSeason') }}</option>
           </select>
         </div>
       </div>
@@ -276,14 +277,14 @@ async function handleCreateTires() {
         <div>
           <div class="flex items-center justify-between mb-1">
             <label for="tire-add-tire-total-price" class="text-xs font-semibold text-slate-400">
-              {{ isTotalPrice ? 'Prix total du lot (€)' : 'Prix par pneu (€)' }}
+              {{ isTotalPrice ? $t('tires.tireAddModal.totalPrice') : $t('tires.tireAddModal.pricePerTire') }}
             </label>
             <button
               type="button"
               @click="isTotalPrice = !isTotalPrice"
               class="text-[10px] text-rose-400 hover:text-rose-300 underline"
             >
-              Passer en {{ isTotalPrice ? 'prix unitaire' : 'prix total' }}
+              {{ $t('tires.tireAddModal.switchTo', { mode: isTotalPrice ? $t('tires.tireAddModal.unitPrice') : $t('tires.tireAddModal.totalPriceMode') }) }}
             </button>
           </div>
           <input id="tire-add-tire-total-price"
@@ -303,7 +304,7 @@ async function handleCreateTires() {
         </div>
 
         <div>
-          <label for="tire-add-tire-estimated-lifespan-km" class="block text-xs font-semibold text-slate-400 mb-1">Durée de vie estimée (km)</label>
+          <label for="tire-add-tire-estimated-lifespan-km" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.estimatedLifespanKm') }}</label>
           <input id="tire-add-tire-estimated-lifespan-km"
             v-model.number="addTireForm.estimated_lifespan_km"
             type="number"
@@ -315,7 +316,7 @@ async function handleCreateTires() {
 
       <!-- Km already driven (second-hand) -->
       <div>
-        <label for="tire-add-tire-accumulated-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">Km déjà parcourus (si occasion)</label>
+        <label for="tire-add-tire-accumulated-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.kmAlreadyDrivenIfUsed') }}</label>
         <input id="tire-add-tire-accumulated-distance-km"
           v-model.number="addTireForm.accumulated_distance_km"
           type="number"
@@ -326,7 +327,7 @@ async function handleCreateTires() {
       <!-- Date & Sculptures -->
       <div class="grid grid-cols-3 gap-3">
         <div>
-          <label for="tire-add-tire-purchase-date" class="block text-[11px] text-slate-400 mb-1">Date d'achat</label>
+          <label for="tire-add-tire-purchase-date" class="block text-[11px] text-slate-400 mb-1">{{ $t('tires.tireAddModal.purchaseDate') }}</label>
           <AppDatePicker
             id="tire-add-tire-purchase-date"
             v-model="addTireForm.purchase_date"
@@ -335,7 +336,7 @@ async function handleCreateTires() {
           />
         </div>
         <div>
-          <label for="tire-add-tire-initial-depth-mm" class="block text-[11px] text-slate-400 mb-1">Gomme neuve (mm)</label>
+          <label for="tire-add-tire-initial-depth-mm" class="block text-[11px] text-slate-400 mb-1">{{ $t('tires.tireAddModal.newTreadMm') }}</label>
           <input id="tire-add-tire-initial-depth-mm"
             v-model.number="addTireForm.initial_depth_mm"
             type="number"
@@ -344,7 +345,7 @@ async function handleCreateTires() {
           />
         </div>
         <div>
-          <label for="tire-add-tire-min-legal-depth-mm" class="block text-[11px] text-slate-400 mb-1">Témoin légal (mm)</label>
+          <label for="tire-add-tire-min-legal-depth-mm" class="block text-[11px] text-slate-400 mb-1">{{ $t('tires.tireAddModal.legalWearIndicatorMm') }}</label>
           <input id="tire-add-tire-min-legal-depth-mm"
             v-model.number="addTireForm.min_legal_depth_mm"
             type="number"
@@ -362,14 +363,14 @@ async function handleCreateTires() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-semibold text-slate-300 transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
           @click="handleCreateTires"
           class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-5 py-2 rounded-xl shadow-lg shadow-rose-600/20 transition-colors"
         >
-          Créer les pneus
+          {{ $t('tires.tireAddModal.createTheTires') }}
         </button>
       </div>
     </div>

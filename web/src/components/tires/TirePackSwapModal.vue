@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { Snowflake, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -41,7 +42,7 @@ async function handlePackSwapSubmit() {
   ].filter(Boolean)
 
   if (selectedIDs.length !== 4) {
-    showAlert('Veuillez sélectionner 4 pneus distincts du garage pour remplacer les pneus montés.', 'Sélection requise', 'warning')
+    showAlert(t('tires.tirePackSwapModal.selectFour'), t('tires.tirePackSwapModal.selectionRequired'), 'warning')
     return
   }
 
@@ -54,7 +55,7 @@ async function handlePackSwapSubmit() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -69,7 +70,7 @@ async function handlePackSwapSubmit() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Snowflake class="w-4 h-4 text-sky-400" />
-          Permutation saisonnière (Changement de pack complet)
+          {{ $t('tires.tirePackSwapModal.seasonalSwapFullSetChange') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-4 h-4" />
@@ -78,7 +79,7 @@ async function handlePackSwapSubmit() {
 
       <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
         <div>
-          <label for="tire-pack-swap-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre de la permutation (km)</label>
+          <label for="tire-pack-swap-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tirePackSwapModal.odometerAtTheSwapKm') }}</label>
           <input id="tire-pack-swap-odometer"
             v-model.number="packSwapForm.odometer"
             type="number"
@@ -88,12 +89,12 @@ async function handlePackSwapSubmit() {
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
           <div>
-            <label for="tire-pack-swap-tires-fl" class="block text-slate-400 mb-1 font-semibold">Avant Gauche (FL)</label>
+            <label for="tire-pack-swap-tires-fl" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tirePackSwapModal.frontLeftFl') }}</label>
             <select id="tire-pack-swap-tires-fl"
               v-model="packSwapForm.tires.FL"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
             >
-              <option value="">-- Choisir un pneu --</option>
+              <option value="">{{ $t('tires.tirePackSwapModal.chooseATire') }}</option>
               <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
                 {{ getTireSelectLabel(t) }}
               </option>
@@ -101,12 +102,12 @@ async function handlePackSwapSubmit() {
           </div>
 
           <div>
-            <label for="tire-pack-swap-tires-fr" class="block text-slate-400 mb-1 font-semibold">Avant Droit (FR)</label>
+            <label for="tire-pack-swap-tires-fr" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tirePackSwapModal.frontRightFr') }}</label>
             <select id="tire-pack-swap-tires-fr"
               v-model="packSwapForm.tires.FR"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
             >
-              <option value="">-- Choisir un pneu --</option>
+              <option value="">{{ $t('tires.tirePackSwapModal.chooseATire') }}</option>
               <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
                 {{ getTireSelectLabel(t) }}
               </option>
@@ -114,12 +115,12 @@ async function handlePackSwapSubmit() {
           </div>
 
           <div>
-            <label for="tire-pack-swap-tires-rl" class="block text-slate-400 mb-1 font-semibold">Arrière Gauche (RL)</label>
+            <label for="tire-pack-swap-tires-rl" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tirePackSwapModal.rearLeftRl') }}</label>
             <select id="tire-pack-swap-tires-rl"
               v-model="packSwapForm.tires.RL"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
             >
-              <option value="">-- Choisir un pneu --</option>
+              <option value="">{{ $t('tires.tirePackSwapModal.chooseATire') }}</option>
               <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
                 {{ getTireSelectLabel(t) }}
               </option>
@@ -127,12 +128,12 @@ async function handlePackSwapSubmit() {
           </div>
 
           <div>
-            <label for="tire-pack-swap-tires-rr" class="block text-slate-400 mb-1 font-semibold">Arrière Droit (RR)</label>
+            <label for="tire-pack-swap-tires-rr" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tirePackSwapModal.rearRightRr') }}</label>
             <select id="tire-pack-swap-tires-rr"
               v-model="packSwapForm.tires.RR"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
             >
-              <option value="">-- Choisir un pneu --</option>
+              <option value="">{{ $t('tires.tirePackSwapModal.chooseATire') }}</option>
               <option v-for="t in storageTires" :key="t.tire.id" :value="t.tire.id">
                 {{ getTireSelectLabel(t) }}
               </option>
@@ -147,14 +148,14 @@ async function handlePackSwapSubmit() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
           @click="handlePackSwapSubmit"
           class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
         >
-          Confirmer la permutation
+          {{ $t('tires.tirePackSwapModal.confirmTheRotation') }}
         </button>
       </div>
     </div>

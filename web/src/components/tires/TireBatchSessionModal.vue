@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { Check, History, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -69,7 +70,7 @@ function onBatchOdometerChange() {
 async function handleSaveBatchSession() {
   if (!props.vehicleId || batchSessionTireIds.value.length === 0) return
   if (!batchSessionForm.value.mounted_date || !batchSessionForm.value.dismounted_date) {
-    showAlert('Veuillez renseigner les dates de montage et de démontage.', 'Dates requises', 'warning')
+    showAlert(t('tires.tireBatchSessionModal.datesRequired'), t('tires.tireBatchSessionModal.datesRequiredTitle'), 'warning')
     return
   }
 
@@ -95,9 +96,9 @@ async function handleSaveBatchSession() {
 
     open.value = false
     emit('saved')
-    showAlert(`Session enregistrée avec succès pour ${batchSessionTireIds.value.length} pneu(s).`, 'Succès', 'success')
+    showAlert(t('tires.tireBatchSessionModal.saved', { count: batchSessionTireIds.value.length }), t('common.success'), 'success')
   } catch (err: any) {
-    showAlert(`Erreur lors de l'enregistrement du lot : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('tires.tireBatchSessionModal.error', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     savingBatchSession.value = false
   }
@@ -115,7 +116,7 @@ async function handleSaveBatchSession() {
         <div class="flex items-center gap-2">
           <History class="w-5 h-5 text-rose-400" />
           <h3 class="text-base font-bold text-white">
-            Ajouter une session passée sur un lot
+            {{ $t('tires.tireBatchSessionModal.addAPastSessionOn') }}
           </h3>
         </div>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
@@ -128,15 +129,15 @@ async function handleSaveBatchSession() {
         <div>
           <div class="flex items-center justify-between mb-2">
             <span class="font-semibold text-slate-300">
-              Pneus du garage concernés ({{ batchSessionTireIds.length }}/{{ storageTires.length }})
+              {{ $t('tires.tireBatchSessionModal.garageTiresConcerned', { length: batchSessionTireIds.length, length2: storageTires.length }) }}
             </span>
             <div class="flex items-center gap-2 text-[11px]">
               <button type="button" @click="selectAllBatchSessionTires()" class="text-rose-400 hover:text-rose-300 font-semibold">
-                Tout cocher
+                {{ $t('tires.tireBatchSessionModal.tickAll') }}
               </button>
               <span class="text-slate-600">|</span>
               <button type="button" @click="deselectAllBatchSessionTires()" class="text-slate-400 hover:text-slate-200">
-                Tout décocher
+                {{ $t('tires.tireBatchSessionModal.untickAll') }}
               </button>
             </div>
           </div>
@@ -164,7 +165,7 @@ async function handleSaveBatchSession() {
         <!-- Dates & Odometers -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="batch-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">Date de montage</label>
+            <label for="batch-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.fittingDate') }}</label>
             <AppDatePicker
               id="batch-session-mounted-date"
               v-model="batchSessionForm.mounted_date"
@@ -173,7 +174,7 @@ async function handleSaveBatchSession() {
             />
           </div>
           <div>
-            <label for="batch-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre montage (km)</label>
+            <label for="batch-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.odometerAtFittingKm') }}</label>
             <input
               id="batch-session-mounted-odometer"
               v-model.number="batchSessionForm.mounted_odometer"
@@ -186,7 +187,7 @@ async function handleSaveBatchSession() {
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="batch-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">Date démontage</label>
+            <label for="batch-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.removalDate') }}</label>
             <AppDatePicker
               id="batch-session-dismounted-date"
               v-model="batchSessionForm.dismounted_date"
@@ -195,7 +196,7 @@ async function handleSaveBatchSession() {
             />
           </div>
           <div>
-            <label for="batch-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre démontage (km)</label>
+            <label for="batch-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.odometerAtRemovalKm') }}</label>
             <input
               id="batch-session-dismounted-odometer"
               v-model.number="batchSessionForm.dismounted_odometer"
@@ -207,23 +208,23 @@ async function handleSaveBatchSession() {
         </div>
 
         <div>
-          <label for="batch-session-distance-km" class="block text-slate-400 mb-1 font-semibold">Distance de la session (km)</label>
+          <label for="batch-session-distance-km" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.sessionDistanceKm') }}</label>
           <input
             id="batch-session-distance-km"
             v-model.number="batchSessionForm.distance_km"
             type="number"
-            placeholder="Auto-calculé par les odomètres ou manuel"
+            :placeholder="$t('tires.tireBatchSessionModal.calculatedFromTheOdometersOr')"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
           />
         </div>
 
         <div>
-          <label for="batch-session-notes" class="block text-slate-400 mb-1 font-semibold">Commentaire / Notes</label>
+          <label for="batch-session-notes" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.commentNotes') }}</label>
           <input
             id="batch-session-notes"
             v-model="batchSessionForm.notes"
             type="text"
-            placeholder="Ex: Saison hiver 2023-2024"
+            :placeholder="$t('tires.tireBatchSessionModal.eGWinterSeason2023')"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
           />
         </div>
@@ -235,7 +236,7 @@ async function handleSaveBatchSession() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
@@ -244,7 +245,7 @@ async function handleSaveBatchSession() {
           class="px-4 py-2 bg-rose-600 hover:bg-rose-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-rose-600/20 transition-all flex items-center gap-1.5"
         >
           <Check class="w-4 h-4" />
-          <span>{{ savingBatchSession ? 'Enregistrement...' : `Appliquer à ${batchSessionTireIds.length} pneu(s)` }}</span>
+          <span>{{ savingBatchSession ? $t('tires.tireBatchSessionModal.saving') : $t('tires.tireBatchSessionModal.applyTo', { count: batchSessionTireIds.length }) }}</span>
         </button>
       </div>
     </div>

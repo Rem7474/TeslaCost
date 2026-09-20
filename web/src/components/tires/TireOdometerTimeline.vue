@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 import { computed, ref } from 'vue'
 import { buildTireTimeline, tickStep, type TimelineSegment } from '../../utils/tireTimeline'
 
@@ -12,7 +13,7 @@ const pinned = ref<TimelineSegment | null>(null)
 const shown = computed(() => hovered.value ?? pinned.value)
 
 const pct = (km: number) => (timeline.value.maxKm > 0 ? (km / timeline.value.maxKm) * 100 : 0)
-const fmtKm = (km: number) => `${Math.round(km).toLocaleString('fr-FR')} km`
+const fmtKm = (km: number) => `${Math.round(km).toLocaleString(intlLocale())} km`
 
 const hasData = computed(() => timeline.value.lanes.some((l) => l.segments.length > 0))
 const hasGaps = computed(() => timeline.value.lanes.some((l) => l.gaps.length > 0))
@@ -33,12 +34,12 @@ function onClick(seg: TimelineSegment) {
 <template>
   <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-sm">
     <div class="flex items-center justify-between flex-wrap gap-2">
-      <h3 class="text-sm font-bold text-white">Pneus montés selon le kilométrage</h3>
+      <h3 class="text-sm font-bold text-white">{{ $t('tires.tireOdometerTimeline.tiresFittedByMileage') }}</h3>
       <span class="text-[11px] text-slate-400">0 → {{ fmtKm(timeline.maxKm) }}</span>
     </div>
 
     <div v-if="!hasData" class="p-6 text-center text-xs text-slate-500 bg-slate-950/40 rounded-2xl">
-      Aucune session de montage avec kilométrage enregistrée.
+      {{ $t('tires.tireOdometerTimeline.noFittingSessionWithMileage') }}
     </div>
 
     <template v-else>
@@ -55,7 +56,7 @@ function onClick(seg: TimelineSegment) {
                 width: pct(gap.endKm - gap.startKm) + '%',
                 backgroundImage: 'repeating-linear-gradient(45deg, #334155 0 4px, transparent 4px 8px)',
               }"
-              :title="`Aucun pneu enregistré (${fmtKm(gap.startKm)} → ${fmtKm(gap.endKm)})`"
+              :title="$t('tires.tireOdometerTimeline.noTire', { from: fmtKm(gap.startKm), to: fmtKm(gap.endKm) })"
             ></div>
             <button
               v-for="seg in lane.segments"
@@ -64,7 +65,7 @@ function onClick(seg: TimelineSegment) {
               class="absolute top-0 h-full border-r border-slate-950 transition-opacity hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
               :class="{ 'ring-2 ring-white ring-inset': pinned?.id === seg.id }"
               :style="{ left: pct(seg.startKm) + '%', width: pct(seg.endKm - seg.startKm) + '%', backgroundColor: seg.color }"
-              :aria-label="`${lane.label} : ${seg.tires[0].label}, de ${fmtKm(seg.startKm)} à ${fmtKm(seg.endKm)}`"
+              :aria-label="$t('tires.tireOdometerTimeline.segment', { lane: lane.label, tire: seg.tires[0].label, from: fmtKm(seg.startKm), to: fmtKm(seg.endKm) })"
               @mouseenter="hovered = seg"
               @mouseleave="hovered = null"
               @focus="hovered = seg"
@@ -77,7 +78,7 @@ function onClick(seg: TimelineSegment) {
 
       <div class="relative h-4 text-[10px] text-slate-500" :class="timeline.lanes.length > 1 ? 'ml-[8.75rem]' : ''">
         <span v-for="km in ticks" :key="km" class="absolute -translate-x-1/2 first:translate-x-0" :style="{ left: pct(km) + '%' }">
-          {{ (km / 1000).toLocaleString('fr-FR') }}k
+          {{ (km / 1000).toLocaleString(intlLocale()) }}k
         </span>
       </div>
 
@@ -86,12 +87,12 @@ function onClick(seg: TimelineSegment) {
           <span class="w-2.5 h-2.5 rounded-sm" :style="{ backgroundColor: l.color }"></span>{{ l.key }}
         </span>
         <span v-if="hasGaps" class="flex items-center gap-1.5 text-[11px] text-slate-400">
-          <span class="w-2.5 h-2.5 rounded-sm bg-slate-600"></span>Aucun pneu enregistré
+          <span class="w-2.5 h-2.5 rounded-sm bg-slate-600"></span>{{ $t('tires.tireOdometerTimeline.noTireRecorded') }}
         </span>
       </div>
 
       <div class="min-h-[4.5rem] bg-slate-950/60 border border-slate-800/80 rounded-2xl p-3 text-xs">
-        <p v-if="!shown" class="text-slate-500">Survolez ou cliquez sur un segment pour voir le détail.</p>
+        <p v-if="!shown" class="text-slate-500">{{ $t('tires.tireOdometerTimeline.hoverOrClickASegment') }}</p>
         <div v-else class="space-y-2">
           <div class="text-slate-200 font-semibold">
             {{ fmtKm(shown.startKm) }} → {{ fmtKm(shown.endKm) }}
@@ -102,10 +103,10 @@ function onClick(seg: TimelineSegment) {
               <span>
                 <span class="font-mono text-rose-400 mr-1">{{ t.position }}</span>{{ t.label }}
                 <span class="text-slate-500 font-mono">{{ t.dimension }}</span>
-                <span v-if="t.ongoing" class="ml-1 text-emerald-400">en cours</span>
+                <span v-if="t.ongoing" class="ml-1 text-emerald-400">{{ $t('tires.tireOdometerTimeline.ongoing') }}</span>
               </span>
               <button type="button" class="text-rose-400 hover:text-rose-300 font-semibold shrink-0" @click="emit('select-tire', t.tireId)">
-                Fiche
+                {{ $t('tires.tireOdometerTimeline.details') }}
               </button>
             </li>
           </ul>

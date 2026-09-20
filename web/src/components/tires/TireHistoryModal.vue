@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 import { Archive, ClipboardPaste, Copy, Edit2, History, Pencil, Plus, Ruler, Shuffle, Trash2, X, Zap } from 'lucide-vue-next'
 import { useVehicleStore } from '@/stores/vehicle'
 import { formatDate, type SessionForm } from '@/utils/tires'
@@ -48,22 +49,22 @@ const open = defineModel<boolean>('open', { required: true })
             </span>
           </div>
           <div class="text-xs text-slate-400 mt-0.5">
-            Acheté le {{ formatDate(selectedTire.purchase_date) }} • {{ selectedTire.purchase_price }} €
+            {{ $t('tires.tireHistoryModal.boughtOn', { purchase_date: formatDate(selectedTire.purchase_date), purchase_price: selectedTire.purchase_price }) }}
           </div>
         </div>
         <div class="flex items-center gap-1.5">
-          <button @click="emit('edit-tire')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors" title="Modifier le pneu">
+          <button @click="emit('edit-tire')" class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition-colors" :title="$t('tires.tireHistoryModal.editTheTire')">
             <Pencil class="w-4 h-4" />
           </button>
           <button
             v-if="selectedTire.current_position !== 'DISPOSED'"
             @click="emit('dispose-tire')"
             class="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-amber-400 rounded-lg transition-colors"
-            title="Mettre au rebut (usé, crevé, vendu)"
+            :title="$t('tires.tireHistoryModal.scrapWornPuncturedSold')"
           >
             <Archive class="w-4 h-4" />
           </button>
-          <button @click="emit('delete-tire')" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg transition-colors" title="Supprimer (saisie erronée)">
+          <button @click="emit('delete-tire')" class="p-1.5 bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 rounded-lg transition-colors" :title="$t('tires.tireHistoryModal.deleteEntryError')">
             <Trash2 class="w-4 h-4" />
           </button>
           <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
@@ -78,10 +79,10 @@ const open = defineModel<boolean>('open', { required: true })
       <!-- Life KPI Card -->
       <div class="bg-slate-950/60 border border-slate-800 p-4 rounded-2xl space-y-3">
         <div class="flex items-center justify-between text-xs">
-          <span class="text-slate-400">Kilométrage total de vie :</span>
+          <span class="text-slate-400">{{ $t('tires.tireHistoryModal.totalLifetimeMileage') }}</span>
           <span class="text-base font-bold text-white">
-            {{ Math.round(selectedTireStats?.total_distance_km || 0).toLocaleString('fr-FR') }} km
-            <span class="text-xs text-slate-400 font-normal">/ {{ (selectedTire.estimated_lifespan_km || 45000).toLocaleString('fr-FR') }} km estimés</span>
+            {{ Math.round(selectedTireStats?.total_distance_km || 0).toLocaleString(intlLocale()) }} km
+            <span class="text-xs text-slate-400 font-normal">{{ $t('tires.tireHistoryModal.kmEstimated', { estimated_lifespan_km: (selectedTire.estimated_lifespan_km || 45000).toLocaleString(intlLocale()) }) }}</span>
           </span>
         </div>
 
@@ -95,15 +96,15 @@ const open = defineModel<boolean>('open', { required: true })
 
         <div class="grid grid-cols-3 gap-2 text-center text-xs pt-1">
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500">Sculpture actuelle</div>
+            <div class="text-[10px] text-slate-500">{{ $t('tires.tireHistoryModal.currentTread') }}</div>
             <div class="font-bold text-emerald-400">{{ selectedTireStats?.current_depth_mm }} mm</div>
           </div>
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500">Durée de vie consommée</div>
+            <div class="text-[10px] text-slate-500">{{ $t('tires.tireHistoryModal.lifespanUsed') }}</div>
             <div class="font-bold text-slate-200">{{ selectedTireStats?.life_progress_pct }}%</div>
           </div>
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500">Coût réel / km</div>
+            <div class="text-[10px] text-slate-500">{{ $t('tires.tireHistoryModal.actualCostKm') }}</div>
             <div class="font-bold text-amber-400">{{ Number(selectedTireStats?.cost_per_km).toFixed(4) }} €</div>
           </div>
         </div>
@@ -114,7 +115,7 @@ const open = defineModel<boolean>('open', { required: true })
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-2">
             <Zap class="w-4 h-4 text-amber-400" />
-            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Télémétrie Dynamique TeslaMate</h4>
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider">{{ $t('tires.tireHistoryModal.teslamateDrivingTelemetry') }}</h4>
           </div>
           <span
             class="px-2.5 py-0.5 rounded-full text-xs font-bold border"
@@ -126,26 +127,26 @@ const open = defineModel<boolean>('open', { required: true })
                 : 'bg-sky-500/15 text-sky-400 border-sky-500/30'
             "
           >
-            {{ selectedTireStats.driving_style === 'SPORT' ? 'Contrainte Sportive' : selectedTireStats.driving_style === 'ECO' ? 'Éco-conduite' : 'Conduite Équilibrée' }} (Indice : x{{ selectedTireStats.driving_stress_index }})
+            {{ selectedTireStats.driving_style === 'SPORT' ? $t('tires.tireHistoryModal.sport') : selectedTireStats.driving_style === 'ECO' ? $t('tires.tireHistoryModal.eco') : $t('tires.tireHistoryModal.balanced') }} {{ $t('tires.tireHistoryModal.index', { index: selectedTireStats.driving_stress_index }) }}
           </span>
         </div>
 
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
           <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500 uppercase">Pointe Accélération</div>
+            <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireHistoryModal.peakAcceleration') }}</div>
             <div class="font-bold text-rose-400 text-sm mt-0.5">+{{ selectedTireStats.avg_power_max_kw }} kW</div>
           </div>
           <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500 uppercase">Pointe Régénération</div>
+            <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireHistoryModal.peakRegeneration') }}</div>
             <div class="font-bold text-emerald-400 text-sm mt-0.5">{{ selectedTireStats.avg_power_min_kw }} kW</div>
           </div>
           <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500 uppercase">Conso moyenne</div>
-            <div class="font-bold text-sky-400 text-sm mt-0.5">{{ selectedTireStats.avg_consumption_kwh_100km }} kWh</div>
+            <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireHistoryModal.averageConsumption') }}</div>
+            <div class="font-bold text-sky-400 text-sm mt-0.5">{{ $t('tires.tireHistoryModal.kwh', { avg_consumption_kwh_100km: selectedTireStats.avg_consumption_kwh_100km }) }}</div>
           </div>
           <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500 uppercase">Longévité ajustée</div>
-            <div class="font-bold text-indigo-300 text-sm mt-0.5">~{{ (selectedTireStats.dynamic_lifespan_km || selectedTire.estimated_lifespan_km).toLocaleString('fr-FR') }} km</div>
+            <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireHistoryModal.adjustedLongevity') }}</div>
+            <div class="font-bold text-indigo-300 text-sm mt-0.5">~{{ (selectedTireStats.dynamic_lifespan_km || selectedTire.estimated_lifespan_km).toLocaleString(intlLocale()) }} km</div>
           </div>
         </div>
 
@@ -159,30 +160,30 @@ const open = defineModel<boolean>('open', { required: true })
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
             <History class="w-4 h-4 text-rose-500" />
-            Historique des montages, démontages & permutations
+            {{ $t('tires.tireHistoryModal.historyOfFittingsRemovalsAnd') }}
           </h4>
           <div class="flex items-center gap-2">
             <button
               v-if="copiedSession"
               @click="emit('paste-session')"
               class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition-colors bg-indigo-950/40 border border-indigo-800/60 px-2 py-1 rounded-lg"
-              :title="'Coller la session copiée (' + (copiedSession.mounted_date ? formatDate(copiedSession.mounted_date) : '') + ')'"
+              :title="$t('tires.tireHistoryModal.pasteCopied', { date: copiedSession.mounted_date ? formatDate(copiedSession.mounted_date) : '' })"
             >
               <ClipboardPaste class="w-3.5 h-3.5" />
-              <span>Coller</span>
+              <span>{{ $t('tires.tireHistoryModal.paste') }}</span>
             </button>
             <button
               @click="emit('add-session')"
               class="text-xs text-rose-400 hover:text-rose-300 font-semibold flex items-center gap-1 transition-colors"
             >
               <Plus class="w-3.5 h-3.5" />
-              Ajouter une session passée
+              {{ $t('tires.tireHistoryModal.addAPastSession') }}
             </button>
           </div>
         </div>
 
         <div v-if="tireSessions.length === 0" class="p-6 text-center bg-slate-950/40 rounded-2xl text-xs text-slate-500">
-          Aucune session enregistrée pour ce pneu.
+          {{ $t('tires.tireHistoryModal.noSessionRecordedForThis') }}
         </div>
 
         <div v-else class="space-y-2.5">
@@ -197,9 +198,9 @@ const open = defineModel<boolean>('open', { required: true })
                   class="px-2 py-0.5 rounded-md font-bold text-[10px]"
                   :class="s.dismounted_date ? 'bg-slate-800 text-slate-300' : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'"
                 >
-                  {{ s.dismounted_date ? 'Session terminée' : '🟢 Montage en cours' }}
+                  {{ s.dismounted_date ? $t('tires.tireHistoryModal.sessionOver') : $t('tires.tireHistoryModal.currentlyFitted') }}
                 </span>
-                <span class="font-bold text-white">Roue : {{ s.position }}</span>
+                <span class="font-bold text-white">{{ $t('tires.tireHistoryModal.wheel', { position: s.position }) }}</span>
               </div>
 
               <div class="flex items-center gap-1.5">
@@ -207,28 +208,28 @@ const open = defineModel<boolean>('open', { required: true })
                   @click="emit('copy-session', s)"
                   class="p-1 rounded transition-colors"
                   :class="copiedSession?.mounted_date === (s.mounted_date ? new Date(s.mounted_date).toISOString().substring(0, 10) : '') && copiedSession?.mounted_odometer === s.mounted_odometer ? 'text-indigo-400 bg-indigo-950/60' : 'text-slate-400 hover:text-indigo-400'"
-                  title="Copier les données de cette session"
+                  :title="$t('tires.tireHistoryModal.copyThisSessionSData')"
                 >
                   <Copy class="w-3.5 h-3.5" />
                 </button>
                 <button
                   @click="emit('duplicate-session', s)"
                   class="p-1 text-slate-400 hover:text-sky-400 rounded transition-colors"
-                  title="Dupliquer vers d'autres pneus..."
+                  :title="$t('tires.tireHistoryModal.duplicateToOtherTires')"
                 >
                   <Shuffle class="w-3.5 h-3.5" />
                 </button>
                 <button
                   @click="emit('edit-session', s)"
                   class="p-1 text-slate-400 hover:text-white rounded"
-                  title="Modifier la session"
+                  :title="$t('tires.tireHistoryModal.editTheSession')"
                 >
                   <Edit2 class="w-3.5 h-3.5" />
                 </button>
                 <button
                   @click="emit('delete-session', s)"
                   class="p-1 text-slate-400 hover:text-rose-400 rounded"
-                  title="Supprimer la session"
+                  :title="$t('tires.tireHistoryModal.deleteTheSession')"
                 >
                   <Trash2 class="w-3.5 h-3.5" />
                 </button>
@@ -238,13 +239,13 @@ const open = defineModel<boolean>('open', { required: true })
             <!-- Session Details -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
               <div>
-                <div class="text-slate-500">Montage :</div>
-                <div class="text-slate-200 font-medium">{{ formatDate(s.mounted_date) }} à {{ Math.round(s.mounted_odometer).toLocaleString('fr-FR') }} km</div>
+                <div class="text-slate-500">{{ $t('tires.tireHistoryModal.fitting') }}</div>
+                <div class="text-slate-200 font-medium">{{ formatDate(s.mounted_date) }} à {{ Math.round(s.mounted_odometer).toLocaleString(intlLocale()) }} km</div>
               </div>
               <div>
-                <div class="text-slate-500">Démontage :</div>
+                <div class="text-slate-500">{{ $t('tires.tireHistoryModal.removal') }}</div>
                 <div class="text-slate-200 font-medium">
-                  {{ s.dismounted_date ? `${formatDate(s.dismounted_date)} à ${Math.round(s.dismounted_odometer).toLocaleString('fr-FR')} km` : 'Actuellement sur le véhicule' }}
+                  {{ s.dismounted_date ? $t('tires.tireHistoryModal.removedAt', { date: formatDate(s.dismounted_date), odometer: Math.round(s.dismounted_odometer).toLocaleString(intlLocale()) }) : $t('tires.tireHistoryModal.currentlyOnVehicle') }}
                 </div>
               </div>
             </div>
@@ -252,7 +253,7 @@ const open = defineModel<boolean>('open', { required: true })
             <div class="flex items-center justify-between text-[11px] pt-1">
               <span v-if="s.notes" class="text-slate-400 italic">"{{ s.notes }}"</span>
               <span v-else></span>
-              <span class="font-bold text-rose-400">+{{ Math.round(s.distance_km).toLocaleString('fr-FR') }} km parcourus</span>
+              <span class="font-bold text-rose-400">{{ $t('tires.tireHistoryModal.kmDriven', { distance_km: Math.round(s.distance_km).toLocaleString(intlLocale()) }) }}</span>
             </div>
           </div>
         </div>
@@ -263,14 +264,14 @@ const open = defineModel<boolean>('open', { required: true })
         <div class="flex items-center justify-between">
           <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
             <Ruler class="w-4 h-4 text-emerald-400" />
-            Relevés de profondeur de gomme ({{ tireLogs.length }})
+            {{ $t('tires.tireHistoryModal.treadDepthReadings', { length: tireLogs.length }) }}
           </h4>
           <button
             @click="emit('add-log')"
             class="text-xs text-emerald-400 hover:text-emerald-300 font-semibold flex items-center gap-1 transition-colors"
           >
             <Plus class="w-3.5 h-3.5" />
-            Ajouter un relevé
+            {{ $t('tires.tireHistoryModal.addAReading') }}
           </button>
         </div>
 
@@ -285,12 +286,12 @@ const open = defineModel<boolean>('open', { required: true })
               <span class="text-[10px] text-slate-500">{{ formatDate(l.date) }}</span>
             </div>
             <div class="flex items-center justify-between text-[10px] text-slate-400">
-              <span>à {{ Math.round(l.odometer).toLocaleString('fr-FR') }} km</span>
+              <span>à {{ Math.round(l.odometer).toLocaleString(intlLocale()) }} km</span>
               <span class="flex items-center gap-1">
-                <button @click="emit('edit-log', l)" class="text-slate-500 hover:text-emerald-400" title="Modifier le relevé">
+                <button @click="emit('edit-log', l)" class="text-slate-500 hover:text-emerald-400" :title="$t('tires.tireHistoryModal.editTheReading')">
                   <Pencil class="w-3 h-3" />
                 </button>
-                <button @click="emit('delete-log', l)" class="text-slate-500 hover:text-rose-400" title="Supprimer le relevé">
+                <button @click="emit('delete-log', l)" class="text-slate-500 hover:text-rose-400" :title="$t('tires.tireHistoryModal.deleteTheReading')">
                   <Trash2 class="w-3 h-3" />
                 </button>
               </span>
@@ -307,7 +308,7 @@ const open = defineModel<boolean>('open', { required: true })
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
         >
-          Fermer
+          {{ $t('common.close') }}
         </button>
       </div>
     </div>

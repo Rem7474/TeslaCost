@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { Copy, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -63,10 +64,10 @@ async function handleCopyHistorySubmit() {
       adapt_position: copyHistoryOptions.value.adapt_position,
     })
     open.value = false
-    showAlert(`Historique copié avec succès vers ${copyHistoryTargetTireIds.value.length} pneu(s).`, 'Succès', 'success')
+    showAlert(t('tires.tireCopyHistoryModal.copied', { count: copyHistoryTargetTireIds.value.length }), t('common.success'), 'success')
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur lors de la copie d'historique : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('tires.tireCopyHistoryModal.error', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     copyingHistory.value = false
   }
@@ -84,7 +85,7 @@ async function handleCopyHistorySubmit() {
         <div class="flex items-center gap-2">
           <Copy class="w-5 h-5 text-indigo-400" />
           <h3 class="text-base font-bold text-white">
-            Copier l'historique complet
+            {{ $t('tires.tireCopyHistoryModal.copyTheFullHistory') }}
           </h3>
         </div>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
@@ -95,7 +96,7 @@ async function handleCopyHistorySubmit() {
       <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
         <!-- Source selection -->
         <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-2">
-          <label for="copy-history-source-select" class="text-[11px] text-indigo-400 font-semibold uppercase tracking-wider block">Pneu source à cloner</label>
+          <label for="copy-history-source-select" class="text-[11px] text-indigo-400 font-semibold uppercase tracking-wider block">{{ $t('tires.tireCopyHistoryModal.sourceTireToClone') }}</label>
           <select
             id="copy-history-source-select"
             :value="copyHistorySourceTire.id"
@@ -110,7 +111,7 @@ async function handleCopyHistorySubmit() {
 
         <!-- Options -->
         <div class="space-y-2 bg-slate-950/40 p-3 rounded-xl border border-slate-800/80">
-          <div class="font-semibold text-slate-300">Données à répliquer :</div>
+          <div class="font-semibold text-slate-300">{{ $t('tires.tireCopyHistoryModal.dataToReplicate') }}</div>
           <label class="flex items-start gap-2.5 cursor-pointer text-slate-200">
             <input
               type="checkbox"
@@ -118,8 +119,8 @@ async function handleCopyHistorySubmit() {
               class="rounded accent-indigo-500 w-4 h-4 mt-0.5"
             />
             <div>
-              <span class="font-medium text-white">Sessions de montage & démontage</span>
-              <span class="block text-[11px] text-slate-400">Copie les périodes, dates, odomètres et distances parcourues.</span>
+              <span class="font-medium text-white">{{ $t('tires.tireCopyHistoryModal.fittingAndRemovalSessions') }}</span>
+              <span class="block text-[11px] text-slate-400">{{ $t('tires.tireCopyHistoryModal.copiesThePeriodsDatesOdometers') }}</span>
             </div>
           </label>
 
@@ -131,8 +132,8 @@ async function handleCopyHistorySubmit() {
               class="rounded accent-indigo-500 w-4 h-4 mt-0.5"
             />
             <div>
-              <span class="font-medium text-white">Adapter la position de montage à chaque pneu cible</span>
-              <span class="block text-[11px] text-slate-400">Si activé, chaque pneu cible utilisera sa propre position (ex: FL, FR, RL, RR) au lieu de reproduire fidèlement la position exacte de la source.</span>
+              <span class="font-medium text-white">{{ $t('tires.tireCopyHistoryModal.adaptTheFittingPositionTo') }}</span>
+              <span class="block text-[11px] text-slate-400">{{ $t('tires.tireCopyHistoryModal.whenEnabledEachTargetTire') }}</span>
             </div>
           </label>
 
@@ -143,8 +144,8 @@ async function handleCopyHistorySubmit() {
               class="rounded accent-indigo-500 w-4 h-4 mt-0.5"
             />
             <div>
-              <span class="font-medium text-white">Mesures d'usure et sculptures (logs)</span>
-              <span class="block text-[11px] text-slate-400">Copie les relevés en mm de sculpture effectués au fil du temps.</span>
+              <span class="font-medium text-white">{{ $t('tires.tireCopyHistoryModal.wearAndTreadMeasurementsLogs') }}</span>
+              <span class="block text-[11px] text-slate-400">{{ $t('tires.tireCopyHistoryModal.copiesTheTreadDepthReadings') }}</span>
             </div>
           </label>
         </div>
@@ -152,14 +153,14 @@ async function handleCopyHistorySubmit() {
         <!-- Target tires list -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <span class="font-semibold text-slate-300">Appliquer aux pneus cibles :</span>
+            <span class="font-semibold text-slate-300">{{ $t('tires.tireCopyHistoryModal.applyToTheTargetTires') }}</span>
             <div class="flex items-center gap-2 text-[11px]">
               <button
                 type="button"
                 @click="copyHistoryTargetTireIds = tires.filter(x => x.tire.id !== copyHistorySourceTire?.id).map(x => x.tire.id)"
                 class="text-indigo-400 hover:text-indigo-300 font-semibold"
               >
-                Tout cocher
+                {{ $t('tires.tireCopyHistoryModal.tickAll') }}
               </button>
               <span class="text-slate-600">|</span>
               <button
@@ -167,7 +168,7 @@ async function handleCopyHistorySubmit() {
                 @click="copyHistoryTargetTireIds = []"
                 class="text-slate-400 hover:text-slate-200"
               >
-                Tout décocher
+                {{ $t('tires.tireCopyHistoryModal.untickAll') }}
               </button>
             </div>
           </div>
@@ -188,12 +189,12 @@ async function handleCopyHistorySubmit() {
                 <div class="font-bold truncate text-white flex items-center justify-between gap-2">
                   <span class="truncate">{{ t.tire.brand }} {{ t.tire.model }}</span>
                   <span class="text-[10px] font-normal text-indigo-300 shrink-0">
-                    {{ Math.round(t.total_distance_km ?? t.tire.accumulated_distance_km ?? 0).toLocaleString('fr-FR') }} km • {{ (t.sessions?.length || 0) }} {{ (t.sessions?.length || 0) > 1 ? 'sessions' : 'session' }}
+                    {{ Math.round(t.total_distance_km ?? t.tire.accumulated_distance_km ?? 0).toLocaleString(intlLocale()) }} km • {{ (t.sessions?.length || 0) }} {{ (t.sessions?.length || 0) > 1 ? 'sessions' : 'session' }}
                   </span>
                 </div>
                 <div class="text-[10px] text-slate-400 truncate">
-                  {{ t.tire.dimension }} — {{ t.tire.current_position === 'STORAGE' ? 'Au garage' : t.tire.current_position === 'DISPOSED' ? 'Au rebut' : 'Roue ' + t.tire.current_position }}
-                  <span v-if="t.tire.dot_code" class="text-slate-500">• DOT {{ t.tire.dot_code }}</span>
+                  {{ t.tire.dimension }} — {{ t.tire.current_position === 'STORAGE' ? $t('tires.inStorage') : t.tire.current_position === 'DISPOSED' ? $t('tires.scrapped') : $t('tires.wheel', { position: t.tire.current_position }) }}
+                  <span v-if="t.tire.dot_code" class="text-slate-500">{{ $t('tires.tireCopyHistoryModal.dot', { dot_code: t.tire.dot_code }) }}</span>
                 </div>
               </div>
             </label>
@@ -207,7 +208,7 @@ async function handleCopyHistorySubmit() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
@@ -216,7 +217,7 @@ async function handleCopyHistorySubmit() {
           class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-1.5"
         >
           <Copy class="w-4 h-4" />
-          <span>{{ copyingHistory ? 'Copie en cours...' : `Copier vers ${copyHistoryTargetTireIds.length} pneu(s)` }}</span>
+          <span>{{ copyingHistory ? $t('tires.tireCopyHistoryModal.copying') : $t('tires.tireCopyHistoryModal.copyTo', { count: copyHistoryTargetTireIds.length }) }}</span>
         </button>
       </div>
     </div>
