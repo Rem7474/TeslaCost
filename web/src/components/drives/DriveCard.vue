@@ -26,9 +26,9 @@ const formatDate = formatDayTime
         :for="'drive-select-' + d.id"
         @click.stop
         class="mt-1 shrink-0 flex items-center cursor-pointer"
-        title="Sélectionner ce trajet"
+        :title="$t('drives.driveCard.selectThisDrive')"
       >
-        <span class="sr-only">Sélectionner ce trajet</span>
+        <span class="sr-only">{{ $t('drives.driveCard.selectThisDrive') }}</span>
         <input
           :id="'drive-select-' + d.id"
           type="checkbox"
@@ -46,32 +46,32 @@ const formatDate = formatDayTime
             {{ d.distance_km }} km
           </span>
           <span v-if="d.duration_min" class="text-xs text-slate-400 flex items-center gap-1 shrink-0">
-            <Clock class="w-3 h-3" /> {{ d.duration_min }} min
+            <Clock class="w-3 h-3" /> {{ $t('drives.driveCard.min', { duration_min: d.duration_min }) }}
           </span>
           <span v-if="d.consumption_kwh_100km" class="text-xs text-sky-400 font-mono shrink-0">
-            {{ d.consumption_kwh_100km }} kWh/100km
+            {{ $t('drives.driveCard.kwh100km', { consumption_kwh_100km: d.consumption_kwh_100km }) }}
           </span>
           <!-- Clean tag pills -->
           <span
             v-if="d.tags?.includes('Pro')"
             class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40 shrink-0"
           >
-            Pro
+            {{ $t('drives.driveCard.work') }}
           </span>
           <span
             v-if="d.tags?.includes('Perso')"
             class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shrink-0"
           >
-            Perso
+            {{ $t('drives.driveCard.personal') }}
           </span>
         </div>
 
         <!-- Route Address -->
         <div class="text-sm text-slate-300 flex items-center gap-1.5 flex-wrap min-w-0">
           <MapPin class="w-3.5 h-3.5 text-rose-400 shrink-0" />
-          <span class="truncate max-w-[140px] sm:max-w-[220px] md:max-w-xs font-medium" :title="d.start_address">{{ d.start_address || 'Départ inconnu' }}</span>
+          <span class="truncate max-w-[140px] sm:max-w-[220px] md:max-w-xs font-medium" :title="d.start_address">{{ d.start_address || $t('drives.driveCard.unknownStart') }}</span>
           <span class="text-slate-500 shrink-0">→</span>
-          <span class="truncate max-w-[140px] sm:max-w-[220px] md:max-w-xs font-medium" :title="d.end_address">{{ d.end_address || 'Arrivée inconnue' }}</span>
+          <span class="truncate max-w-[140px] sm:max-w-[220px] md:max-w-xs font-medium" :title="d.end_address">{{ d.end_address || $t('drives.driveCard.unknownEnd') }}</span>
         </div>
       </div>
     </div>
@@ -83,23 +83,23 @@ const formatDate = formatDayTime
         <button
           @click="emit('toll-entry', d)"
           class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 flex items-center gap-1"
-          title="Renseigner le péage de ce trajet"
+          :title="$t('drives.driveCard.enterTheTollOfThis')"
         >
-          <Plus class="w-3.5 h-3.5" /> Péage
+          <Plus class="w-3.5 h-3.5" /> {{ $t('drives.driveCard.toll') }}
         </button>
         <button
           @click="emit('no-toll', d)"
           class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-white flex items-center gap-1"
-          title="Confirmer que ce trajet n'a pas de péage"
+          :title="$t('drives.driveCard.confirmThatThisDriveHas')"
         >
-          <Ban class="w-3.5 h-3.5" /> Sans péage
+          <Ban class="w-3.5 h-3.5" /> {{ $t('drives.driveCard.noToll') }}
         </button>
       </div>
 
       <!-- Real Cost Badge -->
       <div
         class="px-3 py-1.5 bg-slate-800/80 border border-slate-700/70 rounded-xl flex items-center gap-2 text-left shadow-sm"
-        title="Coût de revient réel calculé pour ce trajet"
+        :title="$t('drives.driveCard.actualCostPriceCalculatedFor')"
       >
         <div class="p-1 rounded-lg bg-emerald-500/10 text-emerald-400">
           <Coins class="w-3.5 h-3.5" />
@@ -119,10 +119,10 @@ const formatDate = formatDayTime
         v-if="vehicleStore.canEdit"
         @click="router.push({ path: '/carpools', query: { new_drive_id: d.id } })"
         class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-300 hover:text-rose-400 hover:border-rose-500/40 flex items-center gap-1.5 transition-all"
-        title="Créer un covoiturage depuis ce trajet"
+        :title="$t('drives.driveCard.createACarpoolFromThis')"
       >
         <Users class="w-3.5 h-3.5 text-rose-500" />
-        <span class="hidden md:inline">Covoiturer</span>
+        <span class="hidden md:inline">{{ $t('drives.driveCard.carpool') }}</span>
       </button>
     </div>
   </div>
