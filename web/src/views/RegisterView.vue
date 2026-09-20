@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { Zap, Lock, Mail, AlertCircle, ShieldAlert } from 'lucide-vue-next'
+import { APP_NAME } from '@/brand'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { APP_VERSION } from '@/version'
 
 const router = useRouter()
@@ -30,11 +33,11 @@ onMounted(async () => {
 async function handleSubmit() {
   error.value = ''
   if (password.value !== confirmPassword.value) {
-    error.value = 'Les mots de passe ne correspondent pas'
+    error.value = t('auth.registerView.passwordsDiffer')
     return
   }
   if (password.value.length < 8) {
-    error.value = 'Le mot de passe doit comporter au moins 8 caractères'
+    error.value = t('auth.registerView.passwordTooShort')
     return
   }
 
@@ -43,7 +46,7 @@ async function handleSubmit() {
     await authStore.register({ email: email.value, password: password.value })
     router.push('/vehicles')
   } catch (err: any) {
-    error.value = err.message || "Erreur lors de l'inscription"
+    error.value = err.message || t('auth.registerView.registrationFailed')
   } finally {
     loading.value = false
   }
@@ -57,8 +60,8 @@ async function handleSubmit() {
         <div class="inline-flex p-3 bg-gradient-to-tr from-rose-500 to-amber-500 rounded-2xl shadow-lg shadow-rose-500/20 mb-3">
           <Zap class="w-8 h-8 text-white" />
         </div>
-        <h1 class="text-2xl font-bold tracking-tight text-white">Créer un compte</h1>
-        <p class="text-sm text-slate-400 mt-1">Rejoignez TeslaCost pour gérer votre véhicule</p>
+        <h1 class="text-2xl font-bold tracking-tight text-white">{{ $t('auth.registerView.createAnAccount') }}</h1>
+        <p class="text-sm text-slate-400 mt-1">{{ $t('auth.registerView.joinToManageYourVehicle', { APP_NAME }) }}</p>
       </div>
 
       <div v-if="error" class="mb-4 p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl flex items-center gap-2 text-sm text-rose-400">
@@ -69,34 +72,34 @@ async function handleSubmit() {
       <div v-if="!registrationEnabled" class="text-center py-4">
         <div class="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl flex flex-col items-center gap-2 text-amber-400 text-sm mb-6">
           <ShieldAlert class="w-8 h-8 text-amber-400" />
-          <p class="font-medium">Inscriptions désactivées</p>
-          <p class="text-xs text-amber-300/80">La création de compte est fermée sur cette instance par l'administrateur.</p>
+          <p class="font-medium">{{ $t('auth.registerView.registrationIsClosed') }}</p>
+          <p class="text-xs text-amber-300/80">{{ $t('auth.registerView.theAdministratorHasClosedAccount') }}</p>
         </div>
         <router-link
           to="/login"
           class="w-full inline-block py-3 px-4 bg-slate-800 hover:bg-slate-700 text-white font-semibold rounded-xl transition-colors"
         >
-          Retour à la page de connexion
+          {{ $t('auth.registerView.backToTheSignIn') }}
         </router-link>
       </div>
 
       <form v-else @submit.prevent="handleSubmit" class="space-y-4">
         <div>
-          <label for="register-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email</label>
+          <label for="register-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('auth.registerView.email') }}</label>
           <div class="relative">
             <Mail class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input id="register-email"
               v-model="email"
               type="email"
               required
-              placeholder="votre@email.com"
+              :placeholder="$t('auth.registerView.youExampleCom')"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
           </div>
         </div>
 
         <div>
-          <label for="register-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe (8 car. min)</label>
+          <label for="register-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('auth.registerView.password8CharactersMin') }}</label>
           <div class="relative">
             <Lock class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input id="register-password"
@@ -110,7 +113,7 @@ async function handleSubmit() {
         </div>
 
         <div>
-          <label for="register-confirm-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Confirmer le mot de passe</label>
+          <label for="register-confirm-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('auth.registerView.confirmThePassword') }}</label>
           <div class="relative">
             <Lock class="w-5 h-5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
             <input id="register-confirm-password"
@@ -128,17 +131,18 @@ async function handleSubmit() {
           :disabled="loading"
           class="w-full py-3 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {{ loading ? 'Création en cours...' : "S'inscrire" }}
+          {{ loading ? $t('auth.registerView.creating') : $t('auth.registerView.signUp') }}
         </button>
       </form>
 
       <div v-if="registrationEnabled" class="mt-6 text-center text-sm text-slate-400">
-        Déjà un compte ?
-        <router-link to="/login" class="text-rose-400 hover:text-rose-300 font-medium">Se connecter</router-link>
+        {{ $t('auth.registerView.alreadyHaveAnAccount') }}
+        <router-link to="/login" class="text-rose-400 hover:text-rose-300 font-medium">{{ $t('auth.registerView.signIn') }}</router-link>
       </div>
 
-      <div class="mt-6 pt-4 border-t border-slate-800 text-center">
-        <span class="text-[11px] font-mono text-slate-400">TeslaCost {{ APP_VERSION }}</span>
+      <div class="mt-6 pt-4 border-t border-slate-800 flex flex-col items-center gap-2">
+        <LanguageSwitcher />
+        <span class="text-[11px] font-mono text-slate-400">{{ APP_NAME }} {{ APP_VERSION }}</span>
       </div>
     </div>
   </div>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { KeyRound, Laptop, LogOut, ShieldCheck, Smartphone, UserRound } from 'lucide-vue-next'
@@ -44,7 +46,7 @@ async function load() {
   try {
     sessions.value = await api.getSessions()
   } catch (err: any) {
-    loadError.value = err?.message || 'Impossible de charger les sessions.'
+    loadError.value = err?.message || t('account.loadFailed')
   } finally {
     loading.value = false
   }
@@ -59,11 +61,11 @@ async function endLocalSession() {
 async function revoke(session: Session) {
   sessionError.value = ''
   const ok = await showConfirm({
-    title: session.current ? 'Se déconnecter' : 'Déconnecter cet appareil',
+    title: session.current ? t('account.signOut') : t('account.disconnectThisDevice'),
     message: session.current
-      ? 'Vous allez être déconnecté de cet appareil.'
-      : `${describeUserAgent(session.user_agent)} sera déconnecté. Il garde son accès jusqu'à 15 minutes, la durée du jeton d'accès.`,
-    confirmText: 'Déconnecter',
+      ? t('account.signOutThisDeviceMessage')
+      : t('account.disconnectDeviceMessage', { device: describeUserAgent(session.user_agent) }),
+    confirmText: t('account.disconnect'),
     type: 'warning',
   })
   if (!ok) return
@@ -76,7 +78,7 @@ async function revoke(session: Session) {
     }
     sessions.value = sessions.value.filter((s) => s.id !== session.id)
   } catch (err: any) {
-    sessionError.value = err?.message || 'Impossible de déconnecter cet appareil.'
+    sessionError.value = err?.message || t('account.disconnectFailed')
   } finally {
     busyId.value = null
   }
@@ -85,9 +87,9 @@ async function revoke(session: Session) {
 async function logoutEverywhere() {
   sessionError.value = ''
   const ok = await showConfirm({
-    title: 'Déconnecter tous les appareils',
-    message: 'Tous les appareils, y compris celui-ci, seront déconnectés. Vous devrez vous reconnecter partout.',
-    confirmText: 'Tout déconnecter',
+    title: t('account.signOutAllTitle'),
+    message: t('account.signOutAllMessage'),
+    confirmText: t('account.signOutAll'),
     type: 'danger',
   })
   if (!ok) return
@@ -96,7 +98,7 @@ async function logoutEverywhere() {
     await api.logoutAll()
     await endLocalSession()
   } catch (err: any) {
-    sessionError.value = err?.message || 'Impossible de déconnecter les appareils.'
+    sessionError.value = err?.message || t('account.disconnectAllFailed')
   } finally {
     busyAll.value = false
   }
@@ -106,15 +108,15 @@ async function changePassword() {
   passwordError.value = ''
   passwordDone.value = ''
   if (next.value.length < 8) {
-    passwordError.value = 'Le nouveau mot de passe doit faire au moins 8 caractères.'
+    passwordError.value = t('account.passwordTooShort')
     return
   }
   if (new TextEncoder().encode(next.value).length > 72) {
-    passwordError.value = 'Le nouveau mot de passe ne doit pas dépasser 72 octets.'
+    passwordError.value = t('account.passwordTooLong')
     return
   }
   if (next.value !== confirmation.value) {
-    passwordError.value = 'Les deux mots de passe ne correspondent pas.'
+    passwordError.value = t('account.passwordsDiffer')
     return
   }
   saving.value = true
@@ -123,11 +125,11 @@ async function changePassword() {
     current.value = next.value = confirmation.value = ''
     const others = res?.sessions_revoked ?? 0
     passwordDone.value = others > 0
-      ? `Mot de passe modifié. ${others} autre(s) appareil(s) déconnecté(s).`
-      : 'Mot de passe modifié.'
+      ? t('account.passwordChangedOthers', { count: others })
+      : t('account.passwordChanged')
     await load()
   } catch (err: any) {
-    passwordError.value = err?.message || 'Impossible de modifier le mot de passe.'
+    passwordError.value = err?.message || t('account.passwordChangeFailed')
   } finally {
     saving.value = false
   }
@@ -143,24 +145,28 @@ onMounted(load)
         <ShieldCheck class="h-5 w-5 text-emerald-400" aria-hidden="true" />
       </div>
       <div>
-        <h1 class="text-xl font-bold text-white">Compte &amp; sécurité</h1>
-        <p class="text-xs text-slate-400">Connexion, mot de passe et appareils connectés.</p>
+        <h1 class="text-xl font-bold text-white">{{ $t('account.accountView.accountAndSecurity') }}</h1>
+        <p class="text-xs text-slate-400">{{ $t('account.accountView.signInPasswordAndConnected') }}</p>
       </div>
     </div>
 
     <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5" aria-labelledby="account-identity">
       <h2 id="account-identity" class="mb-3 flex items-center gap-2 text-sm font-bold text-white">
         <UserRound class="h-4 w-4 text-slate-400" aria-hidden="true" />
-        Identité
+        {{ $t('account.accountView.identity') }}
       </h2>
       <dl class="space-y-1 text-sm">
+        <div class="flex flex-wrap items-center gap-x-2">
+          <dt class="text-slate-400">{{ $t('account.language') }}</dt>
+          <dd><LanguageSwitcher /></dd>
+        </div>
         <div class="flex flex-wrap gap-x-2">
-          <dt class="text-slate-400">Adresse e-mail</dt>
+          <dt class="text-slate-400">{{ $t('account.accountView.emailAddress') }}</dt>
           <dd class="break-all font-medium text-white">{{ authStore.user?.email }}</dd>
         </div>
         <div class="flex flex-wrap gap-x-2">
-          <dt class="text-slate-400">Connexion</dt>
-          <dd class="text-slate-200">{{ hasPassword ? 'Mot de passe local' : 'Fournisseur SSO' }}</dd>
+          <dt class="text-slate-400">{{ $t('account.accountView.signIn') }}</dt>
+          <dd class="text-slate-200">{{ hasPassword ? $t('account.localPassword') : $t('account.ssoProvider') }}</dd>
         </div>
       </dl>
     </section>
@@ -168,20 +174,20 @@ onMounted(load)
     <section v-if="hasPassword" class="rounded-2xl border border-slate-800 bg-slate-900 p-5" aria-labelledby="account-password">
       <h2 id="account-password" class="mb-3 flex items-center gap-2 text-sm font-bold text-white">
         <KeyRound class="h-4 w-4 text-slate-400" aria-hidden="true" />
-        Mot de passe
+        {{ $t('account.accountView.password') }}
       </h2>
       <form class="space-y-4" novalidate @submit.prevent="changePassword">
         <div>
-          <label for="pw-current" class="quick-label">Mot de passe actuel</label>
+          <label for="pw-current" class="quick-label">{{ $t('account.accountView.currentPassword') }}</label>
           <input id="pw-current" v-model="current" type="password" autocomplete="current-password" class="quick-input" />
         </div>
         <div>
-          <label for="pw-new" class="quick-label">Nouveau mot de passe</label>
+          <label for="pw-new" class="quick-label">{{ $t('account.accountView.newPassword') }}</label>
           <input id="pw-new" v-model="next" type="password" autocomplete="new-password" class="quick-input" aria-describedby="pw-hint" />
-          <p id="pw-hint" class="mt-1 text-[11px] text-slate-400">8 caractères au minimum, 72 octets au maximum.</p>
+          <p id="pw-hint" class="mt-1 text-[11px] text-slate-400">{{ $t('account.accountView.8CharactersMinimum72Bytes') }}</p>
         </div>
         <div>
-          <label for="pw-confirm" class="quick-label">Confirmer le nouveau mot de passe</label>
+          <label for="pw-confirm" class="quick-label">{{ $t('account.accountView.confirmTheNewPassword') }}</label>
           <input id="pw-confirm" v-model="confirmation" type="password" autocomplete="new-password" class="quick-input" />
         </div>
         <p v-if="passwordError" role="alert" class="rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{{ passwordError }}</p>
@@ -191,9 +197,9 @@ onMounted(load)
           :disabled="saving || !current || !next || !confirmation"
           class="min-h-12 rounded-xl bg-rose-600 px-5 text-sm font-bold text-white hover:bg-rose-500 disabled:opacity-50"
         >
-          {{ saving ? 'Enregistrement…' : 'Modifier le mot de passe' }}
+          {{ saving ? $t('account.saving') : $t('account.changePassword') }}
         </button>
-        <p class="text-[11px] text-slate-400">Les autres appareils sont déconnectés après un changement de mot de passe.</p>
+        <p class="text-[11px] text-slate-400">{{ $t('account.accountView.otherDevicesAreSignedOut') }}</p>
       </form>
     </section>
 
@@ -201,7 +207,7 @@ onMounted(load)
       <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 id="account-sessions" class="flex items-center gap-2 text-sm font-bold text-white">
           <Laptop class="h-4 w-4 text-slate-400" aria-hidden="true" />
-          Appareils connectés
+          {{ $t('account.accountView.connectedDevices') }}
         </h2>
         <button
           type="button"
@@ -209,11 +215,11 @@ onMounted(load)
           class="min-h-11 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 text-xs font-semibold text-rose-300 hover:bg-rose-500/20 disabled:opacity-50"
           @click="logoutEverywhere"
         >
-          Tout déconnecter
+          {{ $t('account.accountView.signOutEverywhere') }}
         </button>
       </div>
 
-      <p v-if="loading" class="text-sm text-slate-400">Chargement…</p>
+      <p v-if="loading" class="text-sm text-slate-400">{{ $t('account.accountView.loading') }}</p>
       <p v-else-if="loadError" role="alert" class="text-sm text-rose-300">{{ loadError }}</p>
       <ul v-else class="space-y-2">
         <li
@@ -227,29 +233,29 @@ onMounted(load)
             <div class="min-w-0">
               <p class="flex flex-wrap items-center gap-2 text-sm font-semibold text-white">
                 {{ describeUserAgent(s.user_agent) }}
-                <span v-if="s.current" class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">Cet appareil</span>
+                <span v-if="s.current" class="rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300">{{ $t('account.accountView.thisDevice') }}</span>
               </p>
               <p class="text-xs text-slate-400">
-                Actif {{ describeRelativeTime(s.last_used_at) }}<template v-if="s.ip"> · {{ s.ip }}</template>
+                {{ $t('account.accountView.active', { value: describeRelativeTime(s.last_used_at) }) }}<template v-if="s.ip"> · {{ s.ip }}</template>
               </p>
-              <p class="text-[11px] text-slate-500">Connecté {{ describeRelativeTime(s.started_at) }}</p>
+              <p class="text-[11px] text-slate-500">{{ $t('account.accountView.signedIn', { value: describeRelativeTime(s.started_at) }) }}</p>
             </div>
           </div>
           <button
             type="button"
             :disabled="busyId === s.id"
             class="flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-800 px-3 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50"
-            :aria-label="s.current ? 'Se déconnecter de cet appareil' : `Déconnecter ${describeUserAgent(s.user_agent)}`"
+            :aria-label="s.current ? $t('account.signOutThisDevice') : $t('account.signOutDevice', { device: describeUserAgent(s.user_agent) })"
             @click="revoke(s)"
           >
             <LogOut class="h-3.5 w-3.5" aria-hidden="true" />
-            <span class="hidden sm:inline">{{ s.current ? 'Se déconnecter' : 'Déconnecter' }}</span>
+            <span class="hidden sm:inline">{{ s.current ? $t('account.signOut') : $t('account.disconnect') }}</span>
           </button>
         </li>
-        <li v-if="sessions.length === 0" class="text-sm text-slate-400">Aucune session active.</li>
+        <li v-if="sessions.length === 0" class="text-sm text-slate-400">{{ $t('account.accountView.noActiveSession') }}</li>
       </ul>
       <p v-if="sessionError" role="alert" class="mt-3 text-xs text-rose-300">{{ sessionError }}</p>
-      <p class="mt-3 text-[11px] text-slate-500">Un appareil déconnecté garde son accès jusqu'à 15 minutes, la durée de vie du jeton d'accès.</p>
+      <p class="mt-3 text-[11px] text-slate-500">{{ $t('account.accountView.aSignedOutDeviceKeeps') }}</p>
     </section>
   </div>
 </template>

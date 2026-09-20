@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
+import { APP_NAME } from '@/brand'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
@@ -49,11 +51,11 @@ onMounted(async () => {
 async function handleStep1Submit() {
   error.value = ''
   if (adminPassword.value !== adminConfirmPassword.value) {
-    error.value = 'Les mots de passe ne correspondent pas'
+    error.value = t('onboarding.passwordsDiffer')
     return
   }
   if (adminPassword.value.length < 8) {
-    error.value = 'Le mot de passe doit comporter au moins 8 caractères'
+    error.value = t('onboarding.passwordTooShort')
     return
   }
 
@@ -62,7 +64,7 @@ async function handleStep1Submit() {
     await authStore.register({ email: adminEmail.value, password: adminPassword.value })
     currentStep.value = 2
   } catch (err: any) {
-    error.value = err.message || "Erreur lors de la création du compte administrateur"
+    error.value = err.message || t('onboarding.adminCreationFailed')
   } finally {
     loading.value = false
   }
@@ -71,7 +73,7 @@ async function handleStep1Submit() {
 async function handleStep2Submit() {
   error.value = ''
   if (!vehicleName.value) {
-    error.value = 'Veuillez saisir un nom pour votre véhicule'
+    error.value = t('onboarding.vehicleNameRequired')
     return
   }
   if (vehiclePowertrain.value === 'ICE') {
@@ -87,7 +89,7 @@ async function testConnection() {
   testResult.value = null
   loading.value = true
   try {
-    if (!teslamateUrl.value) throw new Error("Veuillez saisir l'URL de l'API TeslaMate")
+    if (!teslamateUrl.value) throw new Error(t('onboarding.apiUrlRequired'))
     const payload: any = {
       teslamate_api_url: teslamateUrl.value,
       teslamate_auth_type: teslamateAuthType.value,
@@ -103,7 +105,7 @@ async function testConnection() {
     const st = res.status
     testResult.value = {
       ok: true,
-      message: `Connexion réussie ! Statut : ${st?.state || 'En ligne'} (${Math.round(st?.odometer || 0).toLocaleString('fr-FR')} km)`,
+      message: t('onboarding.testSuccess', { state: st?.state || t('onboarding.online'), odometer: Math.round(st?.odometer || 0).toLocaleString(intlLocale()) }),
     }
   } catch (err: any) {
     testResult.value = { ok: false, message: err.message }
@@ -138,7 +140,7 @@ async function handleFinalSubmit() {
     await vehicleStore.fetchVehicles()
     currentStep.value = 4
   } catch (err: any) {
-    error.value = err.message || "Erreur lors de l'enregistrement du véhicule"
+    error.value = err.message || t('onboarding.vehicleSaveFailed')
   } finally {
     loading.value = false
   }
@@ -157,8 +159,8 @@ function finishOnboarding() {
         <div class="inline-flex p-3.5 bg-gradient-to-tr from-rose-500 to-amber-500 rounded-2xl shadow-lg shadow-rose-500/25 mb-4">
           <Zap class="w-8 h-8 text-white" />
         </div>
-        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">Bienvenue sur TeslaCost</h1>
-        <p class="text-sm text-slate-400 mt-1.5">Assistant de configuration initiale de votre instance</p>
+        <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-white">{{ $t('onboarding.onboardingView.welcomeTo', { APP_NAME }) }}</h1>
+        <p class="text-sm text-slate-400 mt-1.5">{{ $t('onboarding.onboardingView.initialSetupWizardForYour') }}</p>
       </div>
 
       <!-- Step Indicators -->
@@ -192,25 +194,25 @@ function finishOnboarding() {
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-white flex items-center gap-2">
             <ShieldCheck class="w-5 h-5 text-rose-400" />
-            1. Créer le compte Administrateur
+            {{ $t('onboarding.onboardingView.1CreateTheAdministratorAccount') }}
           </h2>
-          <p class="text-xs text-slate-400 mt-1">C'est le compte principal qui gérera l'instance TeslaCost.</p>
+          <p class="text-xs text-slate-400 mt-1">{{ $t('onboarding.onboardingView.thisIsTheMainAccount', { APP_NAME }) }}</p>
         </div>
 
         <form @submit.prevent="handleStep1Submit" class="space-y-4">
           <div>
-            <label for="onboarding-admin-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Email Administrateur</label>
+            <label for="onboarding-admin-email" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.administratorEmail') }}</label>
             <input id="onboarding-admin-email"
               v-model="adminEmail"
               type="email"
               required
-              placeholder="admin@votre-domaine.fr"
+              :placeholder="$t('onboarding.onboardingView.adminYourDomainCom')"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
           </div>
 
           <div>
-            <label for="onboarding-admin-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe (8 car. min)</label>
+            <label for="onboarding-admin-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.password8CharactersMin') }}</label>
             <input id="onboarding-admin-password"
               v-model="adminPassword"
               type="password"
@@ -221,7 +223,7 @@ function finishOnboarding() {
           </div>
 
           <div>
-            <label for="onboarding-admin-confirm-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Confirmer le mot de passe</label>
+            <label for="onboarding-admin-confirm-password" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.confirmThePassword') }}</label>
             <input id="onboarding-admin-confirm-password"
               v-model="adminConfirmPassword"
               type="password"
@@ -236,7 +238,7 @@ function finishOnboarding() {
             :disabled="loading"
             class="w-full py-3.5 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
           >
-            <span>{{ loading ? 'Création...' : 'Continuer vers le véhicule' }}</span>
+            <span>{{ loading ? $t('onboarding.creating') : $t('onboarding.continueToVehicle') }}</span>
             <ArrowRight class="w-4 h-4" />
           </button>
         </form>
@@ -247,37 +249,37 @@ function finishOnboarding() {
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-white flex items-center gap-2">
             <Car class="w-5 h-5 text-rose-400" />
-            2. Votre Premier Véhicule
+            {{ $t('onboarding.onboardingView.2YourFirstVehicle') }}
           </h2>
-          <p class="text-xs text-slate-400 mt-1">Configurez votre véhicule principal pour suivre ses coûts.</p>
+          <p class="text-xs text-slate-400 mt-1">{{ $t('onboarding.onboardingView.setUpYourMainVehicle') }}</p>
         </div>
 
         <form @submit.prevent="handleStep2Submit" class="space-y-4">
           <div>
-            <label for="onboarding-vehicle-name" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Nom du véhicule</label>
+            <label for="onboarding-vehicle-name" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.vehicleName') }}</label>
             <input id="onboarding-vehicle-name"
               v-model="vehicleName"
               type="text"
               required
-              placeholder="Ex: Ma voiture"
+              :placeholder="$t('onboarding.onboardingView.eGMyCar')"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
             />
           </div>
 
           <div>
-            <label for="onboarding-vehicle-powertrain" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Motorisation</label>
+            <label for="onboarding-vehicle-powertrain" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.powertrain') }}</label>
             <select id="onboarding-vehicle-powertrain"
               v-model="vehiclePowertrain"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
             >
-              <option value="EV">Électrique (suivi TeslaMate possible)</option>
-              <option value="ICE">Thermique (saisie manuelle des pleins)</option>
+              <option value="EV">{{ $t('onboarding.onboardingView.electricTeslamateTrackingAvailable') }}</option>
+              <option value="ICE">{{ $t('onboarding.onboardingView.combustionFillUpsEnteredBy') }}</option>
             </select>
           </div>
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="onboarding-vehicle-odometer" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Odomètre actuel (km)</label>
+              <label for="onboarding-vehicle-odometer" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.currentOdometerKm') }}</label>
               <input id="onboarding-vehicle-odometer"
                 v-model.number="vehicleOdometer"
                 type="number"
@@ -288,7 +290,7 @@ function finishOnboarding() {
               />
             </div>
             <div>
-              <label for="onboarding-vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Numéro VIN (Optionnel)</label>
+              <label for="onboarding-vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.vinOptional') }}</label>
               <input id="onboarding-vehicle-vin"
                 v-model="vehicleVin"
                 type="text"
@@ -302,7 +304,7 @@ function finishOnboarding() {
             type="submit"
             class="w-full py-3.5 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all"
           >
-            <span>{{ vehiclePowertrain === 'ICE' ? 'Terminer' : 'Continuer vers TeslaMate (Optionnel)' }}</span>
+            <span>{{ vehiclePowertrain === 'ICE' ? $t('onboarding.finish') : $t('onboarding.continueToTeslamate') }}</span>
             <ArrowRight class="w-4 h-4" />
           </button>
         </form>
@@ -313,56 +315,56 @@ function finishOnboarding() {
         <div class="mb-6">
           <h2 class="text-lg font-semibold text-white flex items-center gap-2">
             <KeyRound class="w-5 h-5 text-rose-400" />
-            3. Synchronisation TeslaMate (Facultatif)
+            {{ $t('onboarding.onboardingView.3TeslamateSynchronizationOptional') }}
           </h2>
-          <p class="text-xs text-slate-400 mt-1">Vous pouvez connecter votre instance teslamateapi dès maintenant ou plus tard.</p>
+          <p class="text-xs text-slate-400 mt-1">{{ $t('onboarding.onboardingView.youCanConnectYourTeslamateapi') }}</p>
         </div>
 
         <div class="space-y-4">
           <label class="flex items-center gap-3 p-4 bg-slate-800/60 border border-slate-700 rounded-xl cursor-pointer hover:bg-slate-800 transition-colors">
             <input v-model="enableTeslaMate" type="checkbox" class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-900 border-slate-700" />
             <div>
-              <span class="text-sm font-medium text-white block">Activer la liaison avec TeslaMateAPI</span>
-              <span class="text-xs text-slate-400 block">Synchronise automatiquement trajets, recharges et odomètre</span>
+              <span class="text-sm font-medium text-white block">{{ $t('onboarding.onboardingView.enableTheTeslamateapiLink') }}</span>
+              <span class="text-xs text-slate-400 block">{{ $t('onboarding.onboardingView.automaticallySyncsDrivesChargesAnd') }}</span>
             </div>
           </label>
 
           <div v-if="enableTeslaMate" class="p-4 bg-slate-800/40 border border-slate-800 rounded-2xl space-y-4">
             <div>
-              <label for="onboarding-teslamate-url" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">URL de l'API TeslaMate</label>
+              <label for="onboarding-teslamate-url" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.teslamateApiUrl') }}</label>
               <input id="onboarding-teslamate-url"
                 v-model="teslamateUrl"
                 type="url"
-                placeholder="http://192.168.1.50:8080 ou http://host.docker.internal:8080"
+                :placeholder="$t('onboarding.onboardingView.http192168150')"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
               />
             </div>
 
             <div>
-              <label for="onboarding-teslamate-auth-type" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mode d'authentification</label>
+              <label for="onboarding-teslamate-auth-type" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.authenticationMode') }}</label>
               <select id="onboarding-teslamate-auth-type"
                 v-model="teslamateAuthType"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-rose-500 transition-colors"
               >
-                <option value="NONE">Aucune authentification</option>
-                <option value="BEARER">Clé API (Bearer Token)</option>
-                <option value="BASIC">HTTP Basic Auth (Utilisateur / Mot de passe)</option>
+                <option value="NONE">{{ $t('onboarding.onboardingView.noAuthentication') }}</option>
+                <option value="BEARER">{{ $t('onboarding.onboardingView.apiKeyBearerToken') }}</option>
+                <option value="BASIC">{{ $t('onboarding.onboardingView.httpBasicAuthUserPassword') }}</option>
               </select>
             </div>
 
             <div v-if="teslamateAuthType === 'BEARER'">
-              <label for="onboarding-teslamate-api-key" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Token API</label>
+              <label for="onboarding-teslamate-api-key" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.apiToken') }}</label>
               <input id="onboarding-teslamate-api-key"
                 v-model="teslamateApiKey"
                 type="password"
-                placeholder="votre-token-secret"
+                :placeholder="$t('onboarding.onboardingView.yourSecretToken')"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-rose-500 transition-colors"
               />
             </div>
 
             <div v-if="teslamateAuthType === 'BASIC'" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label for="onboarding-teslamate-user" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Utilisateur</label>
+                <label for="onboarding-teslamate-user" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.user') }}</label>
                 <input id="onboarding-teslamate-user"
                   v-model="teslamateUser"
                   type="text"
@@ -371,7 +373,7 @@ function finishOnboarding() {
                 />
               </div>
               <div>
-                <label for="onboarding-teslamate-pass" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">Mot de passe</label>
+                <label for="onboarding-teslamate-pass" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.password') }}</label>
                 <input id="onboarding-teslamate-pass"
                   v-model="teslamatePass"
                   type="password"
@@ -391,7 +393,7 @@ function finishOnboarding() {
               >
                 <RefreshCw v-if="loading" class="w-3.5 h-3.5 animate-spin text-rose-400" />
                 <Link2 v-else class="w-3.5 h-3.5 text-rose-400" />
-                <span>{{ loading ? 'Test de connexion en cours...' : 'Tester la connexion TeslaMate' }}</span>
+                <span>{{ loading ? $t('onboarding.testing') : $t('onboarding.testConnection') }}</span>
               </button>
 
               <div
@@ -412,7 +414,7 @@ function finishOnboarding() {
               @click="currentStep = 2"
               class="py-3 px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold rounded-xl text-sm transition-colors"
             >
-              Retour
+              {{ $t('onboarding.onboardingView.back') }}
             </button>
             <button
               type="button"
@@ -420,7 +422,7 @@ function finishOnboarding() {
               @click="handleFinalSubmit"
               class="flex-1 py-3 px-4 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
             >
-              <span>{{ loading ? 'Enregistrement...' : 'Finaliser la configuration' }}</span>
+              <span>{{ loading ? $t('onboarding.saving') : $t('onboarding.finalize') }}</span>
               <ArrowRight class="w-4 h-4" />
             </button>
           </div>
@@ -432,15 +434,15 @@ function finishOnboarding() {
         <div class="inline-flex p-4 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-full mb-4">
           <CheckCircle2 class="w-12 h-12" />
         </div>
-        <h2 class="text-2xl font-bold text-white mb-2">Félicitations !</h2>
+        <h2 class="text-2xl font-bold text-white mb-2">{{ $t('onboarding.onboardingView.congratulations') }}</h2>
         <p class="text-slate-400 text-sm max-w-sm mx-auto mb-6">
-          Votre compte administrateur et votre véhicule sont prêts. Vous pouvez maintenant commencer à suivre vos coûts.
+          {{ $t('onboarding.onboardingView.yourAdministratorAccountAndYour') }}
         </p>
         <button
           @click="finishOnboarding"
           class="w-full py-3.5 px-6 bg-gradient-to-r from-rose-600 to-rose-500 hover:from-rose-500 hover:to-rose-400 text-white font-semibold rounded-xl shadow-lg shadow-rose-600/25 transition-all"
         >
-          Accéder à mon tableau de bord
+          {{ $t('onboarding.onboardingView.goToMyDashboard') }}
         </button>
       </div>
     </div>

@@ -1,8 +1,9 @@
-// Turns a User-Agent header into a short label for the list of sessions ("Firefox sur Linux").
+import { intlLocale, t } from '@/i18n'
+// Turns a User-Agent header into a short label for the list of sessions ("Firefox on Linux").
 // Only the common browsers and systems are recognised; anything else falls back to a generic label.
 
 export function describeUserAgent(ua: string | null | undefined): string {
-  if (!ua) return 'Appareil inconnu'
+  if (!ua) return t('account.unknownDevice')
 
   // Order matters: Edge and Opera also announce Chrome, Chrome also announces Safari.
   const browser =
@@ -24,8 +25,8 @@ export function describeUserAgent(ua: string | null | undefined): string {
     : /Linux|X11/.test(ua) ? 'Linux'
     : null
 
-  if (browser && system) return `${browser} sur ${system}`
-  return browser ?? system ?? 'Appareil inconnu'
+  if (browser && system) return t('account.browserOnSystem', { browser, system })
+  return browser ?? system ?? t('account.unknownDevice')
 }
 
 const units: [Intl.RelativeTimeFormatUnit, number][] = [
@@ -34,12 +35,12 @@ const units: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60],
 ]
 
-// "il y a 3 heures", "à l'instant"; dates older than a week are written out.
-export function describeRelativeTime(iso: string, now: Date = new Date(), locale = 'fr-FR'): string {
+// "3 hours ago", "just now"; dates older than a week are written out.
+export function describeRelativeTime(iso: string, now: Date = new Date(), locale = intlLocale()): string {
   const then = new Date(iso)
   const seconds = Math.round((then.getTime() - now.getTime()) / 1000)
   if (Number.isNaN(seconds)) return ''
-  if (Math.abs(seconds) < 60) return "à l'instant"
+  if (Math.abs(seconds) < 60) return t('account.justNow')
   if (Math.abs(seconds) >= 7 * 86_400) return then.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })
   const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'always' })
   for (const [unit, size] of units) {
