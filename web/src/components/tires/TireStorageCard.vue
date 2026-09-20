@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 import { getSeasonIcon } from '@/utils/tires'
 
 // A tire kept in the garage
@@ -19,7 +20,7 @@ const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
           <span class="text-slate-300">{{ getSeasonIcon(t.tire.season).label }}</span>
         </div>
         <h4 class="text-sm font-bold text-white group-hover:text-rose-300 transition-colors mt-1 flex items-center gap-1.5">
-          <label :for="'storage-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" title="Sélectionner pour une action par lot">
+          <label :for="'storage-select-' + t.tire.id" @click.stop class="cursor-pointer flex items-center" :title="$t('tires.tireStorageCard.selectForABulkAction')">
             <input
               :id="'storage-select-' + t.tire.id"
               type="checkbox"
@@ -33,17 +34,17 @@ const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
         <div class="text-[11px] text-slate-400 font-mono">{{ t.tire.dimension }}</div>
       </div>
       <span class="bg-slate-800 text-slate-400 text-[10px] px-2 py-0.5 rounded-full border border-slate-700 font-medium">
-        Au garage
+        {{ $t('tires.tireStorageCard.inStorage') }}
       </span>
     </div>
 
     <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-center text-xs">
       <div>
-        <div class="text-[10px] text-slate-500">Total parcouru</div>
-        <div class="font-bold text-white">{{ Math.round(t.total_distance_km).toLocaleString('fr-FR') }} km</div>
+        <div class="text-[10px] text-slate-500">{{ $t('tires.tireStorageCard.totalDriven') }}</div>
+        <div class="font-bold text-white">{{ Math.round(t.total_distance_km).toLocaleString(intlLocale()) }} km</div>
       </div>
       <div>
-        <div class="text-[10px] text-slate-500">Usure estimée</div>
+        <div class="text-[10px] text-slate-500">{{ $t('tires.tireStorageCard.estimatedWear') }}</div>
         <div class="font-bold" :class="t.life_progress_pct > 80 ? 'text-rose-400' : 'text-emerald-400'">{{ t.life_progress_pct }}%</div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+import { intlLocale, t } from '@/i18n'
 import { CloudSun, Snowflake, Sun } from 'lucide-vue-next'
 import { todayIso, toIsoDay } from '@/utils/dates'
 
@@ -8,47 +9,47 @@ export const isMountedPosition = (position: string): boolean => (MOUNTED_POSITIO
 export function getConditionBadge(condition: string) {
   switch (condition) {
     case 'GOOD':
-      return { label: 'Bon état', class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
+      return { label: t('tires.condition.good'), class: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
     case 'WARNING':
-      return { label: 'À surveiller', class: 'bg-amber-500/10 text-amber-400 border-amber-500/20' }
+      return { label: t('tires.condition.warning'), class: 'bg-amber-500/10 text-amber-400 border-amber-500/20' }
     case 'CRITICAL':
-      return { label: 'Usure critique', class: 'bg-rose-500/10 text-rose-400 border-rose-500/20' }
+      return { label: t('tires.condition.critical'), class: 'bg-rose-500/10 text-rose-400 border-rose-500/20' }
     default:
-      return { label: 'Inconnu', class: 'bg-slate-800 text-slate-400 border-slate-700' }
+      return { label: t('tires.condition.unknown'), class: 'bg-slate-800 text-slate-400 border-slate-700' }
   }
 }
 
 export function getSeasonIcon(season: string) {
   switch (season) {
     case 'WINTER':
-      return { icon: Snowflake, color: 'text-sky-400', label: 'Hiver' }
+      return { icon: Snowflake, color: 'text-sky-400', label: t('tires.season.winter') }
     case 'ALL_SEASON':
-      return { icon: CloudSun, color: 'text-amber-400', label: '4 Saisons' }
+      return { icon: CloudSun, color: 'text-amber-400', label: t('tires.season.allSeason') }
     default:
-      return { icon: Sun, color: 'text-orange-400', label: 'Été' }
+      return { icon: Sun, color: 'text-orange-400', label: t('tires.season.summer') }
   }
 }
 
 export function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('fr-FR', {
+  return new Date(d).toLocaleDateString(intlLocale(), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
   })
 }
 
-export function getTireSelectLabel(t: any): string {
-  if (!t || !t.tire) return ''
-  const pos = t.tire.current_position === 'STORAGE'
-    ? 'Au garage'
-    : t.tire.current_position === 'DISPOSED'
-    ? 'Au rebut'
-    : 'Roue ' + t.tire.current_position
-  const km = Math.round(t.total_distance_km ?? t.tire.accumulated_distance_km ?? 0)
-  const sessionCount = t.sessions?.length ?? 0
-  const sessionLabel = sessionCount > 1 ? `${sessionCount} sessions` : `${sessionCount} session`
-  const dot = t.tire.dot_code ? ` • DOT ${t.tire.dot_code}` : ''
-  return `${t.tire.brand} ${t.tire.model} (${t.tire.dimension}) — ${pos} • ${km.toLocaleString('fr-FR')} km • ${sessionLabel}${dot}`
+export function getTireSelectLabel(item: any): string {
+  if (!item || !item.tire) return ''
+  const pos = item.tire.current_position === 'STORAGE'
+    ? t('tires.inStorage')
+    : item.tire.current_position === 'DISPOSED'
+    ? t('tires.scrapped')
+    : t('tires.wheel', { position: item.tire.current_position })
+  const km = Math.round(item.total_distance_km ?? item.tire.accumulated_distance_km ?? 0)
+  const sessionCount = item.sessions?.length ?? 0
+  const sessionLabel = t('tires.sessionCount', sessionCount)
+  const dot = item.tire.dot_code ? ` • DOT ${item.tire.dot_code}` : ''
+  return `${item.tire.brand} ${item.tire.model} (${item.tire.dimension}) — ${pos} • ${km.toLocaleString(intlLocale())} km • ${sessionLabel}${dot}`
 }
 
 /** Date and odometer of the most recent dismount of a tire, from the sessions carried by the tire list. */

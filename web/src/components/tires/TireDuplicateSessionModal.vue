@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { Copy, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -56,9 +57,9 @@ async function handleDuplicateSessionSubmit() {
 
     open.value = false
     emit('saved')
-    showAlert(`Session dupliquée vers ${duplicateTargetTireIds.value.length} pneu(s).`, 'Succès', 'success')
+    showAlert(t('tires.tireDuplicateSessionModal.duplicated', { count: duplicateTargetTireIds.value.length }), t('common.success'), 'success')
   } catch (err: any) {
-    showAlert(`Erreur lors de la duplication : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('tires.tireDuplicateSessionModal.error', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     duplicatingSession.value = false
   }
@@ -76,7 +77,7 @@ async function handleDuplicateSessionSubmit() {
         <div class="flex items-center gap-2">
           <Copy class="w-5 h-5 text-indigo-400" />
           <h3 class="text-base font-bold text-white">
-            Dupliquer la session vers d'autres pneus
+            {{ $t('tires.tireDuplicateSessionModal.duplicateTheSessionToOther') }}
           </h3>
         </div>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
@@ -87,22 +88,22 @@ async function handleDuplicateSessionSubmit() {
       <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
         <!-- Session recap -->
         <div class="bg-slate-950/60 p-3 rounded-xl border border-slate-800 space-y-1">
-          <div class="text-slate-400">Période : <strong class="text-white">{{ formatDate(sessionToDuplicate.mounted_date) }} → {{ sessionToDuplicate.dismounted_date ? formatDate(sessionToDuplicate.dismounted_date) : 'En cours' }}</strong></div>
-          <div class="text-slate-400">Distance : <strong class="text-rose-400">+{{ Math.round(sessionToDuplicate.distance_km || 0).toLocaleString('fr-FR') }} km</strong></div>
+          <div class="text-slate-400">{{ $t('tires.tireDuplicateSessionModal.period') }} <strong class="text-white">{{ formatDate(sessionToDuplicate.mounted_date) }} → {{ sessionToDuplicate.dismounted_date ? formatDate(sessionToDuplicate.dismounted_date) : $t('tires.tireDuplicateSessionModal.ongoing') }}</strong></div>
+          <div class="text-slate-400">{{ $t('tires.tireDuplicateSessionModal.distance') }} <strong class="text-rose-400">+{{ Math.round(sessionToDuplicate.distance_km || 0).toLocaleString(intlLocale()) }} km</strong></div>
           <div v-if="sessionToDuplicate.notes" class="text-slate-400 italic">"{{ sessionToDuplicate.notes }}"</div>
         </div>
 
         <!-- Target tires selection -->
         <div>
           <div class="flex items-center justify-between mb-2">
-            <span class="font-semibold text-slate-300">Sélectionner les pneus cibles :</span>
+            <span class="font-semibold text-slate-300">{{ $t('tires.tireDuplicateSessionModal.selectTheTargetTires') }}</span>
             <div class="flex items-center gap-2 text-[11px]">
               <button
                 type="button"
                 @click="duplicateTargetTireIds = tires.filter(x => x.tire.id !== selectedTire?.id).map(x => x.tire.id)"
                 class="text-indigo-400 hover:text-indigo-300 font-semibold"
               >
-                Tout cocher
+                {{ $t('tires.tireDuplicateSessionModal.tickAll') }}
               </button>
               <span class="text-slate-600">|</span>
               <button
@@ -110,7 +111,7 @@ async function handleDuplicateSessionSubmit() {
                 @click="duplicateTargetTireIds = []"
                 class="text-slate-400 hover:text-slate-200"
               >
-                Tout décocher
+                {{ $t('tires.tireDuplicateSessionModal.untickAll') }}
               </button>
             </div>
           </div>
@@ -128,7 +129,7 @@ async function handleDuplicateSessionSubmit() {
               />
               <div class="min-w-0 flex-1">
                 <div class="font-bold truncate text-white">{{ t.tire.brand }} {{ t.tire.model }}</div>
-                <div class="text-[10px] text-slate-400 truncate">{{ t.tire.dimension }} — {{ t.tire.current_position === 'STORAGE' ? 'Au garage' : 'Roue ' + t.tire.current_position }}</div>
+                <div class="text-[10px] text-slate-400 truncate">{{ t.tire.dimension }} — {{ t.tire.current_position === 'STORAGE' ? $t('tires.inStorage') : $t('tires.wheel', { position: t.tire.current_position }) }}</div>
               </div>
             </label>
           </div>
@@ -141,7 +142,7 @@ async function handleDuplicateSessionSubmit() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
@@ -150,7 +151,7 @@ async function handleDuplicateSessionSubmit() {
           class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-1.5"
         >
           <Copy class="w-4 h-4" />
-          <span>{{ duplicatingSession ? 'Duplication...' : `Dupliquer vers ${duplicateTargetTireIds.length} pneu(s)` }}</span>
+          <span>{{ duplicatingSession ? $t('tires.tireDuplicateSessionModal.duplicating') : $t('tires.tireDuplicateSessionModal.duplicateTo', { count: duplicateTargetTireIds.length }) }}</span>
         </button>
       </div>
     </div>

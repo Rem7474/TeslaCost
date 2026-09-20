@@ -42,6 +42,8 @@ export const i18n = createI18n({
   legacy: false,
   locale: detectLocale(storage?.getItem(STORAGE_KEY), browserLanguages),
   fallbackLocale: DEFAULT_LOCALE,
+  // French writes 0 and 1 in the singular, unlike the default two-form rule.
+  pluralRules: { fr: (choice: number, choicesLength: number) => (choicesLength === 2 ? (Math.abs(choice) < 2 ? 0 : 1) : Math.min(Math.abs(choice), choicesLength - 1)) },
   messages: loadCatalogs(),
 })
 

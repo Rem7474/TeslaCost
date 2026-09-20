@@ -53,6 +53,15 @@ describe('setLocale', () => {
     expect(t('shell.topBar.driveCount', 3)).toBe('+3 trajets')
     expect(intlLocale()).toBe('fr-FR')
   })
+
+  it('writes zero in the singular in French and in the plural in English', () => {
+    setLocale('fr')
+    expect(t('tires.sessionCount', 0)).toBe('0 session')
+    expect(t('tires.sessionCount', 2)).toBe('2 sessions')
+    setLocale('en')
+    expect(t('tires.sessionCount', 0)).toBe('0 sessions')
+    setLocale('fr')
+  })
 })
 
 // A key typed in a template or a script that no catalog defines would show up as raw text on screen.

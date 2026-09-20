@@ -1,3 +1,4 @@
+import { t } from '@/i18n'
 export interface TimelineTireInfo {
   tireId: string
   label: string
@@ -41,12 +42,7 @@ const GROUP_TOLERANCE_KM = 50
 const PALETTE = ['#f43f5e', '#38bdf8', '#34d399', '#fbbf24', '#a78bfa', '#fb923c', '#2dd4bf', '#f472b6', '#a3e635', '#60a5fa']
 
 const WHEELS = ['FL', 'FR', 'RL', 'RR'] as const
-const WHEEL_LABELS: Record<string, string> = {
-  FL: 'Avant gauche',
-  FR: 'Avant droit',
-  RL: 'Arrière gauche',
-  RR: 'Arrière droit',
-}
+const wheelLabel = (wheel: string): string => t(`tires.timeline.wheels.${wheel}`)
 
 interface FlatSession extends TimelineTireInfo {
   colorKey: string
@@ -166,7 +162,7 @@ export function buildTireTimeline(tires: any[], currentOdometer: number): TireTi
       w,
       buildLane(
         w,
-        `${WHEEL_LABELS[w]} (${w})`,
+        `${wheelLabel(w)} (${w})`,
         flat.filter((s) => s.position === w || !(WHEELS as readonly string[]).includes(s.position)),
         colorFor,
         maxKm,
@@ -174,12 +170,12 @@ export function buildTireTimeline(tires: any[], currentOdometer: number): TireTi
     ]),
   ) as Record<(typeof WHEELS)[number], TimelineLane>
 
-  const front = sameCoverage(wheel.FL, wheel.FR) ? [mergeLanes('front', 'Train avant', wheel.FL, wheel.FR)] : [wheel.FL, wheel.FR]
-  const rear = sameCoverage(wheel.RL, wheel.RR) ? [mergeLanes('rear', 'Train arrière', wheel.RL, wheel.RR)] : [wheel.RL, wheel.RR]
+  const front = sameCoverage(wheel.FL, wheel.FR) ? [mergeLanes('front', t('tires.timeline.front'), wheel.FL, wheel.FR)] : [wheel.FL, wheel.FR]
+  const rear = sameCoverage(wheel.RL, wheel.RR) ? [mergeLanes('rear', t('tires.timeline.rear'), wheel.RL, wheel.RR)] : [wheel.RL, wheel.RR]
 
   let lanes = [...front, ...rear]
   if (front.length === 1 && rear.length === 1 && sameCoverage(front[0], rear[0])) {
-    lanes = [mergeLanes('all', 'Toutes les roues', front[0], rear[0])]
+    lanes = [mergeLanes('all', t('tires.timeline.all'), front[0], rear[0])]
   }
 
   const legend = [...colorByKey.entries()].map(([key, color]) => ({ key, color }))

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, onMounted, computed, watch } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
@@ -46,10 +47,10 @@ const currentOdometer = computed(() => vehicleStore.activeVehicle?.current_odome
 const activeTab = ref<'chassis' | 'storage' | 'disposed'>('chassis')
 
 const wheels = [
-  { pos: 'FL', label: 'Avant Gauche' },
-  { pos: 'FR', label: 'Avant Droit' },
-  { pos: 'RL', label: 'Arrière Gauche' },
-  { pos: 'RR', label: 'Arrière Droit' },
+  { pos: 'FL', labelKey: 'tires.wheels.FL' },
+  { pos: 'FR', labelKey: 'tires.wheels.FR' },
+  { pos: 'RL', labelKey: 'tires.wheels.RL' },
+  { pos: 'RR', labelKey: 'tires.wheels.RR' },
 ]
 
 // Modals
@@ -179,11 +180,11 @@ onMounted(() => {
 async function handleQuickRotate(mode: 'FRONT_BACK' | 'CROSS') {
   if (!vehicleStore.activeVehicle) return
   const odo = Math.round(vehicleStore.activeVehicle.current_odometer || 0)
-  const label = mode === 'FRONT_BACK' ? 'Avant ⇄ Arrière (FL ⇄ RL, FR ⇄ RR)' : 'Croisée (FL ⇄ RR, FR ⇄ RL)'
+  const label = mode === 'FRONT_BACK' ? t('tires.tiresView.rotateFrontBack') : t('tires.tiresView.rotateCross')
   const ok = await showConfirm({
-    title: 'Permutation rapide',
-    message: `Confirmez-vous la permutation rapide ${label} à ${odo.toLocaleString('fr-FR')} km ?`,
-    confirmText: 'Permuter',
+    title: t('tires.tiresView.quickRotationTitle'),
+    message: t('tires.tiresView.quickRotationMessage', { label, odometer: odo.toLocaleString(intlLocale()) }),
+    confirmText: t('tires.tiresView.rotate'),
     type: 'warning',
   })
   if (!ok) return
@@ -195,7 +196,7 @@ async function handleQuickRotate(mode: 'FRONT_BACK' | 'CROSS') {
     })
     await loadTires()
   } catch (err: any) {
-    showAlert(`Erreur lors de la permutation : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('tires.tiresView.rotationError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -214,18 +215,18 @@ function openTimelineTire(tireId: string) {
   if (t) openHistoryModal(t)
 }
 
-async function openHistoryModal(t: any) {
-  selectedTire.value = t.tire
-  selectedTireStats.value = t
+async function openHistoryModal(tire: any) {
+  selectedTire.value = tire.tire
+  selectedTireStats.value = tire
   try {
-    const res = await api.getTireHistory(vehicleStore.activeVehicle!.id, t.tire.id)
+    const res = await api.getTireHistory(vehicleStore.activeVehicle!.id, tire.tire.id)
     selectedTire.value = res.tire
     selectedTireStats.value = res.stats
     tireSessions.value = res.sessions || []
     tireLogs.value = res.logs || []
     showHistoryModal.value = true
   } catch (err: any) {
-    showAlert(`Erreur de chargement : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('tires.tiresView.loadError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -285,23 +286,23 @@ async function onHistoryCopied() {
   await refreshAfterHistoryChange()
 }
 
-async function handleDeleteTire(t: any) {
+async function handleDeleteTire(tire: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Supprimer définitivement le pneu',
-    message: `Supprimer définitivement le pneu ${t.brand} ${t.model} (${t.dimension}) avec son historique et son coût ? Pour un pneu usé, crevé ou vendu, préférez « Mettre au rebut » qui conserve son coût dans le TCO.`,
-    confirmText: 'Supprimer définitivement',
+    title: t('tires.tiresView.deleteTireTitle'),
+    message: t('tires.tiresView.deleteTireMessage', { brand: tire.brand, model: tire.model, dimension: tire.dimension }),
+    confirmText: t('tires.tiresView.deleteTireConfirm'),
     type: 'danger',
   })
   if (!ok) return
 
   try {
-    await api.deleteTire(vehicleStore.activeVehicle.id, t.id)
+    await api.deleteTire(vehicleStore.activeVehicle.id, tire.id)
     showHistoryModal.value = false
-    selectedTireIds.value = selectedTireIds.value.filter((id) => id !== t.id)
+    selectedTireIds.value = selectedTireIds.value.filter((id) => id !== tire.id)
     await loadTires()
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -326,9 +327,9 @@ async function onSessionSaved() {
 async function handleDeleteSession(session: any) {
   if (!vehicleStore.activeVehicle || !selectedTire.value) return
   const ok = await showConfirm({
-    title: 'Supprimer la session de montage',
-    message: 'Confirmez-vous la suppression de cette session de montage ?',
-    confirmText: 'Supprimer',
+    title: t('tires.tiresView.deleteSessionTitle'),
+    message: t('tires.tiresView.deleteSessionMessage'),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -338,7 +339,7 @@ async function handleDeleteSession(session: any) {
     await openHistoryModal({ tire: selectedTire.value })
     await loadTires()
   } catch (err: any) {
-    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.deleteError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -360,13 +361,13 @@ function openDuplicateSessionModal(s: any) {
 }
 
 // Tread depth measurements
-function openLogModal(t: any, log?: any) {
-  selectedTire.value = t.tire
+function openLogModal(tire: any, log?: any) {
+  selectedTire.value = tire.tire
   editingLogId.value = log ? log.id : null
   logInitialForm.value = log
     ? { depth_mm: log.depth_mm, odometer: Math.round(log.odometer), notes: log.notes || '', date: toIsoDay(log.date) }
     : {
-        depth_mm: t.current_depth_mm || 6.5,
+        depth_mm: tire.current_depth_mm || 6.5,
         odometer: Math.round(vehicleStore.activeVehicle?.current_odometer || 0),
         notes: '',
         date: todayIso(),
@@ -385,9 +386,9 @@ async function onLogSaved() {
 async function handleDeleteLog(l: any) {
   if (!vehicleStore.activeVehicle || !selectedTire.value) return
   const ok = await showConfirm({
-    title: 'Supprimer le relevé de gomme',
-    message: `Supprimer le relevé de ${l.depth_mm} mm du ${formatDate(l.date)} ?`,
-    confirmText: 'Supprimer',
+    title: t('tires.tiresView.deleteReadingTitle'),
+    message: t('tires.tiresView.deleteReadingMessage', { depth: l.depth_mm, date: formatDate(l.date) }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -397,7 +398,7 @@ async function handleDeleteLog(l: any) {
     await openHistoryModal({ tire: selectedTire.value })
     await loadTires()
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -409,10 +410,10 @@ async function handleDeleteLog(l: any) {
       <div>
         <h2 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
           <Disc class="w-6 h-6 text-rose-500" />
-          Pneumatiques & Cycles de vie
+          {{ $t('tires.tiresView.tiresAndLifeCycles') }}
         </h2>
         <p class="text-sm text-slate-400">
-          Suivi de l'usure en mm, durée de vie estimée, permutations en 1 clic et historique complet des montages
+          {{ $t('tires.tiresView.wearTrackingInMmEstimated') }}
         </p>
       </div>
 
@@ -422,10 +423,10 @@ async function handleDeleteLog(l: any) {
           @click="openPackSwapModal()"
           :disabled="storageTires.length === 0"
           class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2 transition-colors disabled:opacity-40"
-          title="Permuter le pack complet monté avec un pack de réserve (ex: Hiver / Été)"
+          :title="$t('tires.tiresView.swapTheFittedSetWith')"
         >
           <Snowflake class="w-4 h-4 text-sky-400" />
-          <span class="hidden md:inline">Changer de pack</span>
+          <span class="hidden md:inline">{{ $t('tires.tiresView.changeSet') }}</span>
         </button>
 
         <button
@@ -433,7 +434,7 @@ async function handleDeleteLog(l: any) {
           class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20 transition-all"
         >
           <Plus class="w-4 h-4" />
-          Ajouter des pneus
+          {{ $t('tires.tiresView.addTires') }}
         </button>
       </div>
     </div>
@@ -444,14 +445,14 @@ async function handleDeleteLog(l: any) {
       class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center gap-3 text-xs text-slate-400"
     >
       <Disc class="w-4 h-4 text-slate-400 shrink-0" />
-      <span>Vous consultez ce véhicule en mode <strong>Lecteur seul</strong>. Les modifications de pneumatiques, permutations et relevés sont désactivés.</span>
+      <span>{{ $t('tires.tiresView.youAreViewingThisVehicle') }} <strong>{{ $t('tires.tiresView.readOnly') }}</strong>{{ $t('tires.tiresView.modeChangesToTiresRotations') }}</span>
     </div>
 
     <!-- Quick Permutations Bar -->
     <div v-if="vehicleStore.canEdit" class="bg-slate-900 border border-slate-800 p-3 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
       <div class="flex items-center gap-2 text-slate-300 font-semibold">
         <RefreshCw class="w-4 h-4 text-rose-400" />
-        <span>Permutations rapides du véhicule en 1 clic :</span>
+        <span>{{ $t('tires.tiresView.quickVehicleRotationsIn1') }}</span>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
         <button
@@ -459,14 +460,14 @@ async function handleDeleteLog(l: any) {
           class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
         >
           <ArrowUpDown class="w-3.5 h-3.5 text-blue-400" />
-          Avant ⇄ Arrière
+          {{ $t('tires.tiresView.frontRear') }}
         </button>
         <button
           @click="handleQuickRotate('CROSS')"
           class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
         >
           <Shuffle class="w-3.5 h-3.5 text-indigo-400" />
-          Permutation Croisée
+          {{ $t('tires.tiresView.crossRotation') }}
         </button>
       </div>
     </div>
@@ -484,7 +485,7 @@ async function handleDeleteLog(l: any) {
         class="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
       >
         <Pencil class="w-3 h-3" />
-        <span>Modifier par lot</span>
+        <span>{{ $t('tires.tiresView.editInBulk') }}</span>
       </button>
 
       <button
@@ -492,10 +493,10 @@ async function handleDeleteLog(l: any) {
         type="button"
         @click="openBatchDisposeModal()"
         class="px-2.5 py-1 bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg flex items-center gap-1 transition-colors text-xs"
-        title="Mettre au rebut les pneus sélectionnés"
+        :title="$t('tires.tiresView.scrapTheSelectedTires')"
       >
         <Archive class="w-3 h-3" />
-        <span>Mettre au rebut</span>
+        <span>{{ $t('tires.tiresView.scrap') }}</span>
       </button>
     </BulkSelectionBar>
 
@@ -507,9 +508,9 @@ async function handleDeleteLog(l: any) {
         class="flex items-center gap-2 hover:text-slate-200 transition-colors"
       >
         <component :is="isCurrentTabAllSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
-        <span>{{ isCurrentTabAllSelected ? 'Tout désélectionner' : 'Tout sélectionner' }}</span>
+        <span>{{ isCurrentTabAllSelected ? $t('tires.tiresView.deselectAll') : $t('tires.tiresView.selectAll') }}</span>
       </button>
-      <span>{{ currentTabTireIds.length }} pneu(s) dans cette vue</span>
+      <span>{{ $t('tires.tiresView.tireSInThisView', { length: currentTabTireIds.length }) }}</span>
     </div>
 
     <!-- View Switcher Tabs -->
@@ -524,7 +525,7 @@ async function handleDeleteLog(l: any) {
         "
       >
         <Disc class="w-4 h-4" />
-        Pneus montés sur la Tesla (4)
+        {{ $t('tires.tiresView.tiresFittedOnTheVehicle') }}
       </button>
 
       <button
@@ -537,7 +538,7 @@ async function handleDeleteLog(l: any) {
         "
       >
         <Package class="w-4 h-4" />
-        Catalogue & Stock au garage ({{ storageTires.length }})
+        {{ $t('tires.tiresView.catalogueAndGarageStock', { length: storageTires.length }) }}
       </button>
 
       <button
@@ -547,7 +548,7 @@ async function handleDeleteLog(l: any) {
         :class="activeTab === 'disposed' ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white hover:bg-slate-800/40'"
       >
         <Archive class="w-4 h-4" />
-        Mis au rebut ({{ disposedTires.length }})
+        {{ $t('tires.tiresView.scrapped', { length: disposedTires.length }) }}
       </button>
     </div>
 
@@ -565,7 +566,7 @@ async function handleDeleteLog(l: any) {
           v-for="w in wheels"
           :key="w.pos"
           :pos="w.pos"
-          :label="w.label"
+          :label="$t(w.labelKey)"
           :stat="mountedTires[w.pos]"
           :selected="!!mountedTires[w.pos] && selectedTireIds.includes(mountedTires[w.pos].tire.id)"
           @open="openHistoryModal"
@@ -578,9 +579,9 @@ async function handleDeleteLog(l: any) {
     <div v-if="activeTab === 'storage'" class="space-y-4">
       <div v-if="storageTires.length === 0" class="bg-slate-900/60 border border-slate-800 rounded-3xl p-12 text-center text-slate-400 space-y-3">
         <Package class="w-10 h-10 mx-auto text-slate-600" />
-        <h3 class="text-base font-bold text-white">Aucun pneu stocké au garage</h3>
+        <h3 class="text-base font-bold text-white">{{ $t('tires.tiresView.noTireInGarageStorage') }}</h3>
         <p class="text-xs text-slate-400 max-w-sm mx-auto">
-          Vous pouvez enregistrer vos packs de pneus hiver ou de rechange pour suivre précisément leur kilométrage même démontés.
+          {{ $t('tires.tiresView.youCanRecordYourWinter') }}
         </p>
       </div>
 
@@ -589,26 +590,26 @@ async function handleDeleteLog(l: any) {
         <div class="flex items-center justify-between flex-wrap gap-2 bg-slate-900/60 border border-slate-800 p-3 rounded-2xl">
           <div class="flex items-center gap-2">
             <Package class="w-4 h-4 text-slate-400" />
-            <span class="text-xs text-slate-300 font-semibold">{{ storageTires.length }} pneu(s) stocké(s) au garage</span>
+            <span class="text-xs text-slate-300 font-semibold">{{ $t('tires.tiresView.tireSInGarageStorage', { length: storageTires.length }) }}</span>
           </div>
           <div class="flex items-center gap-2 flex-wrap">
             <button
               v-if="vehicleStore.canEdit"
               @click="openCopyHistoryModal()"
               class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors"
-              title="Copier tout l'historique d'un pneu vers d'autres pneus"
+              :title="$t('tires.tiresView.copyATireSWhole')"
             >
               <Copy class="w-3.5 h-3.5 text-indigo-400" />
-              <span>Copier l'historique d'un pneu</span>
+              <span>{{ $t('tires.tiresView.copyATireSHistory') }}</span>
             </button>
             <button
               v-if="vehicleStore.canEdit"
               @click="openBatchSessionModal()"
               class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-colors"
-              title="Enregistrer une session passée sur un lot de pneus du garage"
+              :title="$t('tires.tiresView.recordAPastSessionOn')"
             >
               <History class="w-3.5 h-3.5 text-rose-400" />
-              <span>Ajouter une session passée sur un lot</span>
+              <span>{{ $t('tires.tiresView.addAPastSessionOn') }}</span>
             </button>
           </div>
         </div>

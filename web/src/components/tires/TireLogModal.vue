@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { Ruler, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -41,7 +42,7 @@ async function handleAddLog() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -56,7 +57,7 @@ async function handleAddLog() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Ruler class="w-4 h-4 text-emerald-400" />
-          {{ editingLogId ? 'Modifier le relevé' : 'Relevé de sculpture' }}
+          {{ editingLogId ? $t('tires.tireLogModal.edit') : $t('tires.tireLogModal.new') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-4 h-4" />
@@ -65,7 +66,7 @@ async function handleAddLog() {
 
       <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
         <div>
-          <label for="tire-new-log-depth-mm" class="block text-slate-400 mb-1 font-semibold">Profondeur mesurée (mm)</label>
+          <label for="tire-new-log-depth-mm" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireLogModal.measuredDepthMm') }}</label>
           <input id="tire-new-log-depth-mm"
             v-model.number="newLogForm.depth_mm"
             type="number"
@@ -76,7 +77,7 @@ async function handleAddLog() {
           />
         </div>
         <div>
-          <label for="tire-new-log-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre actuel (km)</label>
+          <label for="tire-new-log-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireLogModal.currentOdometerKm') }}</label>
           <input id="tire-new-log-odometer"
             v-model.number="newLogForm.odometer"
             type="number"
@@ -84,15 +85,15 @@ async function handleAddLog() {
           />
         </div>
         <div>
-          <label for="tire-new-log-date" class="block text-slate-400 mb-1 font-semibold">Date du relevé</label>
+          <label for="tire-new-log-date" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireLogModal.readingDate') }}</label>
           <AppDatePicker id="tire-new-log-date" v-model="newLogForm.date" size="sm" required />
         </div>
         <div>
-          <label for="tire-new-log-notes" class="block text-slate-400 mb-1 font-semibold">Notes (optionnel)</label>
+          <label for="tire-new-log-notes" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireLogModal.notesOptional') }}</label>
           <input id="tire-new-log-notes"
             v-model="newLogForm.notes"
             type="text"
-            placeholder="Ex: Contrôle avant vacances"
+            :placeholder="$t('tires.tireLogModal.eGCheckBeforeThe')"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
           />
         </div>
@@ -104,14 +105,14 @@ async function handleAddLog() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
           @click="handleAddLog"
           class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
         >
-          Enregistrer le relevé
+          {{ $t('tires.tireLogModal.saveTheReading') }}
         </button>
       </div>
     </div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { Archive, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -38,7 +39,7 @@ async function handleDisposeTire() {
     open.value = false
     emit('saved', tireId)
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -53,7 +54,7 @@ async function handleDisposeTire() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Archive class="w-4 h-4 text-amber-400" />
-          Mettre au rebut
+          {{ $t('tires.tireDisposeModal.scrap') }}
         </h3>
         <button type="button" @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-4 h-4" />
@@ -65,7 +66,7 @@ async function handleDisposeTire() {
           {{ selectedTire.brand }} {{ selectedTire.model }}
         </p>
         <div>
-          <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date</label>
+          <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">{{ $t('common.date') }}</label>
           <AppDatePicker
             id="tire-dispose-date"
             v-model="disposeForm.date"
@@ -74,17 +75,17 @@ async function handleDisposeTire() {
           />
         </div>
         <div v-if="['FL', 'FR', 'RL', 'RR'].includes(selectedTire.current_position)">
-          <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au démontage (km)</label>
+          <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">{{ $t('tires.tireDisposeModal.odometerAtRemovalKm') }}</label>
           <input id="tire-dispose-odometer" v-model.number="disposeForm.odometer" type="number" min="0" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
         </div>
       </form>
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="tire-dispose-modal-form" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors">
-          Mettre au rebut
+          {{ $t('tires.tireDisposeModal.scrap') }}
         </button>
       </div>
     </div>

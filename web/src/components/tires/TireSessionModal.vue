@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { ClipboardPaste, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -73,7 +74,7 @@ async function handleSaveSession() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -87,7 +88,7 @@ async function handleSaveSession() {
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white">
-          {{ editingSessionId ? 'Modifier la session de montage' : 'Ajouter une session de montage passée' }}
+          {{ editingSessionId ? $t('tires.tireSessionModal.edit') : $t('tires.tireSessionModal.add') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -103,26 +104,26 @@ async function handleSaveSession() {
           class="w-full px-3 py-2 bg-indigo-950/40 border border-indigo-800/60 rounded-xl text-indigo-300 hover:text-white text-xs flex items-center justify-center gap-2 transition-colors font-semibold"
         >
           <ClipboardPaste class="w-4 h-4 text-indigo-400" />
-          <span>Coller les données de la session copiée ({{ copiedSession.mounted_date ? formatDate(copiedSession.mounted_date) : '' }})</span>
+          <span>{{ $t('tires.tireSessionModal.pasteTheDataOfThe', { mounted_date: copiedSession.mounted_date ? formatDate(copiedSession.mounted_date) : '' }) }}</span>
         </button>
 
         <div>
-          <label for="tire-session-position" class="block text-slate-400 mb-1 font-semibold">Position occupée</label>
+          <label for="tire-session-position" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.positionUsed') }}</label>
           <select id="tire-session-position"
             v-model="sessionForm.position"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
           >
-            <option value="FL">Avant Gauche (FL)</option>
-            <option value="FR">Avant Droit (FR)</option>
-            <option value="RL">Arrière Gauche (RL)</option>
-            <option value="RR">Arrière Droit (RR)</option>
-            <option value="STORAGE">Au garage / Non spécifié</option>
+            <option value="FL">{{ $t('tires.tireSessionModal.frontLeftFl') }}</option>
+            <option value="FR">{{ $t('tires.tireSessionModal.frontRightFr') }}</option>
+            <option value="RL">{{ $t('tires.tireSessionModal.rearLeftRl') }}</option>
+            <option value="RR">{{ $t('tires.tireSessionModal.rearRightRr') }}</option>
+            <option value="STORAGE">{{ $t('tires.tireSessionModal.inStorageUnspecified') }}</option>
           </select>
         </div>
 
         <div class="grid grid-cols-2 gap-2">
           <div>
-            <label for="tire-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">Date de montage</label>
+            <label for="tire-session-mounted-date" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.fittingDate') }}</label>
             <AppDatePicker
               id="tire-session-mounted-date"
               v-model="sessionForm.mounted_date"
@@ -131,7 +132,7 @@ async function handleSaveSession() {
             />
           </div>
           <div>
-            <label for="tire-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre montage (km)</label>
+            <label for="tire-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.odometerAtFittingKm') }}</label>
             <input id="tire-session-mounted-odometer"
               v-model.number="sessionForm.mounted_odometer"
               @input="onSessionOdometerChange"
@@ -144,13 +145,13 @@ async function handleSaveSession() {
         <div class="pt-1">
           <label class="flex items-center gap-2 cursor-pointer text-slate-300">
             <input type="checkbox" v-model="sessionForm.is_dismounted" class="rounded accent-rose-500" />
-            <span>Cette session est terminée (pneu démonté)</span>
+            <span>{{ $t('tires.tireSessionModal.thisSessionIsOverTire') }}</span>
           </label>
         </div>
 
         <div v-if="sessionForm.is_dismounted" class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
           <div>
-            <label for="tire-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">Date démontage</label>
+            <label for="tire-session-dismounted-date" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.removalDate') }}</label>
             <AppDatePicker
               id="tire-session-dismounted-date"
               v-model="sessionForm.dismounted_date"
@@ -159,7 +160,7 @@ async function handleSaveSession() {
             />
           </div>
           <div>
-            <label for="tire-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">Odomètre démontage (km)</label>
+            <label for="tire-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.odometerAtRemovalKm') }}</label>
             <input id="tire-session-dismounted-odometer"
               v-model.number="sessionForm.dismounted_odometer"
               @input="onSessionOdometerChange"
@@ -170,21 +171,21 @@ async function handleSaveSession() {
         </div>
 
         <div>
-          <label for="tire-session-distance-km" class="block text-slate-400 mb-1 font-semibold">Distance de la session (km)</label>
+          <label for="tire-session-distance-km" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.sessionDistanceKm') }}</label>
           <input id="tire-session-distance-km"
             v-model.number="sessionForm.distance_km"
             type="number"
-            placeholder="Auto-calculé ou forcé"
+            :placeholder="$t('tires.tireSessionModal.calculatedOrForced')"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
           />
         </div>
 
         <div>
-          <label for="tire-session-notes" class="block text-slate-400 mb-1 font-semibold">Commentaire / Notes</label>
+          <label for="tire-session-notes" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.commentNotes') }}</label>
           <input id="tire-session-notes"
             v-model="sessionForm.notes"
             type="text"
-            placeholder="Ex: Saison hivernale 2024"
+            :placeholder="$t('tires.tireSessionModal.eGWinterSeason2024')"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
           />
         </div>
@@ -196,14 +197,14 @@ async function handleSaveSession() {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
         >
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="button"
           @click="handleSaveSession"
           class="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors"
         >
-          Enregistrer
+          {{ $t('common.save') }}
         </button>
       </div>
     </div>
