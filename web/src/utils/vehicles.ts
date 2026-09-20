@@ -1,16 +1,16 @@
+import { intlLocale, t } from '@/i18n'
 import { todayIso } from '@/utils/dates'
 
-export const ACQUISITION_LABELS: Record<string, string> = {
-  CASH: 'Achat comptant',
-  LOAN: 'Achat à crédit',
-  LOA: 'LOA (location avec option d\'achat)',
-  LLD: 'LLD (location longue durée)',
-}
+export const acquisitionLabel = (type: string): string => t(`vehicles.acquisition.${type}`)
 
-export const OWNERSHIP_STEPS = [
-  { step: 1, title: 'Mode & Début', description: 'Type de contrat et date' },
-  { step: 2, title: 'Modalités Financières', description: 'Coûts et mensualités' },
-  { step: 3, title: 'Conditions & Fin', description: 'Kilométrage, options et clôture' },
+/** Role of a user on a vehicle, in the current language. */
+export const roleLabel = (role: string): string =>
+  role === 'OWNER' ? t('vehicles.roles.OWNER') : role === 'EDITOR' ? t('vehicles.roles.EDITOR') : t('vehicles.roles.VIEWER')
+
+export const ownershipSteps = () => [
+  { step: 1, title: t('vehicles.wizardSteps.one.title'), description: t('vehicles.wizardSteps.one.description') },
+  { step: 2, title: t('vehicles.wizardSteps.two.title'), description: t('vehicles.wizardSteps.two.description') },
+  { step: 3, title: t('vehicles.wizardSteps.three.title'), description: t('vehicles.wizardSteps.three.description') },
 ]
 
 export function emptyOwnership() {
@@ -151,33 +151,33 @@ export function leasePreview(f: OwnershipForm) {
 
 export function ownershipSummary(o: any) {
   if (!o) return null
-  const fmt = (v: number) => Number(v).toLocaleString('fr-FR', { maximumFractionDigits: 0 })
+  const fmt = (v: number) => Number(v).toLocaleString(intlLocale(), { maximumFractionDigits: 0 })
   if (o.acquisition_type === 'CASH' || o.acquisition_type === 'LOAN') {
-    return `${ACQUISITION_LABELS[o.acquisition_type]} • ${fmt(o.purchase_price)} €`
+    return `${acquisitionLabel(o.acquisition_type)} • ${fmt(o.purchase_price)} €`
   }
-  return `${o.acquisition_type} • ${fmt(o.lease_monthly_rent)} €/mois sur ${o.lease_duration_months} mois`
+  return `${o.acquisition_type} • ${t('vehicles.leaseSummary', { rent: fmt(o.lease_monthly_rent), months: o.lease_duration_months })}`
 }
 
 /** The message to show when a wizard step is incomplete, or null when it can be left. */
 export function ownershipStepError(f: OwnershipForm, step: number): string | null {
   if (step === 1) {
-    if (!f.acquisition_type) return "Veuillez sélectionner un mode d'acquisition"
-    if (!f.start_date) return 'Veuillez renseigner la date de début'
+    if (!f.acquisition_type) return t('vehicles.wizardErrors.mode')
+    if (!f.start_date) return t('vehicles.wizardErrors.startDate')
     return null
   }
   if (step === 2) {
     if (isPurchaseType(f)) {
       if (f.purchase_price === null || f.purchase_price === undefined || Number(f.purchase_price) <= 0) {
-        return "Veuillez renseigner le prix d'achat TTC"
+        return t('vehicles.wizardErrors.price')
       }
     }
     if (f.acquisition_type === 'LOAN') {
-      if (!f.loan_amount || Number(f.loan_amount) <= 0) return 'Veuillez renseigner le montant emprunté'
-      if (f.loan_duration_months === null || Number(f.loan_duration_months) <= 0) return 'Veuillez renseigner la durée du crédit en mois'
+      if (!f.loan_amount || Number(f.loan_amount) <= 0) return t('vehicles.wizardErrors.loanAmount')
+      if (f.loan_duration_months === null || Number(f.loan_duration_months) <= 0) return t('vehicles.wizardErrors.loanDuration')
     }
     if (isLeaseType(f)) {
-      if (f.lease_monthly_rent === null || f.lease_monthly_rent === undefined || Number(f.lease_monthly_rent) < 0) return 'Veuillez renseigner le loyer mensuel'
-      if (!f.lease_duration_months || Number(f.lease_duration_months) <= 0) return 'Veuillez renseigner la durée de la location en mois'
+      if (f.lease_monthly_rent === null || f.lease_monthly_rent === undefined || Number(f.lease_monthly_rent) < 0) return t('vehicles.wizardErrors.rent')
+      if (!f.lease_duration_months || Number(f.lease_duration_months) <= 0) return t('vehicles.wizardErrors.leaseDuration')
     }
     return null
   }

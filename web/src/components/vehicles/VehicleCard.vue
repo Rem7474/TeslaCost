@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { intlLocale } from '@/i18n'
 import { ref } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { Car, Plus, Trash2, Edit2, RefreshCw, CheckCircle2, AlertCircle, X, Gauge, Link2, FileText, Zap, Users, Pencil } from 'lucide-vue-next'
-import { ownershipSummary } from '@/utils/vehicles'
+import { ownershipSummary, roleLabel } from '@/utils/vehicles'
 
 // One vehicle of the list, with its contract summary and a TeslaMate connection test of its own
 const props = defineProps<{ v: any; ownership: any | null }>()
@@ -54,7 +55,7 @@ function clearCardTestResult() {
                 'bg-slate-700/50 text-slate-400 border border-slate-600/30': v.role === 'VIEWER',
               }"
             >
-              {{ v.role === 'OWNER' ? 'Propriétaire' : v.role === 'EDITOR' ? 'Co-conducteur' : 'Lecteur' }}
+              {{ roleLabel(v.role) }}
             </span>
           </div>
           <p v-if="v.vin" class="break-all text-xs text-slate-400 font-mono">{{ v.vin }}</p>
@@ -65,14 +66,14 @@ function clearCardTestResult() {
         <button
           @click="emit('edit', v)"
           class="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
-          title="Modifier"
+          :title="$t('common.edit')"
         >
           <Edit2 class="w-4 h-4" />
         </button>
         <button
           @click="emit('delete', v.id)"
           class="p-2 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
-          title="Supprimer"
+          :title="$t('common.delete')"
         >
           <Trash2 class="w-4 h-4" />
         </button>
@@ -82,15 +83,15 @@ function clearCardTestResult() {
     <!-- Telemetry & Stats -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-800 text-xs">
       <div>
-        <span class="text-slate-400">Odomètre actuel</span>
+        <span class="text-slate-400">{{ $t('vehicles.vehicleCard.currentOdometer') }}</span>
         <p class="text-sm font-bold text-slate-200 flex items-center gap-1.5 mt-0.5">
           <Gauge class="w-3.5 h-3.5 text-rose-400" />
-          {{ Math.round(v.current_odometer).toLocaleString('fr-FR') }} km
+          {{ Math.round(v.current_odometer).toLocaleString(intlLocale()) }} km
         </p>
       </div>
 
       <div v-if="v.role === 'OWNER'">
-        <span class="text-slate-400 block mb-1">Acquisition & Contrat</span>
+        <span class="text-slate-400 block mb-1">{{ $t('vehicles.vehicleCard.acquisitionAndContract') }}</span>
         <button
           type="button"
           @click="emit('ownership', v)"
@@ -100,27 +101,27 @@ function clearCardTestResult() {
               ? 'bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
               : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30'
           "
-          :title="ownership ? 'Cliquer pour modifier les termes du contrat' : 'Cliquer pour configurer l\'achat ou la location (LOA/LLD)'"
+          :title="ownership ? $t('vehicles.vehicleCard.editContract') : $t('vehicles.vehicleCard.setUpContract')"
         >
           <FileText v-if="ownership" class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           <Plus v-else class="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span>{{ ownership ? ownershipSummary(ownership) : 'Renseigner le contrat' }}</span>
+          <span>{{ ownership ? ownershipSummary(ownership) : $t('vehicles.vehicleCard.enterContract') }}</span>
           <Pencil v-if="ownership" class="w-3 h-3 text-indigo-400 opacity-60 group-hover:opacity-100 shrink-0 ml-0.5" />
         </button>
       </div>
       <div v-else>
-        <span class="text-slate-400">Accès véhicule</span>
+        <span class="text-slate-400">{{ $t('vehicles.vehicleCard.vehicleAccess') }}</span>
         <p class="text-xs font-semibold text-slate-300 mt-1">
-          {{ v.role === 'EDITOR' ? 'Éditeur (Co-conducteur)' : 'Lecteur seul' }}
+          {{ v.role === 'EDITOR' ? $t('vehicles.vehicleCard.editorRole') : $t('vehicles.vehicleCard.readOnly') }}
         </p>
       </div>
 
       <div v-if="v.powertrain === 'ICE'">
-        <span class="text-slate-400">Motorisation</span>
-        <p class="text-sm font-semibold mt-0.5 text-amber-300">Thermique · pleins saisis à la main</p>
+        <span class="text-slate-400">{{ $t('vehicles.vehicleCard.powertrain') }}</span>
+        <p class="text-sm font-semibold mt-0.5 text-amber-300">{{ $t('vehicles.vehicleCard.combustionFillUpsEnteredBy') }}</p>
       </div>
       <div v-if="v.powertrain !== 'ICE'">
-        <span class="text-slate-400">Connexion TeslaMate</span>
+        <span class="text-slate-400">{{ $t('vehicles.vehicleCard.teslamateConnection') }}</span>
         <p
           class="text-sm font-semibold mt-0.5"
           :class="
@@ -136,24 +137,24 @@ function clearCardTestResult() {
           {{
             v.role === 'OWNER'
               ? (cardTest?.success
-                ? 'En ligne'
+                ? $t('vehicles.vehicleCard.online')
                 : cardTest?.error
-                ? 'Erreur de connexion'
+                ? $t('vehicles.vehicleCard.connectionError')
                 : v.teslamate_api_url
-                ? 'Configurée'
-                : 'Non configurée')
-              : 'Gérée par l\'administrateur'
+                ? $t('vehicles.vehicleCard.configured')
+                : $t('vehicles.vehicleCard.notConfigured'))
+              : $t('vehicles.vehicleCard.managedByAdmin')
           }}
         </p>
       </div>
 
       <div v-if="v.powertrain !== 'ICE'">
-        <span class="text-slate-400">Recharge avant TM</span>
+        <span class="text-slate-400">{{ $t('vehicles.vehicleCard.estimatedEnergy') }}</span>
         <p v-if="v.estimated_kwh_100km && v.estimated_price_per_kwh" class="text-xs font-semibold text-sky-400 flex items-center gap-1 mt-1">
           <Zap class="w-3.5 h-3.5 text-sky-400" />
-          {{ v.estimated_kwh_100km }} kWh/100km • {{ v.estimated_price_per_kwh }} €/kWh
+          {{ $t('vehicles.vehicleCard.kwh100kmKwh', { estimated_kwh_100km: v.estimated_kwh_100km, estimated_price_per_kwh: v.estimated_price_per_kwh }) }}
         </p>
-        <p v-else class="text-xs text-slate-500 mt-1">Non configurée</p>
+        <p v-else class="text-xs text-slate-500 mt-1">{{ $t('vehicles.vehicleCard.notConfigured') }}</p>
       </div>
     </div>
 
@@ -162,10 +163,10 @@ function clearCardTestResult() {
       <button
         @click="emit('members', v)"
         class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
-        title="Gérer les accès et co-conducteurs"
+        :title="$t('vehicles.vehicleCard.manageAccessAndCoDrivers')"
       >
         <Users class="w-3.5 h-3.5 text-violet-400" />
-        <span>Partage & Accès</span>
+        <span>{{ $t('vehicles.vehicleCard.sharingAndAccess') }}</span>
       </button>
       <button
         v-if="v.role === 'OWNER'"
@@ -173,16 +174,16 @@ function clearCardTestResult() {
         class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
       >
         <FileText class="w-3.5 h-3.5 text-indigo-400" />
-        <span>Acquisition & financement</span>
+        <span>{{ $t('vehicles.vehicleCard.acquisitionAndFinancing') }}</span>
       </button>
       <router-link
         to="/manual"
         @click="vehicleStore.setActiveVehicle(v.id)"
         class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg flex items-center gap-1.5 border border-slate-700"
-        title="Relevés kilométriques et saisies manuelles de ce véhicule"
+        :title="$t('vehicles.vehicleCard.odometerReadingsAndManualEntries')"
       >
         <Gauge class="w-3.5 h-3.5 text-cyan-400" />
-        <span>Suivi manuel</span>
+        <span>{{ $t('vehicles.vehicleCard.manualTracking') }}</span>
       </router-link>
       <button
         v-if="v.role === 'OWNER' && v.teslamate_api_url"
@@ -192,7 +193,7 @@ function clearCardTestResult() {
       >
         <RefreshCw v-if="cardTest?.loading" class="w-3.5 h-3.5 animate-spin text-rose-400" />
         <Link2 v-else class="w-3.5 h-3.5" />
-        <span>{{ cardTest?.loading ? 'Test...' : 'Tester l\'API' }}</span>
+        <span>{{ cardTest?.loading ? $t('vehicles.vehicleCard.testing') : $t('vehicles.vehicleCard.testApi') }}</span>
       </button>
 
       <button
@@ -200,10 +201,10 @@ function clearCardTestResult() {
         @click="vehicleStore.setActiveVehicle(v.id)"
         class="ml-auto px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-rose-400 font-semibold rounded-lg"
       >
-        Sélectionner
+        {{ $t('vehicles.vehicleCard.select') }}
       </button>
       <span v-else class="ml-auto text-xs font-semibold text-rose-400 px-3 py-1.5 bg-rose-500/10 rounded-lg">
-        Véhicule actif
+        {{ $t('vehicles.vehicleCard.activeVehicle') }}
       </span>
     </div>
 
@@ -218,7 +219,7 @@ function clearCardTestResult() {
         <AlertCircle v-else class="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
         <div>
           <span v-if="cardTest.success">
-            Connexion réussie ! Statut : {{ cardTest.status?.state || 'En ligne' }} ({{ Math.round(cardTest.status?.odometer || 0).toLocaleString('fr-FR') }} km)
+            {{ $t('vehicles.testSuccess', { state: cardTest.status?.state || $t('vehicles.vehicleCard.online'), odometer: Math.round(cardTest.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
           </span>
           <span v-else>{{ cardTest.error }}</span>
         </div>

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { roleLabel } from '@/utils/vehicles'
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useAuthStore } from '@/stores/auth'
@@ -33,7 +35,7 @@ async function loadMembers(vehicleId: string) {
   try {
     members.value = await api.getVehicleMembers(vehicleId)
   } catch (err: any) {
-    showAlert(`Erreur lors du chargement des membres : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('vehicles.vehicleMembersModal.loadError', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     loadingMembers.value = false
   }
@@ -49,9 +51,9 @@ async function handleAddMember() {
     })
     newMemberEmail.value = ''
     await loadMembers(membersVehicle.value.id)
-    showAlert('Membre ajouté avec succès !', 'Succès', 'info')
+    showAlert(t('vehicles.vehicleMembersModal.added'), t('common.success'), 'info')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     addingMember.value = false
   }
@@ -63,9 +65,9 @@ async function handleUpdateMemberRole(m: any, newRole: string) {
   try {
     await api.updateVehicleMemberRole(membersVehicle.value.id, m.user_id, { role: newRole })
     await loadMembers(membersVehicle.value.id)
-    showAlert('Rôle mis à jour avec succès !', 'Succès', 'info')
+    showAlert(t('vehicles.vehicleMembersModal.roleUpdated'), t('common.success'), 'info')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     updatingMemberId.value = null
   }
@@ -75,11 +77,11 @@ async function handleRemoveMember(m: any) {
   if (!membersVehicle.value) return
   const isSelf = authStore.user?.id === m.user_id
   const ok = await showConfirm({
-    title: isSelf ? 'Quitter le véhicule partagé' : 'Retirer l\'accès au véhicule',
+    title: isSelf ? t('vehicles.vehicleMembersModal.leaveTitle') : t('vehicles.vehicleMembersModal.removeTitle'),
     message: isSelf
-      ? `Êtes-vous sûr de vouloir quitter le véhicule ${membersVehicle.value.name} ? Vous n'aurez plus accès à ses données.`
-      : `Retirer l'accès de ${m.user_email} à ce véhicule ?`,
-    confirmText: isSelf ? 'Quitter' : 'Retirer',
+      ? t('vehicles.vehicleMembersModal.leaveMessage', { name: membersVehicle.value.name })
+      : t('vehicles.vehicleMembersModal.removeMessage', { email: m.user_email }),
+    confirmText: isSelf ? t('vehicles.vehicleMembersModal.leave') : t('vehicles.vehicleMembersModal.remove'),
     type: 'danger',
   })
   if (!ok) return
@@ -91,9 +93,9 @@ async function handleRemoveMember(m: any) {
     } else {
       await loadMembers(membersVehicle.value.id)
     }
-    showAlert(isSelf ? 'Vous avez quitté le véhicule' : 'Accès révoqué avec succès', 'Succès', 'info')
+    showAlert(isSelf ? t('vehicles.vehicleMembersModal.left') : t('vehicles.vehicleMembersModal.revoked'), t('common.success'), 'info')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -111,7 +113,7 @@ async function handleRemoveMember(m: any) {
             <Users class="w-5 h-5" />
           </div>
           <div>
-            <h3 class="text-base font-bold text-white">Partage & Accès</h3>
+            <h3 class="text-base font-bold text-white">{{ $t('vehicles.vehicleMembersModal.sharingAndAccess') }}</h3>
             <p class="text-xs text-slate-400">{{ membersVehicle?.name }}</p>
           </div>
         </div>
@@ -132,34 +134,34 @@ async function handleRemoveMember(m: any) {
         >
           <div class="flex items-center gap-2">
             <UserPlus class="w-4 h-4 text-violet-400" />
-            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Ajouter un membre</h4>
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider">{{ $t('vehicles.vehicleMembersModal.addAMember') }}</h4>
           </div>
           <p class="text-[11px] text-slate-400">
-            Invitez un co-conducteur ou un membre de votre foyer. L'utilisateur doit déjà posséder un compte sur l'application.
+            {{ $t('vehicles.vehicleMembersModal.inviteACoDriverOr') }}
           </p>
 
           <form @submit.prevent="handleAddMember" class="space-y-3">
             <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
               <div class="sm:col-span-7">
-                <label for="new-member-email" class="sr-only">Email du membre</label>
+                <label for="new-member-email" class="sr-only">{{ $t('vehicles.vehicleMembersModal.memberEmail') }}</label>
                 <input
                   id="new-member-email"
                   v-model="newMemberEmail"
                   type="email"
                   required
-                  placeholder="email@exemple.com"
+                  :placeholder="$t('vehicles.vehicleMembersModal.emailExampleCom')"
                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-500"
                 />
               </div>
               <div class="sm:col-span-5">
-                <label for="new-member-role" class="sr-only">Rôle du membre</label>
+                <label for="new-member-role" class="sr-only">{{ $t('vehicles.vehicleMembersModal.memberRole') }}</label>
                 <select
                   id="new-member-role"
                   v-model="newMemberRole"
                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-violet-500"
                 >
-                  <option value="EDITOR">Co-conducteur (Éditeur)</option>
-                  <option value="VIEWER">Lecteur seul</option>
+                  <option value="EDITOR">{{ $t('vehicles.vehicleMembersModal.coDriverEditor') }}</option>
+                  <option value="VIEWER">{{ $t('vehicles.vehicleMembersModal.readOnly') }}</option>
                 </select>
               </div>
             </div>
@@ -167,7 +169,7 @@ async function handleRemoveMember(m: any) {
             <div class="flex items-center justify-between gap-3 pt-1">
               <p class="text-[10px] text-slate-500 leading-tight">
                 <ShieldCheck class="w-3 h-3 text-emerald-400 inline mr-0.5 -mt-0.5" />
-                Vos clés API TeslaMate et données de financement restent invisibles pour les membres.
+                {{ $t('vehicles.vehicleMembersModal.yourTeslamateApiKeysAnd') }}
               </p>
               <button
                 type="submit"
@@ -176,7 +178,7 @@ async function handleRemoveMember(m: any) {
               >
                 <RefreshCw v-if="addingMember" class="w-3.5 h-3.5 animate-spin" />
                 <UserPlus v-else class="w-3.5 h-3.5" />
-                <span>Ajouter</span>
+                <span>{{ $t('vehicles.vehicleMembersModal.add') }}</span>
               </button>
             </div>
           </form>
@@ -185,16 +187,16 @@ async function handleRemoveMember(m: any) {
         <!-- Members List -->
         <div class="space-y-3">
           <div class="flex items-center justify-between">
-            <h4 class="text-xs font-bold text-white uppercase tracking-wider">Membres autorisés</h4>
-            <span class="text-xs text-slate-400">{{ members.length }} membre(s)</span>
+            <h4 class="text-xs font-bold text-white uppercase tracking-wider">{{ $t('vehicles.vehicleMembersModal.authorizedMembers') }}</h4>
+            <span class="text-xs text-slate-400">{{ $t('vehicles.vehicleMembersModal.memberS', { length: members.length }) }}</span>
           </div>
 
           <div v-if="loadingMembers" class="py-8 text-center text-xs text-slate-400">
-            Chargement des accès...
+            {{ $t('vehicles.vehicleMembersModal.loadingTheAccess') }}
           </div>
 
           <div v-else-if="members.length === 0" class="py-6 text-center text-xs text-slate-500 bg-slate-950/40 rounded-xl border border-slate-800">
-            Aucun membre trouvé.
+            {{ $t('vehicles.vehicleMembersModal.noMemberFound') }}
           </div>
 
           <div v-else class="space-y-2">
@@ -217,7 +219,7 @@ async function handleRemoveMember(m: any) {
                       v-if="m.user_id === authStore.user?.id"
                       class="text-[10px] px-1.5 py-0.2 bg-slate-800 text-slate-400 rounded"
                     >
-                      Vous
+                      {{ $t('vehicles.vehicleMembersModal.you') }}
                     </span>
                   </div>
                   <div class="flex items-center gap-1.5 mt-0.5">
@@ -229,7 +231,7 @@ async function handleRemoveMember(m: any) {
                         'bg-slate-800 text-slate-400 border border-slate-700': m.role === 'VIEWER',
                       }"
                     >
-                      {{ m.role === 'OWNER' ? 'Propriétaire' : m.role === 'EDITOR' ? 'Co-conducteur' : 'Lecteur' }}
+                      {{ roleLabel(m.role) }}
                     </span>
                   </div>
                 </div>
@@ -239,7 +241,7 @@ async function handleRemoveMember(m: any) {
               <div class="flex items-center gap-2 shrink-0">
                 <!-- If current user is OWNER and this member is not OWNER: allow role change or removal -->
                 <template v-if="membersVehicle?.role === 'OWNER' && m.role !== 'OWNER'">
-                  <label :for="'member-role-' + m.user_id" class="sr-only">Rôle du membre {{ m.user_email }}</label>
+                  <label :for="'member-role-' + m.user_id" class="sr-only">{{ $t('vehicles.vehicleMembersModal.roleOfTheMember', { user_email: m.user_email }) }}</label>
                   <select
                     :id="'member-role-' + m.user_id"
                     :value="m.role"
@@ -247,15 +249,15 @@ async function handleRemoveMember(m: any) {
                     @change="handleUpdateMemberRole(m, ($event.target as HTMLSelectElement).value)"
                     class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-violet-500"
                   >
-                    <option value="EDITOR">Co-conducteur</option>
-                    <option value="VIEWER">Lecteur</option>
+                    <option value="EDITOR">{{ $t('vehicles.vehicleMembersModal.coDriver') }}</option>
+                    <option value="VIEWER">{{ $t('vehicles.vehicleMembersModal.viewer') }}</option>
                   </select>
 
                   <button
                     type="button"
                     @click="handleRemoveMember(m)"
                     class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
-                    title="Retirer l'accès"
+                    :title="$t('vehicles.vehicleMembersModal.removeAccess')"
                   >
                     <Trash2 class="w-4 h-4" />
                   </button>
@@ -269,7 +271,7 @@ async function handleRemoveMember(m: any) {
                     class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold rounded-lg flex items-center gap-1.5 transition-colors border border-rose-500/20"
                   >
                     <LogOut class="w-3.5 h-3.5" />
-                    <span>Quitter</span>
+                    <span>{{ $t('vehicles.vehicleMembersModal.leave') }}</span>
                   </button>
                 </template>
               </div>
@@ -285,7 +287,7 @@ async function handleRemoveMember(m: any) {
           @click="open = false"
           class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl transition-colors"
         >
-          Fermer
+          {{ $t('common.close') }}
         </button>
       </div>
     </div>
