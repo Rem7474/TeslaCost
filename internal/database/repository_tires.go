@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -139,10 +140,10 @@ func (r *Repository) DisposeTire(ctx context.Context, vehicleID, tireID string, 
 	}
 	if isMountedPosition(t.CurrentPosition) {
 		if odometer == nil {
-			return validationErrorf("l'odomètre de démontage est requis pour un pneu monté")
+			return apierror.New("tire.dismount_odometer_required", "The removal odometer is required for a fitted tire")
 		}
 		if t.MountedOdometer != nil && *odometer < *t.MountedOdometer {
-			return validationErrorf("l'odomètre (%.0f km) est inférieur à l'odomètre de montage (%.0f km)", *odometer, *t.MountedOdometer)
+			return apierror.Newf("tire.odometer_below_mount", "The odometer (%.0f km) is lower than the fitting odometer (%.0f km)", *odometer, *t.MountedOdometer)
 		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE tire_mount_sessions

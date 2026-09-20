@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -27,10 +27,10 @@ func parseSessionPayload(req *MountSessionPayload) (time.Time, *time.Time, error
 	// a dismounted_date is provided (i.e. the session is already over).
 	isHistoricalStorage := req.Position == models.TirePosStorage && req.DismountedDate != nil
 	if !isMountedPosition(req.Position) && !isHistoricalStorage {
-		return time.Time{}, nil, errors.New("une session de montage requiert une position FL, FR, RL ou RR (ou STORAGE pour une session historique terminée)")
+		return time.Time{}, nil, apierror.New("tire.session_position", "A fitting session needs a position FL, FR, RL or RR (or STORAGE for a finished historical session)")
 	}
 	if req.MountedOdometer < 0 || (req.DismountedOdometer != nil && *req.DismountedOdometer < 0) {
-		return time.Time{}, nil, errors.New("odomètre invalide")
+		return time.Time{}, nil, apierror.New("odometer.invalid", "Invalid odometer")
 	}
 	mountedDate, err := parseDate(req.MountedDate)
 	if err != nil {
@@ -41,7 +41,7 @@ func parseSessionPayload(req *MountSessionPayload) (time.Time, *time.Time, error
 		return time.Time{}, nil, err
 	}
 	if dismountedDate != nil && dismountedDate.Before(mountedDate) {
-		return time.Time{}, nil, errors.New("la date de démontage précède la date de montage")
+		return time.Time{}, nil, apierror.New("tire.dismount_before_mount", "The removal date is before the fitting date")
 	}
 	return mountedDate, dismountedDate, nil
 }
@@ -51,13 +51,13 @@ func parseSessionPayload(req *MountSessionPayload) (time.Time, *time.Time, error
 func decodeMountSession(w http.ResponseWriter, r *http.Request, vehicleID, tireID string) (*models.TireMountSession, bool) {
 	var req MountSessionPayload
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return nil, false
 	}
 
 	mountedDate, dismountedDate, err := parseSessionPayload(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return nil, false
 	}
 

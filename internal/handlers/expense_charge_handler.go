@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 )
@@ -75,10 +75,10 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 		return nil, err
 	}
 	if endDate != nil && endDate.Before(date) {
-		return nil, errors.New("la fin de recharge précède son début")
+		return nil, apierror.New("charge.end_before_start", "The end of the charge is before its start")
 	}
 	if err := validateQuantity(req.KwhAdded, 1000); err != nil {
-		return nil, errors.New("énergie ajoutée invalide")
+		return nil, apierror.New("charge.energy_invalid", "Invalid energy added")
 	}
 	if req.Cost != nil {
 		if err := validateAmount(*req.Cost, true); err != nil {
@@ -109,20 +109,20 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 }
 
 // decodeCharge reads and validates a charge from the request body. It writes the error response and returns
-// false when the payload is invalid or carries no cost (costRequired is the message for that case).
-func decodeCharge(w http.ResponseWriter, r *http.Request, vehicleID, costRequired string) (*models.ChargeLog, bool) {
+// false when the payload is invalid or carries no cost (costRequired is the error for that case).
+func decodeCharge(w http.ResponseWriter, r *http.Request, vehicleID string, costRequired *apierror.Error) (*models.ChargeLog, bool) {
 	var req SaveChargeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return nil, false
 	}
 	c, err := buildCharge(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return nil, false
 	}
 	if c.Cost == nil {
-		writeError(w, http.StatusBadRequest, costRequired)
+		writeAPIError(w, http.StatusBadRequest, costRequired)
 		return nil, false
 	}
 	return c, true
@@ -134,12 +134,12 @@ func (h *ExpenseHandler) CreateManualCharge(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	c, ok := decodeCharge(w, r, vehicleID, "le coût d'une recharge manuelle est requis")
+	c, ok := decodeCharge(w, r, vehicleID, apierror.New("charge.manual_cost_required", "The cost of a manual charge is required"))
 	if !ok {
 		return
 	}
 	if c.KwhAdded <= 0 {
-		writeError(w, http.StatusBadRequest, "l'énergie ajoutée doit être positive")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("charge.energy_positive", "The energy added must be positive"))
 		return
 	}
 
@@ -157,7 +157,7 @@ func (h *ExpenseHandler) UpdateCharge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	c, ok := decodeCharge(w, r, vehicleID, "le coût est requis")
+	c, ok := decodeCharge(w, r, vehicleID, apierror.New("charge.cost_required", "The cost is required"))
 	if !ok {
 		return
 	}

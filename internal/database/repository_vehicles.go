@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -273,7 +274,7 @@ func (r *Repository) ListVehicleMembers(ctx context.Context, vehicleID string) (
 // AddVehicleMember associates an existing user to a vehicle by email with a specified role.
 func (r *Repository) AddVehicleMember(ctx context.Context, vehicleID, userEmail string, role models.VehicleRole) (*models.VehicleMember, error) {
 	if !role.IsValid() {
-		return nil, fmt.Errorf("rôle invalide: %s", role)
+		return nil, apierror.Newf("member.invalid_role", "Invalid role: %s", role)
 	}
 	var targetUser models.User
 	err := r.pool.QueryRow(ctx, `SELECT id, email, display_name FROM users WHERE LOWER(email) = LOWER($1);`, userEmail).
@@ -294,7 +295,7 @@ func (r *Repository) AddVehicleMember(ctx context.Context, vehicleID, userEmail 
 	err = r.pool.QueryRow(ctx, query, vehicleID, targetUser.ID, string(role)).Scan(&createdAt, &updatedAt)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "vehicle_members_pkey") {
-			return nil, fmt.Errorf("cet utilisateur a déjà accès à ce véhicule")
+			return nil, apierror.New("member.already_member", "This user already has access to this vehicle")
 		}
 		return nil, fmt.Errorf("failed to add vehicle member: %w", err)
 	}
@@ -313,7 +314,7 @@ func (r *Repository) AddVehicleMember(ctx context.Context, vehicleID, userEmail 
 // UpdateVehicleMemberRole updates the role of a vehicle member, preventing demotion of the last owner.
 func (r *Repository) UpdateVehicleMemberRole(ctx context.Context, vehicleID, targetUserID string, newRole models.VehicleRole) error {
 	if !newRole.IsValid() {
-		return fmt.Errorf("rôle invalide: %s", newRole)
+		return apierror.Newf("member.invalid_role", "Invalid role: %s", newRole)
 	}
 
 	var currentRole string
@@ -331,7 +332,7 @@ func (r *Repository) UpdateVehicleMemberRole(ctx context.Context, vehicleID, tar
 			return err
 		}
 		if ownerCount <= 1 {
-			return fmt.Errorf("impossible de rétrograder l'unique propriétaire du véhicule")
+			return apierror.New("member.last_owner_demote", "The only owner of the vehicle cannot be demoted")
 		}
 	}
 
@@ -367,7 +368,7 @@ func (r *Repository) RemoveVehicleMember(ctx context.Context, vehicleID, targetU
 			return err
 		}
 		if ownerCount <= 1 {
-			return fmt.Errorf("impossible de retirer l'unique propriétaire du véhicule")
+			return apierror.New("member.last_owner_remove", "The only owner of the vehicle cannot be removed")
 		}
 	}
 

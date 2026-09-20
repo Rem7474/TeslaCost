@@ -2,12 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
@@ -54,7 +54,7 @@ func buildDriveExpense(vehicleID string, req *CreateDriveExpenseRequest) (*model
 		expType = "TOLL"
 	}
 	if !driveExpenseTypes[expType] {
-		return nil, errors.New("type de dépense invalide")
+		return nil, apierror.New("expense.type_invalid", "Invalid expense type")
 	}
 
 	return &models.DriveExpense{
@@ -86,13 +86,13 @@ func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Reque
 
 	var req CreateDriveExpenseRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	exp, err := buildDriveExpense(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -131,13 +131,13 @@ func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Reque
 
 	var req CreateDriveExpenseRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	exp, err := buildDriveExpense(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	exp.ID = expenseID

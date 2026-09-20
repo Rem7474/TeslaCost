@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/teslacost/teslacost/internal/apierror"
+
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 	"github.com/teslacost/teslacost/internal/models"
@@ -23,22 +25,40 @@ func writeError(w http.ResponseWriter, status int, message string) {
 	})
 }
 
+// writeAPIError answers with the English message, the stable code and the values the front end interpolates
+// in its own translation of that code.
+func writeAPIError(w http.ResponseWriter, status int, e *apierror.Error) {
+	body := map[string]any{"error": e.Message, "code": e.Code}
+	if len(e.Params) > 0 {
+		body["params"] = e.Params
+	}
+	writeJSON(w, status, body)
+}
+
+// writeErr answers with err as an API error when it carries a code, and with its plain message otherwise.
+func writeErr(w http.ResponseWriter, status int, err error) {
+	if apiErr, ok := apierror.As(err); ok {
+		writeAPIError(w, status, apiErr)
+		return
+	}
+	writeError(w, status, err.Error())
+}
+
 // requireVehicleAccess checks that the authenticated user has access to the vehicle with at least minRole.
 func requireVehicleAccess(w http.ResponseWriter, r *http.Request, repo *database.Repository, vehicleID string, minRole models.VehicleRole) *models.Vehicle {
 	userID := middleware.GetUserID(r.Context())
 	v, err := repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return nil
 	}
 	if minRole == models.RoleOwner && v.Role != models.RoleOwner {
-		writeError(w, http.StatusForbidden, "Action réservée au propriétaire du véhicule")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.owner_only", "This action is reserved to the vehicle owner"))
 		return nil
 	}
 	if (minRole == models.RoleEditor || minRole == models.RoleOwner) && !v.Role.CanEdit() {
-		writeError(w, http.StatusForbidden, "Accès en lecture seule : modifications non autorisées")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.read_only", "Read-only access: changes are not allowed"))
 		return nil
 	}
 	return v
 }
-

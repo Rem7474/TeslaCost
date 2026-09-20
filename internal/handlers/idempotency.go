@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
 )
@@ -49,12 +50,12 @@ func Idempotency(repo *database.Repository) func(http.Handler) http.Handler {
 			stored, err := repo.GetIdempotentResponse(r.Context(), userID, key)
 			if err != nil {
 				slog.ErrorContext(r.Context(), "idempotency lookup failed", "component", "idempotency", "error", err)
-				writeError(w, http.StatusInternalServerError, "Idempotency check failed")
+				writeAPIError(w, http.StatusInternalServerError, apierror.New("idempotency.check_failed", "Idempotency check failed"))
 				return
 			}
 			if stored != nil {
 				if stored.Method != r.Method || stored.Path != r.URL.Path {
-					writeError(w, http.StatusUnprocessableEntity, "Idempotency-Key déjà utilisée pour une autre requête")
+					writeAPIError(w, http.StatusUnprocessableEntity, apierror.New("idempotency.key_reused", "Idempotency-Key already used for another request"))
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")

@@ -31,32 +31,32 @@ func TestValidateComparisonRequest(t *testing.T) {
 		wantErr string
 	}{
 		{"valid retrospective", func(r *SaveComparisonRequest) {}, ""},
-		{"empty name", func(r *SaveComparisonRequest) { r.Name = "   " }, "Nom invalide"},
-		{"long name", func(r *SaveComparisonRequest) { r.Name = strings.Repeat("a", 101) }, "Nom invalide"},
-		{"unknown mode", func(r *SaveComparisonRequest) { r.Mode = "OTHER" }, "Mode invalide"},
-		{"zero km", func(r *SaveComparisonRequest) { r.AnnualKm = 0 }, "Kilométrage annuel"},
-		{"too many km", func(r *SaveComparisonRequest) { r.AnnualKm = 500_000 }, "Kilométrage annuel"},
-		{"zero years", func(r *SaveComparisonRequest) { r.Years = 0 }, "Durée invalide"},
-		{"too many years", func(r *SaveComparisonRequest) { r.Years = 16 }, "Durée invalide"},
-		{"unknown fuel", func(r *SaveComparisonRequest) { r.ICE.FuelType = "KEROSENE" }, "Carburant invalide"},
-		{"zero consumption", func(r *SaveComparisonRequest) { r.ICE.LPer100Km = 0 }, "Consommation thermique"},
-		{"negative fuel price", func(r *SaveComparisonRequest) { r.ICE.FuelPrice = -1 }, "Prix du carburant"},
-		{"negative purchase", func(r *SaveComparisonRequest) { r.ICE.PurchasePrice = -1 }, "positif"},
-		{"inflation out of range", func(r *SaveComparisonRequest) { r.Options.FuelInflationPct = 50 }, "Inflation invalide"},
-		{"retrospective without vehicle", func(r *SaveComparisonRequest) { r.VehicleID = nil }, "véhicule est requis"},
-		{"projection without EV", func(r *SaveComparisonRequest) { r.Mode = models.ComparisonModeProjection }, "véhicule électrique sont requises"},
+		{"empty name", func(r *SaveComparisonRequest) { r.Name = "   " }, "comparison.name_invalid"},
+		{"long name", func(r *SaveComparisonRequest) { r.Name = strings.Repeat("a", 101) }, "comparison.name_invalid"},
+		{"unknown mode", func(r *SaveComparisonRequest) { r.Mode = "OTHER" }, "comparison.mode_invalid"},
+		{"zero km", func(r *SaveComparisonRequest) { r.AnnualKm = 0 }, "comparison.annual_km"},
+		{"too many km", func(r *SaveComparisonRequest) { r.AnnualKm = 500_000 }, "comparison.annual_km"},
+		{"zero years", func(r *SaveComparisonRequest) { r.Years = 0 }, "comparison.years"},
+		{"too many years", func(r *SaveComparisonRequest) { r.Years = 16 }, "comparison.years"},
+		{"unknown fuel", func(r *SaveComparisonRequest) { r.ICE.FuelType = "KEROSENE" }, "fuel.type_invalid"},
+		{"zero consumption", func(r *SaveComparisonRequest) { r.ICE.LPer100Km = 0 }, "comparison.ice_consumption"},
+		{"negative fuel price", func(r *SaveComparisonRequest) { r.ICE.FuelPrice = -1 }, "comparison.fuel_price"},
+		{"negative purchase", func(r *SaveComparisonRequest) { r.ICE.PurchasePrice = -1 }, "expense.amount_positive"},
+		{"inflation out of range", func(r *SaveComparisonRequest) { r.Options.FuelInflationPct = 50 }, "comparison.inflation"},
+		{"retrospective without vehicle", func(r *SaveComparisonRequest) { r.VehicleID = nil }, "comparison.vehicle_required"},
+		{"projection without EV", func(r *SaveComparisonRequest) { r.Mode = models.ComparisonModeProjection }, "comparison.ev_required"},
 		{"projection bad EV consumption", func(r *SaveComparisonRequest) {
 			r.Mode = models.ComparisonModeProjection
 			r.EV = &models.EVInputs{KwhPer100Km: 0, EurPerKwh: 0.2}
-		}, "Consommation électrique"},
+		}, "comparison.ev_consumption"},
 		{"projection bad electricity price", func(r *SaveComparisonRequest) {
 			r.Mode = models.ComparisonModeProjection
 			r.EV = &models.EVInputs{KwhPer100Km: 16, EurPerKwh: 9}
-		}, "Prix de l'électricité"},
+		}, "comparison.electricity_price"},
 		{"projection negative EV amount", func(r *SaveComparisonRequest) {
 			r.Mode = models.ComparisonModeProjection
 			r.EV = &models.EVInputs{KwhPer100Km: 16, EurPerKwh: 0.2, PurchasePrice: -5}
-		}, "positif"},
+		}, "expense.amount_positive"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -69,8 +69,8 @@ func TestValidateComparisonRequest(t *testing.T) {
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+			if err == nil || errorCode(err) != tt.wantErr {
+				t.Fatalf("error = %v, want code %q", err, tt.wantErr)
 			}
 		})
 	}

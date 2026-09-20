@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -56,14 +55,14 @@ func TestBuildFuelLog(t *testing.T) {
 				}
 			},
 		},
-		{name: "no amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000)}, wantErr: "Montant"},
-		{name: "liters without price or amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000), Liters: f64(40)}, wantErr: "Montant"},
-		{name: "bad date", req: SaveFuelLogRequest{Date: "nope", Odometer: f64(12000), Amount: cents(50)}, wantErr: "Date"},
-		{name: "negative odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(-1), Amount: cents(50)}, wantErr: "Kilométrage"},
-		{name: "huge odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(3_000_000), Amount: cents(50)}, wantErr: "Kilométrage"},
-		{name: "too many liters", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), Liters: f64(900)}, wantErr: "Quantité"},
-		{name: "absurd price", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), PricePerLiter: f64(50)}, wantErr: "Prix au litre"},
-		{name: "unknown fuel", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), FuelType: strPtr("KEROSENE")}, wantErr: "Carburant"},
+		{name: "no amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000)}, wantErr: "fuel.amount_required"},
+		{name: "liters without price or amount", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(12000), Liters: f64(40)}, wantErr: "fuel.amount_required"},
+		{name: "bad date", req: SaveFuelLogRequest{Date: "nope", Odometer: f64(12000), Amount: cents(50)}, wantErr: "request.invalid_date"},
+		{name: "negative odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(-1), Amount: cents(50)}, wantErr: "odometer.range"},
+		{name: "huge odometer", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(3_000_000), Amount: cents(50)}, wantErr: "odometer.range"},
+		{name: "too many liters", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), Liters: f64(900)}, wantErr: "fuel.liters_range"},
+		{name: "absurd price", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), PricePerLiter: f64(50)}, wantErr: "fuel.price_range"},
+		{name: "unknown fuel", req: SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), FuelType: strPtr("KEROSENE")}, wantErr: "fuel.type_invalid"},
 		{
 			name: "known fuel and trimmed notes",
 			req:  SaveFuelLogRequest{Date: "2026-03-01", Odometer: f64(1), Amount: cents(50), FuelType: strPtr("DIESEL"), Notes: strPtr("  Leclerc ")},
@@ -78,8 +77,8 @@ func TestBuildFuelLog(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			f, err := buildFuelLog("veh", &tt.req)
 			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+				if err == nil || errorCode(err) != tt.wantErr {
+					t.Fatalf("error = %v, want code %q", err, tt.wantErr)
 				}
 				return
 			}
@@ -111,10 +110,10 @@ func TestCheckOdometerOrder(t *testing.T) {
 		{"between the two", "", day(5), 10400, ""},
 		{"same day as a neighbour is not compared", "", day(10), 10500, ""},
 		{"after the last with a higher odometer", "", day(20), 11000, ""},
-		{"lower than an older point", "", day(5), 9000, "plus ancien"},
-		{"higher than a newer point", "", day(5), 11000, "plus récent"},
+		{"lower than an older point", "", day(5), 9000, "odometer.inconsistent_older"},
+		{"higher than a newer point", "", day(5), 11000, "odometer.inconsistent_newer"},
 		{"editing a point ignores itself", "b", day(10), 10500, ""},
-		{"editing still checks the others", "b", day(10), 9000, "plus ancien"},
+		{"editing still checks the others", "b", day(10), 9000, "odometer.inconsistent_older"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -125,8 +124,8 @@ func TestCheckOdometerOrder(t *testing.T) {
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+			if err == nil || errorCode(err) != tt.wantErr {
+				t.Fatalf("error = %v, want code %q", err, tt.wantErr)
 			}
 		})
 	}
@@ -158,8 +157,8 @@ func TestValidatePowertrain(t *testing.T) {
 		{"EV with TeslaMate", "EV", &url, ""},
 		{"ICE without TeslaMate", "ICE", nil, ""},
 		{"ICE with blank URL", "ICE", &empty, ""},
-		{"ICE with TeslaMate", "ICE", &url, "TeslaMate"},
-		{"unknown", "HYBRID", nil, "motorisation invalide"},
+		{"ICE with TeslaMate", "ICE", &url, "vehicle.ice_no_teslamate"},
+		{"unknown", "HYBRID", nil, "vehicle.powertrain_invalid"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -170,8 +169,8 @@ func TestValidatePowertrain(t *testing.T) {
 				}
 				return
 			}
-			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-				t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+			if err == nil || errorCode(err) != tt.wantErr {
+				t.Fatalf("error = %v, want code %q", err, tt.wantErr)
 			}
 		})
 	}

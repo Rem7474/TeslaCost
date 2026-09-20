@@ -75,6 +75,7 @@ backup/                     sidecar image: pg_dump + documents archive on a sche
 
 Backend
 - Handlers are thin: decode, validate (`validation.go`), check ownership/role (`ownership.go`), call a repository or service, write with `response.go`. Errors returned to clients are generic; details go to logs with a subsystem prefix (`[sync]`, `[auth]`, ...).
+- A user-facing error is an `*apierror.Error` (`internal/apierror`): a stable dotted code (`vehicle.not_found`), an English message and, for formatted messages (`apierror.Newf`), the values as `p0`, `p1`, ... in verb order. Answer with `writeAPIError`, or `writeErr` for an error that may carry one; the JSON body is `{error, code, params}`. Each code needs an entry in `web/src/locales/{en,fr}/errors.json` (a front-end test lists the codes used in the Go source), with `{p0}` placeholders. Internal failures use the code `internal` and log the cause. Never put French text in Go source.
 - Every repository query that touches user data is scoped by ownership; new endpoints need an ownership test.
 - Migrations: next number after the last file, always with a `.down.sql`, each applied in its own transaction. Do not edit an applied migration. `sonar.cpd.exclusions` already excludes `migrations/`.
 - `internal/handlers/auth_handler.go` uses CRLF line endings: edit it with a tool that preserves them (Python `newline=''`), or the whole file shows as changed.

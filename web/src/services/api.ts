@@ -1,6 +1,7 @@
 import { t } from '@/i18n'
 // TeslaCost API Service
 import { newIdempotencyKey } from '@/services/offlineQueue'
+import { apiErrorMessage } from '@/services/apiError'
 
 const BASE_URL = '/api'
 
@@ -140,7 +141,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}, offlineLa
   }
 
   if (!res.ok) {
-    throw new Error(data.error || t('shell.api.requestFailed', { status: res.status }))
+    throw new Error(apiErrorMessage(data, t('shell.api.requestFailed', { status: res.status })))
   }
 
   return data as T

@@ -18,20 +18,20 @@ func TestNormalizeGrafanaURL(t *testing.T) {
 		{"plain http", s("http://192.168.1.50:3000"), "http://192.168.1.50:3000", ""},
 		{"trailing slash is dropped", s("https://grafana.example.com/"), "https://grafana.example.com", ""},
 		{"sub path is kept", s(" https://home.example.com/grafana/ "), "https://home.example.com/grafana", ""},
-		{"no scheme", s("grafana.local:3000"), "", "invalide"},
-		{"unsupported scheme", s("ftp://grafana.local"), "", "invalide"},
-		{"no host", s("http://"), "", "invalide"},
-		{"credentials refused", s("http://admin:secret@grafana.local"), "", "identifiants"},
-		{"query refused", s("http://grafana.local/?orgId=1"), "", "sans paramètres"},
-		{"fragment refused", s("http://grafana.local/#top"), "", "sans paramètres"},
-		{"too long", s("http://" + strings.Repeat("a", 300) + ".com"), "", "trop longue"},
+		{"no scheme", s("grafana.local:3000"), "", "vehicle.grafana_url_invalid"},
+		{"unsupported scheme", s("ftp://grafana.local"), "", "vehicle.grafana_url_invalid"},
+		{"no host", s("http://"), "", "vehicle.grafana_url_invalid"},
+		{"credentials refused", s("http://admin:secret@grafana.local"), "", "vehicle.grafana_url_credentials"},
+		{"query refused", s("http://grafana.local/?orgId=1"), "", "vehicle.grafana_url_base"},
+		{"fragment refused", s("http://grafana.local/#top"), "", "vehicle.grafana_url_base"},
+		{"too long", s("http://" + strings.Repeat("a", 300) + ".com"), "", "vehicle.grafana_url_too_long"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := normalizeGrafanaURL(tt.in)
 			if tt.wantErr != "" {
-				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("error = %v, want containing %q", err, tt.wantErr)
+				if err == nil || errorCode(err) != tt.wantErr {
+					t.Fatalf("error = %v, want code %q", err, tt.wantErr)
 				}
 				return
 			}

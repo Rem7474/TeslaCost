@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/crypto"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/middleware"
@@ -58,17 +58,17 @@ func normalizeGrafanaURL(raw *string) (*string, error) {
 		return nil, nil
 	}
 	if len(value) > 300 {
-		return nil, errors.New("URL Grafana trop longue (300 caractères maximum)")
+		return nil, apierror.New("vehicle.grafana_url_too_long", "Grafana URL too long (300 characters maximum)")
 	}
 	u, err := url.Parse(value)
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
-		return nil, errors.New("URL Grafana invalide (http:// ou https:// requis)")
+		return nil, apierror.New("vehicle.grafana_url_invalid", "Invalid Grafana URL (http:// or https:// required)")
 	}
 	if u.User != nil {
-		return nil, errors.New("l'URL Grafana ne doit pas contenir d'identifiants")
+		return nil, apierror.New("vehicle.grafana_url_credentials", "The Grafana URL must not contain credentials")
 	}
 	if u.RawQuery != "" || u.Fragment != "" {
-		return nil, errors.New("l'URL Grafana doit être une adresse de base, sans paramètres")
+		return nil, apierror.New("vehicle.grafana_url_base", "The Grafana URL must be a base address, without parameters")
 	}
 	out := strings.TrimRight(u.String(), "/")
 	return &out, nil
@@ -82,11 +82,11 @@ func validatePowertrain(powertrain string, teslamateURL *string) error {
 		return nil
 	case models.PowertrainICE:
 		if teslamateURL != nil && strings.TrimSpace(*teslamateURL) != "" {
-			return errors.New("un véhicule thermique ne peut pas être relié à TeslaMate")
+			return apierror.New("vehicle.ice_no_teslamate", "A combustion vehicle cannot be linked to TeslaMate")
 		}
 		return nil
 	default:
-		return errors.New("motorisation invalide (EV ou ICE)")
+		return apierror.New("vehicle.powertrain_invalid", "Invalid powertrain (EV or ICE)")
 	}
 }
 
@@ -94,7 +94,7 @@ func (h *VehicleHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	list, err := h.repo.ListVehiclesByUserID(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list vehicles")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to list vehicles"))
 		return
 	}
 	if list == nil {
@@ -108,16 +108,16 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req SaveVehicleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if req.Name == "" {
-		writeError(w, http.StatusBadRequest, "Vehicle name is required")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("vehicle.name_required", "Vehicle name is required"))
 		return
 	}
 	if err := validatePowertrain(req.Powertrain, req.TeslaMateAPIURL); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	powertrain := req.Powertrain
@@ -126,7 +126,7 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	grafanaURL, err := normalizeGrafanaURL(req.TeslaMateGrafanaURL)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *VehicleHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 
@@ -193,35 +193,35 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if existing.Role != models.RoleOwner {
-		writeError(w, http.StatusForbidden, "Seul le propriétaire peut modifier la configuration du véhicule")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.owner_only_configure", "Only the owner can change the vehicle configuration"))
 		return
 	}
 
 	var req SaveVehicleRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if req.Powertrain != "" {
 		if err := validatePowertrain(req.Powertrain, req.TeslaMateAPIURL); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		existing.Powertrain = req.Powertrain
 	} else if err := validatePowertrain(existing.Powertrain, req.TeslaMateAPIURL); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
 	if req.TeslaMateGrafanaURL != nil {
 		grafanaURL, err := normalizeGrafanaURL(req.TeslaMateGrafanaURL)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		existing.TeslaMateGrafanaURL = grafanaURL
@@ -261,7 +261,7 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.repo.UpdateVehicle(r.Context(), existing); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to update vehicle")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to update vehicle"))
 		return
 	}
 
@@ -276,16 +276,16 @@ type SaveEstimatedEnergyRequest struct {
 func (h *VehicleHandler) UpdateEstimatedEnergy(w http.ResponseWriter, r *http.Request) {
 	var req SaveEstimatedEnergyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if req.EstimatedKwh100km != nil && (*req.EstimatedKwh100km <= 0 || *req.EstimatedKwh100km > 100) {
-		writeError(w, http.StatusBadRequest, "La consommation moyenne doit être comprise entre 0 et 100 kWh/100km")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("vehicle.estimate_consumption_range", "The average consumption must be between 0 and 100 kWh/100km"))
 		return
 	}
 	if req.EstimatedPricePerKwh != nil && (*req.EstimatedPricePerKwh <= 0 || *req.EstimatedPricePerKwh > 10) {
-		writeError(w, http.StatusBadRequest, "Le tarif de l'électricité doit être compris entre 0 et 10 €/kWh")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("vehicle.estimate_rate_range", "The electricity rate must be between 0 and 10 €/kWh"))
 		return
 	}
 
@@ -302,11 +302,11 @@ func (h *VehicleHandler) UpdateEstimatedEnergy(w http.ResponseWriter, r *http.Re
 
 	vCheck, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if !vCheck.Role.CanEdit() {
-		writeError(w, http.StatusForbidden, "Droits insuffisants pour modifier ce paramètre")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.insufficient_rights", "Insufficient rights to change this setting"))
 		return
 	}
 
@@ -330,16 +330,16 @@ func (h *VehicleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if v.Role != models.RoleOwner {
-		writeError(w, http.StatusForbidden, "Seul le propriétaire peut supprimer le véhicule")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.owner_only_delete", "Only the owner can delete the vehicle"))
 		return
 	}
 
 	if err := h.repo.DeleteVehicle(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to delete vehicle")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to delete vehicle"))
 		return
 	}
 
@@ -358,7 +358,7 @@ type TestConnectionRequest struct {
 func (h *VehicleHandler) TestTeslaMateRaw(w http.ResponseWriter, r *http.Request) {
 	var req TestConnectionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Corps de requête invalide")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
@@ -389,7 +389,7 @@ func (h *VehicleHandler) TestTeslaMateRaw(w http.ResponseWriter, r *http.Request
 		carID,
 	)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -405,23 +405,23 @@ func (h *VehicleHandler) TestTeslaMate(w http.ResponseWriter, r *http.Request) {
 
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if v.Role != models.RoleOwner {
-		writeError(w, http.StatusForbidden, "Seul le propriétaire peut tester la connexion TeslaMate")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.owner_only_test_connection", "Only the owner can test the TeslaMate connection"))
 		return
 	}
 
 	fullVehicle, err := h.repo.GetVehicleByIDInternal(r.Context(), vehicleID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to load vehicle credentials")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to load vehicle credentials"))
 		return
 	}
 
 	status, err := h.syncService.TestConnection(r.Context(), fullVehicle)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -437,17 +437,17 @@ func (h *VehicleHandler) Sync(w http.ResponseWriter, r *http.Request) {
 
 	v, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 	if v.Role == models.RoleViewer {
-		writeError(w, http.StatusForbidden, "Les lecteurs ne peuvent pas déclencher de synchronisation")
+		writeAPIError(w, http.StatusForbidden, apierror.New("access.viewer_cannot_sync", "Viewers cannot trigger a synchronization"))
 		return
 	}
 
 	fullVehicle, err := h.repo.GetVehicleByIDInternal(r.Context(), vehicleID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to load vehicle credentials")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to load vehicle credentials"))
 		return
 	}
 
@@ -465,7 +465,7 @@ func (h *VehicleHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "id")
 
 	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 
@@ -483,7 +483,7 @@ func (h *VehicleHandler) GetOdometerAtDate(w http.ResponseWriter, r *http.Reques
 	vehicleID := chi.URLParam(r, "id")
 
 	if _, err := h.repo.GetVehicleByID(r.Context(), vehicleID, userID); err != nil {
-		writeError(w, http.StatusNotFound, "Vehicle not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("vehicle.not_found", "Vehicle not found"))
 		return
 	}
 
@@ -492,7 +492,7 @@ func (h *VehicleHandler) GetOdometerAtDate(w http.ResponseWriter, r *http.Reques
 	if dateStr != "" {
 		parsed, err := parseDate(dateStr)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, "Date invalide")
+			writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_date", "Invalid date"))
 			return
 		}
 		// If only date was provided (00:00:00), check drives up to end of that day

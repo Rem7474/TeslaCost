@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 )
@@ -35,7 +35,7 @@ type CreateMaintenanceRequest struct {
 func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*models.MaintenanceExpense, error) {
 	category := strings.ToUpper(strings.TrimSpace(req.Category))
 	if !maintenanceCategories[category] {
-		return nil, errors.New("catégorie de dépense invalide")
+		return nil, apierror.New("expense.category_invalid", "Invalid expense category")
 	}
 	if err := validateAmount(req.Amount, false); err != nil {
 		return nil, err
@@ -49,20 +49,20 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 		return nil, err
 	}
 	if strings.TrimSpace(req.Description) == "" {
-		return nil, errors.New("la description est requise")
+		return nil, apierror.New("expense.description_required", "The description is required")
 	}
 
 	interval := req.RecurrenceIntervalMonths
 	var endDate *time.Time
 	if req.IsRecurring {
 		if interval == nil || *interval <= 0 || *interval > 120 {
-			return nil, errors.New("une dépense récurrente requiert une périodicité en mois (1 à 120)")
+			return nil, apierror.New("expense.recurrence_interval", "A recurring expense needs a frequency in months (1 to 120)")
 		}
 		if endDate, err = parseOptionalDate(req.RecurrenceEndDate); err != nil {
 			return nil, err
 		}
 		if endDate != nil && endDate.Before(mDate) {
-			return nil, errors.New("la fin de récurrence précède la première échéance")
+			return nil, apierror.New("expense.recurrence_end", "The end of the recurrence is before the first due date")
 		}
 	} else {
 		interval = nil
@@ -78,7 +78,7 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 		amortMode = "NONE"
 	}
 	if amortMode != "NONE" && amortMode != "DISTANCE" && amortMode != "DURATION" && amortMode != "HYBRID" {
-		return nil, errors.New("mode d'amortissement invalide (NONE, DISTANCE, DURATION, HYBRID)")
+		return nil, apierror.New("expense.amortization_mode", "Invalid smoothing mode (NONE, DISTANCE, DURATION, HYBRID)")
 	}
 
 	var covKm *float64
@@ -132,13 +132,13 @@ func (h *ExpenseHandler) CreateMaintenance(w http.ResponseWriter, r *http.Reques
 
 	var req CreateMaintenanceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	m, err := buildMaintenanceExpense(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -183,13 +183,13 @@ func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Reques
 
 	var req CreateMaintenanceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	m, err := buildMaintenanceExpense(vehicleID, &req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	m.ID = maintID

@@ -11,17 +11,6 @@ import (
 // ErrForeignReference is returned when a referenced record does not belong to the target vehicle.
 var ErrForeignReference = errors.New("referenced record does not belong to this vehicle")
 
-// ValidationError reports a business rule violation whose message can be shown to the user.
-type ValidationError struct {
-	Message string
-}
-
-func (e *ValidationError) Error() string { return e.Message }
-
-func validationErrorf(format string, args ...any) error {
-	return &ValidationError{Message: fmt.Sprintf(format, args...)}
-}
-
 // queryRower is satisfied by both *pgxpool.Pool and pgx.Tx.
 type queryRower interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row

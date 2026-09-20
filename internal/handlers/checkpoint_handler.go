@@ -2,13 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
-	"errors"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 )
@@ -31,15 +31,15 @@ type SaveCheckpointRequest struct {
 func decodeCheckpointRequest(r *http.Request) (time.Time, float64, *string, error) {
 	var req SaveCheckpointRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return time.Time{}, 0, nil, errors.New("Invalid request payload")
+		return time.Time{}, 0, nil, apierror.New("request.invalid_body", "Invalid request body")
 	}
 
 	d, err := parseDate(req.Date)
 	if err != nil {
-		return time.Time{}, 0, nil, errors.New("Date invalide")
+		return time.Time{}, 0, nil, apierror.New("request.invalid_date", "Invalid date")
 	}
 	if req.Odometer < 0 || req.Odometer > 2_000_000 {
-		return time.Time{}, 0, nil, errors.New("Odomètre invalide (doit être compris entre 0 et 2 000 000 km)")
+		return time.Time{}, 0, nil, apierror.New("odometer.range_checkpoint", "Invalid odometer (must be between 0 and 2,000,000 km)")
 	}
 
 	var notes *string
@@ -59,7 +59,7 @@ func (h *CheckpointHandler) checkConsistency(w http.ResponseWriter, r *http.Requ
 		return false
 	}
 	if err := checkOdometerOrder(points, id, date, odometer); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return false
 	}
 	return true
@@ -98,7 +98,7 @@ func (h *CheckpointHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	d, odometer, notes, err := decodeCheckpointRequest(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -134,7 +134,7 @@ func (h *CheckpointHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	d, odometer, notes, err := decodeCheckpointRequest(r)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 

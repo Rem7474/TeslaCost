@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -21,7 +22,7 @@ func (h *TireHandler) GetHistory(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.repo.GetTireByID(r.Context(), tireID, vehicleID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Tire not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("tire.not_found", "Tire not found"))
 		return
 	}
 
@@ -60,11 +61,11 @@ func (h *TireHandler) CopyHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	var req CopyTireHistoryRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	if len(req.TargetTireIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "Au moins un pneu cible requis (target_tire_ids)")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("tire.target_required", "At least one target tire is required (target_tire_ids)"))
 		return
 	}
 	sourceTireID := chi.URLParam(r, "tireId")

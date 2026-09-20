@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"github.com/teslacost/teslacost/internal/apierror"
 	"crypto/subtle"
 	"encoding/json"
 	"errors"
@@ -214,45 +215,45 @@ func (h *AuthHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.OIDCEnabled && h.cfg.OIDCDisableLocalAuth {
-		writeError(w, http.StatusForbidden, "L'inscription locale est desactivee - utilisez le SSO")
+		writeAPIError(w, http.StatusForbidden, apierror.New("auth.local_registration_disabled", "Local registration is disabled - use SSO"))
 		return
 	}
 	if h.cfg.DisableRegistration {
 		count, err := h.repo.GetUserCount(r.Context())
 		if err != nil || count > 0 {
-			writeError(w, http.StatusForbidden, "La creation de compte est desactivee sur cette instance")
+			writeAPIError(w, http.StatusForbidden, apierror.New("auth.registration_closed", "Account creation is disabled on this instance"))
 			return
 		}
 	}
 
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	if req.Email == "" || len(req.Password) < 8 {
-		writeError(w, http.StatusBadRequest, "Email required and password must be at least 8 characters")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.credentials_invalid", "Email required and password must be at least 8 characters"))
 		return
 	}
 	if len(req.Password) > auth.MaxPasswordBytes {
-		writeError(w, http.StatusBadRequest, "Le mot de passe ne doit pas dépasser 72 octets")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.password_too_long", "The password must not exceed 72 bytes"))
 		return
 	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to hash password")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to hash password"))
 		return
 	}
 	user, err := h.repo.CreateUser(r.Context(), req.Email, hash)
 	if err != nil {
-		writeError(w, http.StatusConflict, "Email already registered or creation failed")
+		writeAPIError(w, http.StatusConflict, apierror.New("auth.registration_failed", "Email already registered or creation failed"))
 		return
 	}
 
 	accessToken, _, err := h.issueSession(w, r, user.ID, user.Email, "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate session tokens")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to generate session tokens"))
 		return
 	}
 	writeJSON(w, http.StatusCreated, AuthResponse{Token: accessToken, User: user})
@@ -260,19 +261,19 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if h.cfg.OIDCEnabled && h.cfg.OIDCDisableLocalAuth {
-		writeError(w, http.StatusForbidden, "La connexion locale est desactivee - utilisez le SSO")
+		writeAPIError(w, http.StatusForbidden, apierror.New("auth.local_login_disabled", "Local sign-in is disabled - use SSO"))
 		return
 	}
 
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request body")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if blocked, retryAfter := h.throttle.Blocked(req.Email); blocked {
 		w.Header().Set("Retry-After", strconv.Itoa(int(retryAfter.Seconds())+1))
-		writeError(w, http.StatusTooManyRequests, "Trop de tentatives de connexion pour ce compte : réessayez plus tard")
+		writeAPIError(w, http.StatusTooManyRequests, apierror.New("auth.account_throttled", "Too many sign-in attempts for this account: try again later"))
 		return
 	}
 
@@ -281,19 +282,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if err != nil || user.PasswordHash == nil {
 		auth.CheckPasswordAgainstNobody(req.Password)
 		h.throttle.Fail(req.Email)
-		writeError(w, http.StatusUnauthorized, "Invalid email or password")
+		writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.invalid_credentials", "Invalid email or password"))
 		return
 	}
 	if !auth.CheckPassword(req.Password, *user.PasswordHash) {
 		h.throttle.Fail(req.Email)
-		writeError(w, http.StatusUnauthorized, "Invalid email or password")
+		writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.invalid_credentials", "Invalid email or password"))
 		return
 	}
 
 	h.throttle.Reset(req.Email)
 	accessToken, _, err := h.issueSession(w, r, user.ID, user.Email, "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate session tokens")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to generate session tokens"))
 		return
 	}
 	writeJSON(w, http.StatusOK, AuthResponse{Token: accessToken, User: user})
@@ -315,7 +316,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if plainToken == "" {
-		writeError(w, http.StatusUnauthorized, "Missing refresh token")
+		writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.refresh_missing", "Missing refresh token"))
 		return
 	}
 
@@ -323,7 +324,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 	newPlainToken, newTokenHash, err := auth.GenerateRefreshToken()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate new refresh token")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to generate new refresh token"))
 		return
 	}
 
@@ -342,26 +343,26 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		h.clearRefreshTokenCookie(w)
 		if errors.Is(err, database.ErrRefreshTokenReused) {
-			writeError(w, http.StatusUnauthorized, "Security alert: refresh token reuse detected")
+			writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.refresh_reuse", "Security alert: refresh token reuse detected"))
 			return
 		}
 		if errors.Is(err, database.ErrNotFound) || err.Error() == "refresh token expired" {
-			writeError(w, http.StatusUnauthorized, "Invalid or expired refresh token")
+			writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.refresh_invalid", "Invalid or expired refresh token"))
 			return
 		}
-		writeError(w, http.StatusInternalServerError, "Failed to refresh token")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to refresh token"))
 		return
 	}
 
 	user, err := h.repo.GetUserByID(r.Context(), rotatedToken.UserID)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "User account no longer exists")
+		writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.user_gone", "User account no longer exists"))
 		return
 	}
 
 	accessToken, err := auth.GenerateAccessToken(user.ID, user.Email, h.cfg.JWTSecret, h.cfg.JWTAccessExpirationMinutes)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate access token")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to generate access token"))
 		return
 	}
 
@@ -397,12 +398,12 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	if userID == "" {
-		writeError(w, http.StatusUnauthorized, "Unauthorized")
+		writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.unauthorized", "Unauthorized"))
 		return
 	}
 	user, err := h.repo.GetUserByID(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "User not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("auth.user_not_found", "User not found"))
 		return
 	}
 	writeJSON(w, http.StatusOK, struct {
@@ -415,18 +416,18 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 // then redirects the browser to the IdP authorization endpoint.
 func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 	if h.oidcService == nil {
-		writeError(w, http.StatusNotFound, "OIDC is not configured on this instance")
+		writeAPIError(w, http.StatusNotFound, apierror.New("auth.oidc_not_configured", "OIDC is not configured on this instance"))
 		return
 	}
 
 	state, err := auth.GenerateStateToken()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate OIDC state")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to generate OIDC state"))
 		return
 	}
 	noncePlain, nonceHashed, err := auth.GenerateNonce()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate OIDC nonce")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to generate OIDC nonce"))
 		return
 	}
 
@@ -469,33 +470,33 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 // performs JIT user provisioning, issues a TeslaCost JWT + Refresh Token, and redirects to the SPA.
 func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	if h.oidcService == nil {
-		writeError(w, http.StatusNotFound, "OIDC is not configured on this instance")
+		writeAPIError(w, http.StatusNotFound, apierror.New("auth.oidc_not_configured", "OIDC is not configured on this instance"))
 		return
 	}
 
 	// Verify and consume the state cookie (one-time CSRF token).
 	stateCookie, err := r.Cookie(oidcStateCookie)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Missing OIDC state cookie - session may have expired")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.oidc_state_missing", "Missing OIDC state cookie - session may have expired"))
 		return
 	}
 	h.clearCookie(w, oidcStateCookie)
 
 	if subtle.ConstantTimeCompare([]byte(r.URL.Query().Get("state")), []byte(stateCookie.Value)) != 1 {
-		writeError(w, http.StatusBadRequest, "OIDC state mismatch - possible CSRF attempt")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.oidc_state_mismatch", "OIDC state mismatch - possible CSRF attempt"))
 		return
 	}
 
 	nonceCookie, err := r.Cookie(oidcNonceCookie)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "Missing OIDC nonce cookie - session may have expired")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.oidc_nonce_missing", "Missing OIDC nonce cookie - session may have expired"))
 		return
 	}
 	h.clearCookie(w, oidcNonceCookie)
 
 	verifierCookie, err := r.Cookie(oidcVerifierCookie)
 	if err != nil || verifierCookie.Value == "" {
-		writeError(w, http.StatusBadRequest, "Missing OIDC verifier cookie - session may have expired")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("auth.oidc_verifier_missing", "Missing OIDC verifier cookie - session may have expired"))
 		return
 	}
 	h.clearCookie(w, oidcVerifierCookie)
@@ -503,23 +504,23 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	code := r.URL.Query().Get("code")
 	if code == "" {
 		oidcErr := r.URL.Query().Get("error")
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("OIDC error: %s", oidcErr))
+		writeAPIError(w, http.StatusBadRequest, apierror.Newf("auth.oidc_provider_error", "OIDC error: %s", oidcErr))
 		return
 	}
 
 	userInfo, err := h.oidcService.ExchangeCode(r.Context(), code, nonceCookie.Value, verifierCookie.Value)
 	if err != nil {
 		if errors.Is(err, auth.ErrEmailNotAllowed) {
-			writeError(w, http.StatusForbidden, "Your email address is not authorized on this instance")
+			writeAPIError(w, http.StatusForbidden, apierror.New("auth.email_not_allowed", "Your email address is not authorized on this instance"))
 			return
 		}
 		if errors.Is(err, auth.ErrEmailNotVerified) {
-			writeError(w, http.StatusForbidden, "Votre fournisseur d'identité n'a pas vérifié votre adresse e-mail")
+			writeAPIError(w, http.StatusForbidden, apierror.New("auth.email_not_verified", "Your identity provider has not verified your email address"))
 			return
 		}
 		// The detail (token endpoint answers, claim names) is for the logs, not for whoever sent the request.
 		slog.WarnContext(r.Context(), "OIDC authentication failed", "component", "auth", "error", err)
-		writeError(w, http.StatusUnauthorized, "OIDC authentication failed")
+		writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.oidc_failed", "OIDC authentication failed"))
 		return
 	}
 
@@ -528,13 +529,13 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		userInfo.Email, userInfo.Subject, h.cfg.OIDCIssuerURL, userInfo.DisplayName,
 	)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to provision user account")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to provision user account"))
 		return
 	}
 
 	_, _, err = h.issueSession(w, r, dbUser.ID, dbUser.Email, "")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to generate token")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to generate token"))
 		return
 	}
 

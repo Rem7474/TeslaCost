@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
@@ -35,7 +36,7 @@ func (h *TireHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	tires, err := h.repo.ListTires(r.Context(), vehicleID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Failed to list tires")
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to list tires"))
 		return
 	}
 
@@ -75,22 +76,22 @@ func (h *TireHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateTireRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
 	if req.Brand == "" || req.Model == "" || req.Dimension == "" {
-		writeError(w, http.StatusBadRequest, "Brand, model and dimension are required")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("tire.fields_required", "Brand, model and size are required"))
 		return
 	}
 
 	purchaseDate, err := parseDate(req.PurchaseDate)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 	if err := validateAmount(req.PurchasePrice, true); err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeErr(w, http.StatusBadRequest, err)
 		return
 	}
 
@@ -169,13 +170,13 @@ func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	t, err := h.repo.GetTireByID(r.Context(), tireID, vehicleID)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "Tire not found")
+		writeAPIError(w, http.StatusNotFound, apierror.New("tire.not_found", "Tire not found"))
 		return
 	}
 
 	var req UpdateTireRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
@@ -194,14 +195,14 @@ func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.PurchaseDate != nil {
 		pd, err := parseDate(*req.PurchaseDate)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		t.PurchaseDate = pd
 	}
 	if req.PurchasePrice != nil {
 		if err := validateAmount(*req.PurchasePrice, true); err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		t.PurchasePrice = *req.PurchasePrice
@@ -217,7 +218,7 @@ func (h *TireHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.InitialDistanceKm != nil {
 		if *req.InitialDistanceKm < 0 {
-			writeError(w, http.StatusBadRequest, "le kilométrage initial ne peut pas être négatif")
+			writeAPIError(w, http.StatusBadRequest, apierror.New("odometer.initial_negative", "The initial mileage cannot be negative"))
 			return
 		}
 		t.InitialDistanceKm = *req.InitialDistanceKm
@@ -267,14 +268,14 @@ func parseDisposal(w http.ResponseWriter, date string, odometer *float64) (time.
 	if date != "" {
 		parsed, err := parseDate(date)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return time.Time{}, false
 		}
 		at = parsed
 	}
 	if odometer != nil {
 		if err := validateQuantity(*odometer, 2_000_000); err != nil {
-			writeError(w, http.StatusBadRequest, "odomètre invalide")
+			writeAPIError(w, http.StatusBadRequest, apierror.New("odometer.invalid", "Invalid odometer"))
 			return time.Time{}, false
 		}
 	}
@@ -289,7 +290,7 @@ func (h *TireHandler) Dispose(w http.ResponseWriter, r *http.Request) {
 	}
 	var req DisposeTireRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 	at, ok := parseDisposal(w, req.Date, req.Odometer)

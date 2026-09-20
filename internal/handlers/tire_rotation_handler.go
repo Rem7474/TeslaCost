@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -25,7 +26,7 @@ func (h *TireHandler) QuickRotate(w http.ResponseWriter, r *http.Request) {
 
 	var req QuickRotateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
@@ -53,7 +54,7 @@ func (h *TireHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 
 	var req RotationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeError(w, http.StatusBadRequest, "Invalid request payload")
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return
 	}
 
@@ -61,7 +62,7 @@ func (h *TireHandler) Rotate(w http.ResponseWriter, r *http.Request) {
 	if req.Date != "" {
 		parsed, err := parseDate(req.Date)
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeErr(w, http.StatusBadRequest, err)
 			return
 		}
 		rotDate = parsed
