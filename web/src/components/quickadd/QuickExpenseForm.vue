@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { onMounted, reactive, ref } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -10,10 +11,10 @@ const props = defineProps<{ vehicle: any }>()
 const emit = defineEmits<{ saved: [result: { queued: boolean; message: string }] }>()
 
 const types: { value: ExpenseType; label: string }[] = [
-  { value: 'TOLL', label: 'Péage' },
-  { value: 'PARKING', label: 'Parking' },
-  { value: 'FERRY', label: 'Ferry' },
-  { value: 'OTHER', label: 'Autre' },
+  { value: 'TOLL', label: 'quickadd.quickExpenseForm.toll' },
+  { value: 'PARKING', label: 'quickadd.quickExpenseForm.parking' },
+  { value: 'FERRY', label: 'quickadd.quickExpenseForm.ferry' },
+  { value: 'OTHER', label: 'quickadd.quickExpenseForm.other' },
 ]
 
 const form = reactive({
@@ -44,10 +45,10 @@ async function submit() {
   saving.value = true
   try {
     const result = await api.createDriveExpense(props.vehicle.id, payload)
-    const label = types.find((t) => t.value === payload.type)?.label ?? 'Dépense'
-    emit('saved', { queued: isQueued(result), message: `${label} de ${payload.amount.toLocaleString('fr-FR')} €` })
+    const label = t(types.find((type) => type.value === payload.type)?.label ?? 'quickadd.quickAddSheet.tabExpense')
+    emit('saved', { queued: isQueued(result), message: t('quickadd.quickExpenseForm.message', { label, amount: payload.amount.toLocaleString(intlLocale()) }) })
   } catch (err: any) {
-    error.value = err?.message || "Impossible d'enregistrer la dépense."
+    error.value = err?.message || t('quickadd.quickExpenseForm.saveFailed')
   } finally {
     saving.value = false
   }
@@ -55,8 +56,8 @@ async function submit() {
 </script>
 
 <template>
-  <QuickFormShell submit-label="Enregistrer la dépense" :saving="saving" :error="error" @submit="submit">
-    <div role="radiogroup" aria-label="Type de dépense" class="grid grid-cols-4 gap-2">
+  <QuickFormShell :submit-label="$t('quickadd.quickExpenseForm.saveTheExpense')" :saving="saving" :error="error" @submit="submit">
+    <div role="radiogroup" :aria-label="$t('quickadd.quickExpenseForm.expenseType')" class="grid grid-cols-4 gap-2">
       <button
         v-for="t in types"
         :key="t.value"
@@ -67,12 +68,12 @@ async function submit() {
         :class="form.type === t.value ? 'border-rose-500/50 bg-rose-500/15 text-rose-200' : 'border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700'"
         @click="form.type = t.value"
       >
-        {{ t.label }}
+        {{ $t(t.label) }}
       </button>
     </div>
 
     <div>
-      <label for="qe-amount" class="quick-label">Montant (€)</label>
+      <label for="qe-amount" class="quick-label">{{ $t('quickadd.quickExpenseForm.amount') }}</label>
       <input id="qe-amount" ref="amountInput" v-model="form.amount" type="number" inputmode="decimal" step="any" min="0" class="quick-input" />
     </div>
 
@@ -83,17 +84,17 @@ async function submit() {
       aria-controls="qe-details"
       @click="showDetails = !showDetails"
     >
-      Plus de détails
+      {{ $t('quickadd.quickExpenseForm.moreDetails') }}
       <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': showDetails }" aria-hidden="true" />
     </button>
 
     <div v-show="showDetails" id="qe-details" class="space-y-4">
       <div>
-        <label for="qe-date" class="quick-label">Date et heure</label>
+        <label for="qe-date" class="quick-label">{{ $t('quickadd.quickExpenseForm.dateAndTime') }}</label>
         <input id="qe-date" v-model="form.date" type="datetime-local" class="quick-input" />
       </div>
       <div>
-        <label for="qe-notes" class="quick-label">Notes</label>
+        <label for="qe-notes" class="quick-label">{{ $t('common.notes') }}</label>
         <input id="qe-notes" v-model="form.notes" autocomplete="off" class="quick-input" />
       </div>
     </div>

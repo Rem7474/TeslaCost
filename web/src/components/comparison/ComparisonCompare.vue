@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { downloadCsv } from '@/utils/csv'
@@ -10,20 +11,20 @@ const props = defineProps<{
 }>()
 
 function fmtEur(v: number | null | undefined, digits = 0): string {
-  return Number(v || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
+  return Number(v || 0).toLocaleString(intlLocale(), { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
 function breakEven(r: any): string {
-  if (r.break_even_year === undefined || r.break_even_year === null) return 'non atteint'
-  if (r.break_even_year === 0) return 'dès l\'achat'
-  return `${String(r.break_even_year).replace('.', ',')} an(s)`
+  if (r.break_even_year === undefined || r.break_even_year === null) return t('comparison.compare.notReached')
+  if (r.break_even_year === 0) return t('comparison.compare.fromPurchase')
+  return t('comparison.compare.years', { years: String(r.break_even_year).replace('.', ',') })
 }
 
 const rows = computed(() =>
   props.items.map(({ scenario, result }) => ({
     id: scenario.id,
     name: scenario.name,
-    mode: scenario.mode === 'RETROSPECTIVE' ? 'Véhicule suivi' : 'Projection',
+    mode: scenario.mode === 'RETROSPECTIVE' ? t('comparison.comparisonView.trackedVehicle') : t('comparison.comparisonView.projection'),
     years: result.years_count,
     km: result.annual_km,
     ev: result.ev.total,
@@ -46,8 +47,8 @@ function render() {
     data: {
       labels: rows.value.map((r) => r.name),
       datasets: [
-        { label: 'Électrique', data: rows.value.map((r) => r.ev), backgroundColor: '#38bdf8', borderRadius: 4 },
-        { label: 'Thermique', data: rows.value.map((r) => r.ice), backgroundColor: '#f59e0b', borderRadius: 4 },
+        { label: t('comparison.electric'), data: rows.value.map((r) => r.ev), backgroundColor: '#38bdf8', borderRadius: 4 },
+        { label: t('comparison.combustion'), data: rows.value.map((r) => r.ice), backgroundColor: '#f59e0b', borderRadius: 4 },
       ],
     },
     options: {
@@ -67,8 +68,8 @@ function render() {
 
 function exportCsv() {
   downloadCsv(
-    'comparatif-scenarios',
-    ['Scenario', 'Type', 'Duree (ans)', 'Km par an', 'Total electrique (EUR)', 'Total thermique (EUR)', 'Ecart en faveur de l\'electrique (EUR)', 'Point d\'equilibre'],
+    t('comparison.csv.scenariosFile'),
+    t('comparison.csv.scenariosHeader').split(','),
     rows.value.map((r) => [
       `"${r.name.replace(/"/g, '""')}"`,
       r.mode,
@@ -93,33 +94,33 @@ onBeforeUnmount(() => chart?.destroy())
   <div class="space-y-5 print-area">
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 overflow-x-auto">
       <div class="flex items-center justify-between mb-3 gap-3">
-        <h2 class="text-sm font-semibold text-white">Comparaison de {{ rows.length }} scénarios</h2>
+        <h2 class="text-sm font-semibold text-white">{{ $t('comparison.comparisonCompare.comparisonOfScenarios', { length: rows.length }) }}</h2>
         <button type="button" class="no-print bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-xl" @click="exportCsv">
-          Exporter en CSV
+          {{ $t('comparison.comparisonCompare.exportAsCsv') }}
         </button>
       </div>
       <table class="w-full text-sm">
-        <caption class="sr-only">Totaux par scénario</caption>
+        <caption class="sr-only">{{ $t('comparison.comparisonCompare.totalsPerScenario') }}</caption>
         <thead>
           <tr class="text-xs text-slate-400 text-right">
-            <th scope="col" class="text-left font-semibold pb-2">Scénario</th>
-            <th scope="col" class="font-semibold pb-2">Électrique</th>
-            <th scope="col" class="font-semibold pb-2">Thermique</th>
-            <th scope="col" class="font-semibold pb-2">Écart</th>
-            <th scope="col" class="font-semibold pb-2">Équilibre</th>
+            <th scope="col" class="text-left font-semibold pb-2">{{ $t('comparison.comparisonCompare.scenario') }}</th>
+            <th scope="col" class="font-semibold pb-2">{{ $t('comparison.comparisonCompare.electric') }}</th>
+            <th scope="col" class="font-semibold pb-2">{{ $t('comparison.comparisonCompare.combustion') }}</th>
+            <th scope="col" class="font-semibold pb-2">{{ $t('comparison.comparisonCompare.gap') }}</th>
+            <th scope="col" class="font-semibold pb-2">{{ $t('comparison.comparisonCompare.breakEven') }}</th>
           </tr>
         </thead>
         <tbody class="text-slate-200">
           <tr v-for="r in rows" :key="r.id" class="border-t border-slate-800 text-right">
             <th scope="row" class="text-left font-normal py-2">
               <div class="font-semibold text-white">{{ r.name }}</div>
-              <div class="text-[11px] text-slate-500">{{ r.mode }} · {{ r.years }} an(s) · {{ Math.round(r.km).toLocaleString('fr-FR') }} km/an</div>
+              <div class="text-[11px] text-slate-500">{{ r.mode }} · {{ $t('comparison.comparisonCompare.usage', { km: Math.round(r.km).toLocaleString(intlLocale()), years: r.years }) }}</div>
             </th>
-            <td>{{ fmtEur(r.ev) }}<div class="text-[11px] text-slate-500">{{ fmtEur(r.evMonth) }}/mois</div></td>
-            <td>{{ fmtEur(r.ice) }}<div class="text-[11px] text-slate-500">{{ fmtEur(r.iceMonth) }}/mois</div></td>
+            <td>{{ fmtEur(r.ev) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month2', { evMonth: fmtEur(r.evMonth) }) }}</div></td>
+            <td>{{ fmtEur(r.ice) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month', { iceMonth: fmtEur(r.iceMonth) }) }}</div></td>
             <td :class="r.savings >= 0 ? 'text-emerald-400' : 'text-amber-400'">
               {{ r.savings >= 0 ? '−' : '+' }}{{ fmtEur(Math.abs(r.savings)) }}
-              <div class="text-[11px] text-slate-500">{{ r.savings >= 0 ? "l'électrique économise" : "l'électrique coûte plus" }}</div>
+              <div class="text-[11px] text-slate-500">{{ r.savings >= 0 ? $t('comparison.compare.saves') : $t('comparison.compare.costsMore') }}</div>
             </td>
             <td>{{ r.breakEven }}</td>
           </tr>
@@ -128,8 +129,8 @@ onBeforeUnmount(() => chart?.destroy())
     </div>
 
     <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-      <h2 class="text-sm font-semibold text-white mb-3">Coût total par scénario</h2>
-      <div class="h-72"><canvas ref="canvas" role="img" aria-label="Coût total électrique et thermique par scénario"></canvas></div>
+      <h2 class="text-sm font-semibold text-white mb-3">{{ $t('comparison.comparisonCompare.totalCostPerScenario') }}</h2>
+      <div class="h-72"><canvas ref="canvas" role="img" :aria-label="$t('comparison.comparisonCompare.totalElectricAndCombustionCost')"></canvas></div>
     </div>
   </div>
 </template>

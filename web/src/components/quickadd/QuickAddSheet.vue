@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { CheckCircle2, X } from 'lucide-vue-next'
@@ -30,12 +31,12 @@ const vehicle = computed(() => vehicleStore.activeVehicle)
 const tabs = computed<{ key: QuickKind; label: string; badge?: number }[]>(() => {
   const list: { key: QuickKind; label: string; badge?: number }[] = []
   if (vehicleStore.isIce) {
-    list.push({ key: 'FUEL', label: 'Plein' })
+    list.push({ key: 'FUEL', label: 'quickadd.quickAddSheet.tabFuel' })
   } else {
-    if (pendingTotal.value > 0) list.push({ key: 'PENDING', label: 'Sans coût', badge: pendingTotal.value })
-    list.push({ key: 'CHARGE', label: 'Recharge' })
+    if (pendingTotal.value > 0) list.push({ key: 'PENDING', label: 'quickadd.quickAddSheet.tabPending', badge: pendingTotal.value })
+    list.push({ key: 'CHARGE', label: 'quickadd.quickAddSheet.tabCharge' })
   }
-  list.push({ key: 'EXPENSE', label: 'Dépense' })
+  list.push({ key: 'EXPENSE', label: 'quickadd.quickAddSheet.tabExpense' })
   return list
 })
 
@@ -127,7 +128,7 @@ function showToast(message: string) {
 function onSaved(result: { queued: boolean; message: string }) {
   quickAdd.close()
   if (result.queued) return
-  showToast(`${result.message} : enregistré`)
+  showToast(t('quickadd.quickAddSheet.saved', { message: result.message }))
   // Refreshes the odometer pill and the pages listing the new entry
   vehicleStore.fetchVehicles()
 }
@@ -218,15 +219,15 @@ onBeforeUnmount(() => {
     >
       <div class="flex shrink-0 items-start justify-between gap-3 px-4 pt-4">
         <div class="min-w-0">
-          <h2 id="quick-add-title" class="text-lg font-bold text-white">Saisie rapide</h2>
+          <h2 id="quick-add-title" class="text-lg font-bold text-white">{{ $t('quickadd.quickAddSheet.quickAdd') }}</h2>
           <p class="truncate text-xs text-slate-400">{{ vehicle.name }}</p>
         </div>
-        <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Fermer" @click="quickAdd.close()">
+        <button type="button" class="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white" :aria-label="$t('common.close')" @click="quickAdd.close()">
           <X class="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
 
-      <div role="tablist" aria-label="Type de saisie" class="mx-4 mt-3 flex shrink-0 gap-1 rounded-2xl border border-slate-800 bg-slate-950 p-1">
+      <div role="tablist" :aria-label="$t('quickadd.quickAddSheet.entryType')" class="mx-4 mt-3 flex shrink-0 gap-1 rounded-2xl border border-slate-800 bg-slate-950 p-1">
         <button
           v-for="t in tabs"
           :id="`quick-tab-${t.key}`"
@@ -238,7 +239,7 @@ onBeforeUnmount(() => {
           :class="activeKind === t.key ? 'bg-rose-500/15 text-rose-200' : 'text-slate-400 hover:text-white'"
           @click="activeKind = t.key"
         >
-          {{ t.label }}
+          {{ $t(t.label) }}
           <span v-if="t.badge" class="rounded-full bg-amber-500/20 px-1.5 text-[11px] font-bold text-amber-300">{{ t.badge }}</span>
         </button>
       </div>

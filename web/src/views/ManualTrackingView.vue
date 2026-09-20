@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ClipboardList, Gauge, Fuel, Zap } from 'lucide-vue-next'
@@ -15,9 +16,9 @@ const vehicleStore = useVehicleStore()
 
 // Readings are shared by every vehicle; fill-ups only exist for combustion vehicles, the energy estimate for electric ones
 const tabs = computed<{ key: Tab; label: string; icon: any }[]>(() => {
-  const list: { key: Tab; label: string; icon: any }[] = [{ key: 'KM', label: 'Kilométrage', icon: Gauge }]
-  if (vehicleStore.isIce) list.push({ key: 'FUEL', label: 'Pleins', icon: Fuel })
-  else list.push({ key: 'ENERGY', label: 'Énergie estimée', icon: Zap })
+  const list: { key: Tab; label: string; icon: any }[] = [{ key: 'KM', label: t('manual.manualTrackingView.mileage'), icon: Gauge }]
+  if (vehicleStore.isIce) list.push({ key: 'FUEL', label: t('manual.manualTrackingView.fillUpsTab'), icon: Fuel })
+  else list.push({ key: 'ENERGY', label: t('manual.manualTrackingView.estimatedEnergy'), icon: Zap })
   return list
 })
 
@@ -52,15 +53,15 @@ function select(tab: Tab) {
         <ClipboardList class="w-5 h-5 text-cyan-400" />
       </div>
       <div>
-        <h1 class="text-xl font-bold text-white">Suivi manuel</h1>
+        <h1 class="text-xl font-bold text-white">{{ $t('manual.manualTrackingView.manualTracking') }}</h1>
         <p class="text-xs text-slate-400">
-          Kilométrage et {{ vehicleStore.isIce ? 'pleins' : 'énergie' }} saisis à la main{{ vehicleStore.activeVehicle ? ` · ${vehicleStore.activeVehicle.name}` : '' }}. Chaque saisie est indépendante.
+          {{ $t('manual.manualTrackingView.subtitle', { what: vehicleStore.isIce ? $t('manual.manualTrackingView.fillUps') : $t('manual.manualTrackingView.energy') }) }}{{ vehicleStore.activeVehicle ? ` · ${vehicleStore.activeVehicle.name}` : '' }}{{ $t('manual.manualTrackingView.independent') }}
         </p>
       </div>
     </div>
 
     <div v-if="!vehicleStore.activeVehicle" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-sm text-slate-400">
-      Ajoutez d'abord un véhicule.
+      {{ $t('manual.manualTrackingView.addAVehicleFirst') }}
     </div>
 
     <template v-else>

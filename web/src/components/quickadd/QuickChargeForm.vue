@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -51,7 +52,7 @@ watch(
 )
 
 const pricePerKwh = computed(() => effectivePricePerKwh(toNumber(form.kwh), toNumber(form.cost)))
-const fmtPrice = (v: number) => v.toLocaleString('fr-FR', { minimumFractionDigits: 3, maximumFractionDigits: 4 })
+const fmtPrice = (v: number) => v.toLocaleString(intlLocale(), { minimumFractionDigits: 3, maximumFractionDigits: 4 })
 const followsTariff = computed(() => !costTouched.value && memory.pricePerKwh !== undefined && form.cost !== '')
 
 function setFree() {
@@ -72,9 +73,9 @@ async function submit() {
   try {
     const result = await api.createCharge(props.vehicle.id, payload)
     rememberCharge(props.vehicle.id, { kwh: payload.kwh_added, cost: payload.cost, address: payload.address })
-    emit('saved', { queued: isQueued(result), message: `Recharge de ${payload.kwh_added} kWh` })
+    emit('saved', { queued: isQueued(result), message: t('quickadd.quickChargeForm.message', { kwh: payload.kwh_added }) })
   } catch (err: any) {
-    error.value = err?.message || "Impossible d'enregistrer la recharge."
+    error.value = err?.message || t('quickadd.quickChargeForm.saveFailed')
   } finally {
     saving.value = false
   }
@@ -82,23 +83,23 @@ async function submit() {
 </script>
 
 <template>
-  <QuickFormShell submit-label="Enregistrer la recharge" :saving="saving" :error="error" @submit="submit">
-    <p class="text-xs text-slate-400">Recharge hors TeslaMate (borne chez un tiers, prise non suivie).</p>
+  <QuickFormShell :submit-label="$t('quickadd.quickChargeForm.saveTheCharge')" :saving="saving" :error="error" @submit="submit">
+    <p class="text-xs text-slate-400">{{ $t('quickadd.quickChargeForm.chargeOutsideTeslamateThirdParty') }}</p>
 
     <div>
-      <label for="qc-kwh" class="quick-label">Énergie ajoutée (kWh)</label>
+      <label for="qc-kwh" class="quick-label">{{ $t('quickadd.quickChargeForm.energyAddedKwh') }}</label>
       <input id="qc-kwh" ref="kwhInput" v-model="form.kwh" type="number" inputmode="decimal" step="any" min="0" class="quick-input" />
     </div>
 
     <div>
-      <label for="qc-cost" class="quick-label">Coût (€)</label>
+      <label for="qc-cost" class="quick-label">{{ $t('quickadd.quickChargeForm.cost') }}</label>
       <div class="flex gap-2">
         <input id="qc-cost" v-model="form.cost" type="number" inputmode="decimal" step="any" min="0" class="quick-input min-w-0" @input="costTouched = true" />
-        <button type="button" class="quick-chip shrink-0 border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700" @click="setFree">Gratuit</button>
+        <button type="button" class="quick-chip shrink-0 border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700" @click="setFree">{{ $t('quickadd.quickChargeForm.free') }}</button>
       </div>
       <p class="mt-1.5 min-h-4 text-[11px] text-slate-400" aria-live="polite">
-        <template v-if="followsTariff">Calculé au dernier tarif ({{ fmtPrice(memory.pricePerKwh!) }} €/kWh). Modifiez le coût si besoin.</template>
-        <template v-else-if="pricePerKwh !== null">Soit {{ fmtPrice(pricePerKwh) }} €/kWh.</template>
+        <template v-if="followsTariff">{{ $t('quickadd.quickChargeForm.calculatedAtTheLastRate', { pricePerKwh: fmtPrice(memory.pricePerKwh!) }) }}</template>
+        <template v-else-if="pricePerKwh !== null">{{ $t('quickadd.quickChargeForm.thatIsKwh', { pricePerKwh: fmtPrice(pricePerKwh) }) }}</template>
       </p>
     </div>
 
@@ -109,25 +110,25 @@ async function submit() {
       aria-controls="qc-details"
       @click="showDetails = !showDetails"
     >
-      Plus de détails
+      {{ $t('quickadd.quickChargeForm.moreDetails') }}
       <ChevronDown class="h-4 w-4 transition-transform" :class="{ 'rotate-180': showDetails }" aria-hidden="true" />
     </button>
 
     <div v-show="showDetails" id="qc-details" class="space-y-4">
       <div>
-        <label for="qc-date" class="quick-label">Date et heure</label>
+        <label for="qc-date" class="quick-label">{{ $t('quickadd.quickChargeForm.dateAndTime') }}</label>
         <input id="qc-date" v-model="form.date" type="datetime-local" class="quick-input" />
       </div>
       <div>
-        <label for="qc-address" class="quick-label">Lieu</label>
-        <input id="qc-address" v-model="form.address" placeholder="Borne, domicile…" autocomplete="off" class="quick-input" />
+        <label for="qc-address" class="quick-label">{{ $t('quickadd.quickChargeForm.place') }}</label>
+        <input id="qc-address" v-model="form.address" :placeholder="$t('quickadd.quickChargeForm.chargerHome')" autocomplete="off" class="quick-input" />
       </div>
       <div>
-        <label for="qc-odometer" class="quick-label">Odomètre (km)</label>
+        <label for="qc-odometer" class="quick-label">{{ $t('quickadd.quickChargeForm.odometerKm') }}</label>
         <input id="qc-odometer" v-model="form.odometer" type="number" inputmode="numeric" min="0" class="quick-input" />
       </div>
       <div>
-        <label for="qc-notes" class="quick-label">Notes</label>
+        <label for="qc-notes" class="quick-label">{{ $t('common.notes') }}</label>
         <input id="qc-notes" v-model="form.notes" autocomplete="off" class="quick-input" />
       </div>
     </div>

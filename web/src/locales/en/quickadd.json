@@ -1,0 +1,80 @@
+{
+  "quickAddSheet": {
+    "entryType": "Entry type",
+    "quickAdd": "Quick add",
+    "tabFuel": "Fill-up",
+    "tabPending": "No cost",
+    "tabCharge": "Charge",
+    "tabExpense": "Expense",
+    "saved": "{message}: saved"
+  },
+  "quickChargeForm": {
+    "odometerKm": "Odometer (km)",
+    "chargerHome": "Charger, home…",
+    "place": "Place",
+    "dateAndTime": "Date and time",
+    "moreDetails": "More details",
+    "thatIsKwh": "That is {pricePerKwh} €/kWh.",
+    "calculatedAtTheLastRate": "Calculated at the last rate ({pricePerKwh} €/kWh). Edit the cost if needed.",
+    "free": "Free",
+    "cost": "Cost (€)",
+    "energyAddedKwh": "Energy added (kWh)",
+    "chargeOutsideTeslamateThirdParty": "Charge outside TeslaMate (third-party charger, untracked socket).",
+    "saveTheCharge": "Save the charge",
+    "message": "Charge of {kwh} kWh",
+    "saveFailed": "Could not save the charge."
+  },
+  "quickExpenseForm": {
+    "dateAndTime": "Date and time",
+    "moreDetails": "More details",
+    "amount": "Amount (€)",
+    "expenseType": "Expense type",
+    "saveTheExpense": "Save the expense",
+    "toll": "Toll",
+    "parking": "Parking",
+    "ferry": "Ferry",
+    "other": "Other",
+    "message": "{label} of {amount} €",
+    "saveFailed": "Could not save the expense."
+  },
+  "quickFuelForm": {
+    "odometerKm": "Odometer (km)",
+    "moreDetails": "More details",
+    "fullTank": "Full tank",
+    "thatIsL": "That is {pricePerLiter} €/L.",
+    "quantityL": "Quantity (L)",
+    "amount": "Amount (€)",
+    "saveTheFillUp": "Save the fill-up",
+    "message": "Fill-up of {amount} €",
+    "saveFailed": "Could not save the fill-up."
+  },
+  "quickPendingCosts": {
+    "otherSToCompleteFrom": "{total} other(s): to complete from Expenses › Charges.",
+    "applyTheLastRate": "Apply the last rate: {c} €",
+    "cost": "Cost (€)",
+    "costOfTheChargeOf": "Cost of the charge of {date} (€)",
+    "kwh": "+{kwh_added} kWh",
+    "teslamateChargesWithoutARate": "TeslaMate charges without a rate. The cost entered here is not overwritten by the synchronizations.",
+    "allHaveCost": "All charges have a cost.",
+    "costAdded": "Cost of {cost} € added",
+    "saveFailed": "Could not save the cost.",
+    "confirm": "Confirm"
+  },
+  "quickPhotoField": {
+    "photoUnavailableOfflineAttachIt": "Photo unavailable offline: attach it later from Expenses.",
+    "removeTheReceipt": "Remove the receipt",
+    "attached": "Receipt attached",
+    "photo": "Photo of the receipt",
+    "uploadFailed": "Could not upload the photo.",
+    "uploading": "Uploading…"
+  },
+  "errors": {
+    "kwh": "Enter the energy added (kWh).",
+    "cost": "Enter the cost (0 if the charge was free).",
+    "fuelAmount": "Enter the amount of the fill-up.",
+    "amount": "Enter the amount."
+  },
+  "quickFormShell": {
+    "saving": "Saving…"
+  }
+}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, computed, watch, onMounted } from 'vue'
 import { Fuel, Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -20,10 +21,10 @@ const editingId = ref<string | null>(null)
 const formError = ref('')
 
 const fuelTypes = [
-  { value: '', label: 'Non précisé' },
+  { value: '', label: '', labelKey: 'manual.fuelLogsPanel.unspecified' },
   { value: 'SP95_E10', label: 'SP95-E10' },
   { value: 'SP98', label: 'SP98' },
-  { value: 'DIESEL', label: 'Gazole' },
+  { value: 'DIESEL', label: '', labelKey: 'manual.fuelLogsPanel.diesel' },
   { value: 'E85', label: 'E85' },
   { value: 'GPL', label: 'GPL' },
 ]
@@ -49,22 +50,22 @@ const logs = computed<any[]>(() => [...(stats.value?.logs || [])].reverse())
 // Any two of amount / liters / price per liter determine the third (the server derives the missing one)
 const derivedHint = computed(() => {
   const { amount, liters, price_per_liter: price } = form.value
-  if (amount && liters && !price) return `Prix au litre : ${(amount / liters).toFixed(3).replace('.', ',')} €/L`
-  if (amount && price && !liters) return `Quantité : ${(amount / price).toFixed(2).replace('.', ',')} L`
-  if (liters && price && !amount) return `Montant : ${(liters * price).toFixed(2).replace('.', ',')} €`
+  if (amount && liters && !price) return t('manual.fuelLogsPanel.derivedPrice', { value: (amount / liters).toFixed(3).replace('.', ',') })
+  if (amount && price && !liters) return t('manual.fuelLogsPanel.derivedQuantity', { value: (amount / price).toFixed(2).replace('.', ',') })
+  if (liters && price && !amount) return t('manual.fuelLogsPanel.derivedAmount', { value: (liters * price).toFixed(2).replace('.', ',') })
   return ''
 })
 
 function fmtEur(v: number | null | undefined, digits = 2): string {
-  return Number(v || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
+  return Number(v || 0).toLocaleString(intlLocale(), { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
 function fmtNum(v: number | null | undefined, digits = 1): string {
-  return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+  return Number(v).toLocaleString(intlLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
 function fmtDate(d: string): string {
-  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+  return new Date(d).toLocaleDateString(intlLocale(), { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 async function load() {
@@ -122,7 +123,7 @@ function payload() {
 async function save() {
   formError.value = ''
   if (!form.value.date) {
-    formError.value = 'Indiquez la date du plein.'
+    formError.value = t('manual.fuelLogsPanel.dateRequired')
     return
   }
   saving.value = true
@@ -135,7 +136,7 @@ async function save() {
     showForm.value = false
     await load()
   } catch (err: any) {
-    formError.value = err?.message || "Impossible d'enregistrer le plein."
+    formError.value = err?.message || t('manual.fuelLogsPanel.saveFailed')
   } finally {
     saving.value = false
   }
@@ -143,9 +144,9 @@ async function save() {
 
 async function remove(log: any) {
   const ok = await showConfirm({
-    title: 'Supprimer le plein',
-    message: `Supprimer le plein du ${fmtDate(log.date)} (${fmtEur(log.amount)}) ?`,
-    confirmText: 'Supprimer',
+    title: t('manual.fuelLogsPanel.deleteTitle'),
+    message: t('manual.fuelLogsPanel.deleteMessage', { date: fmtDate(log.date), amount: fmtEur(log.amount) }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -153,7 +154,7 @@ async function remove(log: any) {
     await api.deleteFuelLog(props.vehicleId, log.id)
     await load()
   } catch (err: any) {
-    await showAlert(err?.message || 'Suppression impossible.', 'Erreur', 'danger')
+    await showAlert(err?.message || t('manual.fuelLogsPanel.deleteFailed'), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -165,7 +166,7 @@ onMounted(load)
   <div class="space-y-3">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-2 text-sm font-semibold text-white">
-        <Fuel class="w-4 h-4 text-amber-400" /> Pleins de carburant
+        <Fuel class="w-4 h-4 text-amber-400" /> {{ $t('manual.fuelLogsPanel.fuelFillUps') }}
       </div>
       <button
         v-if="canEdit"
@@ -173,51 +174,51 @@ onMounted(load)
         class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         @click="openAdd"
       >
-        <Plus class="w-3.5 h-3.5" /> Nouveau plein
+        <Plus class="w-3.5 h-3.5" /> {{ $t('manual.fuelLogsPanel.newFillUp') }}
       </button>
     </div>
 
     <div v-if="stats && stats.fill_ups > 0" class="grid grid-cols-2 md:grid-cols-4 gap-3">
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
-        <div class="text-[11px] text-slate-400">Pleins</div>
+        <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.fillUps') }}</div>
         <div class="text-lg font-bold text-white">{{ stats.fill_ups }}</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
-        <div class="text-[11px] text-slate-400">Total dépensé</div>
+        <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.totalSpent') }}</div>
         <div class="text-lg font-bold text-white">{{ fmtEur(stats.total_cost, 0) }}</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
-        <div class="text-[11px] text-slate-400">Prix moyen au litre</div>
+        <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.averagePricePerLitre') }}</div>
         <div class="text-lg font-bold text-white">{{ stats.avg_price_per_liter ? `${fmtNum(stats.avg_price_per_liter, 3)} €/L` : '—' }}</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
-        <div class="text-[11px] text-slate-400">Consommation moyenne</div>
-        <div class="text-lg font-bold text-white">{{ stats.consumption_l_100km ? `${fmtNum(stats.consumption_l_100km, 2)} L/100` : 'non mesurable' }}</div>
+        <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.averageConsumption') }}</div>
+        <div class="text-lg font-bold text-white">{{ stats.consumption_l_100km ? `${fmtNum(stats.consumption_l_100km, 2)} L/100` : $t('manual.fuelLogsPanel.notMeasurable') }}</div>
       </div>
     </div>
     <p v-if="stats && stats.unmeasurable_segments > 0" class="text-[11px] text-amber-400">
-      {{ stats.unmeasurable_segments }} intervalle(s) entre pleins complets sans consommation : litres manquants, kilométrage identique ou non estimable.
+      {{ $t('manual.fuelLogsPanel.intervalSBetweenFullTanks', { unmeasurable_segments: stats.unmeasurable_segments }) }}
     </p>
     <p v-if="stats && stats.fill_ups_without_mileage > 0" class="text-[11px] text-slate-500">
-      {{ stats.fill_ups_without_mileage }} plein(s) sans kilométrage : estimé(s) à partir des relevés kilométriques quand ils encadrent la date.
-      <template v-if="stats.estimated_segments > 0">La consommation de {{ stats.estimated_segments }} intervalle(s) est donc approximative (≈).</template>
+      {{ $t('manual.fuelLogsPanel.fillUpSWithoutMileage', { fill_ups_without_mileage: stats.fill_ups_without_mileage }) }}
+      <template v-if="stats.estimated_segments > 0">{{ $t('manual.fuelLogsPanel.theConsumptionOfIntervalS', { estimated_segments: stats.estimated_segments }) }}</template>
     </p>
     <p v-if="stats && stats.fill_ups > 0 && !stats.consumption_l_100km && stats.unmeasurable_segments === 0" class="text-[11px] text-slate-500">
-      La consommation se calcule entre deux pleins complets avec les litres renseignés.
+      {{ $t('manual.fuelLogsPanel.consumptionIsCalculatedBetweenTwo') }}
     </p>
 
-    <div v-if="loading && !stats" class="text-sm text-slate-400">Chargement…</div>
+    <div v-if="loading && !stats" class="text-sm text-slate-400">{{ $t('manual.fuelLogsPanel.loading') }}</div>
     <div v-else-if="logs.length === 0" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-sm text-slate-400">
-      Aucun plein enregistré. Saisissez la date, le kilométrage et le montant de chaque plein : le coût au kilomètre est calculé à partir de ces relevés.
+      {{ $t('manual.fuelLogsPanel.noFillUpRecordedEnter') }}
     </div>
     <ul v-else class="space-y-2">
       <li v-for="log in logs" :key="log.id" class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between gap-3">
         <div class="min-w-0">
           <div class="text-sm font-semibold text-white flex flex-wrap items-center gap-2">
             {{ fmtDate(log.date) }}
-            <template v-if="log.odometer != null"> · {{ Math.round(log.odometer).toLocaleString('fr-FR') }} km</template>
-            <template v-else-if="log.odometer_estimated != null"> · ≈ {{ Math.round(log.odometer_estimated).toLocaleString('fr-FR') }} km <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">estimé</span></template>
-            <span v-if="!log.is_full_tank" class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">partiel</span>
+            <template v-if="log.odometer != null"> · {{ Math.round(log.odometer).toLocaleString(intlLocale()) }} km</template>
+            <template v-else-if="log.odometer_estimated != null"> · ≈ {{ Math.round(log.odometer_estimated).toLocaleString(intlLocale()) }} km <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('manual.fuelLogsPanel.estimated') }}</span></template>
+            <span v-if="!log.is_full_tank" class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('manual.fuelLogsPanel.partial') }}</span>
           </div>
           <div class="text-xs text-slate-400 mt-0.5">
             {{ fmtEur(log.amount) }}
@@ -228,10 +229,10 @@ onMounted(load)
           </div>
         </div>
         <div v-if="canEdit" class="flex items-center gap-1.5 shrink-0">
-          <button type="button" :aria-label="`Modifier le plein du ${fmtDate(log.date)}`" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300" @click="openEdit(log)">
+          <button type="button" :aria-label="$t('manual.fuelLogsPanel.editFillUp', { date: fmtDate(log.date) })" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300" @click="openEdit(log)">
             <Pencil class="w-4 h-4" />
           </button>
-          <button type="button" :aria-label="`Supprimer le plein du ${fmtDate(log.date)}`" class="p-2 rounded-lg bg-slate-800 hover:bg-red-900/60 text-red-300" @click="remove(log)">
+          <button type="button" :aria-label="$t('manual.fuelLogsPanel.deleteFillUp', { date: fmtDate(log.date) })" class="p-2 rounded-lg bg-slate-800 hover:bg-red-900/60 text-red-300" @click="remove(log)">
             <Trash2 class="w-4 h-4" />
           </button>
         </div>
@@ -242,68 +243,68 @@ onMounted(load)
     <div v-if="showForm" class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 overflow-y-auto">
       <form class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-5 space-y-3.5 my-auto shadow-2xl" @submit.prevent="save">
         <div class="flex items-center justify-between">
-          <h3 class="text-base font-bold text-white">{{ editingId ? 'Modifier le plein' : 'Nouveau plein' }}</h3>
-          <button type="button" aria-label="Fermer" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" @click="showForm = false">
+          <h3 class="text-base font-bold text-white">{{ editingId ? $t('manual.fuelLogsPanel.edit') : $t('manual.fuelLogsPanel.new') }}</h3>
+          <button type="button" :aria-label="$t('common.close')" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800" @click="showForm = false">
             <X class="w-5 h-5" />
           </button>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="fuel-date" class="block text-xs font-semibold text-slate-300 mb-1">Date</label>
+            <label for="fuel-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('common.date') }}</label>
             <AppDatePicker id="fuel-date" v-model="form.date" required size="sm" />
           </div>
           <div>
-            <label for="fuel-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage (km, optionnel)</label>
+            <label for="fuel-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.mileageKmOptional') }}</label>
             <input id="fuel-odometer" v-model.number="form.odometer" type="number" inputmode="numeric" min="0" step="1" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>
 
         <div class="grid grid-cols-3 gap-3">
           <div>
-            <label for="fuel-amount" class="block text-xs font-semibold text-slate-300 mb-1">Montant (€)</label>
+            <label for="fuel-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.amount') }}</label>
             <input id="fuel-amount" v-model.number="form.amount" type="number" inputmode="decimal" min="0.01" step="0.01" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
-            <label for="fuel-liters" class="block text-xs font-semibold text-slate-300 mb-1">Litres</label>
+            <label for="fuel-liters" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.litres') }}</label>
             <input id="fuel-liters" v-model.number="form.liters" type="number" inputmode="decimal" min="0.01" step="0.01" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
-            <label for="fuel-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix (€/L)</label>
+            <label for="fuel-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.priceL') }}</label>
             <input id="fuel-price" v-model.number="form.price_per_liter" type="number" inputmode="decimal" min="0.001" step="0.001" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>
         <p class="text-[11px] text-slate-500 -mt-1.5">
-          Indiquez le montant, ou les litres et le prix au litre. {{ derivedHint }}
+          {{ $t('manual.fuelLogsPanel.enterTheAmountOrThe', { derivedHint }) }}
         </p>
         <p v-if="!hasOdometer(form.odometer)" class="text-[11px] text-slate-500 -mt-2">
-          Sans kilométrage, il est estimé à partir de vos relevés kilométriques.
+          {{ $t('manual.fuelLogsPanel.withoutAMileageItIs') }}
         </p>
 
         <div class="grid grid-cols-2 gap-3 items-end">
           <div>
-            <label for="fuel-type" class="block text-xs font-semibold text-slate-300 mb-1">Carburant</label>
+            <label for="fuel-type" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.fuel') }}</label>
             <select id="fuel-type" v-model="form.fuel_type" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
-              <option v-for="t in fuelTypes" :key="t.value" :value="t.value">{{ t.label }}</option>
+              <option v-for="t in fuelTypes" :key="t.value" :value="t.value">{{ t.labelKey ? $t(t.labelKey) : t.label }}</option>
             </select>
           </div>
           <label for="fuel-full" class="flex items-center gap-2 text-xs text-slate-300 pb-2">
             <input id="fuel-full" v-model="form.is_full_tank" type="checkbox" class="rounded border-slate-600 bg-slate-800" />
-            Plein complet
+            {{ $t('manual.fuelLogsPanel.fullTank') }}
           </label>
         </div>
 
         <div>
-          <label for="fuel-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes (optionnel)</label>
+          <label for="fuel-notes" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.notesOptional') }}</label>
           <input id="fuel-notes" v-model="form.notes" maxlength="200" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
 
         <p v-if="formError" class="text-xs text-red-300" role="alert">{{ formError }}</p>
 
         <div class="flex justify-end gap-2 pt-1">
-          <button type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl" @click="showForm = false">Annuler</button>
+          <button type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl" @click="showForm = false">{{ $t('common.cancel') }}</button>
           <button type="submit" :disabled="saving" class="bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl">
-            {{ saving ? 'Enregistrement…' : 'Enregistrer' }}
+            {{ saving ? $t('manual.fuelLogsPanel.saving') : $t('common.save') }}
           </button>
         </div>
       </form>

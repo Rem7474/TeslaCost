@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Scale, Plus, Trash2, Pencil, ArrowLeft, ArrowRight, Info, TrendingDown, TrendingUp, ChevronDown, Download, Printer, GitCompare } from 'lucide-vue-next'
@@ -73,22 +74,22 @@ const showAdvanced = ref(false)
 const isRetro = computed(() => form.mode === 'RETROSPECTIVE')
 
 const iceFields = [
-  { key: 'purchase_price', label: "Prix d'achat (€)" },
-  { key: 'resale_value', label: 'Valeur de revente en fin de période (€)' },
-  { key: 'maintenance_yearly', label: 'Entretien par an (€)' },
-  { key: 'insurance_yearly', label: 'Assurance par an (€)' },
-  { key: 'tax_yearly', label: 'Taxes par an (€)' },
+  { key: 'purchase_price', label: 'comparison.fields.purchasePrice' },
+  { key: 'resale_value', label: 'comparison.fields.resaleValue' },
+  { key: 'maintenance_yearly', label: 'comparison.fields.maintenanceYearly' },
+  { key: 'insurance_yearly', label: 'comparison.fields.insuranceYearly' },
+  { key: 'tax_yearly', label: 'comparison.fields.taxYearly' },
 ] as const
 
 const evFields = [
-  { key: 'purchase_price', label: "Prix d'achat net des aides (€)" },
-  { key: 'resale_value', label: 'Valeur de revente en fin de période (€)' },
-  { key: 'maintenance_yearly', label: 'Entretien par an (€)' },
-  { key: 'insurance_yearly', label: 'Assurance par an (€)' },
+  { key: 'purchase_price', label: 'comparison.fields.purchasePriceNet' },
+  { key: 'resale_value', label: 'comparison.fields.resaleValue' },
+  { key: 'maintenance_yearly', label: 'comparison.fields.maintenanceYearly' },
+  { key: 'insurance_yearly', label: 'comparison.fields.insuranceYearly' },
 ] as const
 
 function fmtEur(v: number | null | undefined, digits = 0): string {
-  return Number(v || 0).toLocaleString('fr-FR', {
+  return Number(v || 0).toLocaleString(intlLocale(), {
     style: 'currency',
     currency: 'EUR',
     minimumFractionDigits: digits,
@@ -97,7 +98,7 @@ function fmtEur(v: number | null | undefined, digits = 0): string {
 }
 
 function fmtKm(v: number): string {
-  return Math.round(Number(v || 0)).toLocaleString('fr-FR')
+  return Math.round(Number(v || 0)).toLocaleString(intlLocale())
 }
 
 async function loadScenarios() {
@@ -214,15 +215,15 @@ function buildPayload() {
 
 function stepError(): string {
   if (step.value === 1) {
-    if (!form.name.trim()) return 'Donnez un nom au comparatif.'
-    if (!(Number(form.annual_km) > 0)) return 'Indiquez un kilométrage annuel.'
-    if (!(Number(form.years) >= 1 && Number(form.years) <= 15)) return 'La durée doit être comprise entre 1 et 15 ans.'
-    if (isRetro.value && !canCompareTrackedVehicle.value) return 'Ce mode nécessite un véhicule électrique suivi : choisissez le mode projection.'
+    if (!form.name.trim()) return t('comparison.errors.name')
+    if (!(Number(form.annual_km) > 0)) return t('comparison.errors.annualKm')
+    if (!(Number(form.years) >= 1 && Number(form.years) <= 15)) return t('comparison.errors.years')
+    if (isRetro.value && !canCompareTrackedVehicle.value) return t('comparison.errors.trackedNeeded')
   }
   if (step.value === 2) {
-    if (!(Number(form.ice.l_per_100km) > 0)) return 'Indiquez la consommation du thermique.'
-    if (!(Number(form.ice.purchase_price) > 0)) return "Indiquez le prix d'achat du thermique."
-    if (!isRetro.value && !(Number(form.ev.purchase_price) > 0)) return "Indiquez le prix d'achat de l'électrique."
+    if (!(Number(form.ice.l_per_100km) > 0)) return t('comparison.errors.iceConsumption')
+    if (!(Number(form.ice.purchase_price) > 0)) return t('comparison.errors.icePrice')
+    if (!isRetro.value && !(Number(form.ev.purchase_price) > 0)) return t('comparison.errors.evPrice')
   }
   return ''
 }
@@ -253,7 +254,7 @@ async function saveAndCompute() {
     await loadScenarios()
     await openResult(saved)
   } catch (err: any) {
-    formError.value = err?.message || "Impossible d'enregistrer le comparatif."
+    formError.value = err?.message || t('comparison.errors.saveFailed')
   } finally {
     saving.value = false
   }
@@ -266,7 +267,7 @@ async function openResult(sc: any) {
   try {
     result.value = await api.getComparisonResult(sc.id)
   } catch (err: any) {
-    await showAlert(err?.message || 'Calcul impossible.', 'Comparatif', 'danger')
+    await showAlert(err?.message || t('comparison.errors.calcFailed'), t('comparison.comparisonView.title'), 'danger')
     view.value = 'list'
     return
   }
@@ -276,9 +277,9 @@ async function openResult(sc: any) {
 
 async function removeScenario(sc: any) {
   const ok = await showConfirm({
-    title: 'Supprimer le comparatif',
-    message: `Supprimer « ${sc.name} » ? Vos données réelles ne sont pas affectées.`,
-    confirmText: 'Supprimer',
+    title: t('comparison.comparisonView.deleteTitle'),
+    message: t('comparison.comparisonView.deleteMessage', { name: sc.name }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -286,7 +287,7 @@ async function removeScenario(sc: any) {
     await api.deleteComparisonScenario(sc.id)
     await loadScenarios()
   } catch (err: any) {
-    await showAlert(err?.message || 'Suppression impossible.', 'Suppression', 'danger')
+    await showAlert(err?.message || t('comparison.errors.deleteFailed'), t('comparison.comparisonView.deletion'), 'danger')
   }
 }
 
@@ -298,29 +299,29 @@ const verdict = computed(() => {
   if (!result.value) return ''
   const n = result.value.years_count
   const abs = fmtEur(Math.abs(savings.value))
-  if (Math.abs(savings.value) < 1) return `Sur ${n} an${n > 1 ? 's' : ''}, les deux véhicules coûtent autant.`
+  if (Math.abs(savings.value) < 1) return t('comparison.verdict.same', n)
   return savings.value > 0
-    ? `Sur ${n} an${n > 1 ? 's' : ''}, l'électrique vous coûte ${abs} de moins.`
-    : `Sur ${n} an${n > 1 ? 's' : ''}, l'électrique vous coûte ${abs} de plus.`
+    ? t('comparison.verdict.less', { count: n, amount: abs })
+    : t('comparison.verdict.more', { count: n, amount: abs })
 })
 
 const breakEvenText = computed(() => {
   if (!result.value) return ''
   const be = result.value.break_even_year
-  if (be === undefined || be === null) return "Point d'équilibre non atteint sur la période."
-  if (be === 0) return "L'électrique est moins chère dès l'achat et le reste."
-  return `Point d'équilibre après ${String(be).replace('.', ',')} an(s) : les économies d'usage compensent l'écart d'achat.`
+  if (be === undefined || be === null) return t('comparison.breakEven.notReached')
+  if (be === 0) return t('comparison.breakEven.immediate')
+  return t('comparison.breakEven.after', { years: String(be).replace('.', ',') })
 })
 
 const costRows = computed(() => {
   const r = result.value
   if (!r) return []
   return [
-    { label: 'Énergie', ev: r.ev.energy, ice: r.ice.energy },
-    { label: 'Entretien et pneus', ev: r.ev.maintenance, ice: r.ice.maintenance },
-    { label: 'Assurance', ev: r.ev.insurance, ice: r.ice.insurance },
-    { label: 'Taxes', ev: r.ev.tax, ice: r.ice.tax },
-    { label: 'Dépréciation', ev: r.ev.depreciation, ice: r.ice.depreciation },
+    { label: t('comparison.rows.energy'), ev: r.ev.energy, ice: r.ice.energy },
+    { label: t('comparison.rows.maintenance'), ev: r.ev.maintenance, ice: r.ice.maintenance },
+    { label: t('comparison.rows.insurance'), ev: r.ev.insurance, ice: r.ice.insurance },
+    { label: t('comparison.rows.tax'), ev: r.ev.tax, ice: r.ice.tax },
+    { label: t('comparison.rows.depreciation'), ev: r.ev.depreciation, ice: r.ice.depreciation },
   ]
 })
 
@@ -347,10 +348,10 @@ function renderChart() {
     charts.push(new Chart(chartRef.value, {
       type: 'line',
       data: {
-        labels: points.map((p) => (p.year === 0 ? 'Achat' : `An ${p.year}`)),
+        labels: points.map((p) => (p.year === 0 ? t('comparison.chart.purchase') : t('comparison.chart.year', { year: p.year }))),
         datasets: [
-          { label: 'Électrique', data: points.map((p) => p.ev), borderColor: '#38bdf8', backgroundColor: '#38bdf8', tension: 0.15 },
-          { label: 'Thermique', data: points.map((p) => p.ice), borderColor: '#f59e0b', backgroundColor: '#f59e0b', tension: 0.15 },
+          { label: t('comparison.electric'), data: points.map((p) => p.ev), borderColor: '#38bdf8', backgroundColor: '#38bdf8', tension: 0.15 },
+          { label: t('comparison.combustion'), data: points.map((p) => p.ice), borderColor: '#f59e0b', backgroundColor: '#f59e0b', tension: 0.15 },
         ],
       },
       options: {
@@ -371,7 +372,7 @@ function renderChart() {
     charts.push(new Chart(barRef.value, {
       type: 'bar',
       data: {
-        labels: ['Électrique', 'Thermique'],
+        labels: [t('comparison.electric'), t('comparison.combustion')],
         datasets: costRows.value.map((row, i) => ({
           label: row.label,
           data: [row.ev, row.ice],
@@ -397,7 +398,7 @@ function renderChart() {
       data: {
         labels: rows.map((s) => s.label),
         datasets: [{
-          label: "Écart sur l'économie de l'électrique",
+          label: t('comparison.chart.gapLabel'),
           data: rows.map((s) => s.delta_shift),
           backgroundColor: rows.map((s) => (s.delta_shift >= 0 ? '#34d399' : '#f87171')),
           borderRadius: 4,
@@ -409,7 +410,7 @@ function renderChart() {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => ` ${Number(ctx.raw) >= 0 ? '+' : '−'}${fmtEur(Math.abs(Number(ctx.raw)))} en faveur de l'électrique` } },
+          tooltip: { callbacks: { label: (ctx) => ` ${Number(ctx.raw) >= 0 ? '+' : '−'}${fmtEur(Math.abs(Number(ctx.raw)))} ${t('comparison.chart.inFavor')}` } },
         },
         scales: { x: eurAxis, y: axisStyle },
       },
@@ -438,7 +439,7 @@ async function openCompare() {
     compareItems.value = chosen.map((scenario, i) => ({ scenario, result: results[i] }))
     view.value = 'compare'
   } catch (err: any) {
-    await showAlert(err?.message || 'Comparaison impossible.', 'Comparatif', 'danger')
+    await showAlert(err?.message || t('comparison.errors.compareFailed'), t('comparison.comparisonView.title'), 'danger')
   }
 }
 
@@ -447,16 +448,16 @@ async function openCompare() {
 function exportResultCsv() {
   const r = result.value
   if (!r) return
-  const name = (currentScenario.value?.name || 'comparatif').replace(/[^\w-]+/g, '-')
+  const name = (currentScenario.value?.name || t('comparison.csv.defaultName')).replace(/[^\w-]+/g, '-')
   const rows: (string | number)[][] = costRows.value.map((row) => [row.label, Number(row.ev).toFixed(2), Number(row.ice).toFixed(2)])
-  rows.push(['Total', Number(r.ev.total).toFixed(2), Number(r.ice.total).toFixed(2)])
-  rows.push(['Par mois', Number(r.ev.per_month).toFixed(2), Number(r.ice.per_month).toFixed(2)])
-  rows.push(['Cout au km', r.ev.cost_per_km, r.ice.cost_per_km])
-  rows.push(["Ecart en faveur de l'electrique", Number(r.ev_savings).toFixed(2), ''])
+  rows.push([t('comparison.csv.total'), Number(r.ev.total).toFixed(2), Number(r.ice.total).toFixed(2)])
+  rows.push([t('comparison.csv.perMonth'), Number(r.ev.per_month).toFixed(2), Number(r.ice.per_month).toFixed(2)])
+  rows.push([t('comparison.csv.costPerKm'), r.ev.cost_per_km, r.ice.cost_per_km])
+  rows.push([t('comparison.csv.gap'), Number(r.ev_savings).toFixed(2), ''])
   rows.push(['', '', ''])
-  rows.push(['Annee', 'Cout cumule electrique', 'Cout cumule thermique'])
+  rows.push(t('comparison.csv.cumulativeHeader').split(','))
   for (const p of r.cumulative) rows.push([p.year, Number(p.ev).toFixed(2), Number(p.ice).toFixed(2)])
-  downloadCsv(`comparatif-${name}`, ['Poste', 'Electrique (EUR)', 'Thermique (EUR)'], rows)
+  downloadCsv(`${t('comparison.csv.filePrefix')}-${name}`, t('comparison.csv.header').split(','), rows)
 }
 
 function printResult() {
@@ -482,8 +483,8 @@ onBeforeUnmount(destroyChart)
           <Scale class="w-5 h-5 text-sky-400" />
         </div>
         <div>
-          <h1 class="text-xl font-bold text-white">Comparatif électrique / thermique</h1>
-          <p class="text-xs text-slate-400">Estimation informative : aucune de vos données réelles n'est modifiée.</p>
+          <h1 class="text-xl font-bold text-white">{{ $t('comparison.comparisonView.electricCombustionComparison') }}</h1>
+          <p class="text-xs text-slate-400">{{ $t('comparison.comparisonView.forInformationOnlyNoneOf') }}</p>
         </div>
       </div>
       <button
@@ -491,27 +492,26 @@ onBeforeUnmount(destroyChart)
         class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2 transition-colors"
         @click="startNew"
       >
-        <Plus class="w-4 h-4" /> Nouveau comparatif
+        <Plus class="w-4 h-4" /> {{ $t('comparison.comparisonView.newComparison') }}
       </button>
     </div>
 
     <!-- Scenario list -->
     <div v-if="view === 'list'">
-      <div v-if="loading" class="text-sm text-slate-400">Chargement…</div>
+      <div v-if="loading" class="text-sm text-slate-400">{{ $t('comparison.comparisonView.loading') }}</div>
       <div v-else-if="scenarios.length === 0" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-sm text-slate-400">
-        Aucun comparatif pour l'instant. Créez-en un pour estimer ce qu'un thermique équivalent vous coûterait
-        (ou ce qu'une électrique vous coûterait) sur plusieurs années.
+        {{ $t('comparison.comparisonView.noComparisonYetCreateOne') }}
       </div>
       <div v-else class="space-y-3">
       <div v-if="scenarios.length >= 2" class="flex items-center justify-between gap-3 text-xs text-slate-400">
-        <span>Cochez 2 ou 3 comparatifs pour les comparer côte à côte.</span>
+        <span>{{ $t('comparison.comparisonView.tick2Or3Comparisons') }}</span>
         <button
           type="button"
           :disabled="selectedIds.length < 2"
           class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 border border-slate-700 font-semibold px-3 py-2 rounded-xl flex items-center gap-2"
           @click="openCompare"
         >
-          <GitCompare class="w-4 h-4" /> Comparer ({{ selectedIds.length }})
+          <GitCompare class="w-4 h-4" /> {{ $t('comparison.comparisonView.compare', { length: selectedIds.length }) }}
         </button>
       </div>
       <ul class="grid gap-3 md:grid-cols-2">
@@ -522,20 +522,20 @@ onBeforeUnmount(destroyChart)
             class="rounded border-slate-600 bg-slate-800 shrink-0"
             :checked="selectedIds.includes(sc.id)"
             :disabled="!selectedIds.includes(sc.id) && selectedIds.length >= MAX_COMPARE"
-            :aria-label="`Sélectionner ${sc.name} pour la comparaison`"
+            :aria-label="$t('comparison.comparisonView.selectFor', { name: sc.name })"
             @change="toggleSelected(sc.id)"
           />
           <button class="text-left min-w-0 flex-1" @click="openResult(sc)">
             <div class="text-sm font-semibold text-white truncate">{{ sc.name }}</div>
             <div class="text-xs text-slate-400">
-              {{ sc.mode === 'RETROSPECTIVE' ? 'Véhicule suivi' : 'Projection' }} · {{ fmtKm(sc.annual_km) }} km/an · {{ sc.years }} an(s)
+              {{ sc.mode === 'RETROSPECTIVE' ? $t('comparison.comparisonView.trackedVehicle') : $t('comparison.comparisonView.projection') }} · {{ $t('comparison.comparisonView.scenarioUsage', { km: fmtKm(sc.annual_km), years: sc.years }) }}
             </div>
           </button>
           <div class="flex items-center gap-1.5 shrink-0">
-            <button :aria-label="`Modifier ${sc.name}`" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300" @click="editScenario(sc)">
+            <button :aria-label="$t('comparison.comparisonView.editScenario', { name: sc.name })" class="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300" @click="editScenario(sc)">
               <Pencil class="w-4 h-4" />
             </button>
-            <button :aria-label="`Supprimer ${sc.name}`" class="p-2 rounded-lg bg-slate-800 hover:bg-red-900/60 text-red-300" @click="removeScenario(sc)">
+            <button :aria-label="$t('comparison.comparisonView.deleteScenario', { name: sc.name })" class="p-2 rounded-lg bg-slate-800 hover:bg-red-900/60 text-red-300" @click="removeScenario(sc)">
               <Trash2 class="w-4 h-4" />
             </button>
           </div>
@@ -547,40 +547,40 @@ onBeforeUnmount(destroyChart)
     <!-- Compare several scenarios -->
     <div v-else-if="view === 'compare'" class="space-y-5">
       <button class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5 no-print" @click="view = 'list'">
-        <ArrowLeft class="w-4 h-4" /> Mes comparatifs
+        <ArrowLeft class="w-4 h-4" /> {{ $t('comparison.comparisonView.myComparisons') }}
       </button>
       <ComparisonCompare :items="compareItems" />
     </div>
 
     <!-- Editor (steps 1 and 2) -->
     <form v-else-if="view === 'edit'" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-5" @submit.prevent="nextStep">
-      <div class="text-xs text-slate-400">Étape {{ step }} sur 2 — {{ step === 1 ? 'Usage' : isRetro ? 'Thermique équivalent' : 'Véhicules comparés' }}</div>
+      <div class="text-xs text-slate-400">{{ $t('comparison.comparisonView.stepOf', { step, name: step === 1 ? $t('comparison.comparisonView.usage') : isRetro ? $t('comparison.comparisonView.equivalentIce') : $t('comparison.comparisonView.comparedVehicles') }) }}</div>
 
       <template v-if="step === 1">
         <div>
-          <label for="cmp-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du comparatif</label>
-          <input id="cmp-name" v-model="form.name" maxlength="100" placeholder="Ex. Comparé à un SUV essence" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <label for="cmp-name" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.comparisonName') }}</label>
+          <input id="cmp-name" v-model="form.name" maxlength="100" :placeholder="$t('comparison.comparisonView.eGComparedWithA')" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
         <div>
-          <label for="cmp-mode" class="block text-xs font-semibold text-slate-300 mb-1">Type de comparatif</label>
+          <label for="cmp-mode" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.comparisonType') }}</label>
           <select id="cmp-mode" v-model="form.mode" :disabled="!!editingId" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" @change="onModeChange">
             <option value="RETROSPECTIVE" :disabled="!canCompareTrackedVehicle">
-              Mon électrique suivie{{ vehicleStore.activeVehicle ? ` (${vehicleStore.activeVehicle.name})` : '' }} vs un thermique
+              {{ $t('comparison.comparisonView.myTrackedEv') }}{{ vehicleStore.activeVehicle ? ` (${vehicleStore.activeVehicle.name})` : '' }} {{ $t('comparison.comparisonView.vsIce') }}
             </option>
-            <option value="PROJECTION">Projection : je compare deux véhicules que je saisis</option>
+            <option value="PROJECTION">{{ $t('comparison.comparisonView.projectionICompareTwoVehicles') }}</option>
           </select>
-          <p v-if="isRetro" class="text-[11px] text-slate-500 mt-1">Les coûts de l'électrique sont ceux réellement constatés sur votre véhicule.</p>
+          <p v-if="isRetro" class="text-[11px] text-slate-500 mt-1">{{ $t('comparison.comparisonView.theElectricVehicleSCosts') }}</p>
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="cmp-km" class="block text-xs font-semibold text-slate-300 mb-1">Kilomètres par an</label>
+            <label for="cmp-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.kilometresPerYear') }}</label>
             <input id="cmp-km" v-model.number="form.annual_km" type="number" min="1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             <p v-if="defaults && isRetro" class="text-[11px] text-slate-500 mt-1">
-              {{ defaults.annual_km_from_data ? 'Estimé depuis votre historique' : 'Valeur par défaut (historique insuffisant)' }}
+              {{ defaults.annual_km_from_data ? $t('comparison.comparisonView.fromHistory') : $t('comparison.comparisonView.defaultValue') }}
             </p>
           </div>
           <div>
-            <label for="cmp-years" class="block text-xs font-semibold text-slate-300 mb-1">Durée (années)</label>
+            <label for="cmp-years" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.durationYears') }}</label>
             <input id="cmp-years" v-model.number="form.years" type="number" min="1" max="15" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>
@@ -588,47 +588,47 @@ onBeforeUnmount(destroyChart)
 
       <template v-else>
         <div class="space-y-3">
-          <h2 class="text-sm font-semibold text-amber-300">Thermique équivalent</h2>
+          <h2 class="text-sm font-semibold text-amber-300">{{ $t('comparison.comparisonView.equivalentCombustionVehicle') }}</h2>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label for="cmp-fuel" class="block text-xs font-semibold text-slate-300 mb-1">Carburant</label>
+              <label for="cmp-fuel" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.fuel') }}</label>
               <select id="cmp-fuel" v-model="form.ice.fuel_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" @change="applyFuelDefaults">
                 <option v-for="f in fuelTypes" :key="f.fuel_type" :value="f.fuel_type">{{ f.label }}</option>
               </select>
             </div>
             <div>
-              <label for="cmp-ice-l100" class="block text-xs font-semibold text-slate-300 mb-1">Consommation (L/100 km)</label>
+              <label for="cmp-ice-l100" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.consumptionL100Km') }}</label>
               <input id="cmp-ice-l100" v-model.number="form.ice.l_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="cmp-ice-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix du carburant (€/L)</label>
+              <label for="cmp-ice-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.fuelPriceL') }}</label>
               <input id="cmp-ice-price" v-model.number="form.ice.fuel_price" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
-          <p class="text-[11px] text-slate-500 flex items-center gap-1"><Info class="w-3 h-3" /> {{ defaults?.source || 'Valeurs indicatives, à ajuster' }}</p>
+          <p class="text-[11px] text-slate-500 flex items-center gap-1"><Info class="w-3 h-3" /> {{ defaults?.source || $t('comparison.comparisonView.indicative') }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="f in iceFields" :key="f.key">
-              <label :for="`cmp-ice-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ f.label }}</label>
+              <label :for="`cmp-ice-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t(f.label) }}</label>
               <input :id="`cmp-ice-${f.key}`" v-model.number="form.ice[f.key]" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
         </div>
 
         <div v-if="!isRetro" class="space-y-3 pt-2 border-t border-slate-800">
-          <h2 class="text-sm font-semibold text-sky-300">Véhicule électrique</h2>
+          <h2 class="text-sm font-semibold text-sky-300">{{ $t('comparison.comparisonView.electricVehicle') }}</h2>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="cmp-ev-kwh" class="block text-xs font-semibold text-slate-300 mb-1">Consommation (kWh/100 km)</label>
+              <label for="cmp-ev-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.consumptionKwh100Km') }}</label>
               <input id="cmp-ev-kwh" v-model.number="form.ev.kwh_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="cmp-ev-price" class="block text-xs font-semibold text-slate-300 mb-1">Prix moyen de l'électricité (€/kWh)</label>
+              <label for="cmp-ev-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.averageElectricityPriceKwh') }}</label>
               <input id="cmp-ev-price" v-model.number="form.ev.eur_per_kwh" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="f in evFields" :key="f.key">
-              <label :for="`cmp-ev-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ f.label }}</label>
+              <label :for="`cmp-ev-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t(f.label) }}</label>
               <input :id="`cmp-ev-${f.key}`" v-model.number="form.ev[f.key]" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
@@ -643,26 +643,26 @@ onBeforeUnmount(destroyChart)
           aria-controls="cmp-advanced"
           @click="showAdvanced = !showAdvanced"
         >
-          <ChevronDown class="w-4 h-4 transition-transform" :class="showAdvanced ? 'rotate-180' : ''" /> Affiner (inflation, aides)
+          <ChevronDown class="w-4 h-4 transition-transform" :class="showAdvanced ? 'rotate-180' : ''" /> {{ $t('comparison.comparisonView.fineTuneInflationGrants') }}
         </button>
         <div v-show="showAdvanced" id="cmp-advanced" class="mt-3 space-y-3">
-          <p class="text-[11px] text-slate-500">Évolution annuelle moyenne des prix, appliquée dès la deuxième année. Laissez à 0 pour des prix constants.</p>
+          <p class="text-[11px] text-slate-500">{{ $t('comparison.comparisonView.averageYearlyPriceChangeApplied') }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
-              <label for="cmp-infl-fuel" class="block text-xs font-semibold text-slate-300 mb-1">Carburant (%/an)</label>
+              <label for="cmp-infl-fuel" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.fuelYear') }}</label>
               <input id="cmp-infl-fuel" v-model.number="form.options.fuel_inflation_pct" type="number" min="-10" max="30" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="cmp-infl-elec" class="block text-xs font-semibold text-slate-300 mb-1">Électricité (%/an)</label>
+              <label for="cmp-infl-elec" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.electricityYear') }}</label>
               <input id="cmp-infl-elec" v-model.number="form.options.electricity_inflation_pct" type="number" min="-10" max="30" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="cmp-infl-cost" class="block text-xs font-semibold text-slate-300 mb-1">Entretien, assurance, taxes (%/an)</label>
+              <label for="cmp-infl-cost" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.maintenanceInsuranceTaxesYear') }}</label>
               <input id="cmp-infl-cost" v-model.number="form.options.cost_inflation_pct" type="number" min="-10" max="30" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <div v-if="!isRetro">
-            <label for="cmp-ev-incentives" class="block text-xs font-semibold text-slate-300 mb-1">Aides à l'achat de l'électrique (€, déduites du prix)</label>
+            <label for="cmp-ev-incentives" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.electricPurchaseGrantsDeductedFrom') }}</label>
             <input id="cmp-ev-incentives" v-model.number="form.options.ev_incentives" type="number" min="0" step="any" class="w-full sm:w-1/2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>
@@ -672,10 +672,10 @@ onBeforeUnmount(destroyChart)
 
       <div class="flex items-center justify-between pt-1">
         <button type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2" @click="prevStep">
-          <ArrowLeft class="w-4 h-4" /> {{ step === 1 ? 'Annuler' : 'Retour' }}
+          <ArrowLeft class="w-4 h-4" /> {{ step === 1 ? $t('common.cancel') : $t('comparison.comparisonView.back') }}
         </button>
         <button type="submit" :disabled="saving" class="bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2">
-          {{ step === 2 ? (saving ? 'Calcul…' : 'Voir le résultat') : 'Suivant' }} <ArrowRight class="w-4 h-4" />
+          {{ step === 2 ? (saving ? $t('comparison.comparisonView.calculating') : $t('comparison.comparisonView.viewResult')) : $t('comparison.comparisonView.next') }} <ArrowRight class="w-4 h-4" />
         </button>
       </div>
     </form>
@@ -684,19 +684,19 @@ onBeforeUnmount(destroyChart)
     <div v-else-if="view === 'result'" class="space-y-5 print-area">
       <div class="flex items-center justify-between gap-3 no-print">
         <button class="text-xs text-slate-400 hover:text-white flex items-center gap-1.5" @click="view = 'list'">
-          <ArrowLeft class="w-4 h-4" /> Mes comparatifs
+          <ArrowLeft class="w-4 h-4" /> {{ $t('comparison.comparisonView.myComparisons') }}
         </button>
         <div v-if="result" class="flex items-center gap-2">
           <button type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5" @click="exportResultCsv">
-            <Download class="w-4 h-4" /> CSV
+            <Download class="w-4 h-4" /> {{ $t('comparison.comparisonView.csv') }}
           </button>
           <button type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5" @click="printResult">
-            <Printer class="w-4 h-4" /> Imprimer / PDF
+            <Printer class="w-4 h-4" /> {{ $t('comparison.comparisonView.printPdf') }}
           </button>
         </div>
       </div>
 
-      <div v-if="!result" class="text-sm text-slate-400">Calcul en cours…</div>
+      <div v-if="!result" class="text-sm text-slate-400">{{ $t('comparison.comparisonView.calculating') }}</div>
       <template v-else>
         <div
           class="rounded-2xl border p-5 flex items-center gap-4"
@@ -705,39 +705,39 @@ onBeforeUnmount(destroyChart)
           <component :is="savings >= 0 ? TrendingDown : TrendingUp" class="w-8 h-8 shrink-0" :class="savings >= 0 ? 'text-emerald-400' : 'text-amber-400'" />
           <div>
             <div class="text-lg font-bold text-white">{{ verdict }}</div>
-            <div class="text-xs text-slate-400 mt-0.5">{{ currentScenario?.name }} · {{ fmtKm(result.annual_km) }} km/an</div>
+            <div class="text-xs text-slate-400 mt-0.5">{{ currentScenario?.name }} · {{ $t('comparison.comparisonView.kmPerYear', { km: fmtKm(result.annual_km) }) }}</div>
           </div>
         </div>
 
         <div class="grid gap-4 md:grid-cols-2">
           <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
             <div class="flex items-center justify-between mb-2">
-              <h2 class="text-sm font-semibold text-sky-300">Électrique</h2>
+              <h2 class="text-sm font-semibold text-sky-300">{{ $t('comparison.comparisonView.electric') }}</h2>
               <span class="text-[10px] px-2 py-0.5 rounded-full border" :class="result.mode === 'RETROSPECTIVE' ? 'border-emerald-500/40 text-emerald-300' : 'border-slate-600 text-slate-400'">
-                {{ result.mode === 'RETROSPECTIVE' ? 'réel' : 'estimé' }}
+                {{ result.mode === 'RETROSPECTIVE' ? $t('comparison.comparisonView.actual') : $t('comparison.comparisonView.estimated') }}
               </span>
             </div>
             <div class="text-2xl font-bold text-white">{{ fmtEur(result.ev.total) }}</div>
-            <div class="text-xs text-slate-400 mt-1">{{ fmtEur(result.ev.per_month) }}/mois · {{ result.ev.cost_per_km.toFixed(3).replace('.', ',') }} €/km</div>
+            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtEur(result.ev.per_month), cost_per_km: result.ev.cost_per_km.toFixed(3).replace('.', ',') }) }}</div>
           </div>
           <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
             <div class="flex items-center justify-between mb-2">
-              <h2 class="text-sm font-semibold text-amber-300">Thermique</h2>
-              <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">estimé</span>
+              <h2 class="text-sm font-semibold text-amber-300">{{ $t('comparison.comparisonView.combustion') }}</h2>
+              <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('comparison.comparisonView.estimated') }}</span>
             </div>
             <div class="text-2xl font-bold text-white">{{ fmtEur(result.ice.total) }}</div>
-            <div class="text-xs text-slate-400 mt-1">{{ fmtEur(result.ice.per_month) }}/mois · {{ result.ice.cost_per_km.toFixed(3).replace('.', ',') }} €/km</div>
+            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtEur(result.ice.per_month), cost_per_km: result.ice.cost_per_km.toFixed(3).replace('.', ',') }) }}</div>
           </div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 overflow-x-auto">
           <table class="w-full text-sm">
-            <caption class="sr-only">Coût par poste sur {{ result.years_count }} an(s)</caption>
+            <caption class="sr-only">{{ $t('comparison.comparisonView.costByCategoryOverYear', { years_count: result.years_count }) }}</caption>
             <thead>
               <tr class="text-xs text-slate-400 text-right">
-                <th scope="col" class="text-left font-semibold pb-2">Poste</th>
-                <th scope="col" class="font-semibold pb-2">Électrique</th>
-                <th scope="col" class="font-semibold pb-2">Thermique</th>
+                <th scope="col" class="text-left font-semibold pb-2">{{ $t('comparison.comparisonView.category') }}</th>
+                <th scope="col" class="font-semibold pb-2">{{ $t('comparison.comparisonView.electric') }}</th>
+                <th scope="col" class="font-semibold pb-2">{{ $t('comparison.comparisonView.combustion') }}</th>
               </tr>
             </thead>
             <tbody class="text-slate-200">
@@ -747,7 +747,7 @@ onBeforeUnmount(destroyChart)
                 <td>{{ fmtEur(row.ice) }}</td>
               </tr>
               <tr class="border-t border-slate-700 text-right font-semibold text-white">
-                <th scope="row" class="text-left py-1.5">Total</th>
+                <th scope="row" class="text-left py-1.5">{{ $t('comparison.comparisonView.total') }}</th>
                 <td>{{ fmtEur(result.ev.total) }}</td>
                 <td>{{ fmtEur(result.ice.total) }}</td>
               </tr>
@@ -756,30 +756,30 @@ onBeforeUnmount(destroyChart)
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <h2 class="text-sm font-semibold text-white mb-3">Répartition des coûts sur la période</h2>
-          <div class="h-64"><canvas ref="barRef" aria-label="Coût par poste, électrique et thermique" role="img"></canvas></div>
+          <h2 class="text-sm font-semibold text-white mb-3">{{ $t('comparison.comparisonView.costBreakdownOverThePeriod') }}</h2>
+          <div class="h-64"><canvas ref="barRef" :aria-label="$t('comparison.comparisonView.costByCategoryElectricAnd')" role="img"></canvas></div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <h2 class="text-sm font-semibold text-white mb-1">Coût cumulé</h2>
+          <h2 class="text-sm font-semibold text-white mb-1">{{ $t('comparison.comparisonView.cumulativeCost') }}</h2>
           <p class="text-xs text-slate-400 mb-3">{{ breakEvenText }}</p>
-          <div class="h-64"><canvas ref="chartRef" aria-label="Coût cumulé électrique et thermique" role="img"></canvas></div>
+          <div class="h-64"><canvas ref="chartRef" :aria-label="$t('comparison.comparisonView.cumulativeCostElectricAndCombustion')" role="img"></canvas></div>
         </div>
 
         <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-          <h2 class="text-sm font-semibold text-white mb-1">Sensibilité</h2>
-          <p class="text-xs text-slate-400 mb-3">Effet sur l'économie de l'électrique quand une hypothèse varie de 20 %.</p>
-          <div class="h-48 mb-3"><canvas ref="tornadoRef" aria-label="Sensibilité de l'écart aux hypothèses" role="img"></canvas></div>
+          <h2 class="text-sm font-semibold text-white mb-1">{{ $t('comparison.comparisonView.sensitivity') }}</h2>
+          <p class="text-xs text-slate-400 mb-3">{{ $t('comparison.comparisonView.effectOnTheElectricSaving') }}</p>
+          <div class="h-48 mb-3"><canvas ref="tornadoRef" :aria-label="$t('comparison.comparisonView.sensitivityOfTheGapTo')" role="img"></canvas></div>
           <ul class="text-xs text-slate-300 space-y-1">
             <li v-for="s in result.sensitivity" :key="s.label" class="flex justify-between">
               <span>{{ s.label }}</span>
-              <span>{{ s.ev_savings >= 0 ? `électrique −${fmtEur(s.ev_savings)}` : `électrique +${fmtEur(-s.ev_savings)}` }}</span>
+              <span>{{ s.ev_savings >= 0 ? $t('comparison.comparisonView.evLess', { amount: fmtEur(s.ev_savings) }) : $t('comparison.comparisonView.evMore', { amount: fmtEur(-s.ev_savings) }) }}</span>
             </li>
           </ul>
         </div>
 
         <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
-          <h2 class="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5"><Info class="w-3.5 h-3.5" /> Hypothèses</h2>
+          <h2 class="text-xs font-semibold text-slate-300 mb-2 flex items-center gap-1.5"><Info class="w-3.5 h-3.5" /> {{ $t('comparison.comparisonView.assumptions') }}</h2>
           <ul class="list-disc pl-4 text-xs text-slate-400 space-y-1">
             <li v-for="a in result.assumptions" :key="a">{{ a }}</li>
           </ul>
@@ -787,7 +787,7 @@ onBeforeUnmount(destroyChart)
 
         <div class="flex gap-2 no-print">
           <button class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold px-3.5 py-2.5 rounded-xl flex items-center gap-2" @click="editScenario(currentScenario)">
-            <Pencil class="w-4 h-4" /> Modifier les hypothèses
+            <Pencil class="w-4 h-4" /> {{ $t('comparison.comparisonView.editTheAssumptions') }}
           </button>
         </div>
       </template>

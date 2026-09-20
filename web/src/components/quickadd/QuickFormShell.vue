@@ -23,7 +23,7 @@ defineEmits<{ submit: [] }>()
         :disabled="saving"
         class="min-h-14 w-full rounded-xl bg-rose-600 text-base font-bold text-white shadow-lg shadow-rose-600/20 transition-colors hover:bg-rose-500 disabled:opacity-60"
       >
-        {{ saving ? 'Enregistrement…' : submitLabel }}
+        {{ saving ? $t('quickadd.quickFormShell.saving') : submitLabel }}
       </button>
     </div>
   </form>

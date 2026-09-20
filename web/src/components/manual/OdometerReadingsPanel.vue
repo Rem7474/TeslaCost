@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { ref, watch, onMounted } from 'vue'
 import { Gauge, Edit2, Trash2 } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -28,7 +29,7 @@ async function load() {
   try {
     readings.value = await api.getOdometerCheckpoints(props.vehicle.id)
   } catch (err: any) {
-    showAlert(`Erreur de chargement des relevés : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('manual.odometerReadingsPanel.loadError', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     loading.value = false
   }
@@ -55,7 +56,7 @@ function startEdit(r: any) {
 async function save() {
   const odo = Number(form.value.odometer)
   if (form.value.odometer === '' || Number.isNaN(odo) || odo < 0) {
-    showAlert("Veuillez saisir un kilométrage d'odomètre valide", 'Champ requis', 'warning')
+    showAlert(t('manual.odometerReadingsPanel.validOdometer'), t('common.requiredField'), 'warning')
     return
   }
   try {
@@ -75,15 +76,15 @@ async function save() {
     await vehicleStore.fetchVehicles()
     vehicleStore.lastSyncTimestamp = Date.now()
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
 async function remove(r: any) {
   const ok = await showConfirm({
-    title: 'Supprimer le relevé kilométrique',
-    message: `Supprimer le relevé de ${Math.round(r.odometer).toLocaleString('fr-FR')} km du ${new Date(r.date).toLocaleDateString('fr-FR')} ?`,
-    confirmText: 'Supprimer',
+    title: t('manual.odometerReadingsPanel.deleteTitle'),
+    message: t('manual.odometerReadingsPanel.deleteMessage', { km: Math.round(r.odometer).toLocaleString(intlLocale()), date: new Date(r.date).toLocaleDateString(intlLocale()) }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -92,7 +93,7 @@ async function remove(r: any) {
     await load()
     vehicleStore.lastSyncTimestamp = Date.now()
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -109,26 +110,26 @@ onMounted(() => {
 <template>
   <div class="space-y-5">
     <p class="text-xs text-slate-400">
-      Les relevés au compteur répartissent les kilomètres non suivis mois par mois, et servent à estimer le kilométrage des pleins saisis sans compteur.
+      {{ $t('manual.odometerReadingsPanel.odometerReadingsSpreadTheUntracked') }}
     </p>
 
     <form v-if="canEdit" class="bg-slate-950/60 border border-slate-800 rounded-xl p-4 space-y-4" @submit.prevent="save">
       <div class="flex items-center justify-between">
         <span class="text-xs font-bold text-cyan-400 uppercase tracking-wider">
-          {{ editingId ? 'Modifier le relevé' : 'Nouveau relevé kilométrique' }}
+          {{ editingId ? $t('manual.odometerReadingsPanel.edit') : $t('manual.odometerReadingsPanel.new') }}
         </span>
         <button v-if="editingId" type="button" class="text-xs text-slate-400 hover:text-white" @click="resetForm">
-          Annuler modification
+          {{ $t('manual.odometerReadingsPanel.cancelTheEdit') }}
         </button>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
-          <label for="checkpoint-date" class="block text-xs font-semibold text-slate-300 mb-1">Date du relevé</label>
+          <label for="checkpoint-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.odometerReadingsPanel.readingDate') }}</label>
           <AppDatePicker id="checkpoint-date" v-model="form.date" required size="sm" />
         </div>
         <div>
-          <label for="checkpoint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Kilométrage (km)</label>
+          <label for="checkpoint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.odometerReadingsPanel.mileageKm') }}</label>
           <input
             id="checkpoint-odometer"
             v-model="form.odometer"
@@ -142,12 +143,12 @@ onMounted(() => {
           />
         </div>
         <div>
-          <label for="checkpoint-notes" class="block text-xs font-semibold text-slate-300 mb-1">Motif / Événement</label>
+          <label for="checkpoint-notes" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.odometerReadingsPanel.reasonEvent') }}</label>
           <input
             id="checkpoint-notes"
             v-model="form.notes"
             type="text"
-            placeholder="ex: Contrôle technique"
+            :placeholder="$t('manual.odometerReadingsPanel.eGRoadworthinessInspection')"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
           />
         </div>
@@ -155,21 +156,21 @@ onMounted(() => {
 
       <div class="flex justify-end pt-1">
         <button type="submit" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-lg shadow-cyan-600/20">
-          <span>{{ editingId ? 'Mettre à jour' : 'Ajouter le relevé' }}</span>
+          <span>{{ editingId ? $t('manual.odometerReadingsPanel.update') : $t('manual.odometerReadingsPanel.add') }}</span>
         </button>
       </div>
     </form>
 
     <div class="space-y-3">
       <div class="flex items-center justify-between">
-        <h4 class="text-xs font-bold text-white uppercase tracking-wider">Historique des relevés enregistrés</h4>
-        <span class="text-xs text-slate-400">{{ readings.length }} relevé(s)</span>
+        <h4 class="text-xs font-bold text-white uppercase tracking-wider">{{ $t('manual.odometerReadingsPanel.historyOfRecordedReadings') }}</h4>
+        <span class="text-xs text-slate-400">{{ $t('manual.odometerReadingsPanel.readingS', { length: readings.length }) }}</span>
       </div>
 
-      <div v-if="loading" class="py-8 text-center text-xs text-slate-400">Chargement des relevés...</div>
+      <div v-if="loading" class="py-8 text-center text-xs text-slate-400">{{ $t('manual.odometerReadingsPanel.loadingTheReadings') }}</div>
 
       <div v-else-if="readings.length === 0" class="py-8 text-center bg-slate-950/40 rounded-xl border border-slate-800 text-xs text-slate-500">
-        Aucun relevé manuel pour l'instant.
+        {{ $t('manual.odometerReadingsPanel.noManualReadingYet') }}
       </div>
 
       <div v-else class="space-y-2">
@@ -184,9 +185,9 @@ onMounted(() => {
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-white font-mono">{{ Math.round(r.odometer).toLocaleString('fr-FR') }} km</span>
+                <span class="text-sm font-bold text-white font-mono">{{ Math.round(r.odometer).toLocaleString(intlLocale()) }} km</span>
                 <span class="text-xs text-slate-400">
-                  le {{ new Date(r.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                  le {{ new Date(r.date).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) }}
                 </span>
               </div>
               <p v-if="r.notes" class="text-xs text-slate-400 truncate mt-0.5">{{ r.notes }}</p>
@@ -194,10 +195,10 @@ onMounted(() => {
           </div>
 
           <div v-if="canEdit" class="flex items-center gap-1.5 shrink-0">
-            <button type="button" class="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="`Modifier le relevé de ${Math.round(r.odometer)} km`" @click="startEdit(r)">
+            <button type="button" class="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="$t('manual.odometerReadingsPanel.editReading', { km: Math.round(r.odometer) })" @click="startEdit(r)">
               <Edit2 class="w-4 h-4" />
             </button>
-            <button type="button" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="`Supprimer le relevé de ${Math.round(r.odometer)} km`" @click="remove(r)">
+            <button type="button" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="$t('manual.odometerReadingsPanel.deleteReading', { km: Math.round(r.odometer) })" @click="remove(r)">
               <Trash2 class="w-4 h-4" />
             </button>
           </div>
