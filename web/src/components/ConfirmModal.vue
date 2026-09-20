@@ -106,7 +106,7 @@ onUnmounted(() => {
                 type="button"
                 @click="onCancel"
                 class="p-1.5 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-                title="Fermer"
+                :title="$t('common.close')"
               >
                 <X class="w-4 h-4" />
               </button>
@@ -126,7 +126,7 @@ onUnmounted(() => {
                 @click="onCancel"
                 class="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-300 bg-slate-800 hover:bg-slate-700 hover:text-white transition-all border border-slate-700/60"
               >
-                {{ options.cancelText || 'Annuler' }}
+                {{ options.cancelText || $t('common.cancel') }}
               </button>
               <button
                 ref="confirmBtnRef"
@@ -140,7 +140,7 @@ onUnmounted(() => {
                   'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-600/30': options.type === 'success',
                 }"
               >
-                {{ options.confirmText || 'Confirmer' }}
+                {{ options.confirmText || $t('common.confirm') }}
               </button>
             </div>
           </div>

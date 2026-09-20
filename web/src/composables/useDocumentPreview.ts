@@ -1,4 +1,5 @@
 import { onUnmounted, ref, watch } from 'vue'
+import { t } from '@/i18n'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 
@@ -73,7 +74,7 @@ export function useDocumentPreview(vehicleId: () => string | undefined) {
         }
       }
     } catch (err: any) {
-      showAlert(`Erreur lors de l'accès au document : ${err.message}`, 'Erreur', 'danger')
+      showAlert(t('shell.documents.accessError', { message: err.message }), t('shell.confirm.error'), 'danger')
     } finally {
       loadingDocId.value = null
     }

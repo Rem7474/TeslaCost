@@ -20,6 +20,8 @@ import {
   Ellipsis,
   X,
 } from 'lucide-vue-next'
+import { APP_NAME } from '@/brand'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { APP_VERSION } from '@/version'
 
 const route = useRoute()
@@ -29,15 +31,15 @@ const vehicleStore = useVehicleStore()
 const quickAdd = useQuickAddStore()
 
 const allNavItems = [
-  { name: 'dashboard', label: 'Tableau de bord', mobileLabel: 'Accueil', path: '/', icon: LayoutDashboard },
-  { name: 'drives', label: 'Trajets', path: '/drives', icon: NavIcon },
-  { name: 'carpools', label: 'Covoiturage', path: '/carpools', icon: Users },
-  { name: 'tires', label: 'Pneus', path: '/tires', icon: Disc },
-  { name: 'manual', label: 'Suivi manuel', path: '/manual', icon: ClipboardList },
-  { name: 'expenses', label: 'Dépenses', path: '/expenses', icon: Receipt },
-  { name: 'comparison', label: 'Comparatif', path: '/comparison', icon: Scale },
-  { name: 'vehicles', label: 'Véhicules', path: '/vehicles', icon: Car },
-  { name: 'account', label: 'Compte', path: '/account', icon: UserRound },
+  { name: 'dashboard', labelKey: 'shell.nav.dashboard', mobileLabelKey: 'shell.nav.home', path: '/', icon: LayoutDashboard },
+  { name: 'drives', labelKey: 'shell.nav.drives', path: '/drives', icon: NavIcon },
+  { name: 'carpools', labelKey: 'shell.nav.carpools', path: '/carpools', icon: Users },
+  { name: 'tires', labelKey: 'shell.nav.tires', path: '/tires', icon: Disc },
+  { name: 'manual', labelKey: 'shell.nav.manual', path: '/manual', icon: ClipboardList },
+  { name: 'expenses', labelKey: 'shell.nav.expenses', path: '/expenses', icon: Receipt },
+  { name: 'comparison', labelKey: 'shell.nav.comparison', path: '/comparison', icon: Scale },
+  { name: 'vehicles', labelKey: 'shell.nav.vehicles', path: '/vehicles', icon: Car },
+  { name: 'account', labelKey: 'shell.nav.account', path: '/account', icon: UserRound },
 ]
 
 // Drives come from TeslaMate only, and carpooling needs trips or a distance that a combustion vehicle does not track
@@ -93,7 +95,7 @@ function handleLogout() {
       <div>
         <div class="flex items-center gap-2">
           <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
-            TeslaCost
+            {{ APP_NAME }}
           </h1>
           <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-semibold">
             {{ APP_VERSION }}
@@ -110,7 +112,7 @@ function handleLogout() {
       @click="quickAdd.open()"
     >
       <Plus class="h-4 w-4" aria-hidden="true" />
-      Saisie rapide
+      {{ $t('shell.navigation.quickAdd') }}
     </button>
 
     <nav class="flex-1 space-y-1">
@@ -126,7 +128,7 @@ function handleLogout() {
         "
       >
         <component :is="item.icon" class="w-5 h-5" />
-        {{ item.label }}
+        {{ $t(item.labelKey) }}
       </router-link>
     </nav>
 
@@ -134,25 +136,28 @@ function handleLogout() {
       <div class="flex items-center justify-between px-3 py-1">
         <div class="truncate">
           <p class="text-xs font-semibold text-slate-200 truncate">{{ authStore.user?.email }}</p>
-          <p class="text-[10px] text-slate-400">Connecté</p>
+          <p class="text-[10px] text-slate-400">{{ $t('shell.navigation.signedIn') }}</p>
         </div>
         <button
           @click="handleLogout"
           class="p-2 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-          title="Déconnexion"
+          :title="$t('shell.navigation.signOut')"
         >
           <LogOut class="w-4 h-4" />
         </button>
       </div>
       <div class="px-3 pt-2 text-[11px] text-slate-500 flex items-center justify-between border-t border-slate-800/60">
-        <span>Version</span>
+        <span>{{ $t('shell.navigation.version') }}</span>
         <span class="font-mono text-slate-400 font-medium">{{ APP_VERSION }}</span>
+      </div>
+      <div class="px-3 pt-2">
+        <LanguageSwitcher />
       </div>
     </div>
   </aside>
 
   <!-- Mobile Bottom Navigation Bar -->
-  <nav aria-label="Navigation principale" class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-1 safe-area-pb">
+  <nav :aria-label="$t('shell.navigation.mainNavigation')" class="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 px-1 safe-area-pb">
     <ul class="flex items-stretch">
       <li v-for="item in leftItems" :key="item.name" class="flex-1">
         <router-link
@@ -162,7 +167,7 @@ function handleLogout() {
           :aria-current="currentRouteName === item.name ? 'page' : undefined"
         >
           <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
-          <span>{{ item.mobileLabel ?? item.label }}</span>
+          <span>{{ $t(item.mobileLabelKey ?? item.labelKey) }}</span>
         </router-link>
       </li>
 
@@ -171,7 +176,7 @@ function handleLogout() {
           v-if="canQuickAdd"
           type="button"
           class="-mt-5 flex h-14 w-14 items-center justify-center rounded-full bg-rose-600 text-white shadow-lg shadow-rose-600/40 ring-4 ring-slate-950 transition-colors hover:bg-rose-500 active:bg-rose-700"
-          aria-label="Saisie rapide"
+          :aria-label="$t('shell.navigation.quickAdd')"
           @click="quickAdd.open()"
         >
           <Plus class="h-7 w-7" aria-hidden="true" />
@@ -186,7 +191,7 @@ function handleLogout() {
           :aria-current="currentRouteName === item.name ? 'page' : undefined"
         >
           <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
-          <span>{{ item.mobileLabel ?? item.label }}</span>
+          <span>{{ $t(item.mobileLabelKey ?? item.labelKey) }}</span>
         </router-link>
       </li>
 
@@ -200,7 +205,7 @@ function handleLogout() {
           @click="showMore = true"
         >
           <Ellipsis class="h-5 w-5" aria-hidden="true" />
-          <span>Plus</span>
+          <span>{{ $t('shell.navigation.more') }}</span>
         </button>
       </li>
     </ul>
@@ -215,12 +220,12 @@ function handleLogout() {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Autres pages"
+      :aria-label="$t('shell.navigation.otherPages')"
       class="w-full rounded-t-3xl border border-slate-800 bg-slate-900 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl"
     >
       <div class="mb-2 flex items-center justify-between">
         <p class="truncate text-xs text-slate-400">{{ authStore.user?.email }}</p>
-        <button type="button" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white" aria-label="Fermer" @click="showMore = false">
+        <button type="button" class="flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-800 hover:text-white" :aria-label="$t('common.close')" @click="showMore = false">
           <X class="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
@@ -233,17 +238,17 @@ function handleLogout() {
             :aria-current="currentRouteName === item.name ? 'page' : undefined"
           >
             <component :is="item.icon" class="h-5 w-5" aria-hidden="true" />
-            {{ item.label }}
+            {{ $t(item.labelKey) }}
           </router-link>
         </li>
         <li>
           <button type="button" class="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-base font-medium text-slate-300 hover:bg-slate-800" @click="handleLogout">
             <LogOut class="h-5 w-5" aria-hidden="true" />
-            Déconnexion
+            {{ $t('shell.navigation.signOut') }}
           </button>
         </li>
       </ul>
-      <p class="mt-3 text-center font-mono text-[11px] text-slate-500">TeslaCost {{ APP_VERSION }}</p>
+      <p class="mt-3 text-center font-mono text-[11px] text-slate-500">{{ APP_NAME }} {{ APP_VERSION }}</p>
     </div>
   </div>
 </template>

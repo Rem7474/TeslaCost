@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
+import { t } from '@/i18n'
 import { enqueueMutation, listQueuedMutations, removeQueuedMutation, type QueuedMutation } from '@/services/offlineQueue'
 import { useVehicleStore } from '@/stores/vehicle'
 
@@ -54,7 +55,7 @@ export const useOfflineStore = defineStore('offline', () => {
         if (res.status === 401 || res.status >= 500) break
         if (!res.ok) {
           const data = await res.json().catch(() => ({}))
-          failures.value.push({ label: m.label, error: data.error || `Erreur ${res.status}` })
+          failures.value.push({ label: m.label, error: data.error || t('shell.offline.httpError', { status: res.status }) })
         } else {
           sent++
         }

@@ -28,7 +28,7 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
     <BulkSelectionBar
       v-if="vehicleStore.canEdit"
       :count="selectedTripIds.length"
-      item-label="covoiturage"
+      noun="carpool"
       @clear="emit('clear')"
     >
       <button

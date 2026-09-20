@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { t } from '@/i18n'
 
 export interface ConfirmOptions {
   title?: string
@@ -11,10 +12,10 @@ export interface ConfirmOptions {
 
 const isOpen = ref(false)
 const options = ref<ConfirmOptions>({
-  title: 'Confirmation',
+  title: '',
   message: '',
-  confirmText: 'Confirmer',
-  cancelText: 'Annuler',
+  confirmText: '',
+  cancelText: '',
   type: 'danger',
   isAlert: false,
 })
@@ -25,19 +26,19 @@ export function useConfirm() {
   function showConfirm(opts: ConfirmOptions | string): Promise<boolean> {
     if (typeof opts === 'string') {
       options.value = {
-        title: 'Confirmation',
+        title: t('shell.confirm.title'),
         message: opts,
-        confirmText: 'Confirmer',
-        cancelText: 'Annuler',
+        confirmText: t('common.confirm'),
+        cancelText: t('common.cancel'),
         type: 'danger',
         isAlert: false,
       }
     } else {
       options.value = {
-        title: opts.title || (opts.type === 'danger' ? 'Suppression' : 'Confirmation'),
+        title: opts.title || (opts.type === 'danger' ? t('shell.confirm.deleteTitle') : t('shell.confirm.title')),
         message: opts.message,
-        confirmText: opts.confirmText || (opts.type === 'danger' ? 'Supprimer' : 'Confirmer'),
-        cancelText: opts.cancelText || 'Annuler',
+        confirmText: opts.confirmText || (opts.type === 'danger' ? t('common.delete') : t('common.confirm')),
+        cancelText: opts.cancelText || t('common.cancel'),
         type: opts.type || 'danger',
         isAlert: false,
       }
@@ -51,9 +52,9 @@ export function useConfirm() {
 
   function showAlert(message: string, title?: string, type: 'info' | 'warning' | 'danger' | 'success' = 'info'): Promise<void> {
     options.value = {
-      title: title || (type === 'danger' ? 'Erreur' : 'Information'),
+      title: title || (type === 'danger' ? t('shell.confirm.error') : t('shell.confirm.information')),
       message,
-      confirmText: 'Compris',
+      confirmText: t('shell.confirm.gotIt'),
       cancelText: '',
       type: type || 'info',
       isAlert: true,

@@ -1,0 +1,18 @@
+{
+  "cancel": "Annuler",
+  "close": "Fermer",
+  "save": "Enregistrer",
+  "loading": "Chargement...",
+  "notes": "Notes",
+  "date": "Date",
+  "edit": "Modifier",
+  "delete": "Supprimer",
+  "confirm": "Confirmer",
+  "success": "Succès",
+  "errorWithMessage": "Erreur : {message}",
+  "requiredField": "Champ requis",
+  "deleteError": "Erreur lors de la suppression : {message}",
+  "selectAll": "Tout sélectionner",
+  "deselectAll": "Tout désélectionner",
+  "deleteForever": "Supprimer définitivement"
+}

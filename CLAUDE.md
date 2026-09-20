@@ -83,6 +83,8 @@ Backend
 Frontend
 - Views orchestrate; anything with its own form or API call is a component under `components/<area>/`. Modals use `defineModel('open')`, seed their form in `watch(open)` and emit `saved`.
 - Put logic in `utils/*.ts` with a test, not in the component. Shared date helpers live in `utils/dates.ts`.
+- Every user-visible string goes through vue-i18n (English and French). Catalogs are `web/src/locales/<lang>/<namespace>.json`; the message key is `<namespace>.<path>`. Templates use `$t('ns.key', { param })`, scripts, stores and utils use `t` from `@/i18n` (call it while rendering so it follows the language). Plurals use the `singular | plural` form with `t(key, count)`. Escape `@ | { } $` in a message as `{'@'}`. Add a key to both languages: `i18n.test.ts` fails when the key sets or placeholders differ. Shared wording (`Cancel`, `Save`, ...) lives in the `common` namespace. Dates and numbers use `intlLocale()`, never a hard-coded `fr-FR`. The product name is `APP_NAME` in `web/src/brand.ts`.
+- Unit tests run with the French locale (`web/vitest.setup.ts`).
 - `<table class="sr-only">` does not clip: wrap it in `<div class="sr-only">`. After changing a page, check that `documentElement.scrollWidth` equals the viewport at 320/360/375/390/414 px.
 - Do not pipe `vite build` through `tail` and trust the result: a failed build leaves the previous `dist`. Grep for `built|error`.
 

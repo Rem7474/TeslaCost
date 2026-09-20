@@ -475,7 +475,7 @@ async function handleDeleteLog(l: any) {
     <BulkSelectionBar
       v-if="vehicleStore.canEdit"
       :count="selectedTireIds.length"
-      item-label="pneu"
+      noun="tire"
       @clear="selectedTireIds = []"
     >
       <button

@@ -4,6 +4,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useOfflineStore } from '@/stores/offline'
 import { RefreshCw, Car, Gauge, Plus, AlertCircle, AlertTriangle, X, CheckCircle2, WifiOff, CloudUpload } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
+import { t } from '@/i18n'
 import { APP_VERSION } from '@/version'
 
 const vehicleStore = useVehicleStore()
@@ -16,12 +17,12 @@ const syncSummary = computed(() => {
   const drives = res.drives_added !== undefined ? res.drives_added : res.drives_synced
   const charges = res.charges_added !== undefined ? res.charges_added : res.charges_synced
   const parts: string[] = []
-  if (drives > 0) parts.push(`+${drives} trajet${drives > 1 ? 's' : ''}`)
-  if (charges > 0) parts.push(`+${charges} charge${charges > 1 ? 's' : ''}`)
+  if (drives > 0) parts.push(t('shell.topBar.driveCount', drives))
+  if (charges > 0) parts.push(t('shell.topBar.chargeCount', charges))
   if (parts.length > 0) {
     return parts.join(', ')
   }
-  return 'À jour (aucun nouveau trajet)'
+  return t('shell.topBar.upToDate')
 })
 
 function onVehicleChange(event: Event) {
@@ -44,7 +45,7 @@ function onVehicleChange(event: Event) {
         </div>
 
         <div v-if="vehicleStore.vehicles.length" class="flex min-w-0 flex-1 items-center gap-2">
-          <label for="topbar-active-vehicle" class="sr-only">Véhicule actif</label>
+          <label for="topbar-active-vehicle" class="sr-only">{{ $t('shell.topBar.activeVehicle') }}</label>
           <select id="topbar-active-vehicle"
             :value="vehicleStore.activeVehicle?.id"
             @change="onVehicleChange"
@@ -53,7 +54,7 @@ function onVehicleChange(event: Event) {
             <option v-for="v in vehicleStore.vehicles" :key="v.id" :value="v.id">
               {{ v.name }}
             </option>
-            <option value="new">+ Ajouter un véhicule</option>
+            <option value="new">{{ $t('shell.topBar.addAVehicle2') }}</option>
           </select>
 
           <!-- Odometer pill -->
@@ -65,7 +66,7 @@ function onVehicleChange(event: Event) {
 
         <div v-else-if="!vehicleStore.isInitialized || vehicleStore.isLoading" class="flex items-center gap-2">
           <div class="w-4 h-4 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
-          <span class="text-xs text-slate-400">Chargement...</span>
+          <span class="text-xs text-slate-400">{{ $t('common.loading') }}</span>
         </div>
 
         <div v-else>
@@ -74,7 +75,7 @@ function onVehicleChange(event: Event) {
             class="text-xs bg-rose-600 hover:bg-rose-500 text-white font-medium px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors"
           >
             <Plus class="w-3.5 h-3.5" />
-            Ajouter un véhicule
+            {{ $t('shell.topBar.addAVehicle') }}
           </button>
         </div>
       </div>
@@ -86,13 +87,13 @@ function onVehicleChange(event: Event) {
           v-if="!offlineStore.isOnline || offlineStore.pendingCount > 0"
           class="flex items-center gap-1.5 text-[11px] px-2.5 py-1 rounded-lg border"
           :class="offlineStore.isOnline ? 'text-sky-300 bg-sky-500/10 border-sky-500/20' : 'text-amber-300 bg-amber-500/10 border-amber-500/20'"
-          :title="offlineStore.isOnline ? 'Envoi des saisies enregistrées hors ligne' : 'Les saisies sont conservées et seront envoyées au retour du réseau'"
-          :aria-label="`${!offlineStore.isOnline ? 'Hors ligne. ' : ''}${offlineStore.pendingCount > 0 ? offlineStore.pendingCount + ' saisie(s) en attente' : ''}`"
+          :title="offlineStore.isOnline ? $t('shell.topBar.offlineSendingTitle') : $t('shell.topBar.offlineKeptTitle')"
+          :aria-label="`${!offlineStore.isOnline ? $t('shell.topBar.offlineSentence') + ' ' : ''}${offlineStore.pendingCount > 0 ? $t('shell.topBar.pendingEntries', { count: offlineStore.pendingCount }) : ''}`"
         >
           <WifiOff v-if="!offlineStore.isOnline" class="w-3.5 h-3.5 shrink-0" />
           <CloudUpload v-else class="w-3.5 h-3.5 shrink-0" :class="{ 'animate-pulse': offlineStore.isFlushing }" />
-          <span v-if="!offlineStore.isOnline" class="hidden sm:inline">Hors ligne</span>
-          <span v-if="offlineStore.pendingCount > 0">{{ offlineStore.pendingCount }}<span class="hidden sm:inline"> en attente</span></span>
+          <span v-if="!offlineStore.isOnline" class="hidden sm:inline">{{ $t('shell.topBar.offline') }}</span>
+          <span v-if="offlineStore.pendingCount > 0">{{ offlineStore.pendingCount }}<span class="hidden sm:inline"> {{ $t('shell.topBar.pending') }}</span></span>
         </div>
 
         <button
@@ -105,10 +106,10 @@ function onVehicleChange(event: Event) {
               ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
               : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
           "
-          title="Synchroniser avec TeslaMate"
+          :title="$t('shell.topBar.syncWithTeslamate')"
         >
           <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': vehicleStore.isSyncing }" />
-          <span class="hidden sm:inline">{{ vehicleStore.isSyncing ? 'Synchronisation...' : 'Synchroniser' }}</span>
+          <span class="hidden sm:inline">{{ vehicleStore.isSyncing ? $t('shell.topBar.syncing') : $t('shell.topBar.sync') }}</span>
         </button>
 
         <!-- Sync result success -->
@@ -135,7 +136,7 @@ function onVehicleChange(event: Event) {
       class="bg-sky-500/15 border-b border-sky-500/30 px-4 py-2 text-xs text-sky-200 flex items-center gap-2"
     >
       <CloudUpload class="w-4 h-4 shrink-0 text-sky-400" />
-      <span><strong>{{ offlineStore.lastQueuedLabel }}</strong> enregistré hors ligne : envoi automatique au retour du réseau.</span>
+      <span><strong>{{ offlineStore.lastQueuedLabel }}</strong> {{ $t('shell.topBar.savedOfflineItWillBe') }}</span>
     </div>
 
     <!-- Offline replay failures -->
@@ -146,7 +147,7 @@ function onVehicleChange(event: Event) {
       <div class="flex items-start gap-2">
         <AlertCircle class="w-4 h-4 shrink-0 text-rose-400" />
         <span>
-          <strong>Saisies hors ligne refusées :</strong>
+          <strong>{{ $t('shell.topBar.offlineEntriesRejected') }}</strong>
           {{ offlineStore.failures.map((f) => `${f.label} (${f.error})`).join(' ; ') }}
         </span>
       </div>
@@ -162,7 +163,7 @@ function onVehicleChange(event: Event) {
     >
       <div class="flex items-center gap-2">
         <AlertCircle class="w-4 h-4 shrink-0 text-rose-400" />
-        <span><strong>Erreur de synchronisation :</strong> {{ vehicleStore.syncError }}</span>
+        <span><strong>{{ $t('shell.topBar.syncError') }}</strong> {{ vehicleStore.syncError }}</span>
       </div>
       <button
         @click="vehicleStore.clearSyncStatus"
@@ -180,7 +181,7 @@ function onVehicleChange(event: Event) {
       <div class="flex items-center gap-2">
         <AlertTriangle class="w-4 h-4 shrink-0 text-amber-400" />
         <span>
-          <strong>Synchronisation terminée avec remarques :</strong> {{ syncSummary }}.
+          <strong>{{ $t('shell.topBar.syncFinishedWithWarnings') }}</strong> {{ syncSummary }}.
           <span class="text-amber-200/80">({{ vehicleStore.syncResult.warnings.join(' ; ') }})</span>
         </span>
       </div>

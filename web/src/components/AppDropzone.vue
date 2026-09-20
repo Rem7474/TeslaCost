@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, useId } from 'vue'
 import { UploadCloud, FileText, Image as ImageIcon, X, AlertCircle } from 'lucide-vue-next'
+import { t } from '@/i18n'
 
 const props = withDefaults(
   defineProps<{
@@ -15,8 +16,6 @@ const props = withDefaults(
   {
     accept: '.pdf,image/png,image/jpeg,image/webp',
     maxSizeMb: 15,
-    label: 'Glissez votre justificatif ou cliquez pour parcourir',
-    helperText: 'Formats acceptés : PDF, PNG, JPG, WEBP (max. 15 Mo)',
     disabled: false,
   }
 )
@@ -44,9 +43,9 @@ const isPdf = computed(() => {
 })
 
 function formatBytes(bytes: number): string {
-  if (!bytes || bytes <= 0) return '0 o'
+  const sizes = t('shell.appDropzone.byteUnits').split(',')
+  if (!bytes || bytes <= 0) return `0 ${sizes[0]}`
   const k = 1024
-  const sizes = ['o', 'Ko', 'Mo', 'Go']
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`
 }
@@ -87,7 +86,7 @@ function validateAndSetFile(file: File) {
   // Check file size
   const maxBytes = props.maxSizeMb * 1024 * 1024
   if (file.size > maxBytes) {
-    const msg = `Le fichier dépasse la taille maximale autorisée de ${props.maxSizeMb} Mo (${formatBytes(file.size)})`
+    const msg = t('shell.appDropzone.tooLarge', { max: props.maxSizeMb, size: formatBytes(file.size) })
     validationError.value = msg
     emit('error', msg)
     return
@@ -96,7 +95,7 @@ function validateAndSetFile(file: File) {
   // Check accepted formats
   const acceptedTypes = props.accept
     .split(',')
-    .map((t) => t.trim().toLowerCase())
+    .map((entry) => entry.trim().toLowerCase())
   const fileExt = `.${file.name.split('.').pop()?.toLowerCase() || ''}`
   const fileMime = file.type.toLowerCase()
 
@@ -112,7 +111,7 @@ function validateAndSetFile(file: File) {
   })
 
   if (!isValid) {
-    const msg = `Format de fichier non pris en charge. Formats acceptés : ${props.accept}`
+    const msg = t('shell.appDropzone.unsupportedFormat', { accept: props.accept })
     validationError.value = msg
     emit('error', msg)
     return
@@ -163,7 +162,7 @@ function removeFile() {
 <template>
   <div class="space-y-2">
     <!-- Hidden native file input -->
-    <label :for="uniqueId" class="sr-only">{{ label }}</label>
+    <label :for="uniqueId" class="sr-only">{{ label ?? $t('shell.appDropzone.defaultLabel') }}</label>
     <input
       :id="uniqueId"
       ref="fileInputRef"
@@ -201,10 +200,10 @@ function removeFile() {
       </div>
       <div>
         <p class="text-xs font-semibold text-slate-200 group-hover:text-white">
-          {{ isDragging ? 'Déposez le fichier ici' : label }}
+          {{ isDragging ? $t('shell.appDropzone.dropHere') : (label ?? $t('shell.appDropzone.defaultLabel')) }}
         </p>
         <p class="text-[11px] text-slate-400 mt-0.5">
-          {{ helperText }}
+          {{ helperText ?? $t('shell.appDropzone.defaultHelper', { max: maxSizeMb }) }}
         </p>
       </div>
     </div>
@@ -249,14 +248,14 @@ function removeFile() {
           :disabled="disabled"
           class="px-2.5 py-1 text-[11px] font-medium text-slate-300 hover:text-white bg-slate-700/70 hover:bg-slate-700 rounded-lg transition-colors"
         >
-          Remplacer
+          {{ $t('shell.appDropzone.replace') }}
         </button>
         <button
           type="button"
           @click="removeFile"
           :disabled="disabled"
           class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 rounded-lg transition-colors"
-          title="Supprimer ce fichier"
+          :title="$t('shell.appDropzone.removeThisFile')"
         >
           <X class="w-4 h-4" />
         </button>
