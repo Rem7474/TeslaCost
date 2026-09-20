@@ -287,7 +287,9 @@
     "noTireFittedAtThe": "Aucun pneu monté à l'{label} ({pos})",
     "estimatedLifespanWearKm": "Usure durée de vie estimée ({estimated_lifespan_km} km)",
     "costKm": "Coût / km",
-    "totalDriven": "Total parcouru"
+    "totalDriven": "Total parcouru",
+    "removeFromSelection": "Retirer de la sélection",
+    "selectForBulk": "Sélectionner pour une action par lot"
   },
   "wheels": {
     "FL": "Avant Gauche",

@@ -287,7 +287,9 @@
     "noTireFittedAtThe": "No tire fitted at the {label} ({pos})",
     "estimatedLifespanWearKm": "Estimated lifespan wear ({estimated_lifespan_km} km)",
     "costKm": "Cost / km",
-    "totalDriven": "Total driven"
+    "totalDriven": "Total driven",
+    "removeFromSelection": "Remove from the selection",
+    "selectForBulk": "Select for a bulk action"
   },
   "wheels": {
     "FL": "Front left",
