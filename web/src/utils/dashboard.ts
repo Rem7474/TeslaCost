@@ -207,7 +207,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       color: '#38bdf8',
       amount: m.energy || 0,
       cashAmount: m.energy || 0,
-      note: m.smoothed_energy > 0 ? `dont ${m.smoothed_energy.toFixed(2)} € estimés avant TeslaMate` : null,
+      note: m.smoothed_energy > 0 ? `dont ${m.smoothed_energy.toFixed(2)} € estimés (énergie non suivie)` : null,
     },
     {
       key: 'tolls',

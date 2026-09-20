@@ -8,43 +8,43 @@ import (
 	"testing"
 )
 
-func TestUpdatePreTeslaMateEnergyValidation(t *testing.T) {
+func TestUpdateEstimatedEnergyValidation(t *testing.T) {
 	h := &VehicleHandler{}
 
 	cases := []struct {
 		name       string
-		body       SavePreTeslaMateEnergyRequest
+		body       SaveEstimatedEnergyRequest
 		wantStatus int
 	}{
 		{
 			name: "negative consumption",
-			body: func() SavePreTeslaMateEnergyRequest {
+			body: func() SaveEstimatedEnergyRequest {
 				c := -10.0
-				return SavePreTeslaMateEnergyRequest{PreTeslaMateKwh100km: &c}
+				return SaveEstimatedEnergyRequest{EstimatedKwh100km: &c}
 			}(),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "excessive consumption",
-			body: func() SavePreTeslaMateEnergyRequest {
+			body: func() SaveEstimatedEnergyRequest {
 				c := 150.0
-				return SavePreTeslaMateEnergyRequest{PreTeslaMateKwh100km: &c}
+				return SaveEstimatedEnergyRequest{EstimatedKwh100km: &c}
 			}(),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "negative tariff",
-			body: func() SavePreTeslaMateEnergyRequest {
+			body: func() SaveEstimatedEnergyRequest {
 				p := -0.22
-				return SavePreTeslaMateEnergyRequest{PreTeslaMateEurPerKwh: &p}
+				return SaveEstimatedEnergyRequest{EstimatedPricePerKwh: &p}
 			}(),
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name: "excessive tariff",
-			body: func() SavePreTeslaMateEnergyRequest {
+			body: func() SaveEstimatedEnergyRequest {
 				p := 15.0
-				return SavePreTeslaMateEnergyRequest{PreTeslaMateEurPerKwh: &p}
+				return SaveEstimatedEnergyRequest{EstimatedPricePerKwh: &p}
 			}(),
 			wantStatus: http.StatusBadRequest,
 		},
@@ -53,9 +53,9 @@ func TestUpdatePreTeslaMateEnergyValidation(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			b, _ := json.Marshal(tc.body)
-			req := httptest.NewRequest(http.MethodPut, "/api/vehicles/123/pre-teslamate-energy", bytes.NewReader(b))
+			req := httptest.NewRequest(http.MethodPut, "/api/vehicles/123/estimated-energy", bytes.NewReader(b))
 			w := httptest.NewRecorder()
-			h.UpdatePreTeslaMateEnergy(w, req)
+			h.UpdateEstimatedEnergy(w, req)
 			if w.Code != tc.wantStatus {
 				t.Fatalf("expected status %d, got %d (body: %s)", tc.wantStatus, w.Code, w.Body.String())
 			}

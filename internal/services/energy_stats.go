@@ -349,7 +349,7 @@ func computeEnergyStats(drives []energyDriveMonth, charges []energyCharge) *Ener
 		}
 
 		// Trailing window: energy bought and energy driven rarely fall in the same month. Months without tracked
-		// distance (before TeslaMate) are left out, their energy has no matching kilometres.
+		// distance (before tracking started) are left out, their energy has no matching kilometres.
 		var winKm float64
 		var winCost money.Cents
 		for _, wm := range previousMonths(m, trailingMonths) {
@@ -380,7 +380,7 @@ func computeEnergyStats(drives []energyDriveMonth, charges []energyCharge) *Ener
 		})
 	}
 
-	// Cost per 100 km only counts the months where distance is tracked: energy bought before TeslaMate has no
+	// Cost per 100 km only counts the months where distance is tracked: energy bought before tracking started has no
 	// matching distance and would inflate it.
 	var trackedCost money.Cents
 	var trackedKm float64

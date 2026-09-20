@@ -1663,8 +1663,8 @@ func TestIntegrationICEVehicleFuelLogs(t *testing.T) {
 	if sum.TotalLiters != 111 || sum.FuelFillUps != 4 || sum.ConsumptionL100km == nil || *sum.ConsumptionL100km != 5.545 { // 61 L over 1100 km between full tanks
 		t.Errorf("fuel figures: liters=%v fills=%d consumption=%v", sum.TotalLiters, sum.FuelFillUps, sum.ConsumptionL100km)
 	}
-	if sum.PreTeslaMateDistanceKm != 0 {
-		t.Errorf("a combustion vehicle has no pre-TeslaMate distance, got %v", sum.PreTeslaMateDistanceKm)
+	if sum.EstimatedEnergyDistanceKm != 0 {
+		t.Errorf("a combustion vehicle has no estimated energy distance, got %v", sum.EstimatedEnergyDistanceKm)
 	}
 	if sum.EnergyCostPerKm <= 0 {
 		t.Errorf("energy cost per km = %v, want > 0 without any drive", sum.EnergyCostPerKm)

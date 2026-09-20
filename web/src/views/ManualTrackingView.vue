@@ -5,7 +5,7 @@ import { ClipboardList, Gauge, Fuel, Zap } from 'lucide-vue-next'
 import { useVehicleStore } from '@/stores/vehicle'
 import OdometerReadingsPanel from '@/components/manual/OdometerReadingsPanel.vue'
 import FuelLogsPanel from '@/components/manual/FuelLogsPanel.vue'
-import PreTeslaMateEnergyPanel from '@/components/manual/PreTeslaMateEnergyPanel.vue'
+import EstimatedEnergyPanel from '@/components/manual/EstimatedEnergyPanel.vue'
 
 type Tab = 'KM' | 'FUEL' | 'ENERGY'
 
@@ -13,11 +13,11 @@ const route = useRoute()
 const router = useRouter()
 const vehicleStore = useVehicleStore()
 
-// Readings are shared by every vehicle; fill-ups only exist for combustion vehicles, the pre-TeslaMate energy for electric ones
+// Readings are shared by every vehicle; fill-ups only exist for combustion vehicles, the energy estimate for electric ones
 const tabs = computed<{ key: Tab; label: string; icon: any }[]>(() => {
   const list: { key: Tab; label: string; icon: any }[] = [{ key: 'KM', label: 'Kilométrage', icon: Gauge }]
   if (vehicleStore.isIce) list.push({ key: 'FUEL', label: 'Pleins', icon: Fuel })
-  else list.push({ key: 'ENERGY', label: 'Énergie avant TeslaMate', icon: Zap })
+  else list.push({ key: 'ENERGY', label: 'Énergie estimée', icon: Zap })
   return list
 })
 
@@ -86,7 +86,7 @@ function select(tab: Tab) {
         :vehicle-id="vehicleStore.activeVehicle.id"
         :can-edit="vehicleStore.canEdit"
       />
-      <PreTeslaMateEnergyPanel v-else-if="activeTab === 'ENERGY'" :vehicle="vehicleStore.activeVehicle" :can-edit="vehicleStore.canEdit" />
+      <EstimatedEnergyPanel v-else-if="activeTab === 'ENERGY'" :vehicle="vehicleStore.activeVehicle" :can-edit="vehicleStore.canEdit" />
     </template>
   </div>
 </template>

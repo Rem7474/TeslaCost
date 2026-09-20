@@ -12,7 +12,7 @@ import (
 
 // monthlyCosts builds the cash-basis monthly timeline (acquisition excluded) in the reporting timezone,
 // including linear smoothing of missing mileage between odometer checkpoints.
-func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, preKwh100km, preEurPerKwh *float64, now time.Time) ([]MonthlyCost, float64, float64, error) {
+func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownership *models.VehicleOwnership, currentOdometer float64, estKwh100km, estPricePerKwh *float64, now time.Time) ([]MonthlyCost, float64, float64, error) {
 	monthlyMap := make(map[string]*MonthlyCost)
 	get := func(m string) *MonthlyCost {
 		if _, ok := monthlyMap[m]; !ok {
@@ -98,7 +98,7 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 	var rawPreTmTotal float64
 	for m, preKm := range preTmMap {
 		if preKm > 0 {
-			get(m).PreTeslaMateKm += round1(preKm)
+			get(m).EstimatedEnergyKm += round1(preKm)
 			rawPreTmTotal += preKm
 		}
 	}
@@ -114,24 +114,24 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 		get(m).TiresAmortized += amount
 	}
 
-	var totalSmoothed, totalPreTm float64
-	var lastSmoothedMc, lastPreTmMc *MonthlyCost
+	var totalSmoothed, totalEstimated float64
+	var lastSmoothedMc, lastEstimatedMc *MonthlyCost
 	for _, mc := range monthlyMap {
 		mc.TrackedDistanceKm = round1(mc.DistanceKm)
 		mc.SmoothedKm = round1(mc.SmoothedKm)
-		mc.PreTeslaMateKm = round1(mc.PreTeslaMateKm)
+		mc.EstimatedEnergyKm = round1(mc.EstimatedEnergyKm)
 		if mc.SmoothedKm > 0 {
 			lastSmoothedMc = mc
 		}
-		if mc.PreTeslaMateKm > 0 {
-			lastPreTmMc = mc
+		if mc.EstimatedEnergyKm > 0 {
+			lastEstimatedMc = mc
 		}
 		mc.DistanceKm = round1(mc.TrackedDistanceKm + mc.SmoothedKm)
 		totalSmoothed += mc.SmoothedKm
-		totalPreTm += mc.PreTeslaMateKm
-		if preKwh100km != nil && *preKwh100km > 0 && preEurPerKwh != nil && *preEurPerKwh > 0 && mc.PreTeslaMateKm > 0 {
-			mc.SmoothedKwh = round1(mc.PreTeslaMateKm * (*preKwh100km / 100.0))
-			mc.SmoothedEnergy = money.FromFloat(mc.SmoothedKwh * *preEurPerKwh)
+		totalEstimated += mc.EstimatedEnergyKm
+		if estKwh100km != nil && *estKwh100km > 0 && estPricePerKwh != nil && *estPricePerKwh > 0 && mc.EstimatedEnergyKm > 0 {
+			mc.SmoothedKwh = round1(mc.EstimatedEnergyKm * (*estKwh100km / 100.0))
+			mc.SmoothedEnergy = money.FromFloat(mc.SmoothedKwh * *estPricePerKwh)
 			mc.Energy += mc.SmoothedEnergy
 		}
 	}
@@ -145,16 +145,16 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 		}
 	}
 
-	if lastPreTmMc != nil && targetPreTm > 0 {
-		diff := round1(targetPreTm - totalPreTm)
+	if lastEstimatedMc != nil && targetPreTm > 0 {
+		diff := round1(targetPreTm - totalEstimated)
 		if math.Abs(diff) > 0.001 && math.Abs(diff) < 1.0 {
-			lastPreTmMc.PreTeslaMateKm = round1(lastPreTmMc.PreTeslaMateKm + diff)
-			totalPreTm = targetPreTm
-			if preKwh100km != nil && *preKwh100km > 0 && preEurPerKwh != nil && *preEurPerKwh > 0 && lastPreTmMc.PreTeslaMateKm > 0 {
-				oldEnergy := lastPreTmMc.SmoothedEnergy
-				lastPreTmMc.SmoothedKwh = round1(lastPreTmMc.PreTeslaMateKm * (*preKwh100km / 100.0))
-				lastPreTmMc.SmoothedEnergy = money.FromFloat(lastPreTmMc.SmoothedKwh * *preEurPerKwh)
-				lastPreTmMc.Energy = lastPreTmMc.Energy - oldEnergy + lastPreTmMc.SmoothedEnergy
+			lastEstimatedMc.EstimatedEnergyKm = round1(lastEstimatedMc.EstimatedEnergyKm + diff)
+			totalEstimated = targetPreTm
+			if estKwh100km != nil && *estKwh100km > 0 && estPricePerKwh != nil && *estPricePerKwh > 0 && lastEstimatedMc.EstimatedEnergyKm > 0 {
+				oldEnergy := lastEstimatedMc.SmoothedEnergy
+				lastEstimatedMc.SmoothedKwh = round1(lastEstimatedMc.EstimatedEnergyKm * (*estKwh100km / 100.0))
+				lastEstimatedMc.SmoothedEnergy = money.FromFloat(lastEstimatedMc.SmoothedKwh * *estPricePerKwh)
+				lastEstimatedMc.Energy = lastEstimatedMc.Energy - oldEnergy + lastEstimatedMc.SmoothedEnergy
 			}
 		}
 	}
@@ -189,5 +189,5 @@ func (s *TCOService) monthlyCosts(ctx context.Context, vehicleID string, ownersh
 	if len(monthlyCosts) == 0 {
 		monthlyCosts = append(monthlyCosts, MonthlyCost{Month: now.Format("2006-01")})
 	}
-	return monthlyCosts, round1(totalSmoothed), round1(totalPreTm), nil
+	return monthlyCosts, round1(totalSmoothed), round1(totalEstimated), nil
 }

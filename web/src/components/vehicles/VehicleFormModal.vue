@@ -101,17 +101,17 @@ async function testModalConnection() {
           </div>
         </div>
 
-        <!-- Pre-TeslaMate energy section -->
+        <!-- Energy estimate section -->
         <div v-if="form.powertrain !== 'ICE'" class="pt-2 border-t border-slate-800 space-y-3">
-          <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Recharge avant TeslaMate (Optionnel)</h4>
+          <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Énergie estimée (Optionnel)</h4>
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label for="vehicle-pre-kwh" class="block text-xs font-semibold text-slate-300 mb-1">Conso (kWh/100km)</label>
-              <input id="vehicle-pre-kwh" v-model.number="form.pre_teslamate_kwh_100km" type="number" step="0.1" min="1" max="100" placeholder="ex: 16.5" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input id="vehicle-pre-kwh" v-model.number="form.estimated_kwh_100km" type="number" step="0.1" min="1" max="100" placeholder="ex: 16.5" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
               <label for="vehicle-pre-rate" class="block text-xs font-semibold text-slate-300 mb-1">Tarif (€/kWh)</label>
-              <input id="vehicle-pre-rate" v-model.number="form.pre_teslamate_eur_per_kwh" type="number" step="0.0001" min="0.01" max="5" placeholder="ex: 0.22" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <input id="vehicle-pre-rate" v-model.number="form.estimated_price_per_kwh" type="number" step="0.0001" min="0.01" max="5" placeholder="ex: 0.22" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
         </div>

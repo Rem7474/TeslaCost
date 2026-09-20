@@ -107,7 +107,7 @@ func TestComputeEnergyStats(t *testing.T) {
 		{Month: "2026-03", DistanceKm: 40, MeasuredKm: 40, Kwh: 6}, // too short for a cost per 100 km
 	}
 	charges := []energyCharge{
-		session("2025-12", 4, 30, nil, ptrCents(9)),      // before TeslaMate: cost without distance
+		session("2025-12", 4, 30, nil, ptrCents(9)),      // before tracking started: cost without distance
 		session("2026-01", 4, 30, ptrF(33), ptrCents(6)), // 7.5 kW: AC
 		session("2026-01", 0.5, 40, nil, ptrCents(20)),   // 80 kW: DC, grid energy not reported
 		session("2026-02", 5, 10, ptrF(12), ptrCents(2)), // 2 kW: socket

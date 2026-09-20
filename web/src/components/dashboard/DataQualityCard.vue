@@ -83,11 +83,11 @@ const issueLabels: Record<string, string> = {
         Saisir un plein
       </router-link>
       <router-link
-        v-if="tco.powertrain !== 'ICE' && tco.completeness.untracked_distance_km > 0 && !tco.pre_teslamate_cost"
+        v-if="tco.powertrain !== 'ICE' && tco.completeness.untracked_distance_km > 0 && !tco.estimated_energy_cost"
         to="/vehicles"
         class="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30"
       >
-        Compléter recharges avant TeslaMate
+        Estimer l'énergie non suivie
       </router-link>
       <button
         v-if="tco.completeness.odometer_gaps > 0 || tco.completeness.odometer_anomalies > 0"

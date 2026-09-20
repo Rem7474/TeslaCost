@@ -37,8 +37,8 @@ type Vehicle struct {
 	TeslaMateAPIKeyEncrypted *string     `json:"-"`
 	TeslaMateBasicUser       *string     `json:"teslamate_basic_user,omitempty"`
 	TeslaMateBasicPassEnc    *string     `json:"-"`
-	PreTeslaMateKwh100km     *float64    `json:"pre_teslamate_kwh_100km,omitempty"`
-	PreTeslaMateEurPerKwh    *float64    `json:"pre_teslamate_eur_per_kwh,omitempty"`
+	EstimatedKwh100km        *float64    `json:"estimated_kwh_100km,omitempty"`
+	EstimatedPricePerKwh     *float64    `json:"estimated_price_per_kwh,omitempty"`
 	Powertrain               string      `json:"powertrain"`                      // PowertrainEV | PowertrainICE
 	TeslaMateGrafanaURL      *string     `json:"teslamate_grafana_url,omitempty"` // Grafana serving the TeslaMate dashboards, to link drives
 	CreatedAt                time.Time   `json:"created_at"`

@@ -173,8 +173,8 @@ export const api = {
   saveOwnership: (id: string, data: any) =>
     request<any>(`/vehicles/${id}/ownership`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteOwnership: (id: string) => request<any>(`/vehicles/${id}/ownership`, { method: 'DELETE' }),
-  updatePreTeslaMateEnergy: (id: string, data: { pre_teslamate_kwh_100km?: number | null; pre_teslamate_eur_per_kwh?: number | null }) =>
-    request<any>(`/vehicles/${id}/pre-teslamate-energy`, { method: 'PUT', body: JSON.stringify(data) }),
+  updateEstimatedEnergy: (id: string, data: { estimated_kwh_100km?: number | null; estimated_price_per_kwh?: number | null }) =>
+    request<any>(`/vehicles/${id}/estimated-energy`, { method: 'PUT', body: JSON.stringify(data) }),
   getOdometerAt: (vehicleId: string, date: string) =>
     request<{ odometer: number; source: string }>(`/vehicles/${vehicleId}/odometer-at?date=${encodeURIComponent(date)}`),
   getDataQuality: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/data-quality`),

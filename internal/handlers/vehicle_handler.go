@@ -32,19 +32,19 @@ func NewVehicleHandler(repo *database.Repository, encryptor *crypto.Encryptor, s
 }
 
 type SaveVehicleRequest struct {
-	Name                  string          `json:"name"`
-	Vin                   *string         `json:"vin"`
-	TeslaMateCarID        *int            `json:"teslamate_car_id"`
-	CurrentOdometer       float64         `json:"current_odometer"`
-	TeslaMateAPIURL       *string         `json:"teslamate_api_url"`
-	TeslaMateAuthType     models.AuthMode `json:"teslamate_auth_type"`
-	TeslaMateAPIKey       *string         `json:"teslamate_api_key"` // Plain text from frontend
-	TeslaMateBasicUser    *string         `json:"teslamate_basic_user"`
-	TeslaMateBasicPass    *string         `json:"teslamate_basic_pass"` // Plain text from frontend
-	PreTeslaMateKwh100km  *float64        `json:"pre_teslamate_kwh_100km"`
-	PreTeslaMateEurPerKwh *float64        `json:"pre_teslamate_eur_per_kwh"`
-	Powertrain            string          `json:"powertrain"` // EV (default) or ICE
-	TeslaMateGrafanaURL   *string         `json:"teslamate_grafana_url"` // Optional; empty clears it
+	Name                 string          `json:"name"`
+	Vin                  *string         `json:"vin"`
+	TeslaMateCarID       *int            `json:"teslamate_car_id"`
+	CurrentOdometer      float64         `json:"current_odometer"`
+	TeslaMateAPIURL      *string         `json:"teslamate_api_url"`
+	TeslaMateAuthType    models.AuthMode `json:"teslamate_auth_type"`
+	TeslaMateAPIKey      *string         `json:"teslamate_api_key"` // Plain text from frontend
+	TeslaMateBasicUser   *string         `json:"teslamate_basic_user"`
+	TeslaMateBasicPass   *string         `json:"teslamate_basic_pass"` // Plain text from frontend
+	EstimatedKwh100km    *float64        `json:"estimated_kwh_100km"`
+	EstimatedPricePerKwh *float64        `json:"estimated_price_per_kwh"`
+	Powertrain           string          `json:"powertrain"`            // EV (default) or ICE
+	TeslaMateGrafanaURL  *string         `json:"teslamate_grafana_url"` // Optional; empty clears it
 }
 
 // normalizeGrafanaURL validates the base URL of the Grafana serving the TeslaMate dashboards.
@@ -160,8 +160,8 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TeslaMateAPIKeyEncrypted: encKey,
 		TeslaMateBasicUser:       req.TeslaMateBasicUser,
 		TeslaMateBasicPassEnc:    encPass,
-		PreTeslaMateKwh100km:     req.PreTeslaMateKwh100km,
-		PreTeslaMateEurPerKwh:    req.PreTeslaMateEurPerKwh,
+		EstimatedKwh100km:        req.EstimatedKwh100km,
+		EstimatedPricePerKwh:     req.EstimatedPricePerKwh,
 		Powertrain:               powertrain,
 		TeslaMateGrafanaURL:      grafanaURL,
 	}
@@ -253,11 +253,11 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 			existing.TeslaMateBasicPassEnc = &encrypted
 		}
 	}
-	if req.PreTeslaMateKwh100km != nil {
-		existing.PreTeslaMateKwh100km = req.PreTeslaMateKwh100km
+	if req.EstimatedKwh100km != nil {
+		existing.EstimatedKwh100km = req.EstimatedKwh100km
 	}
-	if req.PreTeslaMateEurPerKwh != nil {
-		existing.PreTeslaMateEurPerKwh = req.PreTeslaMateEurPerKwh
+	if req.EstimatedPricePerKwh != nil {
+		existing.EstimatedPricePerKwh = req.EstimatedPricePerKwh
 	}
 
 	if err := h.repo.UpdateVehicle(r.Context(), existing); err != nil {
@@ -268,23 +268,23 @@ func (h *VehicleHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, existing)
 }
 
-type SavePreTeslaMateEnergyRequest struct {
-	PreTeslaMateKwh100km  *float64 `json:"pre_teslamate_kwh_100km"`
-	PreTeslaMateEurPerKwh *float64 `json:"pre_teslamate_eur_per_kwh"`
+type SaveEstimatedEnergyRequest struct {
+	EstimatedKwh100km    *float64 `json:"estimated_kwh_100km"`
+	EstimatedPricePerKwh *float64 `json:"estimated_price_per_kwh"`
 }
 
-func (h *VehicleHandler) UpdatePreTeslaMateEnergy(w http.ResponseWriter, r *http.Request) {
-	var req SavePreTeslaMateEnergyRequest
+func (h *VehicleHandler) UpdateEstimatedEnergy(w http.ResponseWriter, r *http.Request) {
+	var req SaveEstimatedEnergyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request payload")
 		return
 	}
 
-	if req.PreTeslaMateKwh100km != nil && (*req.PreTeslaMateKwh100km <= 0 || *req.PreTeslaMateKwh100km > 100) {
+	if req.EstimatedKwh100km != nil && (*req.EstimatedKwh100km <= 0 || *req.EstimatedKwh100km > 100) {
 		writeError(w, http.StatusBadRequest, "La consommation moyenne doit être comprise entre 0 et 100 kWh/100km")
 		return
 	}
-	if req.PreTeslaMateEurPerKwh != nil && (*req.PreTeslaMateEurPerKwh <= 0 || *req.PreTeslaMateEurPerKwh > 10) {
+	if req.EstimatedPricePerKwh != nil && (*req.EstimatedPricePerKwh <= 0 || *req.EstimatedPricePerKwh > 10) {
 		writeError(w, http.StatusBadRequest, "Le tarif de l'électricité doit être compris entre 0 et 10 €/kWh")
 		return
 	}
@@ -310,8 +310,8 @@ func (h *VehicleHandler) UpdatePreTeslaMateEnergy(w http.ResponseWriter, r *http
 		return
 	}
 
-	if err := h.repo.UpdateVehiclePreTeslaMateEnergy(r.Context(), vehicleID, userID, req.PreTeslaMateKwh100km, req.PreTeslaMateEurPerKwh); err != nil {
-		writeRepoError(w, r, err, "Failed to update pre-teslamate energy")
+	if err := h.repo.UpdateVehicleEstimatedEnergy(r.Context(), vehicleID, userID, req.EstimatedKwh100km, req.EstimatedPricePerKwh); err != nil {
+		writeRepoError(w, r, err, "Failed to update estimated energy")
 		return
 	}
 
@@ -514,4 +514,3 @@ func (h *VehicleHandler) GetOdometerAtDate(w http.ResponseWriter, r *http.Reques
 		"source":   source,
 	})
 }
-

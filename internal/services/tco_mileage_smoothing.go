@@ -146,7 +146,7 @@ func (s *TCOService) computeMileageSmoothing(ctx context.Context, vehicleID stri
 	}
 
 	if isICE {
-		// No TeslaMate history to precede: every interval is plain smoothing, never "pre-TeslaMate".
+		// No TeslaMate history to precede: every interval is plain smoothing, never estimated energy.
 		first := cleanPoints[0].date
 		firstTrackingTime = &first
 	}

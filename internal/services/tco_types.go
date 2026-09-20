@@ -32,13 +32,13 @@ const (
 
 // MonthlyCost represents monthly expenditure (cash basis, acquisition excluded) and mileage.
 type MonthlyCost struct {
-	Month                string      `json:"month"`                      // YYYY-MM
-	DistanceKm           float64     `json:"distance_km"`                // Total effective distance (tracked + smoothed)
-	TrackedDistanceKm    float64     `json:"tracked_distance_km"`        // Exact GPS drives distance
-	SmoothedKm           float64     `json:"smoothed_km"`                // Linearly smoothed / interpolated distance
-	PreTeslaMateKm       float64     `json:"pre_teslamate_km,omitempty"` // Distance driven before TeslaMate
-	SmoothedKwh          float64     `json:"smoothed_kwh,omitempty"`     // Estimated pre-TeslaMate kWh
-	SmoothedEnergy       money.Cents `json:"smoothed_energy,omitempty"`  // Estimated pre-TeslaMate energy cost
+	Month                string      `json:"month"`                         // YYYY-MM
+	DistanceKm           float64     `json:"distance_km"`                   // Total effective distance (tracked + smoothed)
+	TrackedDistanceKm    float64     `json:"tracked_distance_km"`           // Exact GPS drives distance
+	SmoothedKm           float64     `json:"smoothed_km"`                   // Linearly smoothed / interpolated distance
+	EstimatedEnergyKm    float64     `json:"estimated_energy_km,omitempty"` // Distance driven before tracking started
+	SmoothedKwh          float64     `json:"smoothed_kwh,omitempty"`        // Estimated kWh for the untracked distance
+	SmoothedEnergy       money.Cents `json:"smoothed_energy,omitempty"`     // Estimated energy cost for the untracked distance
 	Energy               money.Cents `json:"energy"`
 	Tolls                money.Cents `json:"tolls"`
 	Maintenance          money.Cents `json:"maintenance"`
@@ -145,11 +145,11 @@ type TCOSummary struct {
 	AvgCostPerLiter   float64  `json:"avg_cost_per_liter,omitempty"`
 	ConsumptionL100km *float64 `json:"consumption_l_100km,omitempty"` // Measured between full tanks
 
-	PreTeslaMateDistanceKm float64     `json:"pre_teslamate_distance_km,omitempty"`
-	PreTeslaMateKwh        float64     `json:"pre_teslamate_kwh,omitempty"`
-	PreTeslaMateCost       money.Cents `json:"pre_teslamate_cost,omitempty"`
-	PreTeslaMateKwh100km   *float64    `json:"pre_teslamate_kwh_100km,omitempty"`
-	PreTeslaMateEurPerKwh  *float64    `json:"pre_teslamate_eur_per_kwh,omitempty"`
+	EstimatedEnergyDistanceKm float64     `json:"estimated_energy_distance_km,omitempty"`
+	EstimatedEnergyKwh        float64     `json:"estimated_energy_kwh,omitempty"`
+	EstimatedEnergyCost       money.Cents `json:"estimated_energy_cost,omitempty"`
+	EstimatedKwh100km         *float64    `json:"estimated_kwh_100km,omitempty"`
+	EstimatedPricePerKwh      *float64    `json:"estimated_price_per_kwh,omitempty"`
 
 	TollsCost      money.Cents `json:"tolls_cost"` // Tolls, parking, ferries
 	TollsCostPerKm float64     `json:"tolls_cost_per_km"`

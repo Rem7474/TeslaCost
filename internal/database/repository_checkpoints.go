@@ -6,7 +6,7 @@ import (
 	"github.com/teslacost/teslacost/internal/models"
 )
 
-// Manual odometer checkpoints (used to bridge pre-TeslaMate history).
+// Manual odometer checkpoints (used to bridge history before tracking started).
 // ListOdometerCheckpoints lists all manual odometer checkpoints for a vehicle, ordered by date ASC, odometer ASC.
 func (r *Repository) ListOdometerCheckpoints(ctx context.Context, vehicleID string) ([]models.OdometerCheckpoint, error) {
 	rows, err := r.pool.Query(ctx, `

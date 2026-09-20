@@ -77,7 +77,7 @@ func TestMileageSmoothingWithPartialDrives(t *testing.T) {
 	}
 }
 
-func TestPreTeslaMateEnergyCalculation(t *testing.T) {
+func TestEstimatedEnergyCalculation(t *testing.T) {
 	// 9000 km smoothed over Jan, Feb, Mar
 	smoothedKm := 9000.0
 	kwh100km := 16.5
@@ -96,7 +96,7 @@ func TestPreTeslaMateEnergyCalculation(t *testing.T) {
 	}
 }
 
-func TestAllocateSmoothingForInterval_PostTeslaMate_NoPreTeslaMateEnergy(t *testing.T) {
+func TestAllocateSmoothingForInterval_AfterTracking_NoEstimatedEnergy(t *testing.T) {
 	loc := time.UTC
 	// TeslaMate started tracking on 2023-01-01
 	firstTrackingTime := time.Date(2023, 1, 1, 0, 0, 0, 0, loc)
@@ -113,18 +113,18 @@ func TestAllocateSmoothingForInterval_PostTeslaMate_NoPreTeslaMateEnergy(t *test
 		t.Errorf("expected 36.6 smoothed km in 2024-05, got %f", smoothed["2024-05"])
 	}
 
-	// But pre-TeslaMate km MUST BE ZERO so no synthetic energy is added when real data is available!
+	// But untracked km MUST BE ZERO so no synthetic energy is added when real data is available!
 	if len(preTm) != 0 || preTm["2024-05"] > 0 {
-		t.Errorf("expected 0 pre-TeslaMate km for post-tracking interval, got %v", preTm)
+		t.Errorf("expected 0 untracked km for post-tracking interval, got %v", preTm)
 	}
 }
 
-func TestAllocateSmoothingForInterval_PreTeslaMate_FullPreTeslaMateEnergy(t *testing.T) {
+func TestAllocateSmoothingForInterval_BeforeTracking_FullEstimatedEnergy(t *testing.T) {
 	loc := time.UTC
 	// TeslaMate started tracking on 2023-06-01
 	firstTrackingTime := time.Date(2023, 6, 1, 0, 0, 0, 0, loc)
 
-	// An interval between 2022-01-01 and 2022-03-01 (before TeslaMate started)
+	// An interval between 2022-01-01 and 2022-03-01 (before tracking started)
 	t1 := time.Date(2022, 1, 1, 0, 0, 0, 0, loc)
 	t2 := time.Date(2022, 3, 1, 0, 0, 0, 0, loc)
 	missingKm := 2000.0
@@ -132,15 +132,15 @@ func TestAllocateSmoothingForInterval_PreTeslaMate_FullPreTeslaMateEnergy(t *tes
 	smoothed, preTm := allocateSmoothingForInterval(t1, t2, missingKm, &firstTrackingTime)
 
 	// Both smoothed and preTm should have the missing km allocated across Jan & Feb 2022
-	var totalPreTm float64
+	var totalEstimated float64
 	for _, km := range preTm {
-		totalPreTm += km
+		totalEstimated += km
 	}
-	if math.Abs(totalPreTm-2000.0) > 0.01 {
-		t.Errorf("expected 2000 pre-TeslaMate km, got %f", totalPreTm)
+	if math.Abs(totalEstimated-2000.0) > 0.01 {
+		t.Errorf("expected 2000 untracked km, got %f", totalEstimated)
 	}
 	if math.Abs(smoothed["2022-01"]-preTm["2022-01"]) > 0.01 {
-		t.Errorf("expected smoothed and preTm to match for pre-TeslaMate interval")
+		t.Errorf("expected smoothed and estimated km to match before tracking")
 	}
 }
 
@@ -161,9 +161,9 @@ func TestAllocateSmoothingForInterval_SpanningBoundary(t *testing.T) {
 		t.Errorf("expected 290 smoothed km, got %f", smoothed["2023-05"])
 	}
 
-	// Pre-TeslaMate portion is exactly 14.5 days out of 29 days = 50% = 145 km
+	// Untracked portion is exactly 14.5 days out of 29 days = 50% = 145 km
 	if math.Abs(preTm["2023-05"]-145.0) > 0.01 {
-		t.Errorf("expected 145 pre-TeslaMate km, got %f", preTm["2023-05"])
+		t.Errorf("expected 145 untracked km, got %f", preTm["2023-05"])
 	}
 }
 

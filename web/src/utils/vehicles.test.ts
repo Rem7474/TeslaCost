@@ -24,16 +24,16 @@ describe('vehicle form', () => {
     expect(f.name).toBe('Tesla Model 3')
     expect(f.powertrain).toBe('EV')
     expect(f.teslamate_auth_type).toBe('NONE')
-    expect(f.pre_teslamate_kwh_100km).toBeNull()
+    expect(f.estimated_kwh_100km).toBeNull()
   })
 
   it('fills an existing vehicle, rounding the odometer and never restoring secrets', () => {
-    const f = vehicleFormFrom({ name: 'M3', current_odometer: 1234.6, teslamate_api_url: 'http://x', teslamate_auth_type: 'BASIC', teslamate_basic_user: 'me', pre_teslamate_kwh_100km: 15 })
+    const f = vehicleFormFrom({ name: 'M3', current_odometer: 1234.6, teslamate_api_url: 'http://x', teslamate_auth_type: 'BASIC', teslamate_basic_user: 'me', estimated_kwh_100km: 15 })
     expect(f.current_odometer).toBe(1235)
     expect(f.teslamate_api_key).toBe('')
     expect(f.teslamate_basic_pass).toBe('')
     expect(f.teslamate_basic_user).toBe('me')
-    expect(f.pre_teslamate_eur_per_kwh).toBeNull()
+    expect(f.estimated_price_per_kwh).toBeNull()
   })
 
   it('falls back to defaults for a bare vehicle', () => {
