@@ -66,8 +66,8 @@ export function emptyVehicleForm() {
     teslamate_api_key: '',
     teslamate_basic_user: '',
     teslamate_basic_pass: '',
-    pre_teslamate_kwh_100km: null as number | null,
-    pre_teslamate_eur_per_kwh: null as number | null,
+    estimated_kwh_100km: null as number | null,
+    estimated_price_per_kwh: null as number | null,
   }
 }
 
@@ -87,8 +87,8 @@ export function vehicleFormFrom(v: any): VehicleForm {
     teslamate_api_key: '',
     teslamate_basic_user: v.teslamate_basic_user || '',
     teslamate_basic_pass: '',
-    pre_teslamate_kwh_100km: v.pre_teslamate_kwh_100km ?? null,
-    pre_teslamate_eur_per_kwh: v.pre_teslamate_eur_per_kwh ?? null,
+    estimated_kwh_100km: v.estimated_kwh_100km ?? null,
+    estimated_price_per_kwh: v.estimated_price_per_kwh ?? null,
   }
 }
 

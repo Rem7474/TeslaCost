@@ -42,9 +42,9 @@ func allocateMissingKmByMonth(t1, t2 time.Time, missingKm float64) map[string]fl
 }
 
 // allocateSmoothingForInterval allocates missingKm across months for interval [t1, t2).
-// It separates total distance smoothing from pre-TeslaMate smoothing.
+// It separates total distance smoothing from smoothing before tracking started.
 // If firstTrackingTime is provided, only the portion of the interval occurring strictly
-// before firstTrackingTime is counted towards pre-TeslaMate energy estimation.
+// before firstTrackingTime is counted towards the energy estimation.
 // Any portion occurring on or after firstTrackingTime is in-TeslaMate smoothing (e.g. GPS
 // drift) where real TeslaMate charges already cover energy consumption.
 func allocateSmoothingForInterval(t1, t2 time.Time, missingKm float64, firstTrackingTime *time.Time) (smoothed map[string]float64, preTm map[string]float64) {
@@ -56,13 +56,13 @@ func allocateSmoothingForInterval(t1, t2 time.Time, missingKm float64, firstTrac
 	}
 
 	if firstTrackingTime == nil {
-		// No TeslaMate data recorded at all: entire interval is pre-TeslaMate
+		// No TeslaMate data recorded at all: entire interval predates tracking
 		preTm = allocateMissingKmByMonth(t1, t2, missingKm)
 		return smoothed, preTm
 	}
 
 	if !t2.After(*firstTrackingTime) {
-		// Entire interval ends on or before TeslaMate tracking started
+		// Entire interval ends on or before tracking started
 		preTm = allocateMissingKmByMonth(t1, t2, missingKm)
 		return smoothed, preTm
 	}
@@ -73,7 +73,7 @@ func allocateSmoothingForInterval(t1, t2 time.Time, missingKm float64, firstTrac
 		return smoothed, preTm
 	}
 
-	// Interval crosses the boundary: prorate only the pre-TeslaMate duration
+	// Interval crosses the boundary: prorate only the duration before tracking
 	totalHours := t2.Sub(t1).Hours()
 	preHours := firstTrackingTime.Sub(t1).Hours()
 	if totalHours > 0 && preHours > 0 {

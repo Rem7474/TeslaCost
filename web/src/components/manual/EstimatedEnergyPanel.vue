@@ -15,15 +15,15 @@ const router = useRouter()
 const vehicleStore = useVehicleStore()
 const { showAlert } = useConfirm()
 
-const form = ref<{ kwh_100km: number | null; eur_per_kwh: number | null }>({ kwh_100km: null, eur_per_kwh: null })
+const form = ref<{ kwh_100km: number | null; price_per_kwh: number | null }>({ kwh_100km: null, price_per_kwh: null })
 const saving = ref(false)
 const tco = ref<any | null>(null)
 
 const preview = computed(() => {
   const kwh100 = Number(form.value.kwh_100km)
-  const rate = Number(form.value.eur_per_kwh)
+  const rate = Number(form.value.price_per_kwh)
   if (!kwh100 || !rate || kwh100 <= 0 || rate <= 0) return null
-  const distance = tco.value?.pre_teslamate_distance_km ?? (tco.value?.completeness?.untracked_distance_km || 0)
+  const distance = tco.value?.estimated_energy_distance_km ?? (tco.value?.completeness?.untracked_distance_km || 0)
   if (distance <= 0) return null
   const kwh = (distance * kwh100) / 100
   return { distance, kwh, cost: kwh * rate }
@@ -31,8 +31,8 @@ const preview = computed(() => {
 
 function syncForm() {
   form.value = {
-    kwh_100km: props.vehicle?.pre_teslamate_kwh_100km ?? null,
-    eur_per_kwh: props.vehicle?.pre_teslamate_eur_per_kwh ?? null,
+    kwh_100km: props.vehicle?.estimated_kwh_100km ?? null,
+    price_per_kwh: props.vehicle?.estimated_price_per_kwh ?? null,
   }
 }
 
@@ -42,7 +42,7 @@ async function loadTco() {
 
 async function save() {
   const kwh100 = form.value.kwh_100km != null ? Number(form.value.kwh_100km) : null
-  const rate = form.value.eur_per_kwh != null ? Number(form.value.eur_per_kwh) : null
+  const rate = form.value.price_per_kwh != null ? Number(form.value.price_per_kwh) : null
   if (kwh100 !== null && (kwh100 <= 0 || kwh100 > 100)) {
     showAlert('Consommation moyenne invalide (doit être comprise entre 1 et 100 kWh/100km)', 'Champ invalide', 'warning')
     return
@@ -53,14 +53,14 @@ async function save() {
   }
   saving.value = true
   try {
-    await api.updatePreTeslaMateEnergy(props.vehicle.id, {
-      pre_teslamate_kwh_100km: kwh100,
-      pre_teslamate_eur_per_kwh: rate,
+    await api.updateEstimatedEnergy(props.vehicle.id, {
+      estimated_kwh_100km: kwh100,
+      estimated_price_per_kwh: rate,
     })
     await vehicleStore.fetchVehicles()
     await loadTco()
     vehicleStore.lastSyncTimestamp = Date.now()
-    showAlert('Coûts de recharge avant TeslaMate enregistrés avec succès !', 'Succès', 'info')
+    showAlert("Estimation de l'énergie enregistrée avec succès !", 'Succès', 'info')
   } catch (err: any) {
     showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
   } finally {
@@ -69,7 +69,7 @@ async function save() {
 }
 
 async function clear() {
-  form.value = { kwh_100km: null, eur_per_kwh: null }
+  form.value = { kwh_100km: null, price_per_kwh: null }
   await save()
 }
 
@@ -92,12 +92,12 @@ onMounted(() => {
             <Zap class="w-4 h-4" />
           </div>
           <div>
-            <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Coûts de recharge avant TeslaMate</h4>
+            <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Estimation de l'énergie</h4>
             <p class="text-[11px] text-slate-400">Complétez automatiquement l'énergie et le coût des kilomètres non suivis</p>
           </div>
         </div>
         <span
-          v-if="vehicle?.pre_teslamate_kwh_100km && vehicle?.pre_teslamate_eur_per_kwh"
+          v-if="vehicle?.estimated_kwh_100km && vehicle?.estimated_price_per_kwh"
           class="text-[10px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold flex items-center gap-1"
         >
           <CheckCircle2 class="w-3 h-3" /> Actif
@@ -125,7 +125,7 @@ onMounted(() => {
             <label for="pre-tm-rate" class="block text-xs font-semibold text-slate-300 mb-1">Tarif de l'électricité (€/kWh)</label>
             <input
               id="pre-tm-rate"
-              v-model.number="form.eur_per_kwh"
+              v-model.number="form.price_per_kwh"
               type="number"
               step="0.0001"
               min="0.01"
@@ -154,7 +154,7 @@ onMounted(() => {
 
         <div v-if="canEdit" class="flex items-center justify-between pt-1">
           <button
-            v-if="vehicle?.pre_teslamate_kwh_100km || vehicle?.pre_teslamate_eur_per_kwh"
+            v-if="vehicle?.estimated_kwh_100km || vehicle?.estimated_price_per_kwh"
             type="button"
             class="text-xs text-slate-400 hover:text-rose-400 transition-colors"
             @click="clear"

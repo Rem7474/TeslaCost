@@ -52,15 +52,15 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		return nil, fmt.Errorf("ownership: %w", err)
 	}
 	var currentOdometer float64
-	var preKwh100km, preEurPerKwh *float64
+	var estKwh100km, estPricePerKwh *float64
 	var powertrain string
-	if err := s.pool.QueryRow(ctx, `SELECT current_odometer, pre_teslamate_kwh_100km, pre_teslamate_eur_per_kwh, powertrain FROM vehicles WHERE id = $1;`, vehicleID).Scan(&currentOdometer, &preKwh100km, &preEurPerKwh, &powertrain); err != nil {
+	if err := s.pool.QueryRow(ctx, `SELECT current_odometer, estimated_kwh_100km, estimated_price_per_kwh, powertrain FROM vehicles WHERE id = $1;`, vehicleID).Scan(&currentOdometer, &estKwh100km, &estPricePerKwh, &powertrain); err != nil {
 		return nil, fmt.Errorf("vehicle: %w", err)
 	}
 	isICE := powertrain == models.PowertrainICE
 	sum.Powertrain = powertrain
-	sum.PreTeslaMateKwh100km = preKwh100km
-	sum.PreTeslaMateEurPerKwh = preEurPerKwh
+	sum.EstimatedKwh100km = estKwh100km
+	sum.EstimatedPricePerKwh = estPricePerKwh
 
 	// 2. Distance: tracked drives, odometer span, distance since the start of the contract
 	var trackedKm, odometerSpan, trackedSinceStart float64
@@ -377,30 +377,30 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	if sum.TagBreakdown, err = s.tagBreakdown(ctx, vehicleID, trackedKm); err != nil {
 		return nil, fmt.Errorf("tag breakdown: %w", err)
 	}
-	var totalSmoothedKm, totalPreTeslaMateKm float64
-	if sum.MonthlyCosts, totalSmoothedKm, totalPreTeslaMateKm, err = s.monthlyCosts(ctx, vehicleID, ownership, currentOdometer, preKwh100km, preEurPerKwh, now); err != nil {
+	var totalSmoothedKm, totalEstimatedEnergyKm float64
+	if sum.MonthlyCosts, totalSmoothedKm, totalEstimatedEnergyKm, err = s.monthlyCosts(ctx, vehicleID, ownership, currentOdometer, estKwh100km, estPricePerKwh, now); err != nil {
 		return nil, fmt.Errorf("monthly costs: %w", err)
 	}
 	sum.SmoothedDistanceKm = totalSmoothedKm
-	sum.PreTeslaMateDistanceKm = totalPreTeslaMateKm
+	sum.EstimatedEnergyDistanceKm = totalEstimatedEnergyKm
 
-	if preKwh100km != nil && *preKwh100km > 0 && preEurPerKwh != nil && *preEurPerKwh > 0 && totalPreTeslaMateKm > 0 {
-		sum.PreTeslaMateKwh = round1(totalPreTeslaMateKm * (*preKwh100km / 100.0))
-		sum.PreTeslaMateCost = money.FromFloat(sum.PreTeslaMateKwh * *preEurPerKwh)
-		sum.TotalKwhAdded = round1(sum.TotalKwhAdded + sum.PreTeslaMateKwh)
-		energy += sum.PreTeslaMateCost
+	if estKwh100km != nil && *estKwh100km > 0 && estPricePerKwh != nil && *estPricePerKwh > 0 && totalEstimatedEnergyKm > 0 {
+		sum.EstimatedEnergyKwh = round1(totalEstimatedEnergyKm * (*estKwh100km / 100.0))
+		sum.EstimatedEnergyCost = money.FromFloat(sum.EstimatedEnergyKwh * *estPricePerKwh)
+		sum.TotalKwhAdded = round1(sum.TotalKwhAdded + sum.EstimatedEnergyKwh)
+		energy += sum.EstimatedEnergyCost
 		sum.EnergyCost = energy
-		sum.TotalCost += sum.PreTeslaMateCost
-		sum.FullCost += sum.PreTeslaMateCost
-		sum.FullCostNet += sum.PreTeslaMateCost
+		sum.TotalCost += sum.EstimatedEnergyCost
+		sum.FullCost += sum.EstimatedEnergyCost
+		sum.FullCostNet += sum.EstimatedEnergyCost
 		if sum.TotalKwhAdded > 0 {
 			sum.AvgCostPerKwh = round3(sum.EnergyCost.Float() / sum.TotalKwhAdded)
 		}
 	}
 	if comp.UntrackedDistanceKm > 0 {
-		if sum.PreTeslaMateCost > 0 {
+		if sum.EstimatedEnergyCost > 0 {
 			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-				"%.0f km parcourus avant TeslaMate : recharges estimées et complétées (%.1f kWh/100km à %.3f €/kWh)", sum.PreTeslaMateDistanceKm, *preKwh100km, *preEurPerKwh))
+				"%.0f km parcourus avant le début du suivi : recharges estimées et complétées (%.1f kWh/100km à %.3f €/kWh)", sum.EstimatedEnergyDistanceKm, *estKwh100km, *estPricePerKwh))
 		} else {
 			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
 				"%.0f km parcourus n'apparaissent dans aucun trajet (avant TeslaMate ou TeslaMate hors ligne) : le coût au km utilise la distance odométrique", comp.UntrackedDistanceKm))

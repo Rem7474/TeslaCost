@@ -149,9 +149,9 @@ function clearCardTestResult() {
 
       <div v-if="v.powertrain !== 'ICE'">
         <span class="text-slate-400">Recharge avant TM</span>
-        <p v-if="v.pre_teslamate_kwh_100km && v.pre_teslamate_eur_per_kwh" class="text-xs font-semibold text-sky-400 flex items-center gap-1 mt-1">
+        <p v-if="v.estimated_kwh_100km && v.estimated_price_per_kwh" class="text-xs font-semibold text-sky-400 flex items-center gap-1 mt-1">
           <Zap class="w-3.5 h-3.5 text-sky-400" />
-          {{ v.pre_teslamate_kwh_100km }} kWh/100km • {{ v.pre_teslamate_eur_per_kwh }} €/kWh
+          {{ v.estimated_kwh_100km }} kWh/100km • {{ v.estimated_price_per_kwh }} €/kWh
         </p>
         <p v-else class="text-xs text-slate-500 mt-1">Non configurée</p>
       </div>

@@ -386,7 +386,7 @@ func main() {
 				r.Get("/{id}/ownership", vehicleHandler.GetOwnership)
 				r.Put("/{id}/ownership", vehicleHandler.SaveOwnership)
 				r.Delete("/{id}/ownership", vehicleHandler.DeleteOwnership)
-				r.Put("/{id}/pre-teslamate-energy", vehicleHandler.UpdatePreTeslaMateEnergy)
+				r.Put("/{id}/estimated-energy", vehicleHandler.UpdateEstimatedEnergy)
 				r.Get("/{id}/odometer-at", vehicleHandler.GetOdometerAtDate)
 				r.Get("/{vehicleId}/data-quality", tcoHandler.GetDataQuality)
 
