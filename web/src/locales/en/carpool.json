@@ -8,7 +8,7 @@
     "youAreViewingThisVehicle": "You are viewing this vehicle in",
     "newCarpool": "New carpool",
     "multiLegTripsPassengersGetting": "Multi-leg trips, passengers getting on and off along the way: everyone pays their share of the legs travelled",
-    "carpoolingAndBlablacar": "Carpooling and BlaBlaCar",
+    "carpooling": "Carpooling",
     "csvFileName": "carpools_export",
     "deleteTitle": "Delete the carpool",
     "deleteMessage": "Do you confirm the deletion of the carpool \"{title}\"?",
@@ -138,7 +138,6 @@
   "start": "Start",
   "destination": "Destination",
   "passenger": "Passenger {n}",
-  "passengerBlablacar": "Passenger {n} (BlaBlaCar)",
   "costFields": {
     "electricity": "Electricity",
     "tolls": "Tolls",

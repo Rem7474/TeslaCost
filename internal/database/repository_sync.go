@@ -33,7 +33,7 @@ func (r *Repository) MarkSyncSuccess(ctx context.Context, vehicleID, resource st
 }
 
 // ============================================================================
-// Carpooling / BlaBlaCar Module
+// Carpooling Module
 // ============================================================================
 
 // UpsertBatterySnapshot keeps the battery health of a day: a later reading the same day replaces the earlier one.

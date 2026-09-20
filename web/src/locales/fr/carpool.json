@@ -8,7 +8,7 @@
     "youAreViewingThisVehicle": "Vous consultez ce véhicule en mode",
     "newCarpool": "Nouveau covoiturage",
     "multiLegTripsPassengersGetting": "Trajets en plusieurs étapes, passagers qui montent et descendent en route : chacun paie sa part des étapes parcourues",
-    "carpoolingAndBlablacar": "Covoiturage & BlaBlaCar",
+    "carpooling": "Covoiturage",
     "csvFileName": "covoiturages_export",
     "deleteTitle": "Supprimer le covoiturage",
     "deleteMessage": "Confirmez-vous la suppression du covoiturage \"{title}\" ?",
@@ -138,7 +138,6 @@
   "start": "Départ",
   "destination": "Arrivée",
   "passenger": "Passager {n}",
-  "passengerBlablacar": "Passager {n} (BlaBlaCar)",
   "costFields": {
     "electricity": "Électricité",
     "tolls": "Péages",

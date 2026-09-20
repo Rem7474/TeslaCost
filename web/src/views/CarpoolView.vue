@@ -204,7 +204,7 @@ onMounted(() => {
       <div>
         <h2 class="text-2xl font-bold tracking-tight text-white flex items-center gap-2.5">
           <Users class="w-6 h-6 text-rose-500" />
-          {{ $t('carpool.carpoolView.carpoolingAndBlablacar') }}
+          {{ $t('carpool.carpoolView.carpooling') }}
         </h2>
         <p class="text-sm text-slate-400">
           {{ $t('carpool.carpoolView.multiLegTripsPassengersGetting') }}

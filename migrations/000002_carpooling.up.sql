@@ -1,5 +1,5 @@
 -- ============================================================================
--- TeslaCost Carpooling / BlaBlaCar Module (Up)
+-- TeslaCost Carpooling Module (Up)
 -- Database: PostgreSQL 14+
 -- ============================================================================
 

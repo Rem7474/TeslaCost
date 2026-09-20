@@ -6,7 +6,7 @@ import (
 	"github.com/teslacost/teslacost/internal/money"
 )
 
-// CarpoolTrip represents a shared trip (e.g. BlaBlaCar) with detailed real cost breakdown and passenger revenues.
+// CarpoolTrip represents a shared trip with detailed real cost breakdown and passenger revenues.
 type CarpoolTrip struct {
 	ID              string      `json:"id"`
 	VehicleID       string      `json:"vehicle_id"`

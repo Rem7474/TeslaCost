@@ -199,7 +199,7 @@ function resetForm() {
     legs: [],
     passengers: [],
   }
-  form.value.passengers.push({ ...newPassenger(0, form.value.legs.length), passenger_name: t('carpool.passengerBlablacar', { n: 1 }) })
+  form.value.passengers.push({ ...newPassenger(0, form.value.legs.length), passenger_name: t('carpool.passenger', { n: 1 }) })
 }
 
 async function initCreate(options: { driveIds?: string[]; tripGroupId?: string }) {

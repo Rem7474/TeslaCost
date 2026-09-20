@@ -422,7 +422,7 @@ func main() {
 				r.Put("/{vehicleId}/trip-groups/{groupId}", driveHandler.UpdateTripGroup)
 				r.Delete("/{vehicleId}/trip-groups/{groupId}", driveHandler.DeleteTripGroup)
 
-				// Carpooling / BlaBlaCar
+				// Carpooling
 				r.Get("/{vehicleId}/carpools", carpoolHandler.List)
 				r.Post("/{vehicleId}/carpools", carpoolHandler.Create)
 				r.Post("/{vehicleId}/carpools/recalculate", carpoolHandler.Recalculate)

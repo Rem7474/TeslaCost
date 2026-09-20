@@ -343,7 +343,7 @@ export const api = {
   getComparisonDefaults: (vehicleId?: string) =>
     request<any>(`/comparison-scenarios/defaults${vehicleId ? `?vehicle_id=${encodeURIComponent(vehicleId)}` : ''}`),
 
-  // Carpooling / BlaBlaCar
+  // Carpooling
   getCarpools: (vehicleId: string) => request<{ trips: any[]; summary: any }>(`/vehicles/${vehicleId}/carpools`),
   getCarpool: (vehicleId: string, id: string) => request<any>(`/vehicles/${vehicleId}/carpools/${id}`),
   createCarpool: (vehicleId: string, data: any) =>
