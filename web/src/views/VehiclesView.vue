@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, onMounted } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
@@ -63,9 +64,9 @@ async function onVehicleSaved() {
 
 async function handleDelete(id: string) {
   const ok = await showConfirm({
-    title: 'Supprimer le véhicule',
-    message: 'Supprimer ce véhicule et tout son historique ? Cette action est irréversible.',
-    confirmText: 'Supprimer définitivement',
+    title: t('vehicles.vehiclesView.deleteTitle'),
+    message: t('vehicles.vehiclesView.deleteMessage'),
+    confirmText: t('tires.tiresView.deleteTireConfirm'),
     type: 'danger',
   })
   if (!ok) return
@@ -73,7 +74,7 @@ async function handleDelete(id: string) {
     await api.deleteVehicle(id)
     await vehicleStore.fetchVehicles()
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -106,8 +107,8 @@ function openMembersModal(v: any) {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h2 class="text-2xl font-bold tracking-tight text-white">Gestion des Véhicules</h2>
-        <p class="text-sm text-slate-400">Configurez vos véhicules et la synchronisation avec TeslaMateApi</p>
+        <h2 class="text-2xl font-bold tracking-tight text-white">{{ $t('vehicles.vehiclesView.vehicleManagement') }}</h2>
+        <p class="text-sm text-slate-400">{{ $t('vehicles.vehiclesView.setUpYourVehiclesAnd') }}</p>
       </div>
 
       <button
@@ -115,7 +116,7 @@ function openMembersModal(v: any) {
         class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
       >
         <Plus class="w-3.5 h-3.5" />
-        Ajouter un véhicule
+        {{ $t('vehicles.vehiclesView.addAVehicle') }}
       </button>
     </div>
 

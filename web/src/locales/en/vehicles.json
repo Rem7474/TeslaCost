@@ -1,0 +1,143 @@
+{
+  "vehicleCard": {
+    "activeVehicle": "Active vehicle",
+    "select": "Select",
+    "manualTracking": "Manual tracking",
+    "odometerReadingsAndManualEntries": "Odometer readings and manual entries of this vehicle",
+    "acquisitionAndFinancing": "Acquisition and financing",
+    "sharingAndAccess": "Sharing and access",
+    "manageAccessAndCoDrivers": "Manage access and co-drivers",
+    "notConfigured": "Not configured",
+    "kwh100kmKwh": "{estimated_kwh_100km} kWh/100km • {estimated_price_per_kwh} €/kWh",
+    "estimatedEnergy": "Estimated energy",
+    "teslamateConnection": "TeslaMate connection",
+    "combustionFillUpsEnteredBy": "Combustion · fill-ups entered by hand",
+    "powertrain": "Powertrain",
+    "vehicleAccess": "Vehicle access",
+    "acquisitionAndContract": "Acquisition and contract",
+    "currentOdometer": "Current odometer",
+    "editContract": "Click to edit the contract terms",
+    "setUpContract": "Click to set up the purchase or lease (LOA/LLD)",
+    "enterContract": "Enter the contract",
+    "editorRole": "Editor (co-driver)",
+    "readOnly": "Read-only",
+    "online": "Online",
+    "connectionError": "Connection error",
+    "configured": "Configured",
+    "managedByAdmin": "Managed by the administrator",
+    "testing": "Testing...",
+    "testApi": "Test the API"
+  },
+  "vehicleFormModal": {
+    "connectionFailed": "Connection failed:",
+    "connectionSuccessful": "Connection successful!",
+    "basicAuthPassword": "Basic Auth password",
+    "basicAuthUser": "Basic Auth user",
+    "teslamateApiKeyToken": "TeslaMate API key / token",
+    "httpBasicAuth": "HTTP Basic Auth",
+    "bearerTokenApiToken": "Bearer token (API_TOKEN)",
+    "noneLan": "None (LAN)",
+    "authenticationMode": "Authentication mode",
+    "carIdInTeslamate": "Car ID in TeslaMate",
+    "addsAnOpenInTeslamate": "Adds an “Open in TeslaMate” link in the detail of each drive (Drive Details dashboard).",
+    "eGHttp192168": "e.g. http://192.168.1.50:3000",
+    "teslamateGrafanaUrlOptional": "TeslaMate Grafana URL (optional)",
+    "eGHttp1921682": "e.g. http://192.168.1.50:8080 or http://host.docker.internal:8080",
+    "teslamateapiBaseUrl": "teslamateapi base URL",
+    "teslamateapiConnectionOptional": "TeslaMateApi connection (optional)",
+    "rateKwh": "Rate (€/kWh)",
+    "consumptionKwh100km": "Consumption (kWh/100km)",
+    "estimatedEnergyOptional": "Estimated energy (optional)",
+    "vinOptional": "VIN (optional)",
+    "combustionFillUpsEnteredBy": "Combustion (fill-ups entered by hand)",
+    "electricTeslamateTrackingAvailable": "Electric (TeslaMate tracking available)",
+    "powertrain": "Powertrain",
+    "eGMyCar": "e.g. My car",
+    "vehicleName": "Vehicle name",
+    "edit": "Edit the vehicle",
+    "currentMileage": "Current mileage (km)",
+    "initialOdometer": "Initial odometer (km)",
+    "testStatus": "Status: {state} • Odometer: {odometer} km",
+    "urlFirst": "Please enter the TeslaMate API URL first"
+  },
+  "vehicleMembersModal": {
+    "leave": "Leave",
+    "removeAccess": "Remove access",
+    "viewer": "Viewer",
+    "coDriver": "Co-driver",
+    "roleOfTheMember": "Role of the member {user_email}",
+    "you": "You",
+    "noMemberFound": "No member found.",
+    "loadingTheAccess": "Loading the access...",
+    "memberS": "{length} member(s)",
+    "authorizedMembers": "Authorized members",
+    "add": "Add",
+    "yourTeslamateApiKeysAnd": "Your TeslaMate API keys and financing data stay hidden from the members.",
+    "readOnly": "Read-only",
+    "coDriverEditor": "Co-driver (Editor)",
+    "memberRole": "Member role",
+    "emailExampleCom": "email{'@'}example.com",
+    "memberEmail": "Member email",
+    "inviteACoDriverOr": "Invite a co-driver or a member of your household. The user must already have an account on the application.",
+    "addAMember": "Add a member",
+    "sharingAndAccess": "Sharing and access",
+    "loadError": "Could not load the members: {message}",
+    "added": "Member added!",
+    "roleUpdated": "Role updated!",
+    "leaveTitle": "Leave the shared vehicle",
+    "removeTitle": "Remove access to the vehicle",
+    "leaveMessage": "Are you sure you want to leave the vehicle {name}? You will no longer have access to its data.",
+    "removeMessage": "Remove {email}'s access to this vehicle?",
+    "remove": "Remove",
+    "left": "You have left the vehicle",
+    "revoked": "Access revoked"
+  },
+  "vehiclesView": {
+    "deleteTitle": "Delete the vehicle",
+    "deleteMessage": "Delete this vehicle and all its history? This cannot be undone."
+  },
+  "ownershipWizardModal": {
+    "leaseStart": "Lease start",
+    "purchaseDate": "Vehicle purchase date",
+    "holdingAfterBuyout": "Holding period after buyout (months)",
+    "holdingTotal": "Planned total holding period (months)",
+    "returnedOn": "Vehicle returned on",
+    "soldOn": "Vehicle sold on",
+    "deleteTitle": "Delete the acquisition contract",
+    "deleteMessage": "Delete the acquisition contract of this vehicle?"
+  },
+  "acquisition": {
+    "CASH": "Cash purchase",
+    "LOAN": "Purchase with a loan",
+    "LOA": "LOA (lease with purchase option)",
+    "LLD": "LLD (long-term lease)"
+  },
+  "roles": {
+    "OWNER": "Owner",
+    "EDITOR": "Co-driver",
+    "VIEWER": "Viewer"
+  },
+  "wizardSteps": {
+    "one": {
+      "title": "Mode and start",
+      "description": "Contract type and date"
+    },
+    "two": {
+      "title": "Financial terms",
+      "description": "Costs and monthly payments"
+    },
+    "three": {
+      "title": "Conditions and end",
+      "description": "Mileage, options and closing"
+    }
+  },
+  "wizardErrors": {
+    "mode": "Please select an acquisition mode",
+    "startDate": "Please enter the start date",
+    "price": "Please enter the purchase price incl. tax",
+    "loanAmount": "Please enter the amount borrowed",
+    "loanDuration": "Please enter the loan duration in months",
+    "rent": "Please enter the monthly rent",
+    "leaseDuration": "Please enter the lease duration in months"
+  }
+}

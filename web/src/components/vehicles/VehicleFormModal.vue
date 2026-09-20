@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { intlLocale, t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -33,13 +34,13 @@ async function handleSave() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
 async function testModalConnection() {
   if (!form.value.teslamate_api_url) {
-    modalTestResult.value = { success: false, error: "Veuillez d'abord renseigner l'URL de l'API TeslaMate" }
+    modalTestResult.value = { success: false, error: t('vehicles.vehicleFormModal.urlFirst') }
     return
   }
   modalTestLoading.value = true
@@ -63,7 +64,7 @@ async function testModalConnection() {
   >
     <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
-        <h3 class="text-base font-bold text-white">{{ isEditing ? 'Modifier le véhicule' : 'Ajouter un véhicule' }}</h3>
+        <h3 class="text-base font-bold text-white">{{ isEditing ? $t('vehicles.vehicleFormModal.edit') : $t('shell.topBar.addAVehicle') }}</h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
         </button>
@@ -71,25 +72,25 @@ async function testModalConnection() {
 
       <form id="vehicle-modal-form" @submit.prevent="handleSave" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-3.5">
         <div>
-          <label for="vehicle-name" class="block text-xs font-semibold text-slate-300 mb-1">Nom du véhicule</label>
-          <input id="vehicle-name" v-model="form.name" required placeholder="ex: Ma voiture" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <label for="vehicle-name" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.vehicleName') }}</label>
+          <input id="vehicle-name" v-model="form.name" required :placeholder="$t('vehicles.vehicleFormModal.eGMyCar')" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
 
         <div>
-          <label for="vehicle-powertrain" class="block text-xs font-semibold text-slate-300 mb-1">Motorisation</label>
+          <label for="vehicle-powertrain" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.powertrain') }}</label>
           <select id="vehicle-powertrain" v-model="form.powertrain" :disabled="isEditing" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white disabled:opacity-50">
-            <option value="EV">Électrique (suivi TeslaMate possible)</option>
-            <option value="ICE">Thermique (saisie manuelle des pleins)</option>
+            <option value="EV">{{ $t('vehicles.vehicleFormModal.electricTeslamateTrackingAvailable') }}</option>
+            <option value="ICE">{{ $t('vehicles.vehicleFormModal.combustionFillUpsEnteredBy') }}</option>
           </select>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1">VIN (optionnel)</label>
+            <label for="vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.vinOptional') }}</label>
             <input id="vehicle-vin" v-model="form.vin" placeholder="5YJ3E1EB..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
-            <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ form.powertrain === 'ICE' ? 'Kilométrage actuel (km)' : 'Odomètre initial (km)' }}</label>
+            <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ form.powertrain === 'ICE' ? $t('vehicles.vehicleFormModal.currentMileage') : $t('vehicles.vehicleFormModal.initialOdometer') }}</label>
             <input
               id="vehicle-current-odometer"
               v-model.number="form.current_odometer"
@@ -103,14 +104,14 @@ async function testModalConnection() {
 
         <!-- Energy estimate section -->
         <div v-if="form.powertrain !== 'ICE'" class="pt-2 border-t border-slate-800 space-y-3">
-          <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">Énergie estimée (Optionnel)</h4>
+          <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">{{ $t('vehicles.vehicleFormModal.estimatedEnergyOptional') }}</h4>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="vehicle-pre-kwh" class="block text-xs font-semibold text-slate-300 mb-1">Conso (kWh/100km)</label>
+              <label for="vehicle-pre-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.consumptionKwh100km') }}</label>
               <input id="vehicle-pre-kwh" v-model.number="form.estimated_kwh_100km" type="number" step="0.1" min="1" max="100" placeholder="ex: 16.5" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="vehicle-pre-rate" class="block text-xs font-semibold text-slate-300 mb-1">Tarif (€/kWh)</label>
+              <label for="vehicle-pre-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.rateKwh') }}</label>
               <input id="vehicle-pre-rate" v-model.number="form.estimated_price_per_kwh" type="number" step="0.0001" min="0.01" max="5" placeholder="ex: 0.22" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
@@ -118,46 +119,46 @@ async function testModalConnection() {
 
         <!-- TeslaMate API Section -->
         <div v-if="form.powertrain !== 'ICE'" class="pt-2 border-t border-slate-800 space-y-3">
-          <h4 class="text-xs font-bold text-rose-400 uppercase tracking-wider">Connexion TeslaMateApi (Optionnelle)</h4>
+          <h4 class="text-xs font-bold text-rose-400 uppercase tracking-wider">{{ $t('vehicles.vehicleFormModal.teslamateapiConnectionOptional') }}</h4>
 
           <div>
-            <label for="vehicle-teslamate-api-url" class="block text-xs font-semibold text-slate-300 mb-1">URL de base teslamateapi</label>
-            <input id="vehicle-teslamate-api-url" v-model="form.teslamate_api_url" placeholder="ex: http://192.168.1.50:8080 ou http://host.docker.internal:8080" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="vehicle-teslamate-api-url" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.teslamateapiBaseUrl') }}</label>
+            <input id="vehicle-teslamate-api-url" v-model="form.teslamate_api_url" :placeholder="$t('vehicles.vehicleFormModal.eGHttp1921682')" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div>
-            <label for="vehicle-teslamate-grafana-url" class="block text-xs font-semibold text-slate-300 mb-1">URL Grafana TeslaMate (optionnelle)</label>
-            <input id="vehicle-teslamate-grafana-url" v-model="form.teslamate_grafana_url" type="url" placeholder="ex: http://192.168.1.50:3000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-            <p class="text-[11px] text-slate-500 mt-1">Ajoute un lien « Ouvrir dans TeslaMate » dans le détail de chaque trajet (dashboard Drive Details).</p>
+            <label for="vehicle-teslamate-grafana-url" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.teslamateGrafanaUrlOptional') }}</label>
+            <input id="vehicle-teslamate-grafana-url" v-model="form.teslamate_grafana_url" type="url" :placeholder="$t('vehicles.vehicleFormModal.eGHttp192168')" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <p class="text-[11px] text-slate-500 mt-1">{{ $t('vehicles.vehicleFormModal.addsAnOpenInTeslamate') }}</p>
           </div>
 
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="vehicle-teslamate-car-id" class="block text-xs font-semibold text-slate-300 mb-1">ID Voiture dans TeslaMate</label>
+              <label for="vehicle-teslamate-car-id" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.carIdInTeslamate') }}</label>
               <input id="vehicle-teslamate-car-id" v-model.number="form.teslamate_car_id" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="vehicle-teslamate-auth-type" class="block text-xs font-semibold text-slate-300 mb-1">Mode d'authentification</label>
+              <label for="vehicle-teslamate-auth-type" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.authenticationMode') }}</label>
               <select id="vehicle-teslamate-auth-type" v-model="form.teslamate_auth_type" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
-                <option value="NONE">Aucun (LAN)</option>
-                <option value="BEARER">Token Bearer (API_TOKEN)</option>
-                <option value="BASIC">HTTP Basic Auth</option>
+                <option value="NONE">{{ $t('vehicles.vehicleFormModal.noneLan') }}</option>
+                <option value="BEARER">{{ $t('vehicles.vehicleFormModal.bearerTokenApiToken') }}</option>
+                <option value="BASIC">{{ $t('vehicles.vehicleFormModal.httpBasicAuth') }}</option>
               </select>
             </div>
           </div>
 
           <div v-if="form.teslamate_auth_type === 'BEARER'">
-            <label for="vehicle-teslamate-api-key" class="block text-xs font-semibold text-slate-300 mb-1">Clé / Token API TeslaMate</label>
+            <label for="vehicle-teslamate-api-key" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.teslamateApiKeyToken') }}</label>
             <input id="vehicle-teslamate-api-key" v-model="form.teslamate_api_key" type="password" placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
 
           <div v-if="form.teslamate_auth_type === 'BASIC'" class="grid grid-cols-2 gap-3">
             <div>
-              <label for="vehicle-teslamate-basic-user" class="block text-xs font-semibold text-slate-300 mb-1">Utilisateur Basic Auth</label>
+              <label for="vehicle-teslamate-basic-user" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.basicAuthUser') }}</label>
               <input id="vehicle-teslamate-basic-user" v-model="form.teslamate_basic_user" placeholder="admin" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="vehicle-teslamate-basic-pass" class="block text-xs font-semibold text-slate-300 mb-1">Mot de passe Basic Auth</label>
+              <label for="vehicle-teslamate-basic-pass" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.basicAuthPassword') }}</label>
               <input id="vehicle-teslamate-basic-pass" v-model="form.teslamate_basic_pass" type="password" placeholder="••••••••" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
@@ -172,7 +173,7 @@ async function testModalConnection() {
             >
               <RefreshCw v-if="modalTestLoading" class="w-3.5 h-3.5 animate-spin text-rose-400" />
               <Link2 v-else class="w-3.5 h-3.5 text-rose-400" />
-              <span>{{ modalTestLoading ? 'Test de connexion en cours...' : 'Tester la connexion TeslaMate' }}</span>
+              <span>{{ modalTestLoading ? $t('onboarding.testing') : $t('onboarding.testConnection') }}</span>
             </button>
 
             <div
@@ -184,13 +185,13 @@ async function testModalConnection() {
               <AlertCircle v-else class="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
               <div class="flex-1">
                 <div v-if="modalTestResult.success">
-                  <strong class="font-semibold">Connexion réussie !</strong>
+                  <strong class="font-semibold">{{ $t('vehicles.vehicleFormModal.connectionSuccessful') }}</strong>
                   <p class="text-[11px] text-emerald-200/80 mt-0.5">
-                    Statut : {{ modalTestResult.status?.state || 'En ligne' }} • Odomètre : {{ Math.round(modalTestResult.status?.odometer || 0).toLocaleString('fr-FR') }} km
+                    {{ $t('vehicles.vehicleFormModal.testStatus', { state: modalTestResult.status?.state || $t('onboarding.online'), odometer: Math.round(modalTestResult.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
                   </p>
                 </div>
                 <div v-else>
-                  <strong class="font-semibold">Échec de la connexion :</strong>
+                  <strong class="font-semibold">{{ $t('vehicles.vehicleFormModal.connectionFailed') }}</strong>
                   <p class="text-[11px] text-rose-200/90 mt-0.5">{{ modalTestResult.error }}</p>
                 </div>
               </div>
@@ -201,10 +202,10 @@ async function testModalConnection() {
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="vehicle-modal-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
-          Enregistrer
+          {{ $t('common.save') }}
         </button>
       </div>
     </div>
