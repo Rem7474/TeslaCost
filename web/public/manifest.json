@@ -1,6 +1,6 @@
 {
-  "name": "TeslaCost - Suivi TCO & Entretien",
-  "short_name": "TeslaCost",
+  "name": "AutoLedger - Vehicle TCO & Maintenance",
+  "short_name": "AutoLedger",
   "description": "Application de suivi des coûts de possession et d'entretien pour véhicules électriques",
   "start_url": "/",
   "display": "standalone",

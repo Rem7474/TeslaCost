@@ -1,5 +1,5 @@
 import { t } from '@/i18n'
-// TeslaCost API Service
+// AutoLedger API Service
 import { newIdempotencyKey } from '@/services/offlineQueue'
 import { apiErrorMessage } from '@/services/apiError'
 
