@@ -1,0 +1,91 @@
+<script setup lang="ts">
+import { ref, watch } from 'vue'
+import { Archive, X } from 'lucide-vue-next'
+import AppDatePicker from '@/components/AppDatePicker.vue'
+import { api } from '@/services/api'
+import { useConfirm } from '@/composables/useConfirm'
+import { getLastDismountInfo, isMountedPosition, todayIso } from '@/utils/tires'
+
+// Dispose (worn out, damaged, sold) keeps history and cost; deleting a tire removes an erroneous entry
+const props = defineProps<{ vehicleId: string; selectedTire: any | null; tires: any[]; currentOdometer: number }>()
+const emit = defineEmits<{ saved: [tireId: string] }>()
+const open = defineModel<boolean>('open', { required: true })
+const { showAlert } = useConfirm()
+
+const disposeForm = ref({ date: todayIso(), odometer: 0 as number | string })
+
+watch(open, (isOpen) => {
+  if (!isOpen) return
+  const t = props.selectedTire
+  const isMounted = t && isMountedPosition(t.current_position)
+  const lastDismount = t ? getLastDismountInfo(props.tires, t.id) : null
+
+  disposeForm.value = {
+    date: (!isMounted && lastDismount?.date) ? lastDismount.date : todayIso(),
+    odometer: isMounted ? Math.round(props.currentOdometer || 0) : (lastDismount?.odometer || ''),
+  }
+})
+
+async function handleDisposeTire() {
+  if (!props.vehicleId || !props.selectedTire) return
+  const tireId = props.selectedTire.id
+  try {
+    await api.disposeTire(props.vehicleId, tireId, {
+      date: new Date(disposeForm.value.date).toISOString(),
+      odometer: disposeForm.value.odometer === '' ? null : Number(disposeForm.value.odometer),
+    })
+    open.value = false
+    emit('saved', tireId)
+  } catch (err: any) {
+    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+  }
+}
+</script>
+
+<template>
+  <div
+    v-if="open && selectedTire"
+    class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    @click.self="open = false"
+  >
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-sm w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+        <h3 class="text-base font-bold text-white flex items-center gap-2">
+          <Archive class="w-4 h-4 text-amber-400" />
+          Mettre au rebut
+        </h3>
+        <button type="button" @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+          <X class="w-4 h-4" />
+        </button>
+      </div>
+
+      <form id="tire-dispose-modal-form" @submit.prevent="handleDisposeTire" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+        <p class="text-xs text-slate-300 font-semibold">
+          {{ selectedTire.brand }} {{ selectedTire.model }}
+        </p>
+        <div>
+          <label for="tire-dispose-date" class="block text-[11px] text-slate-400 mb-1 font-semibold">Date</label>
+          <AppDatePicker
+            id="tire-dispose-date"
+            v-model="disposeForm.date"
+            required
+            size="xs"
+          />
+        </div>
+        <div v-if="['FL', 'FR', 'RL', 'RR'].includes(selectedTire.current_position)">
+          <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">Odomètre au démontage (km)</label>
+          <input id="tire-dispose-odometer" v-model.number="disposeForm.odometer" type="number" min="0" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+        </div>
+      </form>
+
+      <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
+        <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+          Annuler
+        </button>
+        <button type="submit" form="tire-dispose-modal-form" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-xl transition-colors">
+          Mettre au rebut
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
