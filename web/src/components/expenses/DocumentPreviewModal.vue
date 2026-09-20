@@ -53,9 +53,9 @@ function openInNewTab() {
               {{ previewDoc.filename }}
             </h3>
             <p class="text-[11px] text-slate-400 flex items-center gap-1.5">
-              <span v-if="previewDoc.isPdf" class="text-indigo-400 font-semibold">Document PDF</span>
-              <span v-else-if="previewDoc.isImage" class="text-emerald-400 font-semibold">Image</span>
-              <span v-else class="text-slate-400 font-semibold">Fichier</span>
+              <span v-if="previewDoc.isPdf" class="text-indigo-400 font-semibold">{{ $t('expenses.documentPreviewModal.pdfDocument') }}</span>
+              <span v-else-if="previewDoc.isImage" class="text-emerald-400 font-semibold">{{ $t('expenses.documentPreviewModal.image') }}</span>
+              <span v-else class="text-slate-400 font-semibold">{{ $t('expenses.documentPreviewModal.file') }}</span>
             </p>
           </div>
         </div>
@@ -66,10 +66,10 @@ function openInNewTab() {
             type="button"
             @click="downloadFile"
             class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
-            title="Télécharger le fichier"
+            :title="$t('expenses.documentPreviewModal.downloadTheFile')"
           >
             <Download class="w-3.5 h-3.5 text-indigo-400" />
-            <span class="hidden sm:inline">Télécharger</span>
+            <span class="hidden sm:inline">{{ $t('expenses.documentPreviewModal.download') }}</span>
           </button>
 
           <!-- Open in New Tab Button -->
@@ -77,10 +77,10 @@ function openInNewTab() {
             type="button"
             @click="openInNewTab"
             class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 border border-slate-700/60 transition-colors"
-            title="Ouvrir dans un nouvel onglet"
+            :title="$t('expenses.documentPreviewModal.openInANewTab')"
           >
             <ExternalLink class="w-3.5 h-3.5 text-slate-400" />
-            <span class="hidden md:inline">Nouvel onglet</span>
+            <span class="hidden md:inline">{{ $t('expenses.documentPreviewModal.newTab') }}</span>
           </button>
 
           <!-- Close Button -->
@@ -88,7 +88,7 @@ function openInNewTab() {
             type="button"
             @click="emit('close')"
             class="text-slate-400 hover:text-white p-1.5 rounded-xl hover:bg-slate-800 transition-colors ml-1"
-            title="Fermer"
+            :title="$t('common.close')"
           >
             <X class="w-5 h-5" />
           </button>
@@ -120,14 +120,14 @@ function openInNewTab() {
         <!-- Unsupported preview fallback -->
         <div v-else class="p-8 text-center space-y-3">
           <FileText class="w-12 h-12 text-slate-500 mx-auto" />
-          <p class="text-sm text-slate-300">Ce format de fichier ne supporte pas l'aperçu direct dans le navigateur.</p>
+          <p class="text-sm text-slate-300">{{ $t('expenses.documentPreviewModal.thisFileFormatCannotBe') }}</p>
           <button
             type="button"
             @click="downloadFile"
             class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-semibold inline-flex items-center gap-2 transition-colors"
           >
             <Download class="w-4 h-4" />
-            Télécharger pour consulter
+            {{ $t('expenses.documentPreviewModal.downloadToView') }}
           </button>
         </div>
       </div>

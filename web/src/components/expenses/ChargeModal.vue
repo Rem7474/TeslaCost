@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -92,7 +93,7 @@ async function handleSaveCharge() {
     open.value = false
     emit('saved')
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -108,10 +109,10 @@ async function handleSaveCharge() {
         <div class="min-w-0 pr-2">
           <h3 class="text-base font-bold text-white flex items-center gap-2 truncate">
             <Zap class="w-5 h-5 text-sky-400 shrink-0" />
-            {{ !editingCharge ? (vehicleStore.hasTeslaMate ? 'Recharge hors TeslaMate' : 'Nouvelle recharge') : editingCharge.is_manual ? 'Modifier la recharge' : 'Coût de la recharge' }}
+            {{ !editingCharge ? (vehicleStore.hasTeslaMate ? $t('expenses.expensesView.chargeOutsideTeslamate') : $t('expenses.chargeModal.newCharge')) : editingCharge.is_manual ? $t('expenses.chargeModal.editCharge') : $t('expenses.chargeModal.chargeCost') }}
           </h3>
           <p v-if="editingCharge && !editingCharge.is_manual" class="text-[11px] text-slate-400 mt-1">
-            Recharge TeslaMate du {{ formatDate(editingCharge.date) }} (+{{ editingCharge.kwh_added }} kWh). Le coût saisi ici ne sera pas écrasé par les synchronisations.
+            {{ $t('expenses.chargeModal.teslamateChargeOfKwhThe', { date: formatDate(editingCharge.date), kwh_added: editingCharge.kwh_added }) }}
           </p>
         </div>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors shrink-0">
@@ -123,42 +124,42 @@ async function handleSaveCharge() {
         <template v-if="!editingCharge || editingCharge.is_manual">
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="charge-form-date" class="block text-xs font-semibold text-slate-300 mb-1">Date & Heure</label>
+              <label for="charge-form-date" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.dateAndTime') }}</label>
               <AppDatePicker id="charge-form-date" v-model="chargeForm.date" enable-time-picker required size="xs" />
             </div>
             <div>
-              <label for="charge-form-kwh-added" class="block text-xs font-semibold text-slate-300 mb-1">Énergie ajoutée (kWh)</label>
+              <label for="charge-form-kwh-added" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.energyAddedKwh') }}</label>
               <input id="charge-form-kwh-added" v-model="chargeForm.kwh_added" type="number" inputmode="decimal" step="0.001" min="0.001" required class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="charge-form-address" class="block text-xs font-semibold text-slate-300 mb-1">Lieu (optionnel)</label>
-              <input id="charge-form-address" v-model="chargeForm.address" placeholder="Borne, domicile..." class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="charge-form-address" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.placeOptional') }}</label>
+              <input id="charge-form-address" v-model="chargeForm.address" :placeholder="$t('expenses.chargeModal.chargerHome')" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="charge-form-odometer" class="block text-xs font-semibold text-slate-300 mb-1">Odomètre (optionnel)</label>
+              <label for="charge-form-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.odometerOptional') }}</label>
               <input id="charge-form-odometer" v-model="chargeForm.odometer" type="number" inputmode="numeric" min="0" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
         </template>
 
         <div>
-          <label for="charge-form-cost" class="block text-xs font-semibold text-slate-300 mb-1">Coût</label>
+          <label for="charge-form-cost" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.cost') }}</label>
           <div class="flex gap-1.5">
-            <input id="charge-form-cost" v-model="chargeForm.cost" type="number" inputmode="decimal" step="0.01" min="0" required placeholder="0.00 si gratuite" class="field-touch w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
-            <label for="charge-form-currency" class="sr-only">Devise</label>
+            <input id="charge-form-cost" v-model="chargeForm.cost" type="number" inputmode="decimal" step="0.01" min="0" required :placeholder="$t('expenses.chargeModal.000IfFree')" class="field-touch w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="charge-form-currency" class="sr-only">{{ $t('expenses.chargeModal.currency') }}</label>
             <select id="charge-form-currency" v-model="chargeForm.currency" class="bg-slate-800 border border-slate-700 rounded-xl px-2 py-2 text-xs text-white">
               <option v-for="cur in CURRENCIES" :key="cur" :value="cur">{{ cur }}</option>
             </select>
           </div>
         </div>
         <div v-if="chargeForm.currency !== 'EUR'">
-          <label for="charge-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">Taux de conversion (1 {{ chargeForm.currency }} = ? €)</label>
+          <label for="charge-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.conversionRate1', { currency: chargeForm.currency }) }}</label>
           <input id="charge-form-fx-rate" v-model="chargeForm.fx_rate" type="number" inputmode="decimal" step="0.000001" min="0.000001" required class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
         <div>
-          <label for="charge-form-notes" class="block text-xs font-semibold text-slate-300 mb-1">Notes (optionnel)</label>
+          <label for="charge-form-notes" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.notesOptional') }}</label>
           <input id="charge-form-notes" v-model="chargeForm.notes" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
 
@@ -167,22 +168,22 @@ async function handleSaveCharge() {
           <div class="flex items-center justify-between">
             <span class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
               <Paperclip class="w-3.5 h-3.5 text-indigo-400" />
-              Justificatif / Facture
+              {{ $t('expenses.chargeModal.receiptInvoice') }}
             </span>
-            <span v-if="chargeForm.document_id" class="text-[11px] text-emerald-400 font-medium">Lié</span>
+            <span v-if="chargeForm.document_id" class="text-[11px] text-emerald-400 font-medium">{{ $t('expenses.chargeModal.linked') }}</span>
           </div>
 
           <div v-if="chargeForm.document_id" class="flex items-center justify-between p-2.5 bg-slate-900 border border-indigo-500/30 rounded-xl">
             <div class="flex items-center gap-2 min-w-0">
               <FileText class="w-4 h-4 text-indigo-400 shrink-0" />
-              <span class="text-xs text-white truncate font-medium">{{ chargeForm.document_filename || 'Facture liée' }}</span>
+              <span class="text-xs text-white truncate font-medium">{{ chargeForm.document_filename || $t('expenses.linkedInvoice') }}</span>
             </div>
             <div class="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 @click="emit('view-document', chargeForm.document_id, chargeForm.document_filename, false)"
                 class="p-1 text-slate-400 hover:text-indigo-400 rounded-lg hover:bg-slate-800"
-                title="Voir le document"
+                :title="$t('expenses.chargeModal.viewTheDocument')"
               >
                 <Eye class="w-3.5 h-3.5" />
               </button>
@@ -190,7 +191,7 @@ async function handleSaveCharge() {
                 type="button"
                 @click="chargeForm.document_id = null; chargeForm.document_filename = null"
                 class="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800"
-                title="Détacher le justificatif"
+                :title="$t('expenses.chargeModal.detachTheReceipt')"
               >
                 <X class="w-3.5 h-3.5" />
               </button>
@@ -200,13 +201,13 @@ async function handleSaveCharge() {
           <div v-else class="space-y-2">
             <div class="flex flex-col sm:flex-row gap-2">
               <div class="flex-1" v-if="documents.length > 0">
-                <label for="charge-existing-doc" class="sr-only">Choisir une facture existante</label>
+                <label for="charge-existing-doc" class="sr-only">{{ $t('expenses.chargeModal.pickAnExistingInvoice') }}</label>
                 <select
                   id="charge-existing-doc"
                   class="w-full bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs text-slate-300"
                   @change="(e: any) => onSelectExistingDoc(e.target.value, chargeForm)"
                 >
-                  <option value="">-- Associer une facture existante --</option>
+                  <option value="">{{ $t('expenses.chargeModal.attachAnExistingInvoice') }}</option>
                   <option v-for="d in documents" :key="d.id" :value="d.id">
                     {{ d.filename }} ({{ formatDate(d.created_at) }})
                   </option>
@@ -214,7 +215,7 @@ async function handleSaveCharge() {
               </div>
               <label class="cursor-pointer px-3 py-1.5 bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 rounded-xl text-xs font-medium flex items-center justify-center gap-1.5 transition-colors">
                 <UploadCloud class="w-3.5 h-3.5" />
-                <span>{{ isUploadingDocument ? 'Téléversement...' : 'Nouveau fichier' }}</span>
+                <span>{{ isUploadingDocument ? $t('expenses.uploading') : $t('expenses.newFile') }}</span>
                 <input
                   type="file"
                   accept=".pdf,image/png,image/jpeg,image/webp"
@@ -225,7 +226,7 @@ async function handleSaveCharge() {
               </label>
             </div>
             <p class="text-[10px] text-slate-400">
-              PDF ou image (reçu Superchargeur, borne publique, etc.).
+              {{ $t('expenses.chargeModal.pdfOrImageSuperchargerReceipt') }}
             </p>
           </div>
         </div>
@@ -233,10 +234,10 @@ async function handleSaveCharge() {
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button type="submit" form="charge-modal-form" class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl transition-colors">
-          Enregistrer
+          {{ $t('common.save') }}
         </button>
       </div>
     </div>

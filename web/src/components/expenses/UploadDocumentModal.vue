@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -23,7 +24,7 @@ watch(open, (isOpen) => {
 
 async function handleUploadStandaloneDocument() {
   if (!props.vehicleId || !uploadDocFile.value) {
-    showAlert('Veuillez sélectionner un fichier', 'Champ requis', 'warning')
+    showAlert(t('expenses.uploadDocumentModal.selectFile'), t('common.requiredField'), 'warning')
     return
   }
   isUploadingDocument.value = true
@@ -31,9 +32,9 @@ async function handleUploadStandaloneDocument() {
     const doc = await api.uploadDocument(props.vehicleId, uploadDocFile.value, uploadDocDescription.value)
     emit('document-added', doc)
     open.value = false
-    showAlert(`Fichier « ${doc.filename} » ajouté avec succès`, 'Succès', 'success')
+    showAlert(t('expenses.uploadDocumentModal.added', { filename: doc.filename }), t('common.success'), 'success')
   } catch (err: any) {
-    showAlert(`Erreur lors du téléversement : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('shell.documents.uploadError', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     isUploadingDocument.value = false
   }
@@ -50,7 +51,7 @@ async function handleUploadStandaloneDocument() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <UploadCloud class="w-5 h-5 text-indigo-400" />
-          Ajouter un Justificatif ou une Facture
+          {{ $t('expenses.uploadDocumentModal.addAReceiptOrAn') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -59,21 +60,21 @@ async function handleUploadStandaloneDocument() {
 
       <form id="standalone-doc-form" @submit.prevent="handleUploadStandaloneDocument" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <div>
-          <span class="block text-xs font-semibold text-slate-300 mb-1.5">Fichier justificatif</span>
+          <span class="block text-xs font-semibold text-slate-300 mb-1.5">{{ $t('expenses.uploadDocumentModal.receiptFile') }}</span>
           <AppDropzone
             v-model="uploadDocFile"
             :disabled="isUploadingDocument"
-            label="Glissez votre facture ou cliquez pour parcourir"
-            helperText="Formats acceptés : PDF, PNG, JPG, WEBP (max. 15 Mo)"
+            :label="$t('expenses.uploadDocumentModal.dragYourInvoiceHereOr')"
+            
           />
         </div>
 
         <div>
-          <label for="standalone-doc-desc" class="block text-xs font-semibold text-slate-300 mb-1">Description / Réf. facture (optionnel)</label>
+          <label for="standalone-doc-desc" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.uploadDocumentModal.descriptionInvoiceRefOptional') }}</label>
           <input
             id="standalone-doc-desc"
             v-model="uploadDocDescription"
-            placeholder="ex: Facture révision Tesla Chambourcy, péages août 2026..."
+            :placeholder="$t('expenses.uploadDocumentModal.eGServiceInvoiceAugust')"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
           />
         </div>
@@ -81,7 +82,7 @@ async function handleUploadStandaloneDocument() {
 
       <div class="px-5 py-3.5 border-t border-slate-800/80 flex justify-end gap-2 shrink-0 bg-slate-900/95">
         <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-          Annuler
+          {{ $t('common.cancel') }}
         </button>
         <button
           type="submit"
@@ -90,7 +91,7 @@ async function handleUploadStandaloneDocument() {
           class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-2 font-medium"
         >
           <UploadCloud class="w-4 h-4" />
-          <span>{{ isUploadingDocument ? 'Téléversement...' : 'Téléverser' }}</span>
+          <span>{{ isUploadingDocument ? $t('expenses.uploading') : $t('expenses.uploadDocumentModal.upload') }}</span>
         </button>
       </div>
     </div>

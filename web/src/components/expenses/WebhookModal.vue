@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api, type VehicleWebhook } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -30,7 +31,7 @@ watch(open, (isOpen) => {
 async function handleSaveWebhook() {
   if (!props.vehicleId) return
   if (!webhookForm.value.url.trim()) {
-    showAlert('Veuillez saisir une URL de webhook valide', 'Champ requis', 'warning')
+    showAlert(t('expenses.webhookModal.enterValidUrl'), t('common.requiredField'), 'warning')
     return
   }
   isSavingWebhook.value = true
@@ -41,10 +42,10 @@ async function handleSaveWebhook() {
       enabled: webhookForm.value.enabled,
     })
     emit('update:webhook', saved)
-    showAlert('Configuration du webhook enregistrée avec succès', 'Succès', 'success')
+    showAlert(t('expenses.webhookModal.saved'), t('common.success'), 'success')
     open.value = false
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     isSavingWebhook.value = false
   }
@@ -53,7 +54,7 @@ async function handleSaveWebhook() {
 async function handleTestWebhook() {
   if (!props.vehicleId) return
   if (!webhookForm.value.url.trim()) {
-    showAlert('Saisissez d\'abord une URL de webhook', 'Champ requis', 'warning')
+    showAlert(t('expenses.webhookModal.enterUrlFirst'), t('common.requiredField'), 'warning')
     return
   }
   isTestingWebhook.value = true
@@ -65,7 +66,7 @@ async function handleTestWebhook() {
     })
     webhookTestResult.value = res
   } catch (err: any) {
-    webhookTestResult.value = { success: false, message: err.message || 'Erreur inattendue' }
+    webhookTestResult.value = { success: false, message: err.message || t('expenses.webhookModal.unexpectedError') }
   } finally {
     isTestingWebhook.value = false
   }
@@ -74,9 +75,9 @@ async function handleTestWebhook() {
 async function handleDeleteWebhook() {
   if (!props.vehicleId) return
   const ok = await showConfirm({
-    title: 'Supprimer le webhook',
-    message: 'Êtes-vous sûr de vouloir supprimer l\'intégration webhook pour ce véhicule ?',
-    confirmText: 'Supprimer',
+    title: t('expenses.webhookModal.deleteTitle'),
+    message: t('expenses.webhookModal.deleteMessage'),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -84,10 +85,10 @@ async function handleDeleteWebhook() {
     await api.deleteVehicleWebhook(props.vehicleId)
     emit('update:webhook', null)
     webhookForm.value = { url: '', type: 'DISCORD', enabled: true }
-    showAlert('Webhook supprimé', 'Succès', 'success')
+    showAlert(t('expenses.webhookModal.deleted'), t('common.success'), 'success')
     open.value = false
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 </script>
@@ -102,7 +103,7 @@ async function handleDeleteWebhook() {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <h3 class="text-base font-bold text-white flex items-center gap-2">
           <Radio class="w-5 h-5 text-violet-400" />
-          Notifications Webhook Homelab
+          {{ $t('expenses.webhookModal.homelabWebhookNotifications') }}
         </h3>
         <button @click="open = false" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
           <X class="w-5 h-5" />
@@ -111,35 +112,35 @@ async function handleDeleteWebhook() {
 
       <form id="webhook-modal-form" @submit.prevent="handleSaveWebhook" class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
         <p class="text-xs text-slate-400">
-          Configurez un webhook sortant vers votre serveur domotique ou de messagerie (Discord, Telegram, Gotify). Dès qu'une échéance approche (date ou kilométrage), une notification est automatiquement expédiée.
+          {{ $t('expenses.webhookModal.setUpAnOutgoingWebhook') }}
         </p>
 
         <div>
-          <label for="webhook-form-type" class="block text-xs font-semibold text-slate-300 mb-1">Plateforme / Connecteur</label>
+          <label for="webhook-form-type" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.webhookModal.platformConnector') }}</label>
           <select
             id="webhook-form-type"
             v-model="webhookForm.type"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
           >
-            <option value="DISCORD">Discord (Webhook Embed)</option>
-            <option value="TELEGRAM">Telegram Bot (API sendMessage)</option>
-            <option value="GOTIFY">Gotify (Push notification)</option>
-            <option value="GENERIC">Générique (JSON standard)</option>
+            <option value="DISCORD">{{ $t('expenses.webhookModal.discordWebhookEmbed') }}</option>
+            <option value="TELEGRAM">{{ $t('expenses.webhookModal.telegramBotSendmessageApi') }}</option>
+            <option value="GOTIFY">{{ $t('expenses.webhookModal.gotifyPushNotification') }}</option>
+            <option value="GENERIC">{{ $t('expenses.webhookModal.genericStandardJson') }}</option>
           </select>
         </div>
 
         <div>
-          <label for="webhook-form-url" class="block text-xs font-semibold text-slate-300 mb-1">URL cible du Webhook</label>
+          <label for="webhook-form-url" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.webhookModal.webhookTargetUrl') }}</label>
           <input
             id="webhook-form-url"
             v-model="webhookForm.url"
             type="url"
             required
-            placeholder="https://discord.com/api/webhooks/... ou https://api.telegram.org/bot<token>/sendMessage?chat_id=<id>"
+            :placeholder="$t('expenses.webhookModal.httpsDiscordComApiWebhooks')"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"
           />
           <p class="text-[11px] text-slate-400 mt-1">
-            Pour Telegram, l'URL doit contenir le token du bot et le chat_id en paramètre.
+            {{ $t('expenses.webhookModal.forTelegramTheUrlMust') }}
           </p>
         </div>
 
@@ -151,7 +152,7 @@ async function handleDeleteWebhook() {
             class="rounded border-slate-700 bg-slate-800 text-violet-600 focus:ring-violet-500"
           />
           <label for="webhook-form-enabled" class="text-xs text-slate-300 cursor-pointer">
-            Activer les notifications automatiques en tâche de fond
+            {{ $t('expenses.webhookModal.enableAutomaticBackgroundNotifications') }}
           </label>
         </div>
 
@@ -176,7 +177,7 @@ async function handleDeleteWebhook() {
           >
             <Loader2 v-if="isTestingWebhook" class="w-4 h-4 animate-spin text-violet-400" />
             <Radio v-else class="w-4 h-4 text-violet-400" />
-            <span>{{ isTestingWebhook ? 'Envoi du test en cours...' : 'Envoyer un message de test maintenant' }}</span>
+            <span>{{ isTestingWebhook ? $t('expenses.webhookModal.sendingTest') : $t('expenses.webhookModal.sendTest') }}</span>
           </button>
         </div>
       </form>
@@ -189,12 +190,12 @@ async function handleDeleteWebhook() {
             @click="handleDeleteWebhook"
             class="px-3 py-1.5 bg-rose-900/20 hover:bg-rose-900/40 text-rose-400 text-xs font-semibold rounded-xl border border-rose-800/40 transition-colors"
           >
-            Supprimer le webhook
+            {{ $t('expenses.webhookModal.deleteTheWebhook') }}
           </button>
         </div>
         <div class="flex items-center gap-2">
           <button type="button" @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
-            Annuler
+            {{ $t('common.cancel') }}
           </button>
           <button
             type="submit"
@@ -203,7 +204,7 @@ async function handleDeleteWebhook() {
             class="px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
           >
             <Loader2 v-if="isSavingWebhook" class="w-3.5 h-3.5 animate-spin" />
-            <span>Enregistrer</span>
+            <span>{{ $t('common.save') }}</span>
           </button>
         </div>
       </div>

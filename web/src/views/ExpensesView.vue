@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
@@ -189,9 +190,9 @@ function openEditTollModal(e: any) {
 async function handleDeleteToll(e: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Supprimer la dépense',
-    message: `Supprimer ce péage / parking de ${Number(e.amount).toFixed(2)} € ?`,
-    confirmText: 'Supprimer',
+    title: t('expenses.expensesView.deleteExpenseTitle'),
+    message: t('expenses.expensesView.deleteTollMessage', { amount: Number(e.amount).toFixed(2) }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -199,7 +200,7 @@ async function handleDeleteToll(e: any) {
     await api.deleteDriveExpense(vehicleStore.activeVehicle.id, e.id)
     await loadData()
   } catch (err: any) {
-    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.deleteError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -219,9 +220,9 @@ function openEditMaintModal(m: any) {
 async function handleDeleteMaint(m: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Supprimer la dépense',
-    message: `Supprimer la dépense "${m.description}" de ${Number(m.amount).toFixed(2)} € ?`,
-    confirmText: 'Supprimer',
+    title: t('expenses.expensesView.deleteExpenseTitle'),
+    message: t('expenses.expensesView.deleteExpenseMessage', { description: m.description, amount: Number(m.amount).toFixed(2) }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -229,7 +230,7 @@ async function handleDeleteMaint(m: any) {
     await api.deleteMaintenance(vehicleStore.activeVehicle.id, m.id)
     await loadData()
   } catch (err: any) {
-    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.deleteError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -244,7 +245,7 @@ async function loadMoreCharges() {
     charges.value = [...charges.value, ...res.charges]
     chargesTotal.value = res.total || 0
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
     loadingMoreCharges.value = false
   }
@@ -270,9 +271,9 @@ function openEditChargeModal(c: any) {
 async function handleDeleteCharge(c: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Supprimer la recharge',
-    message: `Supprimer cette recharge manuelle de ${c.kwh_added} kWh ?`,
-    confirmText: 'Supprimer',
+    title: t('expenses.expensesView.deleteChargeTitle'),
+    message: t('expenses.expensesView.deleteChargeMessage', { kwh: c.kwh_added }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
@@ -280,7 +281,7 @@ async function handleDeleteCharge(c: any) {
     await api.deleteCharge(vehicleStore.activeVehicle.id, c.id)
     await loadData()
   } catch (err: any) {
-    showAlert(`Erreur lors de la suppression : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.deleteError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -292,19 +293,19 @@ function openUploadDocumentModal() {
 async function handleDeleteDocument(doc: ExpenseDocumentHeader) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Supprimer le justificatif',
-    message: `Supprimer le justificatif « ${doc.filename} » ? Les dépenses associées seront conservées mais ne pointeront plus vers ce document.`,
-    confirmText: 'Supprimer',
+    title: t('expenses.expensesView.deleteReceiptTitle'),
+    message: t('expenses.expensesView.deleteReceiptMessage', { filename: doc.filename }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
   try {
     await api.deleteDocument(vehicleStore.activeVehicle.id, doc.id)
     documents.value = documents.value.filter((d) => d.id !== doc.id)
-    showAlert('Justificatif supprimé', 'Succès', 'success')
+    showAlert(t('expenses.expensesView.receiptDeleted'), t('common.success'), 'success')
     await loadData()
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -324,18 +325,18 @@ function openEditReminderModal(r: MaintenanceReminder) {
 async function handleDeleteReminder(r: MaintenanceReminder) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
-    title: 'Supprimer le rappel',
-    message: `Êtes-vous sûr de vouloir supprimer le rappel d'entretien « ${r.title} » ?`,
-    confirmText: 'Supprimer',
+    title: t('expenses.expensesView.deleteReminderTitle'),
+    message: t('expenses.expensesView.deleteReminderMessage', { title: r.title }),
+    confirmText: t('common.delete'),
     type: 'danger',
   })
   if (!ok) return
   try {
     await api.deleteReminder(vehicleStore.activeVehicle.id, r.id)
-    showAlert('Rappel supprimé', 'Succès', 'success')
+    showAlert(t('expenses.expensesView.reminderDeleted'), t('common.success'), 'success')
     await loadReminders()
   } catch (err: any) {
-    showAlert(`Erreur : ${err.message}`, 'Erreur', 'danger')
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -368,8 +369,8 @@ async function openWebhookModal() {
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
       <div>
-        <h2 class="text-2xl font-bold tracking-tight text-white">Dépenses & Entretien</h2>
-        <p class="text-sm text-slate-400">Péages, parkings, entretien récurrent, assurance et recharges</p>
+        <h2 class="text-2xl font-bold tracking-tight text-white">{{ $t('expenses.expensesView.expensesAndMaintenance') }}</h2>
+        <p class="text-sm text-slate-400">{{ $t('expenses.expensesView.tollsParkingRecurringMaintenanceInsurance') }}</p>
       </div>
 
       <div v-if="vehicleStore.canEdit" class="flex items-center gap-2">
@@ -379,7 +380,7 @@ async function openWebhookModal() {
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          Péage / Parking
+          {{ $t('expenses.expensesView.tollParking') }}
         </button>
         <button
           v-if="activeTab === 'MAINTENANCE'"
@@ -387,17 +388,17 @@ async function openWebhookModal() {
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          Entretien / Fixe
+          {{ $t('expenses.expensesView.maintenanceFixed') }}
         </button>
         <button
           v-if="activeTab === 'REMINDERS'"
           @click="openWebhookModal"
           class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-2 border border-slate-700 transition-colors"
-          title="Configurer le webhook pour recevoir des notifications en temps réel"
+          :title="$t('expenses.expensesView.setUpTheWebhookTo')"
         >
           <Radio class="w-3.5 h-3.5 text-violet-400" />
-          <span class="hidden sm:inline">Webhook Homelab</span>
-          <span class="sm:hidden">Webhook</span>
+          <span class="hidden sm:inline">{{ $t('expenses.expensesView.homelabWebhook') }}</span>
+          <span class="sm:hidden">{{ $t('expenses.expensesView.webhook') }}</span>
         </button>
         <button
           v-if="activeTab === 'REMINDERS'"
@@ -405,7 +406,7 @@ async function openWebhookModal() {
           class="px-3.5 py-2 bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-violet-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          Nouveau rappel
+          {{ $t('expenses.expensesView.newReminder') }}
         </button>
         <button
           v-if="activeTab === 'CHARGES' && !vehicleStore.isIce"
@@ -413,7 +414,7 @@ async function openWebhookModal() {
           class="px-3.5 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          {{ vehicleStore.hasTeslaMate ? 'Recharge hors TeslaMate' : 'Ajouter une recharge' }}
+          {{ vehicleStore.hasTeslaMate ? $t('expenses.expensesView.chargeOutsideTeslamate') : $t('expenses.expensesView.addCharge') }}
         </button>
         <button
           v-if="activeTab === 'DOCUMENTS'"
@@ -421,7 +422,7 @@ async function openWebhookModal() {
           class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-600/20"
         >
           <Plus class="w-3.5 h-3.5" />
-          Ajouter un justificatif
+          {{ $t('expenses.expensesView.addAReceipt') }}
         </button>
       </div>
     </div>
@@ -432,7 +433,7 @@ async function openWebhookModal() {
       class="bg-slate-900 border border-slate-800 p-3.5 rounded-2xl flex items-center gap-3 text-xs text-slate-400"
     >
       <Eye class="w-4 h-4 text-slate-400 shrink-0" />
-      <span>Vous consultez ce véhicule en mode <strong>Lecteur seul</strong>. Les ajouts et modifications sont désactivés.</span>
+      <span>{{ $t('expenses.expensesView.youAreViewingThisVehicle') }} <strong>{{ $t('expenses.expensesView.readOnly') }}</strong>{{ $t('expenses.expensesView.modeAdditionsAndChangesAre') }}</span>
     </div>
 
     <!-- Segmented Navigation: Frais de Route vs Flotte & Entretien -->
@@ -442,7 +443,7 @@ async function openWebhookModal() {
         <div class="flex max-w-full items-center overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
           <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1 select-none flex items-center gap-1.5">
             <Navigation class="w-3 h-3 text-amber-400" />
-            <span class="hidden sm:inline">Route & Trajets</span>
+            <span class="hidden sm:inline">{{ $t('expenses.expensesView.roadAndDrives') }}</span>
           </span>
           <button
             @click="activeTab = 'TOLLS'"
@@ -450,7 +451,7 @@ async function openWebhookModal() {
             :class="activeTab === 'TOLLS' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
           >
             <Receipt class="w-3.5 h-3.5" />
-            <span>Péages</span>
+            <span>{{ $t('expenses.expensesView.tolls') }}</span>
           </button>
           <button
             v-if="!vehicleStore.isIce"
@@ -459,7 +460,7 @@ async function openWebhookModal() {
             :class="activeTab === 'CHARGES' ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
           >
             <Zap class="w-3.5 h-3.5" />
-            <span>Recharges</span>
+            <span>{{ $t('expenses.expensesView.charges') }}</span>
             <span v-if="chargesWithoutCost > 0" class="px-1.5 py-0.2 text-[10px] font-bold rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
               {{ chargesWithoutCost }}
             </span>
@@ -470,7 +471,7 @@ async function openWebhookModal() {
         <div class="flex max-w-full items-center overflow-x-auto bg-slate-900 border border-slate-800 rounded-2xl p-1 gap-1">
           <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2.5 py-1 select-none flex items-center gap-1.5">
             <Wrench class="w-3 h-3 text-pink-400" />
-            <span class="hidden sm:inline">Flotte & Véhicule</span>
+            <span class="hidden sm:inline">{{ $t('expenses.expensesView.fleetAndVehicle') }}</span>
           </span>
           <button
             @click="activeTab = 'MAINTENANCE'"
@@ -478,7 +479,7 @@ async function openWebhookModal() {
             :class="activeTab === 'MAINTENANCE' ? 'bg-pink-500/20 text-pink-300 border border-pink-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
           >
             <Wrench class="w-3.5 h-3.5" />
-            <span>Entretiens</span>
+            <span>{{ $t('expenses.expensesView.maintenance') }}</span>
           </button>
           <button
             @click="activeTab = 'REMINDERS'"
@@ -486,7 +487,7 @@ async function openWebhookModal() {
             :class="activeTab === 'REMINDERS' ? 'bg-violet-500/20 text-violet-300 border border-violet-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
           >
             <Bell class="w-3.5 h-3.5" />
-            <span>Rappels</span>
+            <span>{{ $t('expenses.expensesView.reminders') }}</span>
             <span
               v-if="urgentRemindersCount > 0"
               class="px-1.5 py-0.2 text-[10px] font-bold rounded-full"
@@ -501,7 +502,7 @@ async function openWebhookModal() {
             :class="activeTab === 'DOCUMENTS' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-sm' : 'text-slate-400 hover:text-white'"
           >
             <Paperclip class="w-3.5 h-3.5" />
-            <span>Justificatifs</span>
+            <span>{{ $t('expenses.expensesView.receipts') }}</span>
             <span v-if="documents.length > 0" class="px-1.5 py-0.2 text-[10px] font-medium rounded-full bg-slate-800 text-slate-400">
               {{ documents.length }}
             </span>
