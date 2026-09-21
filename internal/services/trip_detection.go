@@ -12,7 +12,7 @@ const (
 	// Two drives separated by less than this are the same trip.
 	TripPauseMax = 5 * time.Minute
 	// A longer stop still belongs to the trip when the car was charging during it (road trip), up to this duration.
-	TripChargeStopMax = 3 * time.Hour
+	TripChargeStopMax = 1 * time.Hour
 	// Charge timestamps and drive ends are recorded independently, so a charge may start slightly before a drive ends.
 	tripChargeSlack = 5 * time.Minute
 )
