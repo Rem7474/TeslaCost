@@ -7,6 +7,9 @@ export interface TimelineTireInfo {
   startKm: number
   endKm: number
   ongoing: boolean
+  season: string
+  mountedDate: string | null
+  dismountedDate: string | null
 }
 
 export interface TimelineSegment {
@@ -26,6 +29,8 @@ export interface TimelineGap {
 export interface TimelineLane {
   id: string
   label: string
+  // Fits a narrow label column (an axle or wheel code)
+  shortLabel: string
   segments: TimelineSegment[]
   gaps: TimelineGap[]
 }
@@ -67,6 +72,9 @@ function flattenSessions(tires: any[], currentKm: number): FlatSession[] {
         startKm: start,
         endKm: end,
         ongoing,
+        season: t.tire.season,
+        mountedDate: s.mounted_date ?? null,
+        dismountedDate: s.dismounted_date ?? null,
         colorKey: `${label} ${t.tire.dimension}`,
       })
     }
@@ -78,6 +86,7 @@ function flattenSessions(tires: any[], currentKm: number): FlatSession[] {
 function buildLane(
   id: string,
   label: string,
+  shortLabel: string,
   sessions: FlatSession[],
   colorFor: (key: string) => string,
   maxKm: number,
@@ -116,7 +125,7 @@ function buildLane(
     }
   }
   if (cursor < maxKm) gaps.push({ startKm: cursor, endKm: maxKm })
-  return { id, label, segments, gaps }
+  return { id, label, shortLabel, segments, gaps }
 }
 
 function sameCoverage(a: TimelineLane, b: TimelineLane): boolean {
@@ -131,10 +140,11 @@ function sameCoverage(a: TimelineLane, b: TimelineLane): boolean {
   )
 }
 
-function mergeLanes(id: string, label: string, a: TimelineLane, b: TimelineLane): TimelineLane {
+function mergeLanes(id: string, label: string, shortLabel: string, a: TimelineLane, b: TimelineLane): TimelineLane {
   return {
     id,
     label,
+    shortLabel,
     gaps: a.gaps,
     segments: a.segments.map((s, i) => {
       const tires = [...s.tires, ...b.segments[i].tires]
@@ -163,6 +173,7 @@ export function buildTireTimeline(tires: any[], currentOdometer: number): TireTi
       buildLane(
         w,
         `${wheelLabel(w)} (${w})`,
+        w,
         flat.filter((s) => s.position === w || !(WHEELS as readonly string[]).includes(s.position)),
         colorFor,
         maxKm,
@@ -170,12 +181,12 @@ export function buildTireTimeline(tires: any[], currentOdometer: number): TireTi
     ]),
   ) as Record<(typeof WHEELS)[number], TimelineLane>
 
-  const front = sameCoverage(wheel.FL, wheel.FR) ? [mergeLanes('front', t('tires.timeline.front'), wheel.FL, wheel.FR)] : [wheel.FL, wheel.FR]
-  const rear = sameCoverage(wheel.RL, wheel.RR) ? [mergeLanes('rear', t('tires.timeline.rear'), wheel.RL, wheel.RR)] : [wheel.RL, wheel.RR]
+  const front = sameCoverage(wheel.FL, wheel.FR) ? [mergeLanes('front', t('tires.timeline.front'), t('tires.timeline.frontShort'), wheel.FL, wheel.FR)] : [wheel.FL, wheel.FR]
+  const rear = sameCoverage(wheel.RL, wheel.RR) ? [mergeLanes('rear', t('tires.timeline.rear'), t('tires.timeline.rearShort'), wheel.RL, wheel.RR)] : [wheel.RL, wheel.RR]
 
   let lanes = [...front, ...rear]
   if (front.length === 1 && rear.length === 1 && sameCoverage(front[0], rear[0])) {
-    lanes = [mergeLanes('all', t('tires.timeline.all'), front[0], rear[0])]
+    lanes = [mergeLanes('all', t('tires.timeline.all'), t('tires.timeline.allShort'), front[0], rear[0])]
   }
 
   const legend = [...colorByKey.entries()].map(([key, color]) => ({ key, color }))
