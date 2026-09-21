@@ -10,7 +10,9 @@ import CarpoolSummaryGrid from '@/components/carpool/CarpoolSummaryGrid.vue'
 import CarpoolTripList from '@/components/carpool/CarpoolTripList.vue'
 import CarpoolTripModal from '@/components/carpool/CarpoolTripModal.vue'
 import CarpoolDetailModal from '@/components/carpool/CarpoolDetailModal.vue'
+import DriveCostModal from '@/components/drives/DriveCostModal.vue'
 import { downloadCsv } from '@/utils/csv'
+import { toggleTag } from '@/utils/drives'
 import { carpoolCsvHeaders, carpoolCsvRows } from '@/utils/carpool'
 import { Users, Plus } from 'lucide-vue-next'
 
@@ -97,6 +99,36 @@ async function loadData() {
     console.error('Failed to load carpool trips', err)
   } finally {
     loading.value = false
+  }
+}
+
+// A leg of a carpool opens the cost detail of its drive, over the carpool detail
+const showDriveModal = ref(false)
+const legDrive = ref<any | null>(null)
+
+async function fetchDrive(driveId: string) {
+  const res = await api.getDrives(vehicleId.value, { driveId, limit: 1 })
+  return res.drives?.[0] ?? null
+}
+
+async function openLegDrive(driveId: string) {
+  try {
+    const drive = await fetchDrive(driveId)
+    if (!drive) return
+    legDrive.value = drive
+    showDriveModal.value = true
+  } catch (err: any) {
+    showAlert(t('drives.drivesView.detailsLoadError', { message: err.message }), t('shell.confirm.error'), 'danger')
+  }
+}
+
+async function toggleLegDriveTag(drive: any, tag: string) {
+  const tags = toggleTag(drive.tags, tag)
+  try {
+    await api.updateDriveTags(vehicleId.value, drive.id, tags)
+    drive.tags = tags
+  } catch (err: any) {
+    showAlert(t('drives.drivesView.tagUpdateError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
 }
 
@@ -291,6 +323,18 @@ onMounted(() => {
       :recalculating="recalculating"
       @edit="(trip) => { showDetail = false; openEditModal(trip) }"
       @recalculate="handleRecalculateSingle"
+      @open-drive="openLegDrive"
+    />
+
+    <DriveCostModal
+      v-model:open="showDriveModal"
+      v-model:drive="legDrive"
+      :vehicle-id="vehicleId"
+      :trip-drive-ids="[]"
+      :trip-legs="[]"
+      :start-with-toll-entry="false"
+      :refresh-drive="fetchDrive"
+      @toggle-tag="toggleLegDriveTag"
     />
 
     <CarpoolTripModal
