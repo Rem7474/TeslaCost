@@ -8,6 +8,8 @@ import { useConfirm } from '@/composables/useConfirm'
 import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save } from 'lucide-vue-next'
 import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, uniqueById } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
+import { buildDriveBreakdown } from '@/utils/costBreakdown'
+import CostDonut from '@/components/costs/CostDonut.vue'
 
 // Cost breakdown of a drive, or of a trip group (drive.is_trip_group, whose drives are tripDriveIds), with its
 // expenses (edit, delete, add a toll) and the toll detection. refreshDrive reloads the drives list and returns the
@@ -25,6 +27,7 @@ const router = useRouter()
 const vehicleStore = useVehicleStore()
 const { showConfirm, showAlert } = useConfirm()
 const formatDate = formatDayTime
+const breakdown = computed(() => buildDriveBreakdown(selectedCostDrive.value?.costs, Number(selectedCostDrive.value?.distance_km) || 0))
 const teslamateDriveUrl = (d: any) => buildTeslamateDriveUrl(vehicleStore.activeVehicle, d)
 
 // Expense edition inside the cost modal
@@ -320,6 +323,18 @@ async function handleDeleteExpense(exp: any) {
         <span>{{ $t('drives.driveCostModal.someItemsUseADefault') }}</span>
       </p>
 
+      <!-- Cost split, same donut as the monthly detail -->
+      <div class="bg-slate-800/30 border border-slate-800 rounded-xl p-4">
+        <h4 class="text-xs font-bold text-white mb-2">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
+        <div class="w-full h-48 relative">
+          <CostDonut
+            :items="breakdown.items"
+            :empty-label="$t('drives.driveCostModal.noCost')"
+            :chart-label="$t('drives.driveCostModal.breakdownAria')"
+          />
+        </div>
+      </div>
+
       <!-- Cost Breakdown List -->
       <div class="space-y-2.5">
         <!-- 1. Électricité -->
@@ -338,8 +353,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-sky-400 font-mono">
-            {{ (selectedCostDrive.costs?.electricity_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-sky-400 font-mono">{{ (selectedCostDrive.costs?.electricity_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.energy.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.energy.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -360,8 +376,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-emerald-400 font-mono">
-            {{ (selectedCostDrive.costs?.tires_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-emerald-400 font-mono">{{ (selectedCostDrive.costs?.tires_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tires.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tires.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -382,8 +399,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-pink-400 font-mono">
-            {{ (selectedCostDrive.costs?.maintenance_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-pink-400 font-mono">{{ (selectedCostDrive.costs?.maintenance_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.maintenance.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.maintenance.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -429,8 +447,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-purple-400 font-mono">
-            {{ (selectedCostDrive.costs?.insurance_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-purple-400 font-mono">{{ (selectedCostDrive.costs?.insurance_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.insurance.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.insurance.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -449,9 +468,10 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-sm font-bold text-amber-400 font-mono">
-                {{ (selectedCostDrive.costs?.tolls_cost || 0).toFixed(2) }} €
-              </span>
+              <div class="text-right">
+                <div class="text-sm font-bold text-amber-400 font-mono">{{ (selectedCostDrive.costs?.tolls_cost || 0).toFixed(2) }} €</div>
+                <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tolls.costPerKm.toFixed(3) }} €/km</span></div>
+              </div>
               <button
                 @click="showAddTollInline = !showAddTollInline"
                 class="p-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs"

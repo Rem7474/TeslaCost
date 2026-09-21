@@ -80,6 +80,9 @@
     "unknownEnd": "Unknown destination"
   },
   "driveCostModal": {
+    "breakdownTitle": "Cost split",
+    "breakdownAria": "Cost breakdown of the drive by category",
+    "noCost": "No expense",
     "shareAsACarpool": "Share as a carpool",
     "costPerKilometre": "Cost per kilometre",
     "totalCostPrice": "Total cost price",

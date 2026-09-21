@@ -1,4 +1,5 @@
 import { intlLocale, t } from '@/i18n'
+import { COST_COLORS } from '@/utils/costBreakdown'
 export const monthlyRangeOptions = [
   { key: 'ALL', labelKey: 'dashboard.range.all' },
   { key: '1Y', labelKey: 'dashboard.range.oneYear' },
@@ -205,7 +206,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       key: 'energy',
       label: t('dashboard.breakdown.energy'),
       subLabel: '',
-      color: '#38bdf8',
+      color: COST_COLORS.energy,
       amount: m.energy || 0,
       cashAmount: m.energy || 0,
       note: m.smoothed_energy > 0 ? t('dashboard.breakdown.energyNote', { amount: m.smoothed_energy.toFixed(2) }) : null,
@@ -214,7 +215,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       key: 'tolls',
       label: t('dashboard.breakdown.tolls'),
       subLabel: '',
-      color: '#f59e0b',
+      color: COST_COLORS.tolls,
       amount: m.tolls || 0,
       cashAmount: m.tolls || 0,
       note: null,
@@ -223,7 +224,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       key: 'tires',
       label: t('dashboard.breakdown.tires'),
       subLabel: t('dashboard.breakdown.tiresSub'),
-      color: '#10b981',
+      color: COST_COLORS.tires,
       amount: m.tires_amortized || 0,
       cashAmount: m.tires || 0,
       note: (m.tires || 0) > 0
@@ -234,7 +235,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       key: 'maintenance',
       label: t('dashboard.breakdown.maintenance'),
       subLabel: t('dashboard.breakdown.smoothed'),
-      color: '#ec4899',
+      color: COST_COLORS.maintenance,
       amount: m.maintenance_amortized || 0,
       cashAmount: m.maintenance || 0,
       note: (m.maintenance || 0) > 0
@@ -245,7 +246,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       key: 'insurance',
       label: t('dashboard.breakdown.insurance'),
       subLabel: '',
-      color: '#a855f7',
+      color: COST_COLORS.insurance,
       amount: m.insurance || 0,
       cashAmount: m.insurance || 0,
       note: null,
@@ -254,7 +255,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       key: 'financing',
       label: t('dashboard.breakdown.financing'),
       subLabel: t('dashboard.breakdown.smoothed'),
-      color: '#f97316',
+      color: COST_COLORS.financing,
       amount: m.financing_amortized || m.financing || 0,
       cashAmount: m.financing || 0,
       note: (m.financing_amortized > 0 && Math.abs(m.financing_amortized - (m.financing || 0)) > 0.01)
@@ -265,7 +266,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       key: 'other',
       label: t('dashboard.breakdown.other'),
       subLabel: '',
-      color: '#64748b',
+      color: COST_COLORS.other,
       amount: m.other || 0,
       cashAmount: m.other || 0,
       note: null,
