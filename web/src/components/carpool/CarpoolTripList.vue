@@ -2,7 +2,8 @@
 import { computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
-import { Users, Trash2, Edit2, Calendar, CheckSquare, Square, Navigation, RotateCw, Download, ChevronRight } from 'lucide-vue-next'
+import SelectAllToggle from '@/components/SelectAllToggle.vue'
+import { Users, Trash2, Edit2, Calendar, Navigation, RotateCw, Download, ChevronRight } from 'lucide-vue-next'
 import { fmt, formatDate } from '@/utils/carpool'
 
 // The carpool trips as compact cards (the legs, passengers and costs are in the detail, opened by a click), and the
@@ -57,14 +58,12 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
 
     <!-- Header row: Select all checkbox & Total info -->
     <div v-if="vehicleStore.canEdit" class="flex items-center justify-between text-xs text-slate-400 px-2">
-      <button
-        type="button"
-        @click="emit('toggle-all')"
-        class="flex items-center gap-2 hover:text-slate-200 transition-colors"
-      >
-        <component :is="isAllSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
-        <span>{{ isAllSelected ? $t('common.deselectAll') : $t('common.selectAll') }}</span>
-      </button>
+      <SelectAllToggle
+        :checked="isAllSelected"
+        :indeterminate="selectedTripIds.length > 0 && !isAllSelected"
+        :label="isAllSelected ? $t('common.deselectAll') : $t('common.selectAll')"
+        @toggle="emit('toggle-all')"
+      />
       <span>{{ $t('carpool.carpoolTripList.carpoolSInTotal', { length: trips.length }) }}</span>
     </div>
 
@@ -83,7 +82,7 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
             v-if="vehicleStore.canEdit"
             :for="'carpool-select-' + trip.id"
             @click.stop
-            class="mt-1 shrink-0 flex items-center cursor-pointer"
+            class="mt-0.5 -ml-1 p-1 shrink-0 flex items-center cursor-pointer"
             :title="$t('carpool.carpoolTripList.selectThisCarpool')"
           >
             <span class="sr-only">{{ $t('carpool.carpoolTripList.selectThisCarpool') }}</span>
@@ -92,7 +91,7 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
               type="checkbox"
               :checked="selectedTripIds.includes(trip.id)"
               @change="emit('toggle', trip.id)"
-              class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+              class="select-box"
             />
           </label>
 

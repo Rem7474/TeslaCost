@@ -5,6 +5,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
+import SelectAllToggle from '@/components/SelectAllToggle.vue'
 import TireOdometerTimeline from '@/components/tires/TireOdometerTimeline.vue'
 import TireWheelCard from '@/components/tires/TireWheelCard.vue'
 import TireStorageCard from '@/components/tires/TireStorageCard.vue'
@@ -20,7 +21,7 @@ import TireBatchSessionModal from '@/components/tires/TireBatchSessionModal.vue'
 import TireDuplicateSessionModal from '@/components/tires/TireDuplicateSessionModal.vue'
 import TireBatchDisposeModal from '@/components/tires/TireBatchDisposeModal.vue'
 import TireCopyHistoryModal from '@/components/tires/TireCopyHistoryModal.vue'
-import { Archive, ArrowUpDown, CheckSquare, Copy, Disc, History, Package, Pencil, Plus, RefreshCw, Shuffle, Snowflake, Square } from 'lucide-vue-next'
+import { Archive, ArrowUpDown, Copy, Disc, History, Package, Pencil, Plus, RefreshCw, Shuffle, Snowflake } from 'lucide-vue-next'
 import {
   MOUNTED_POSITIONS,
   copiedSessionFromSession,
@@ -128,6 +129,10 @@ const isCurrentTabAllSelected = computed<boolean>(() => {
   const ids = currentTabTireIds.value
   return ids.length > 0 && ids.every((id) => selectedTireIds.value.includes(id))
 })
+
+const isCurrentTabPartlySelected = computed<boolean>(
+  () => !isCurrentTabAllSelected.value && currentTabTireIds.value.some((id) => selectedTireIds.value.includes(id))
+)
 
 function toggleSelectAllCurrentTab() {
   const ids = currentTabTireIds.value
@@ -502,14 +507,12 @@ async function handleDeleteLog(l: any) {
 
     <!-- Header row: Select all toggle & Total info -->
     <div v-if="vehicleStore.canEdit" class="flex items-center justify-between text-xs text-slate-400 px-2">
-      <button
-        type="button"
-        @click="toggleSelectAllCurrentTab"
-        class="flex items-center gap-2 hover:text-slate-200 transition-colors"
-      >
-        <component :is="isCurrentTabAllSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
-        <span>{{ isCurrentTabAllSelected ? $t('tires.tiresView.deselectAll') : $t('tires.tiresView.selectAll') }}</span>
-      </button>
+      <SelectAllToggle
+        :checked="isCurrentTabAllSelected"
+        :indeterminate="isCurrentTabPartlySelected"
+        :label="isCurrentTabAllSelected ? $t('tires.tiresView.deselectAll') : $t('tires.tiresView.selectAll')"
+        @toggle="toggleSelectAllCurrentTab"
+      />
       <span>{{ $t('tires.tiresView.tireSInThisView', { length: currentTabTireIds.length }) }}</span>
     </div>
 
