@@ -3,16 +3,13 @@ import { intlLocale } from '@/i18n'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Layers, X, Users, Coins, Pencil, Trash2 } from 'lucide-vue-next'
-import { formatTripDates, tripNeedsTollQualification } from '@/utils/drives'
-import TollQualifyActions from '@/components/drives/TollQualifyActions.vue'
+import { formatTripDates } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 
 // The trip groups ("voyages") list; a trip can be expanded to show its drives.
 defineProps<{ loadingTrips: boolean; tripGroups: any[]; expandedTripId: string | null; tripDrives: any[] }>()
 const emit = defineEmits<{
   'open-cost': [trip: any]
-  'toll-entry': [trip: any]
-  'no-toll': [trip: any]
   'toggle-details': [trip: any]
   edit: [trip: any]
   delete: [trip: any]
@@ -54,9 +51,6 @@ const formatDate = formatDayTime
               <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 shrink-0">
                 {{ $t('drives.tripGroupsPanel.legS', { length: tg.drive_ids?.length || 0 }) }}
               </span>
-              <span v-if="tripNeedsTollQualification(tg)" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/30 shrink-0">
-                {{ $t('drives.tripGroupsPanel.legsToQualify', { count: tg.unqualified_drive_count }) }}
-              </span>
               <span v-if="tg.carpool_count" class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-rose-500/10 text-rose-300 border border-rose-500/30 shrink-0">
                 {{ $t('drives.tripGroupsPanel.carpoolS', { carpool_count: tg.carpool_count }) }}
               </span>
@@ -72,15 +66,6 @@ const formatDate = formatDayTime
 
         <!-- Right Side: Cost Badge & Actions (matching Drive right-side) -->
         <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0" @click.stop>
-          <!-- Toll qualification: same two taps as a drive -->
-          <TollQualifyActions
-            v-if="vehicleStore.canEdit && tripNeedsTollQualification(tg)"
-            :toll-title="$t('drives.tripGroupsPanel.enterTheTollOfThisTrip')"
-            :no-toll-title="$t('drives.tripGroupsPanel.confirmThatThisTripHasNoToll')"
-            @toll-entry="emit('toll-entry', tg)"
-            @no-toll="emit('no-toll', tg)"
-          />
-
           <!-- Real Cost Badge -->
           <div
             class="px-3 py-1.5 bg-slate-800/80 border border-slate-700/70 rounded-xl flex items-center gap-2 text-left shadow-sm"

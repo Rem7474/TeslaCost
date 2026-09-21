@@ -277,13 +277,14 @@ type ReconcileResult struct {
 // Share of the covered window above which missing records are considered an API anomaly rather than deletions.
 const maxUpstreamDeletionShare = 0.2
 
-// ListTripCandidateDrives returns the vehicle's drives since a date, with whether each already belongs to a trip group.
+// ListTripCandidateDrives returns the vehicle's drives since a date that were not ruled out as part of a trip,
+// with whether each already belongs to a trip group.
 func (r *Repository) ListTripCandidateDrives(ctx context.Context, vehicleID string, since time.Time) ([]models.TripCandidateDrive, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT d.id::text, d.start_time, COALESCE(d.end_time, d.start_time), d.distance_km, d.start_address, d.end_address,
 		       EXISTS(SELECT 1 FROM trip_group_drives tgd WHERE tgd.drive_id = d.id)
 		FROM drives d
-		WHERE d.vehicle_id = $1 AND d.deleted_upstream_at IS NULL AND d.start_time >= $2
+		WHERE d.vehicle_id = $1 AND d.deleted_upstream_at IS NULL AND d.trip_reviewed_at IS NULL AND d.start_time >= $2
 		ORDER BY d.start_time;
 	`, vehicleID, since)
 	if err != nil {
@@ -324,4 +325,17 @@ func (r *Repository) ListChargeWindows(ctx context.Context, vehicleID string, si
 		list = append(list, c)
 	}
 	return list, rows.Err()
+}
+
+// DismissTripSuggestion rules that these drives are not part of a trip, so they are no longer suggested.
+func (r *Repository) DismissTripSuggestion(ctx context.Context, vehicleID string, driveIDs []string) error {
+	ids := uniqueStrings(driveIDs)
+	if err := ensureDrivesOwned(ctx, r.pool, vehicleID, ids); err != nil {
+		return err
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE drives SET trip_reviewed_at = COALESCE(trip_reviewed_at, NOW()), updated_at = NOW()
+		WHERE vehicle_id = $1 AND id::text = ANY($2::text[]);
+	`, vehicleID, ids)
+	return err
 }
