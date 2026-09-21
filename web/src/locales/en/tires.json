@@ -239,7 +239,6 @@
   "tireOdometerTimeline": {
     "details": "Details",
     "ongoing": "ongoing",
-    "hoverOrClickASegment": "Hover or click a segment to see the detail.",
     "noTireRecorded": "No tire recorded",
     "noFittingSessionWithMileage": "No fitting session with mileage recorded.",
     "tiresFittedByMileage": "Tires fitted by mileage",
@@ -322,7 +321,10 @@
     },
     "rear": "Rear axle",
     "front": "Front axle",
-    "all": "All wheels"
+    "all": "All wheels",
+    "frontShort": "Front",
+    "rearShort": "Rear",
+    "allShort": "All"
   },
   "sessionCount": "{count} session | {count} sessions"
 }
