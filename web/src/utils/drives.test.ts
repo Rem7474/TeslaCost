@@ -15,7 +15,7 @@ import {
   teslamateDriveUrl,
   toggleTag,
   tollApplyStatusLabel,
-  uniqueById,
+  mergeExpensesByDrive,
 } from './drives'
 
 describe('isHighwayDrive', () => {
@@ -171,9 +171,26 @@ describe('selectionSummary and CSV rows', () => {
   })
 })
 
-describe('uniqueById', () => {
-  it('keeps the first of each id in order', () => {
-    expect(uniqueById([{ id: 'a', v: 1 }, { id: 'b', v: 2 }, { id: 'a', v: 3 }])).toEqual([{ id: 'a', v: 1 }, { id: 'b', v: 2 }])
+describe('mergeExpensesByDrive', () => {
+  it('lists each expense once, in order', () => {
+    const merged = mergeExpensesByDrive([{ id: 'a', allocated_amount: 1 }, { id: 'b', allocated_amount: 2 }, { id: 'a', allocated_amount: 3 }])
+    expect(merged.map((e) => e.id)).toEqual(['a', 'b'])
+  })
+
+  it('sums the shares of a trip group expense returned once per drive', () => {
+    const merged = mergeExpensesByDrive([
+      { id: 'toll', amount: 11.9, allocated_amount: 7.53 },
+      { id: 'own', amount: 5.6, allocated_amount: 5.6 },
+      { id: 'toll', amount: 11.9, allocated_amount: 4.37 },
+    ])
+    expect(merged.map((e) => e.allocated_amount)).toEqual([11.9, 5.6])
+    expect(merged.reduce((s, e) => s + (e.allocated_amount ?? 0), 0)).toBeCloseTo(17.5, 2)
+  })
+
+  it('does not mutate its input', () => {
+    const input = [{ id: 'a', allocated_amount: 1 }, { id: 'a', allocated_amount: 2 }]
+    mergeExpensesByDrive(input)
+    expect(input[0].allocated_amount).toBe(1)
   })
 })
 
