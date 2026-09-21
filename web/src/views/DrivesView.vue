@@ -3,6 +3,7 @@ import { t } from '@/i18n'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
+import { usePreferencesStore } from '@/stores/preferences'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import DrivesToolbar from '@/components/drives/DrivesToolbar.vue'
@@ -34,6 +35,7 @@ import {
 // the pagination and the modals are components that report back to it.
 const router = useRouter()
 const vehicleStore = useVehicleStore()
+const prefs = usePreferencesStore()
 const { showConfirm, showAlert } = useConfirm()
 const vehicleId = computed(() => vehicleStore.activeVehicle?.id ?? '')
 const drives = ref<any[]>([])
@@ -236,6 +238,15 @@ watch(
 watch(
   () => vehicleStore.activeVehicle?.id,
   () => clearSelection()
+)
+
+// A work/personal filter left on would hide drives with no way to clear it once the classification is off
+watch(
+  () => prefs.proPersoEnabled,
+  (enabled) => {
+    if (!enabled) selectedTag.value = ''
+  },
+  { immediate: true }
 )
 
 onMounted(() => {
@@ -548,27 +559,29 @@ async function handleBulkApplyToll() {
             <option value="MANUAL">{{ $t('drives.drivesView.manual') }}</option>
           </select>
         </template>
-        <button
-          @click="selectedTag = ''"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-          :class="selectedTag === '' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
-        >
-          {{ $t('drives.drivesView.all') }}
-        </button>
-        <button
-          @click="selectedTag = 'Pro'"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-          :class="selectedTag === 'Pro' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-white'"
-        >
-          {{ $t('drives.drivesView.work') }}
-        </button>
-        <button
-          @click="selectedTag = 'Perso'"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-          :class="selectedTag === 'Perso' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'"
-        >
-          {{ $t('drives.drivesView.personal') }}
-        </button>
+        <template v-if="prefs.proPersoEnabled">
+          <button
+            @click="selectedTag = ''"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            :class="selectedTag === '' ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' : 'text-slate-400 hover:text-white'"
+          >
+            {{ $t('drives.drivesView.all') }}
+          </button>
+          <button
+            @click="selectedTag = 'Pro'"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            :class="selectedTag === 'Pro' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'text-slate-400 hover:text-white'"
+          >
+            {{ $t('drives.drivesView.work') }}
+          </button>
+          <button
+            @click="selectedTag = 'Perso'"
+            class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+            :class="selectedTag === 'Perso' ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-slate-400 hover:text-white'"
+          >
+            {{ $t('drives.drivesView.personal') }}
+          </button>
+        </template>
       </div>
     </div>
 

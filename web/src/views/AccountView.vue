@@ -3,9 +3,10 @@ import { t } from '@/i18n'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { KeyRound, Laptop, LogOut, ShieldCheck, Smartphone, UserRound } from 'lucide-vue-next'
+import { KeyRound, Laptop, LogOut, ShieldCheck, SlidersHorizontal, Smartphone, UserRound } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
+import { usePreferencesStore } from '@/stores/preferences'
 import { useConfirm } from '@/composables/useConfirm'
 import { describeRelativeTime, describeUserAgent } from '@/utils/userAgent'
 
@@ -20,6 +21,7 @@ interface Session {
 
 const router = useRouter()
 const authStore = useAuthStore()
+const prefs = usePreferencesStore()
 const { showConfirm } = useConfirm()
 
 const sessions = ref<Session[]>([])
@@ -169,6 +171,26 @@ onMounted(load)
           <dd class="text-slate-200">{{ hasPassword ? $t('account.localPassword') : $t('account.ssoProvider') }}</dd>
         </div>
       </dl>
+    </section>
+
+    <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5" aria-labelledby="account-preferences">
+      <h2 id="account-preferences" class="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+        <SlidersHorizontal class="h-4 w-4 text-slate-400" aria-hidden="true" />
+        {{ $t('account.accountView.preferences') }}
+      </h2>
+      <label class="flex cursor-pointer items-start justify-between gap-4">
+        <span>
+          <span class="block text-sm font-medium text-white">{{ $t('account.accountView.proPersoTitle') }}</span>
+          <span class="block text-xs text-slate-400">{{ $t('account.accountView.proPersoHelp') }}</span>
+        </span>
+        <input
+          type="checkbox"
+          role="switch"
+          class="mt-1 h-5 w-9 shrink-0 cursor-pointer appearance-none rounded-full bg-slate-700 transition-colors checked:bg-rose-500 relative before:absolute before:left-0.5 before:top-0.5 before:h-4 before:w-4 before:rounded-full before:bg-white before:transition-transform checked:before:translate-x-4"
+          :checked="prefs.proPersoEnabled"
+          @change="prefs.setProPersoEnabled(($event.target as HTMLInputElement).checked)"
+        />
+      </label>
     </section>
 
     <section v-if="hasPassword" class="rounded-2xl border border-slate-800 bg-slate-900 p-5" aria-labelledby="account-password">
