@@ -3,6 +3,7 @@ import { t } from '@/i18n'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useVehicleStore } from '@/stores/vehicle'
 import { Zap, Lock, Mail, AlertCircle, ShieldAlert } from 'lucide-vue-next'
 import { APP_NAME } from '@/brand'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
@@ -10,6 +11,7 @@ import { APP_VERSION } from '@/version'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const vehicleStore = useVehicleStore()
 
 const email = ref('')
 const password = ref('')
@@ -44,6 +46,8 @@ async function handleSubmit() {
   loading.value = true
   try {
     await authStore.register({ email: email.value, password: password.value })
+    // The app only loads the vehicles at startup when already signed in; without this the layout waits forever
+    await vehicleStore.fetchVehicles()
     router.push('/vehicles')
   } catch (err: any) {
     error.value = err.message || t('auth.registerView.registrationFailed')
