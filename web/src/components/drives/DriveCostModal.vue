@@ -6,7 +6,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { usePreferencesStore } from '@/stores/preferences'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save, ArrowLeft, ChevronRight } from 'lucide-vue-next'
+import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save, ArrowLeft, ChevronRight, ChevronDown, Radar } from 'lucide-vue-next'
 import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, mergeExpensesByDrive } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 import { buildDriveBreakdown } from '@/utils/costBreakdown'
@@ -50,6 +50,7 @@ const addingToll = ref(false)
 const tollDetection = ref<any | null>(null)
 const tollDetectionLoading = ref(false)
 const tollDetectionError = ref('')
+const showTollSegments = ref(false)
 const tollDetectionEstimatedTotal = computed(() => {
   const priced = (tollDetection.value?.segments || []).filter((s: any) => s.estimated_price != null)
   if (!priced.length) return null
@@ -125,6 +126,7 @@ async function loadTripExpenses() {
 async function loadTollDetection(drive: any) {
   tollDetection.value = null
   tollDetectionError.value = ''
+  showTollSegments.value = false
   if (!props.vehicleId || drive.is_trip_group) return
   try {
     tollDetection.value = await api.getTollDetection(props.vehicleId, drive.id)
@@ -140,6 +142,12 @@ const canApplyTollEstimate = computed(
     tollDetectionEstimatedTotal.value != null &&
     (!existingTollExpense.value || existingTollExpense.value.source === 'AUTO_TOLL') &&
     !existingTollExpense.value?.trip_group_id
+)
+// The detection needs the GPS trace of a TeslaMate drive; a trip or a manual drive has none
+const canDetectTolls = computed(() => !selectedCostDrive.value?.is_trip_group && !!selectedCostDrive.value?.teslamate_drive_id)
+// Nothing to apply when the toll already recorded is that same estimate
+const estimateMatchesExistingToll = computed(
+  () => existingTollExpense.value?.source === 'AUTO_TOLL' && Math.abs(Number(existingTollExpense.value.amount) - (tollDetectionEstimatedTotal.value ?? NaN)) < 0.005
 )
 const applyingToll = ref(false)
 
@@ -585,6 +593,17 @@ async function handleDeleteExpense(exp: any) {
                 <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tolls.costPerKm.toFixed(3) }} €/km</span></div>
               </div>
               <button
+                v-if="canDetectTolls"
+                type="button"
+                @click="handleDetectTolls"
+                :disabled="tollDetectionLoading"
+                class="p-1 bg-cyan-600/20 hover:bg-cyan-600/40 text-cyan-300 rounded-lg text-xs disabled:opacity-50"
+                :title="tollDetectionLoading ? $t('drives.driveCostModal.detecting') : tollDetection ? $t('drives.driveCostModal.redetect') : $t('drives.driveCostModal.detectTolls')"
+                :aria-label="$t('drives.driveCostModal.detectTolls')"
+              >
+                <Radar class="w-3.5 h-3.5" :class="{ 'animate-pulse': tollDetectionLoading }" />
+              </button>
+              <button
                 v-if="!selectedCostDrive.is_suggestion"
                 @click="showAddTollInline = !showAddTollInline"
                 class="p-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs"
@@ -638,6 +657,53 @@ async function handleDeleteExpense(exp: any) {
             </div>
           </div>
 
+          <!-- GPS toll detection, folded into the tolls: what was detected and its estimate, with the segments on demand -->
+          <div
+            v-if="canDetectTolls && (tollDetectionError || tollDetection)"
+            class="pt-1 space-y-1 text-[11px] pl-9"
+            :class="driveExpenses.length ? '' : 'border-t border-slate-700/50'"
+          >
+            <p v-if="tollDetectionError" class="text-rose-400">{{ tollDetectionError }}</p>
+            <template v-else-if="tollDetection?.segments?.length">
+              <div class="flex items-center justify-between gap-2 text-slate-300">
+                <button
+                  type="button"
+                  @click="showTollSegments = !showTollSegments"
+                  :aria-expanded="showTollSegments"
+                  class="flex items-center gap-1 text-cyan-400 hover:text-cyan-300"
+                >
+                  <Radar class="w-3 h-3" />
+                  {{ $t('drives.driveCostModal.detectedGates', tollDetection.segments.length) }}
+                  <ChevronDown class="w-3 h-3 transition-transform" :class="{ 'rotate-180': showTollSegments }" />
+                </button>
+                <span v-if="tollDetectionEstimatedTotal != null" class="flex items-center gap-2 shrink-0">
+                  <span class="text-slate-400">{{ $t('drives.driveCostModal.totalEstimate') }}</span>
+                  <span class="text-amber-400 font-mono font-semibold" :title="$t('drives.driveCostModal.class1LightVehicle')">{{ tollDetectionEstimatedTotal.toFixed(2) }} €</span>
+                  <button
+                    v-if="canApplyTollEstimate && !estimateMatchesExistingToll"
+                    type="button"
+                    @click="handleApplyTollEstimate"
+                    :disabled="applyingToll"
+                    class="px-2 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-semibold rounded-lg disabled:opacity-50"
+                  >
+                    {{ applyingToll ? '...' : existingTollExpense ? $t('drives.driveCostModal.update') : $t('drives.drivesView.apply') }}
+                  </button>
+                </span>
+              </div>
+              <div v-if="showTollSegments" class="space-y-1">
+                <div v-for="(seg, idx) in tollDetection.segments" :key="idx" class="text-slate-300 flex items-center justify-between gap-2">
+                  <span v-if="seg.type === 'close' && seg.exit">
+                    {{ seg.operator ? `${seg.operator}${$t('drives.driveCostModal.operatorSeparator')}` : '' }}{{ seg.entry }} → {{ seg.exit }}
+                  </span>
+                  <span v-else-if="seg.type === 'close'">{{ $t('drives.driveCostModal.entryDetectedExitNotIdentified', { entry: seg.entry }) }}</span>
+                  <span v-else>{{ $t('drives.driveCostModal.tollGate', { entry: seg.entry }) }}</span>
+                  <span v-if="seg.estimated_price != null" class="text-amber-400 font-mono shrink-0">{{ seg.estimated_price.toFixed(2) }} €</span>
+                </div>
+              </div>
+            </template>
+            <p v-else class="text-slate-500">{{ $t('drives.driveCostModal.noTollDetectedOnThis') }}</p>
+          </div>
+
           <!-- Inline add toll form -->
           <div v-if="showAddTollInline" class="p-3 bg-slate-900 border border-slate-700 rounded-xl space-y-2 mt-2">
             <div class="text-xs font-bold text-white">{{ $t('drives.driveCostModal.addATollParkingFee') }}</div>
@@ -683,61 +749,6 @@ async function handleDeleteExpense(exp: any) {
               </button>
             </div>
           </div>
-        </div>
-
-        <!-- 6. Détection péage autoroute (GPS, informatif — disponible sur tout trajet, même si l'heuristique de vitesse ne l'a pas repéré) -->
-        <div
-          v-if="!selectedCostDrive.is_trip_group"
-          class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl space-y-2"
-        >
-          <div class="flex items-center justify-between gap-2">
-            <div class="flex items-center gap-3">
-              <div class="p-2 bg-cyan-500/10 text-cyan-400 rounded-lg">
-                <MapPin class="w-4 h-4" />
-              </div>
-              <div>
-                <div class="text-xs font-semibold text-white">{{ $t('drives.driveCostModal.motorwayTollDetection') }}</div>
-                <div class="text-[11px] text-slate-400">{{ $t('drives.driveCostModal.basedOnTheTeslamateGps') }}</div>
-              </div>
-            </div>
-            <button
-              v-if="selectedCostDrive.teslamate_drive_id"
-              @click="handleDetectTolls"
-              :disabled="tollDetectionLoading"
-              class="px-2.5 py-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold rounded-lg disabled:opacity-50 shrink-0"
-            >
-              {{ tollDetectionLoading ? $t('drives.driveCostModal.detecting') : tollDetection ? $t('drives.driveCostModal.redetect') : $t('drives.driveCostModal.detectTolls') }}
-            </button>
-            <span v-else class="text-[11px] text-slate-500 shrink-0">{{ $t('drives.driveCostModal.manualDriveNoGpsTrack') }}</span>
-          </div>
-
-          <p v-if="tollDetectionError" class="text-[11px] text-rose-400">{{ tollDetectionError }}</p>
-
-          <div v-if="tollDetection?.segments?.length" class="space-y-1 pt-1 border-t border-slate-700/50">
-            <div v-for="(seg, idx) in tollDetection.segments" :key="idx" class="text-[11px] text-slate-300 pl-9 flex items-center justify-between gap-2">
-              <span v-if="seg.type === 'close' && seg.exit">
-                {{ seg.operator ? `${seg.operator}${$t('drives.driveCostModal.operatorSeparator')}` : '' }}{{ seg.entry }} → {{ seg.exit }}
-              </span>
-              <span v-else-if="seg.type === 'close'">{{ $t('drives.driveCostModal.entryDetectedExitNotIdentified', { entry: seg.entry }) }}</span>
-              <span v-else>{{ $t('drives.driveCostModal.tollGate', { entry: seg.entry }) }}</span>
-              <span v-if="seg.estimated_price != null" class="text-amber-400 font-mono shrink-0">{{ seg.estimated_price.toFixed(2) }} €</span>
-            </div>
-            <div v-if="tollDetectionEstimatedTotal != null" class="flex items-center justify-between gap-2 pl-9 pt-1 border-t border-slate-700/50 text-[11px]">
-              <span class="text-slate-400">{{ $t('drives.driveCostModal.totalEstimate') }} <span class="text-slate-500">{{ $t('drives.driveCostModal.class1LightVehicle') }}</span></span>
-              <span class="flex items-center gap-2 shrink-0">
-                <span class="text-amber-400 font-mono font-semibold">{{ tollDetectionEstimatedTotal.toFixed(2) }} €</span>
-                <button
-                  v-if="canApplyTollEstimate"
-                  @click="handleApplyTollEstimate"
-                  :disabled="applyingToll"
-                  class="px-2 py-0.5 bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-semibold rounded-lg disabled:opacity-50"
-                >
-                  {{ applyingToll ? '...' : existingTollExpense ? $t('drives.driveCostModal.update') : $t('drives.drivesView.apply') }}
-                </button>
-              </span>
-            </div>
-          </div>
-          <p v-else-if="tollDetection" class="text-[11px] text-slate-500 pl-9">{{ $t('drives.driveCostModal.noTollDetectedOnThis') }}</p>
         </div>
 
         <!-- Grand Total Card -->
