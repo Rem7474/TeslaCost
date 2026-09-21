@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useVehicleStore } from '@/stores/vehicle'
+import { usePreferencesStore } from '@/stores/preferences'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import { Receipt, Layers, Users, Plus, Download } from 'lucide-vue-next'
 
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   'add-to-trip': []
 }>()
 const vehicleStore = useVehicleStore()
+const prefs = usePreferencesStore()
 </script>
 
 <template>
@@ -61,6 +63,7 @@ const vehicleStore = useVehicleStore()
 
     <!-- Batch Tag actions -->
     <button
+      v-if="prefs.proPersoEnabled"
       type="button"
       @click="emit('tag', 'Pro')"
       class="px-2.5 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 border border-blue-500/40 text-xs font-semibold rounded-xl flex items-center gap-1 transition-colors"
@@ -70,6 +73,7 @@ const vehicleStore = useVehicleStore()
     </button>
 
     <button
+      v-if="prefs.proPersoEnabled"
       type="button"
       @click="emit('tag', 'Perso')"
       class="px-2.5 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 text-xs font-semibold rounded-xl flex items-center gap-1 transition-colors"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
+import { usePreferencesStore } from '@/stores/preferences'
 import { MapPin, Clock, Users, Coins } from 'lucide-vue-next'
 import QualifyActions from '@/components/drives/QualifyActions.vue'
 import { needsTollQualification } from '@/utils/drives'
@@ -11,6 +12,7 @@ defineProps<{ d: any; selected: boolean }>()
 const emit = defineEmits<{ open: [drive: any]; toggle: [drive: any]; 'toll-entry': [drive: any]; 'no-toll': [drive: any] }>()
 const router = useRouter()
 const vehicleStore = useVehicleStore()
+const prefs = usePreferencesStore()
 const formatDate = formatDayTime
 </script>
 
@@ -54,13 +56,13 @@ const formatDate = formatDayTime
           </span>
           <!-- Clean tag pills -->
           <span
-            v-if="d.tags?.includes('Pro')"
+            v-if="prefs.proPersoEnabled && d.tags?.includes('Pro')"
             class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40 shrink-0"
           >
             {{ $t('drives.driveCard.work') }}
           </span>
           <span
-            v-if="d.tags?.includes('Perso')"
+            v-if="prefs.proPersoEnabled && d.tags?.includes('Perso')"
             class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shrink-0"
           >
             {{ $t('drives.driveCard.personal') }}

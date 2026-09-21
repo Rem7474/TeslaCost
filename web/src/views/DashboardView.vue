@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
+import { usePreferencesStore } from '@/stores/preferences'
 import { api, type MaintenanceReminder } from '@/services/api'
 
 import EnergyEfficiencyPanel from '@/components/dashboard/EnergyEfficiencyPanel.vue'
@@ -18,6 +19,7 @@ import MonthDetailModal from '@/components/dashboard/MonthDetailModal.vue'
 // The page loads the TCO and the reminders; each card and chart of the dashboard is a component that
 // receives the data it shows. A click on a month (chart or banner) opens its detail modal.
 const vehicleStore = useVehicleStore()
+const prefs = usePreferencesStore()
 const vehicleId = computed(() => vehicleStore.activeVehicle?.id ?? '')
 const tco = ref<any | null>(null)
 const loading = ref(true)
@@ -163,7 +165,7 @@ onMounted(() => {
 
       <MileageCostChart :monthly-costs="monthlyCosts" @open-month="openMonthDetail" />
 
-      <TagBreakdown :tco="tco" />
+      <TagBreakdown v-if="prefs.proPersoEnabled" :tco="tco" />
     </div>
 
     <MonthDetailModal v-model:month="selectedMonth" :monthly-costs="tco?.monthly_costs || []" />

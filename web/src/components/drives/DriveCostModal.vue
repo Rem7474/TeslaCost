@@ -3,6 +3,7 @@ import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
+import { usePreferencesStore } from '@/stores/preferences'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save, ArrowLeft, ChevronRight } from 'lucide-vue-next'
@@ -26,6 +27,7 @@ const open = defineModel<boolean>('open', { required: true })
 const selectedCostDrive = defineModel<any | null>('drive', { required: true })
 const router = useRouter()
 const vehicleStore = useVehicleStore()
+const prefs = usePreferencesStore()
 const { showConfirm, showAlert } = useConfirm()
 const formatDate = formatDayTime
 const breakdown = computed(() => buildDriveBreakdown(selectedCostDrive.value?.costs, Number(selectedCostDrive.value?.distance_km) || 0))
@@ -336,7 +338,7 @@ async function handleDeleteExpense(exp: any) {
         </div>
 
         <!-- Tag qualification (only for individual drives) -->
-        <div v-if="!selectedCostDrive.is_trip_group && vehicleStore.canEdit" class="pt-2 border-t border-slate-700/60 flex items-center justify-between gap-2">
+        <div v-if="prefs.proPersoEnabled && !selectedCostDrive.is_trip_group && vehicleStore.canEdit" class="pt-2 border-t border-slate-700/60 flex items-center justify-between gap-2">
           <span class="text-xs text-slate-400">{{ $t('drives.driveCostModal.classification') }}</span>
           <div class="flex items-center gap-1.5">
             <button
