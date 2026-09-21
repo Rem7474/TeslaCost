@@ -149,7 +149,7 @@
   select,
   textarea,
   .dp__input {
-    font-size: 16px !important;
+    font-size: var(--touch-font-size, 16px) !important;
   }
 }
 
@@ -207,4 +207,9 @@
   .select-box:indeterminate {
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E");
   }
+}
+
+/* The compact date pickers (the month navigator of a toolbar) trade the 16px of touch fields for a size that fits their width. */
+.app-datepicker-wrapper.size-xs {
+  --touch-font-size: 0.8125rem;
 }
