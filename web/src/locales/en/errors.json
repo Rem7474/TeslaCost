@@ -80,6 +80,7 @@
     "lifespan_invalid": "Invalid estimated lifespan",
     "session_position": "A fitting session needs a position FL, FR, RL or RR (or STORAGE for a finished historical session)",
     "dismount_before_mount": "The removal date is before the fitting date",
+    "session_in_future": "A fitting or removal date cannot be in the future",
     "dismount_odometer_lower": "The removal odometer is lower than the fitting odometer",
     "session_distance_negative": "A session distance cannot be negative",
     "swap_count": "An axle swap needs between 1 and 4 tires",
