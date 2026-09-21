@@ -439,8 +439,9 @@ async function refreshCostDrive(id: string) {
     const leg = legs.find((d: any) => d.id === id)
     if (leg) return leg
   }
-  await loadDrives()
-  return drives.value.find((d) => d.id === id) ?? null
+  // Fetched by id: after a toll is added, the drive may have left the filtered list (e.g. "to qualify")
+  const [, fresh] = await Promise.all([loadDrives(), api.getDrives(vehicleStore.activeVehicle!.id, { driveId: id, limit: 1 })])
+  return fresh.drives[0] ?? null
 }
 
 async function handleBulkApplyToll() {

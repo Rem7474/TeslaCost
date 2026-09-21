@@ -191,8 +191,9 @@ async function handleAddTollToDrive() {
   addingToll.value = true
   try {
     const amountNum = Number(inlineTollAmount.value)
+    const target = selectedCostDrive.value.is_trip_group ? { trip_group_id: selectedCostDrive.value.id } : { drive_id: selectedCostDrive.value.id }
     await api.createDriveExpense(props.vehicleId, {
-      drive_id: selectedCostDrive.value.id,
+      ...target,
       type: inlineTollType.value,
       amount: amountNum,
       currency: 'EUR',

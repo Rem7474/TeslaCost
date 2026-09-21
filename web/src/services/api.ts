@@ -219,6 +219,7 @@ export const api = {
       hasToll?: boolean
       tollSource?: string
       tripGroupId?: string
+      driveId?: string
       from?: string
       to?: string
       q?: string
@@ -227,6 +228,7 @@ export const api = {
     const q = new URLSearchParams()
     if (params?.tag) q.set('tag', params.tag)
     if (params?.tripGroupId) q.set('trip_group_id', params.tripGroupId)
+    if (params?.driveId) q.set('drive_id', params.driveId)
     if (params?.unqualified) q.set('unqualified', 'true')
     if (params?.hasToll) q.set('has_toll', 'true')
     if (params?.tollSource) q.set('toll_source', params.tollSource)

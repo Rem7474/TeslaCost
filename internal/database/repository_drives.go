@@ -84,6 +84,7 @@ type DriveFilter struct {
 	HasToll         bool
 	TollSource      string // "", ExpenseSourceManual or ExpenseSourceAutoToll (only with HasToll)
 	TripGroupID     string
+	DriveID         string // a single drive, whatever the other filters
 	From            *time.Time
 	To              *time.Time
 	Query           string
@@ -153,6 +154,12 @@ func (r *Repository) ListDrives(ctx context.Context, vehicleID string, filter Dr
 			argIdx++
 		}
 		conditions = append(conditions, tollDrivePredicate(sourceCond))
+	}
+
+	if filter.DriveID != "" {
+		conditions = append(conditions, fmt.Sprintf("id::text = $%d", argIdx))
+		args = append(args, filter.DriveID)
+		argIdx++
 	}
 
 	if filter.TripGroupID != "" {

@@ -507,6 +507,7 @@ func parseDriveFilter(r *http.Request) database.DriveFilter {
 		UnqualifiedOnly: r.URL.Query().Get("unqualified") == "true",
 		HasToll:         r.URL.Query().Get("has_toll") == "true",
 		TripGroupID:     r.URL.Query().Get("trip_group_id"),
+		DriveID:         r.URL.Query().Get("drive_id"),
 		Query:           strings.TrimSpace(r.URL.Query().Get("q")),
 	}
 
