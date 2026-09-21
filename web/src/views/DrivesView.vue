@@ -23,6 +23,9 @@ import {
   driveCsvHeaders,
   applyBatchTag,
   buildTripCostDrive,
+  buildSuggestionCostDrive,
+  filterTrips,
+  suggestionTripId,
   formatTripDates,
   currentYearMonth,
   driveCsvRows,
@@ -60,7 +63,19 @@ const customFrom = ref('')
 const customTo = ref('')
 const searchQuery = ref('')
 
+// The trips and the suggestions are narrowed client-side by the same period and search as the drives
+const tripFilter = computed(() => {
+  if (periodMode.value === 'MONTH' && selectedMonth.value) return { ...monthRange(selectedMonth.value), q: searchQuery.value }
+  if (periodMode.value === 'CUSTOM') return { from: customFrom.value || undefined, to: customTo.value || undefined, q: searchQuery.value }
+  return { q: searchQuery.value }
+})
+const filteredTrips = computed(() => filterTrips(tripGroups.value, tripFilter.value))
+const filteredSuggestions = computed(() => filterTrips(tripSuggestions.value, tripFilter.value))
+const shownTrips = computed(() => (tripQualifyOnly.value ? filteredSuggestions.value : filteredTrips.value))
+const hasFilters = computed(() => periodMode.value !== 'ALL' || !!searchQuery.value.trim())
+
 function onFiltersChange() {
+  if (viewMode.value === 'TRIPS') return
   page.value = 1
   loadDrives()
 }
@@ -222,6 +237,8 @@ const showCostModal = ref(false)
 const selectedCostDrive = ref<any | null>(null)
 const costTripDriveIds = ref<string[]>([])
 const costTripId = ref<string | null>(null)
+// Detected trip whose breakdown is open before any trip group exists for it
+const costSuggestion = ref<any | null>(null)
 const tripLegs = ref<any[]>([])
 const costStartWithToll = ref(false)
 const bulkApplyingToll = ref(false)
@@ -310,13 +327,16 @@ async function dismissTripSuggestion(s: any) {
   }
 }
 
+function suggestionName(s: any) {
+  const route = [s.start_address, s.end_address].filter(Boolean).join(' → ')
+  return route || formatTripDates({ start_time: s.start_time, end_time: s.end_time })
+}
+
 async function createTripFromSuggestion(s: any) {
   if (!vehicleStore.activeVehicle) return
   suggestionBusyKey.value = s.drive_ids[0]
   try {
-    const route = [s.start_address, s.end_address].filter(Boolean).join(' → ')
-    const name = route || formatTripDates({ start_time: s.start_time, end_time: s.end_time })
-    await api.createTripGroup(vehicleStore.activeVehicle.id, { name, drive_ids: s.drive_ids })
+    await api.createTripGroup(vehicleStore.activeVehicle.id, { name: suggestionName(s), drive_ids: s.drive_ids })
     await loadTripGroups()
   } catch (err: any) {
     showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
@@ -439,10 +459,50 @@ async function fetchTripLegs(tripId: string) {
   return [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
 }
 
+// A suggestion is not a trip group yet: its drives are found by the period it covers
+async function fetchSuggestionLegs(s: any) {
+  const res = await api.getDrives(vehicleStore.activeVehicle!.id, { from: s.start_time, to: s.end_time, limit: 200 })
+  const ids = new Set<string>(s.drive_ids)
+  return res.drives.filter((d: any) => ids.has(d.id)).sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+}
+
+async function openSuggestionCostModal(s: any) {
+  if (!vehicleStore.activeVehicle) return
+  try {
+    const legs = await fetchSuggestionLegs(s)
+    selectedCostDrive.value = buildSuggestionCostDrive(s, legs, suggestionName(s))
+    costTripDriveIds.value = legs.map((d: any) => d.id)
+    costTripId.value = null
+    costSuggestion.value = s
+    tripLegs.value = legs
+    showCostModal.value = true
+  } catch (err: any) {
+    showAlert(t('drives.drivesView.detailsLoadError', { message: err.message }), t('shell.confirm.error'), 'danger')
+  }
+}
+
+// The modal only knows the trip it shows: find the suggestion it was built from
+function suggestionOf(virtual: any) {
+  return tripSuggestions.value.find((x) => suggestionTripId(x) === virtual.id)
+}
+
+async function createTripFromCostModal(virtual: any) {
+  const s = suggestionOf(virtual)
+  showCostModal.value = false
+  if (s) await createTripFromSuggestion(s)
+}
+
+async function dismissTripFromCostModal(virtual: any) {
+  const s = suggestionOf(virtual)
+  showCostModal.value = false
+  if (s) await dismissTripSuggestion(s)
+}
+
 async function openTripCostModal(tg: any) {
   if (!vehicleStore.activeVehicle) return
   try {
     const tgDrives = await fetchTripLegs(tg.id)
+    costSuggestion.value = null
     selectedCostDrive.value = buildTripCostDrive(tg, tgDrives)
     costTripDriveIds.value = tgDrives.map((d: any) => d.id)
     costTripId.value = tg.id
@@ -457,6 +517,7 @@ function openCostModal(drive: any, startWithToll = false) {
   selectedCostDrive.value = drive
   costStartWithToll.value = startWithToll
   costTripId.value = null
+  costSuggestion.value = null
   tripLegs.value = []
   showCostModal.value = true
 }
@@ -464,6 +525,14 @@ function openCostModal(drive: any, startWithToll = false) {
 // Reloads the costs and returns the refreshed drive or trip, so the open cost breakdown follows the server-side costs.
 // Inside a trip, its legs are reloaded too since they are what the trip total and each leg are built from.
 async function refreshCostDrive(id: string) {
+  const suggestion = costSuggestion.value
+  if (suggestion) {
+    const legs = await fetchSuggestionLegs(suggestion)
+    tripLegs.value = legs
+    costTripDriveIds.value = legs.map((d: any) => d.id)
+    if (id === suggestionTripId(suggestion)) return buildSuggestionCostDrive(suggestion, legs, suggestionName(suggestion))
+    return legs.find((d: any) => d.id === id) ?? null
+  }
   const tripId = costTripId.value
   if (tripId) {
     const [, legs] = await Promise.all([loadTripGroups(), fetchTripLegs(tripId)])
@@ -609,15 +678,15 @@ async function handleBulkApplyToll() {
 
     <!-- Filters & Navigation Toolbar (Drives Mode) -->
     <DrivesToolbar
-      v-if="viewMode === 'DRIVES'"
       v-model:period-mode="periodMode"
       v-model:selected-month="selectedMonth"
       v-model:custom-from="customFrom"
       v-model:custom-to="customTo"
       v-model:search-query="searchQuery"
-      :total="total"
-      :loading="loading"
-      :drives="drives"
+      :mode="viewMode"
+      :total="viewMode === 'DRIVES' ? total : shownTrips.length"
+      :loading="viewMode === 'DRIVES' ? loading : loadingTrips"
+      :drives="viewMode === 'DRIVES' ? drives : shownTrips"
       @change="onFiltersChange"
     />
 
@@ -710,15 +779,17 @@ async function handleBulkApplyToll() {
     <template v-else>
     <TripSuggestions
       v-if="tripQualifyOnly"
-      :suggestions="tripSuggestions"
+      :suggestions="filteredSuggestions"
       :busy-key="suggestionBusyKey"
+      @open="openSuggestionCostModal"
       @create="createTripFromSuggestion"
       @dismiss="dismissTripSuggestion"
     />
     <TripGroupsPanel
       v-else
       :loading-trips="loadingTrips"
-      :trip-groups="tripGroups"
+      :trip-groups="filteredTrips"
+      :has-filters="hasFilters"
       :expanded-trip-id="expandedTripId"
       :trip-drives="tripDrives"
       @open-cost="openTripCostModal"
@@ -738,6 +809,8 @@ async function handleBulkApplyToll() {
       :start-with-toll-entry="costStartWithToll"
       :refresh-drive="refreshCostDrive"
       @toggle-tag="toggleDriveTag"
+      @create-trip="createTripFromCostModal"
+      @dismiss-trip="dismissTripFromCostModal"
     />
 
     <DriveGroupModal

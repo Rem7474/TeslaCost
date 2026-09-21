@@ -81,7 +81,7 @@
   },
   "tripSuggestions": {
     "title": "{count} trip(s) to qualify",
-    "help": "Consecutive drives separated by stops shorter than 5 minutes, or by a stop with a charge: they are probably a single trip. Create the trip, or say it is not one.",
+    "help": "Consecutive drives separated by stops shorter than 5 minutes, or by a stop with a charge, over at least 50 km in total: they are probably a single trip. Open one to see its details, create the trip, or say it is not one.",
     "reasonPause": "short stops",
     "reasonCharge": "charge between legs",
     "unnamed": "Trip without address",
@@ -93,6 +93,7 @@
     "toQualifyHint": "Automatically detected trips, to create or rule out"
   },
   "driveCostModal": {
+    "suggestionNotice": "Trip detected automatically, not created yet. Create it to attach costs or a carpool to it.",
     "backToTrip": "Back to the trip",
     "tripLegs": "Trip legs ({count})",
     "tripCarpools": "Trip carpools ({count})",
@@ -201,6 +202,8 @@
     "display": "Display"
   },
   "drivesToolbar": {
+    "tripSFound": "trip(s) found",
+    "totalDistance": "Total distance:",
     "pageCost": "Page cost:",
     "kwh": "{pageEnergy} kWh",
     "pageEnergy": "Page energy:",
@@ -219,6 +222,7 @@
     "all": "All"
   },
   "tripGroupsPanel": {
+    "noTripMatchesTheFilters": "No trip matches the filters.",
     "loadingTheDrives": "Loading the drives...",
     "removeThisDriveFromThe": "Remove this drive from the trip",
     "deleteTheTrip": "Delete the trip",

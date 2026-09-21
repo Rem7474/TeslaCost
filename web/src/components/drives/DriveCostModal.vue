@@ -23,7 +23,7 @@ const props = defineProps<{
   startWithTollEntry: boolean
   refreshDrive: (driveId: string) => Promise<any | null>
 }>()
-const emit = defineEmits<{ 'toggle-tag': [drive: any, tag: string]; 'create-trip': [suggestion: any] }>()
+const emit = defineEmits<{ 'toggle-tag': [drive: any, tag: string]; 'create-trip': [suggestion: any]; 'dismiss-trip': [suggestion: any] }>()
 const open = defineModel<boolean>('open', { required: true })
 const selectedCostDrive = defineModel<any | null>('drive', { required: true })
 const router = useRouter()
@@ -766,17 +766,26 @@ async function handleDeleteExpense(exp: any) {
         >
           {{ $t('common.close') }}
         </button>
+        <div v-if="selectedCostDrive.is_suggestion && vehicleStore.canEdit" class="flex items-center gap-2">
+          <button
+            type="button"
+            @click="emit('dismiss-trip', selectedCostDrive)"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors"
+            :title="$t('drives.tripSuggestions.dismissTitle')"
+          >
+            {{ $t('drives.tripSuggestions.dismiss') }}
+          </button>
+          <button
+            type="button"
+            @click="emit('create-trip', selectedCostDrive)"
+            class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all"
+          >
+            <Layers class="w-4 h-4" />
+            <span>{{ $t('drives.tripSuggestions.create') }}</span>
+          </button>
+        </div>
         <button
-          v-if="selectedCostDrive.is_suggestion"
-          type="button"
-          @click="emit('create-trip', selectedCostDrive)"
-          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all"
-        >
-          <Layers class="w-4 h-4" />
-          <span>{{ $t('drives.tripSuggestions.create') }}</span>
-        </button>
-        <button
-          v-else
+          v-else-if="!selectedCostDrive.is_suggestion"
           @click="open = false; router.push({ path: '/carpools', query: selectedCostDrive.is_trip_group ? { new_trip_group_id: selectedCostDrive.id } : { new_drive_id: selectedCostDrive.id } })"
           class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/25 transition-all"
         >

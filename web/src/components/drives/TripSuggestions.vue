@@ -7,9 +7,10 @@ import { useVehicleStore } from '@/stores/vehicle'
 import QualifyActions from '@/components/drives/QualifyActions.vue'
 
 // The "to qualify" queue of trips: chains of drives that look like one trip (short stops, or a charge in between).
-// Each one is either turned into a trip or ruled out ("not a trip"), like a drive is given a toll or marked without one.
+// Each one is either turned into a trip or ruled out ("not a trip"), like a drive is given a toll or marked without one;
+// opening one shows its costs before deciding.
 const props = defineProps<{ suggestions: any[]; busyKey: string | null }>()
-const emit = defineEmits<{ create: [suggestion: any]; dismiss: [suggestion: any] }>()
+const emit = defineEmits<{ create: [suggestion: any]; dismiss: [suggestion: any]; open: [suggestion: any] }>()
 const vehicleStore = useVehicleStore()
 
 const PAGE = 20
@@ -33,7 +34,8 @@ const route = (s: any) => [s.start_address, s.end_address].filter(Boolean).join(
     <div
       v-for="s in visible"
       :key="key(s)"
-      class="bg-slate-900/60 border border-dashed border-amber-500/30 p-4 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-3"
+      @click="emit('open', s)"
+      class="bg-slate-900/60 border border-dashed border-amber-500/30 hover:border-amber-500/60 p-4 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-3 cursor-pointer transition-colors"
     >
       <div class="min-w-0">
         <div class="flex items-center gap-2 flex-wrap mb-1">
@@ -61,6 +63,7 @@ const route = (s: any) => [s.start_address, s.end_address].filter(Boolean).join(
         :primary-title="$t('drives.tripSuggestions.createTitle')"
         :secondary-label="$t('drives.tripSuggestions.dismiss')"
         :secondary-title="$t('drives.tripSuggestions.dismissTitle')"
+        @click.stop
         @primary="emit('create', s)"
         @secondary="emit('dismiss', s)"
       />
