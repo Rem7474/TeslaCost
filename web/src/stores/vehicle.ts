@@ -4,6 +4,7 @@ import { api } from '@/services/api'
 import { t } from '@/i18n'
 import { apiErrorMessage } from '@/services/apiError'
 import { hasTeslaMate as vehicleHasTeslaMate } from '@/utils/vehicles'
+import { checkSyncProgress, POLL_INTERVAL_MS, STALE_AFTER_HIDDEN_MS, type SyncSeen } from '@/utils/syncWatch'
 
 export const useVehicleStore = defineStore('vehicle', () => {
   const vehicles = ref<any[]>([])
@@ -108,6 +109,58 @@ export const useVehicleStore = defineStore('vehicle', () => {
     }
   }
 
+  // ----- Automatic refresh -----
+  // The server synchronizes on its own schedule; the pages reload on lastSyncTimestamp, so it is bumped when new data
+  // arrived, without the user having to leave the page and come back.
+  let seenSync: SyncSeen | null = null
+  let pollTimer: ReturnType<typeof setInterval> | null = null
+  let hiddenSince: number | null = null
+
+  async function checkForNewData() {
+    const vehicle = activeVehicle.value
+    if (!vehicle || !hasTeslaMate.value || isSyncing.value) return
+    try {
+      const job = await api.getSyncStatus(vehicle.id)
+      if (job?.status === 'RUNNING') {
+        await followSyncJob(vehicle.id, job)
+        seenSync = null
+        return
+      }
+      const { refresh, seen } = checkSyncProgress(seenSync, vehicle.id, job)
+      seenSync = seen
+      if (refresh) await fetchVehicles()
+    } catch {
+      // Offline or server busy: try again at the next tick
+    }
+  }
+
+  function onVisibilityChange() {
+    if (document.visibilityState === 'hidden') {
+      hiddenSince = Date.now()
+      return
+    }
+    const wasAwayLong = hiddenSince !== null && Date.now() - hiddenSince >= STALE_AFTER_HIDDEN_MS
+    hiddenSince = null
+    if (wasAwayLong) fetchVehicles()
+    else checkForNewData()
+  }
+
+  function startAutoRefresh() {
+    if (pollTimer) return
+    pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') checkForNewData()
+    }, POLL_INTERVAL_MS)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+  }
+
+  function stopAutoRefresh() {
+    if (pollTimer) clearInterval(pollTimer)
+    pollTimer = null
+    seenSync = null
+    hiddenSince = null
+    document.removeEventListener('visibilitychange', onVisibilityChange)
+  }
+
   function clearSyncStatus() {
     syncResult.value = null
     syncError.value = null
@@ -134,6 +187,8 @@ export const useVehicleStore = defineStore('vehicle', () => {
     setActiveVehicle,
     syncActiveVehicle,
     resumeRunningSync,
+    startAutoRefresh,
+    stopAutoRefresh,
     clearSyncStatus,
   }
 })

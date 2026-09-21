@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
@@ -23,6 +23,14 @@ const showDashboardLayout = computed(() => {
 })
 
 const offlineStore = useOfflineStore()
+
+// Pages follow the server-side synchronization while the user is signed in
+watch(
+  () => authStore.isAuthenticated,
+  (authenticated) => (authenticated ? vehicleStore.startAutoRefresh() : vehicleStore.stopAutoRefresh()),
+  { immediate: true }
+)
+onUnmounted(() => vehicleStore.stopAutoRefresh())
 
 onMounted(async () => {
   offlineStore.start()

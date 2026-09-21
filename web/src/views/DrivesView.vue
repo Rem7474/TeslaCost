@@ -163,12 +163,12 @@ function exportSelectedDrives() {
   downloadCsv(`${t('drives.drivesView.csvFileName')}_${new Date().toISOString().slice(0, 10)}.csv`, driveCsvHeaders(), driveCsvRows(selectedList.value))
 }
 
-async function loadDrives() {
+async function loadDrives(silent = false) {
   if (!vehicleStore.activeVehicle) {
     loading.value = false
     return
   }
-  loading.value = true
+  if (!silent) loading.value = true
   try {
     let fromStr: string | undefined
     let toStr: string | undefined
@@ -227,11 +227,20 @@ const costStartWithToll = ref(false)
 const bulkApplyingToll = ref(false)
 
 watch(
-  () => [vehicleStore.activeVehicle?.id, selectedTag.value, unqualifiedOnly.value, hasTollOnly.value, tollSource.value, vehicleStore.lastSyncTimestamp],
+  () => [vehicleStore.activeVehicle?.id, selectedTag.value, unqualifiedOnly.value, hasTollOnly.value, tollSource.value],
   () => {
     page.value = 1
     loadDrives()
     if (viewMode.value === 'TRIPS') loadTripGroups()
+  }
+)
+
+// New data arrived (synchronization): reload in place, keeping the page, the filters and the selection
+watch(
+  () => vehicleStore.lastSyncTimestamp,
+  () => {
+    loadDrives(true)
+    if (viewMode.value === 'TRIPS') loadTripGroups(true)
   }
 )
 
@@ -273,9 +282,9 @@ function openTollEntry(d: any) {
 }
 
 // ----- Trip groups ("voyages") -----
-async function loadTripGroups() {
+async function loadTripGroups(silent = false) {
   if (!vehicleStore.activeVehicle) return
-  loadingTrips.value = true
+  if (!silent) loadingTrips.value = true
   try {
     const vehicleId = vehicleStore.activeVehicle.id
     const [groups, suggestions] = await Promise.all([api.getTripGroups(vehicleId), api.getTripSuggestions(vehicleId).catch(() => [])])
