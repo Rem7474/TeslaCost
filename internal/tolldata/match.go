@@ -8,7 +8,7 @@ import (
 
 // DefaultThresholdMeters is the maximum distance between a drive's GPS trace and a toll
 // station for that station to be considered crossed.
-const DefaultThresholdMeters = 150.0
+const DefaultThresholdMeters = 50.0
 
 // MinRevisitGapMeters is the minimum trace distance required between two visits of the same
 // station for them to be treated as two distinct passes (e.g. exiting and re-entering through

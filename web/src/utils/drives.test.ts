@@ -8,7 +8,6 @@ import {
   filterTrips,
   formatMonthLabel,
   formatTripDates,
-  isHighwayDrive,
   monthRange,
   needsTollQualification,
   paginationPages,
@@ -21,34 +20,11 @@ import {
   mergeExpensesByDrive,
 } from './drives'
 
-describe('isHighwayDrive', () => {
-  it('flags long fast drives and short very fast ones', () => {
-    expect(isHighwayDrive({ distance_km: 40, speed_avg: 70, speed_max: 100 })).toBe(true)
-    expect(isHighwayDrive({ distance_km: 20, speed_avg: 50, speed_max: 126 })).toBe(true)
-    expect(isHighwayDrive({ distance_km: 20, speed_avg: 70, speed_max: 110 })).toBe(true)
-    expect(isHighwayDrive({ distance_km: 8, speed_avg: 70, speed_max: 105 })).toBe(true)
-  })
-
-  it('ignores city drives and drives just under each threshold', () => {
-    expect(isHighwayDrive({ distance_km: 39, speed_avg: 90, speed_max: 100 })).toBe(false)
-    expect(isHighwayDrive({ distance_km: 40, speed_avg: 69, speed_max: 100 })).toBe(false)
-    expect(isHighwayDrive({ distance_km: 20, speed_avg: 50, speed_max: 125 })).toBe(false)
-    expect(isHighwayDrive({ distance_km: 7, speed_avg: 90, speed_max: 130 })).toBe(false)
-    expect(isHighwayDrive({})).toBe(false)
-  })
-})
-
 describe('needsTollQualification', () => {
-  const highway = { distance_km: 120, speed_avg: 95, speed_max: 130 }
-
-  it('applies to unreviewed highway drives without a toll', () => {
-    expect(needsTollQualification(highway)).toBe(true)
-  })
-
-  it('does not once reviewed or once a toll is attached', () => {
-    expect(needsTollQualification({ ...highway, toll_reviewed_at: '2026-05-01' })).toBe(false)
-    expect(needsTollQualification({ ...highway, costs: { tolls_cost: 8 } })).toBe(false)
-    expect(needsTollQualification({ distance_km: 10, speed_avg: 30 })).toBe(false)
+  it('follows the flag computed by the server', () => {
+    expect(needsTollQualification({ needs_toll_qualification: true })).toBe(true)
+    expect(needsTollQualification({ needs_toll_qualification: false })).toBe(false)
+    expect(needsTollQualification({})).toBe(false)
   })
 })
 

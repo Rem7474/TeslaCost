@@ -1,20 +1,8 @@
 import { intlLocale, t } from '@/i18n'
-/** Same speed heuristic as the backend's HighwayDrivePredicate / Drive.IsHighway() (which also counts drives whose
- * GPS detection found a toll). It favours recall: a false positive only adds the drive to the review queue. */
-export function isHighwayDrive(d: any) {
-  const avg = d.speed_avg || 0
-  const max = d.speed_max || 0
-  return (
-    (d.distance_km >= 40 && avg >= 70) ||
-    (d.distance_km >= 20 && max > 125) ||
-    (d.distance_km >= 20 && max >= 110 && avg >= 70) ||
-    (d.distance_km >= 8 && max >= 105 && avg >= 70)
-  )
-}
-
-/** Highway-like drive with no toll attached and not reviewed yet (same rule as the backend queue). */
+/** Drive of the "to qualify" toll queue: highway-like (speed heuristic or a toll found by the GPS detection), no toll
+ * attached, not reviewed. The server decides (needs_toll_qualification), with the same rule as the queue filter. */
 export function needsTollQualification(d: any) {
-  return !d.toll_reviewed_at && isHighwayDrive(d) && !(d.costs?.tolls_cost > 0)
+  return d.needs_toll_qualification === true
 }
 
 /** Link to the drive in the TeslaMate Grafana "Drive Details" dashboard (standard TeslaMate dashboard uid),
