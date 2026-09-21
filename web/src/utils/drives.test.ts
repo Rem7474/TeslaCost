@@ -200,6 +200,22 @@ describe('buildTripCostDrive', () => {
     expect(t.costs.has_estimates).toBe(true)
   })
 
+  it('keeps the rate sources so the modal does not report the insurance as not entered', () => {
+    const withSources = (insurance: string, tires: string) => ({ ...drives[0], costs: { ...drives[0].costs, insurance_source: insurance, tires_rate_source: tires, electricity_rate_source: 'HISTORY', maintenance_rate_source: 'DEFAULT' } })
+    const t = buildTripCostDrive({ id: 'tg1', name: 'Alpes' }, [withSources('RECORDED_EXPENSES', 'MOUNTED_TIRES'), withSources('RECORDED_EXPENSES', 'MOUNTED_TIRES')])
+    expect(t.costs.insurance_source).toBe('RECORDED_EXPENSES')
+    expect(t.costs.tires_rate_source).toBe('MOUNTED_TIRES')
+    expect(t.costs.electricity_rate_source).toBe('HISTORY')
+    expect(t.costs.maintenance_rate_source).toBe('DEFAULT')
+  })
+
+  it('shows the most cautious source when the drives of a trip differ', () => {
+    const one = (insurance: string, tires: string) => ({ ...drives[0], costs: { ...drives[0].costs, insurance_source: insurance, tires_rate_source: tires } })
+    const t = buildTripCostDrive({ id: 'tg1', name: 'Alpes' }, [one('RECORDED_EXPENSES', 'MOUNTED_TIRES'), one('INSUFFICIENT_DISTANCE', 'DEFAULT')])
+    expect(t.costs.insurance_source).toBe('INSUFFICIENT_DISTANCE')
+    expect(t.costs.tires_rate_source).toBe('DEFAULT')
+  })
+
   it('counts the tolls entered on a drive of the trip, not only those attached to the trip itself', () => {
     const t = buildTripCostDrive({ id: 'tg1', name: 'Alpes', expenses_total: 0, tolls_total: 10.3 }, drives)
     expect(t.costs.tolls_cost).toBe(10.3)

@@ -164,6 +164,12 @@ export function uniqueById<T extends { id: string }>(items: T[]): T[] {
   return Array.from(map.values())
 }
 
+/** The source shown for a whole trip: the most cautious one among its drives (first of `cautious` found), else the common one. */
+function pickSource(tgDrives: any[], field: string, cautious: string[] = []): string | undefined {
+  const values = tgDrives.map((d) => d.costs?.[field]).filter(Boolean)
+  return cautious.find((c) => values.includes(c)) ?? values[0]
+}
+
 /** A trip group presented like a drive for the cost modal: distances and costs summed over its drives. */
 export function buildTripCostDrive(tg: any, tgDrives: any[]) {
   const totalKm = tgDrives.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
@@ -206,6 +212,12 @@ export function buildTripCostDrive(tg: any, tgDrives: any[]) {
       total_cost: totalCost,
       cost_per_km: costPerKm,
       has_estimates: tgDrives.some((d) => d.costs?.has_estimates),
+      // Without the sources, the modal would treat every rate as unknown (e.g. insurance "not entered")
+      energy_source: pickSource(tgDrives, 'energy_source', ['DEFAULT', 'CONSUMPTION']),
+      electricity_rate_source: pickSource(tgDrives, 'electricity_rate_source', ['DEFAULT']),
+      tires_rate_source: pickSource(tgDrives, 'tires_rate_source', ['DEFAULT']),
+      maintenance_rate_source: pickSource(tgDrives, 'maintenance_rate_source', ['DEFAULT']),
+      insurance_source: pickSource(tgDrives, 'insurance_source', ['NONE', 'INSUFFICIENT_DISTANCE', 'RECORDED_EXPENSES']),
     },
   }
 }
