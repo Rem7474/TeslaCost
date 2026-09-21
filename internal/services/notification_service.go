@@ -159,7 +159,7 @@ func (s *NotificationService) postWebhook(ctx context.Context, webhookURL string
 		return fmt.Errorf("failed to create webhook request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "TeslaCost-NotificationService/1.0")
+	req.Header.Set("User-Agent", "AutoLedger-NotificationService/1.0")
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
@@ -194,7 +194,7 @@ func formatPayload(
 	switch strings.ToUpper(webhookType) {
 	case "DISCORD":
 		return map[string]any{
-			"username":   "TeslaCost",
+			"username":   "AutoLedger",
 			"avatar_url": "https://raw.githubusercontent.com/Rem7474/TeslaCost/main/web/public/favicon.svg",
 			"embeds": []map[string]any{
 				{
@@ -202,7 +202,7 @@ func formatPayload(
 					"description": fmt.Sprintf("**Véhicule :** %s\n**Odomètre :** %.0f km\n\n%s", vehicleName, currentOdo, details),
 					"color":       color,
 					"footer": map[string]string{
-						"text": "TeslaCost • Suivi d'entretien",
+						"text": "AutoLedger • Suivi d'entretien",
 					},
 					"timestamp": time.Now().Format(time.RFC3339),
 				},
@@ -211,7 +211,7 @@ func formatPayload(
 
 	case "TELEGRAM":
 		text := fmt.Sprintf(
-			"?? *TeslaCost — Rappel d'Entretien*\n\n%s *%s*\nOpération : *%s*\nVéhicule : *%s*\nOdomètre : %.0f km\n%s",
+			"?? *AutoLedger — Rappel d'Entretien*\n\n%s *%s*\nOpération : *%s*\nVéhicule : *%s*\nOdomètre : %.0f km\n%s",
 			statusEmoji, statusLabel, rem.Title, vehicleName, currentOdo, details,
 		)
 		return map[string]any{
@@ -225,7 +225,7 @@ func formatPayload(
 			priority = 8
 		}
 		return map[string]any{
-			"title":    fmt.Sprintf("TeslaCost : %s (%s)", rem.Title, statusLabel),
+			"title":    fmt.Sprintf("AutoLedger : %s (%s)", rem.Title, statusLabel),
 			"message":  fmt.Sprintf("Véhicule : %s\nOdomètre : %.0f km\n%s", vehicleName, currentOdo, details),
 			"priority": priority,
 		}, nil
@@ -255,7 +255,7 @@ func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryA
 	switch strings.ToUpper(webhookType) {
 	case "DISCORD":
 		return map[string]any{
-			"username":   "TeslaCost",
+			"username":   "AutoLedger",
 			"avatar_url": "https://raw.githubusercontent.com/Rem7474/TeslaCost/main/web/public/favicon.svg",
 			"embeds": []map[string]any{
 				{
@@ -263,7 +263,7 @@ func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryA
 					"description": message,
 					"color":       15158332, // Red
 					"footer": map[string]string{
-						"text": "TeslaCost • Alerte système",
+						"text": "AutoLedger • Alerte système",
 					},
 					"timestamp": time.Now().Format(time.RFC3339),
 				},
@@ -272,13 +272,13 @@ func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryA
 
 	case "TELEGRAM":
 		return map[string]any{
-			"text":       fmt.Sprintf("*TeslaCost — Alerte synchronisation*\n\nVéhicule : *%s*\n%s", vehicleName, message),
+			"text":       fmt.Sprintf("*AutoLedger — Alerte synchronisation*\n\nVéhicule : *%s*\n%s", vehicleName, message),
 			"parse_mode": "Markdown",
 		}
 
 	case "GOTIFY":
 		return map[string]any{
-			"title":    fmt.Sprintf("TeslaCost : synchronisation en échec (%s)", vehicleName),
+			"title":    fmt.Sprintf("AutoLedger : synchronisation en échec (%s)", vehicleName),
 			"message":  message,
 			"priority": 8,
 		}

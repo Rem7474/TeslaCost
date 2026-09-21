@@ -19,7 +19,7 @@ func formatTeslaMateError(err error, rawURL string) error {
 	msg := err.Error()
 	isDockerLocalhost := strings.Contains(rawURL, "localhost") || strings.Contains(rawURL, "127.0.0.1")
 	if isDockerLocalhost && (strings.Contains(msg, "connection refused") || strings.Contains(msg, "dial tcp")) {
-		return fmt.Errorf("%s (Remarque : dans Docker, 'localhost' désigne le conteneur TeslaCost lui-même. Utilisez 'http://host.docker.internal:PORT' ou l'IP locale de votre machine)", msg)
+		return fmt.Errorf("%s (Remarque : dans Docker, 'localhost' désigne le conteneur AutoLedger lui-même. Utilisez 'http://host.docker.internal:PORT' ou l'IP locale de votre machine)", msg)
 	}
 	if strings.Contains(msg, "Client.Timeout exceeded") || strings.Contains(msg, "context deadline exceeded") {
 		return fmt.Errorf("%s (Délai d'attente dépassé : vérifiez que l'adresse et le port sont joignables et que TeslaMate répond)", msg)

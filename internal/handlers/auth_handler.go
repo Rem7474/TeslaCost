@@ -467,7 +467,7 @@ func (h *AuthHandler) OIDCLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 // OIDCCallback handles the redirect from the IdP, exchanges the authorization code,
-// performs JIT user provisioning, issues a TeslaCost JWT + Refresh Token, and redirects to the SPA.
+// performs JIT user provisioning, issues an AutoLedger JWT + Refresh Token, and redirects to the SPA.
 func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 	if h.oidcService == nil {
 		writeAPIError(w, http.StatusNotFound, apierror.New("auth.oidc_not_configured", "OIDC is not configured on this instance"))
