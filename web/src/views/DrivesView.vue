@@ -16,7 +16,7 @@ import TripSuggestions from '@/components/drives/TripSuggestions.vue'
 import ToQualifyFilter from '@/components/drives/ToQualifyFilter.vue'
 import DriveCostModal from '@/components/drives/DriveCostModal.vue'
 import DriveGroupModal from '@/components/drives/DriveGroupModal.vue'
-import TripRenameModal from '@/components/drives/TripRenameModal.vue'
+import TripEditModal from '@/components/drives/TripEditModal.vue'
 import AddToTripModal from '@/components/drives/AddToTripModal.vue'
 import { downloadCsv } from '@/utils/csv'
 import { Receipt, Layers, List, RotateCcw } from 'lucide-vue-next'
@@ -366,6 +366,21 @@ async function toggleTripDetails(tg: any) {
   } catch (err: any) {
     showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
+}
+
+// The edit form replaces the detail, like the edit of a carpool
+function editTripFromCostModal(virtual: any) {
+  const tg = tripGroups.value.find((g) => g.id === virtual.id)
+  if (!tg) return
+  showCostModal.value = false
+  openTripEdit(tg)
+}
+
+// Its legs may have changed: the trips, the drives (their trip badge) and the open leg list are reloaded
+async function onTripSaved() {
+  expandedTripId.value = null
+  await loadTripGroups()
+  loadDrives()
 }
 
 function openTripEdit(tg: any) {
@@ -815,6 +830,7 @@ async function handleBulkApplyToll() {
       :start-with-toll-entry="costStartWithToll"
       :refresh-drive="refreshCostDrive"
       @toggle-tag="toggleDriveTag"
+      @edit-trip="editTripFromCostModal"
       @create-trip="createTripFromCostModal"
       @dismiss-trip="dismissTripFromCostModal"
     />
@@ -827,11 +843,11 @@ async function handleBulkApplyToll() {
       @saved="onGroupCreated"
     />
 
-    <TripRenameModal
+    <TripEditModal
       v-model:open="showTripEditModal"
       :vehicle-id="vehicleId"
       :trip="tripBeingEdited"
-      @saved="loadTripGroups"
+      @saved="onTripSaved"
     />
 
     <AddToTripModal

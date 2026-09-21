@@ -1,5 +1,6 @@
 {
   "carpoolView": {
+    "backToTheCarpool": "Back to the carpool",
     "createMyFirstCarpool": "Create my first carpool",
     "selectTheLegsOfYour": "Select the legs of your trip and indicate where each passenger gets on and off: {APP_NAME} calculates everyone's actual share.",
     "noCarpooledTripYet": "No carpooled trip yet",
@@ -67,11 +68,6 @@
     "seats": "{count} seat | {count} seats"
   },
   "carpoolTripModal": {
-    "earlierDrives": "Earlier drives",
-    "laterDrives": "Later drives",
-    "latestDrives": "Latest drives",
-    "aroundTheDate": "± {days} days around this date",
-    "noDriveInThisPeriod": "No drive in this period.",
     "notesOptional": "Notes (optional)",
     "received": "Received",
     "driverSShare": "Driver's share",

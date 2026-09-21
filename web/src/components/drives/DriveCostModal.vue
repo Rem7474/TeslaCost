@@ -23,9 +23,17 @@ const props = defineProps<{
   tripDriveIds: string[]
   tripLegs: any[]
   startWithTollEntry: boolean
+  // Set when the drive was opened from another detail (a carpool): the header then offers a way back to it
+  backLabel?: string
   refreshDrive: (driveId: string) => Promise<any | null>
 }>()
-const emit = defineEmits<{ 'toggle-tag': [drive: any, tag: string]; 'create-trip': [suggestion: any]; 'dismiss-trip': [suggestion: any] }>()
+const emit = defineEmits<{
+  'toggle-tag': [drive: any, tag: string]
+  'create-trip': [suggestion: any]
+  'dismiss-trip': [suggestion: any]
+  'edit-trip': [trip: any]
+  back: []
+}>()
 const open = defineModel<boolean>('open', { required: true })
 useEscapeToClose(open, () => (open.value = false))
 const selectedCostDrive = defineModel<any | null>('drive', { required: true })
@@ -296,11 +304,11 @@ async function handleDeleteExpense(exp: any) {
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <div class="flex items-center gap-2.5 min-w-0 pr-2">
           <button
-            v-if="parentTrip"
+            v-if="parentTrip || backLabel"
             type="button"
-            @click="backToTrip"
+            @click="parentTrip ? backToTrip() : emit('back')"
             class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
-            :title="$t('drives.driveCostModal.backToTrip')"
+            :title="parentTrip ? $t('drives.driveCostModal.backToTrip') : backLabel"
           >
             <ArrowLeft class="w-4 h-4" />
           </button>
@@ -763,14 +771,24 @@ async function handleDeleteExpense(exp: any) {
             <span>{{ $t('drives.tripSuggestions.create') }}</span>
           </button>
         </div>
-        <button
-          v-else-if="!selectedCostDrive.is_suggestion"
-          @click="open = false; router.push({ path: '/carpools', query: selectedCostDrive.is_trip_group ? { new_trip_group_id: selectedCostDrive.id } : { new_drive_id: selectedCostDrive.id } })"
-          class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/25 transition-all"
-        >
-          <Users class="w-4 h-4" />
-          <span>{{ $t('drives.driveCostModal.shareAsACarpool') }}</span>
-        </button>
+        <div v-else-if="!selectedCostDrive.is_suggestion" class="flex items-center gap-2">
+          <button
+            v-if="selectedCostDrive.is_trip_group && vehicleStore.canEdit"
+            type="button"
+            @click="emit('edit-trip', selectedCostDrive)"
+            class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl flex items-center gap-2 transition-colors"
+          >
+            <Pencil class="w-4 h-4" />
+            <span>{{ $t('common.edit') }}</span>
+          </button>
+          <button
+            @click="open = false; router.push({ path: '/carpools', query: selectedCostDrive.is_trip_group ? { new_trip_group_id: selectedCostDrive.id } : { new_drive_id: selectedCostDrive.id } })"
+            class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/25 transition-all"
+          >
+            <Users class="w-4 h-4" />
+            <span>{{ $t('drives.driveCostModal.shareAsACarpool') }}</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

@@ -1,5 +1,6 @@
 {
   "carpoolView": {
+    "backToTheCarpool": "Retour au covoiturage",
     "createMyFirstCarpool": "Créer mon premier covoiturage",
     "selectTheLegsOfYour": "Sélectionnez les étapes de votre trajet, indiquez où chaque passager monte et descend : {APP_NAME} calcule la part réelle de chacun.",
     "noCarpooledTripYet": "Aucun trajet covoituré pour le moment",
@@ -67,11 +68,6 @@
     "seats": "{count} place | {count} places"
   },
   "carpoolTripModal": {
-    "earlierDrives": "Trajets plus anciens",
-    "laterDrives": "Trajets plus récents",
-    "latestDrives": "Derniers trajets",
-    "aroundTheDate": "± {days} jours autour de cette date",
-    "noDriveInThisPeriod": "Aucun trajet sur cette période.",
     "notesOptional": "Notes (optionnel)",
     "received": "Perçu",
     "driverSShare": "Part du conducteur",

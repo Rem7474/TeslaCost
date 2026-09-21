@@ -79,6 +79,13 @@
     "unknownStart": "Unknown start",
     "unknownEnd": "Unknown destination"
   },
+  "drivePicker": {
+    "earlierDrives": "Earlier drives",
+    "laterDrives": "Later drives",
+    "latestDrives": "Latest drives",
+    "aroundTheDate": "± {days} days around this date",
+    "noDriveInThisPeriod": "No drive in this period."
+  },
   "tripSuggestions": {
     "title": "{count} trip(s) to qualify",
     "help": "Consecutive drives separated by stops shorter than 5 minutes, or by a stop with a charge, over at least 50 km in total: they are probably a single trip. Open one to see its details, create the trip, or say it is not one.",
@@ -237,9 +244,11 @@
     "legs": "Legs",
     "dateSeparator": ": "
   },
-  "tripRenameModal": {
+  "tripEditModal": {
     "name": "Name",
-    "editTheTrip": "Edit the trip"
+    "editTheTrip": "Edit the trip",
+    "tickTheLegs": "Tick the drives that make up the trip: each drive is a leg.",
+    "legsSelected": "{count} leg(s)"
   },
   "toll": {
     "skippedManual": "A toll entered by hand already exists: it is not replaced.",
