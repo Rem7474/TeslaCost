@@ -63,6 +63,11 @@
     "seats": "{count} seat | {count} seats"
   },
   "carpoolTripModal": {
+    "earlierDrives": "Earlier drives",
+    "laterDrives": "Later drives",
+    "latestDrives": "Latest drives",
+    "aroundTheDate": "± {days} days around this date",
+    "noDriveInThisPeriod": "No drive in this period.",
     "notesOptional": "Notes (optional)",
     "received": "Received",
     "driverSShare": "Driver's share",
