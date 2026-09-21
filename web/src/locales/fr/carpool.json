@@ -38,6 +38,10 @@
     "below": "{amount} € sous leur part"
   },
   "carpoolDetailModal": {
+    "paidByPassengers": "Payé par les passagers",
+    "received": "Perçu : {amount} €",
+    "fairShare": "Part équitable : {percent} %",
+    "fairShareAmount": "Part équitable {percent} % ({amount} €)",
     "onBoard": "{count} à bord",
     "perPerson": "{amount} €/pers."
   },
