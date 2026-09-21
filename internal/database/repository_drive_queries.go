@@ -133,6 +133,32 @@ func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID str
 	return result, rows.Err()
 }
 
+// DrivesNeedingTollQualification returns which of the drives are in the "to qualify" toll queue: the same rule as
+// the unqualified filter of the drives list (UnqualifiedDrivePredicate).
+func (r *Repository) DrivesNeedingTollQualification(ctx context.Context, vehicleID string, driveIDs []string) (map[string]bool, error) {
+	result := make(map[string]bool)
+	ids := uniqueStrings(driveIDs)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT drives.id::text FROM drives
+		WHERE drives.vehicle_id = $1 AND drives.id::text = ANY($2::text[]) AND (`+UnqualifiedDrivePredicate+`)
+	`, vehicleID, ids)
+	if err != nil {
+		return result, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return result, err
+		}
+		result[id] = true
+	}
+	return result, rows.Err()
+}
+
 // GetTotalTollExpensesForDrives sums the expenses allocated to a set of drives (EUR).
 func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (money.Cents, error) {
 	perDrive, err := r.GetTollExpensesForDrives(ctx, vehicleID, driveIDs)

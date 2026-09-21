@@ -44,6 +44,9 @@ type DriveCostBreakdown struct {
 type EnrichedDrive struct {
 	models.Drive
 	Costs DriveCostBreakdown `json:"costs"`
+	// NeedsTollQualification is true for a highway-like drive (speed heuristic or a toll found by the GPS
+	// detection) with no toll attached and no "no toll" review: the drives of the "to qualify" queue.
+	NeedsTollQualification bool `json:"needs_toll_qualification"`
 }
 
 type DriveHandler struct {
@@ -105,6 +108,11 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeRepoError(w, r, err, "Failed to load drive expenses")
 		return
 	}
+	needsQualification, err := h.repo.DrivesNeedingTollQualification(r.Context(), vehicleID, driveIDs)
+	if err != nil {
+		writeRepoError(w, r, err, "Failed to list drives")
+		return
+	}
 	unqualifiedCount, err := h.repo.CountUnqualifiedDrives(r.Context(), vehicleID)
 	if err != nil {
 		writeRepoError(w, r, err, "Failed to list drives")
@@ -145,7 +153,8 @@ func (h *DriveHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 
 		enriched[i] = EnrichedDrive{
-			Drive: d,
+			Drive:                  d,
+			NeedsTollQualification: needsQualification[d.ID],
 			Costs: DriveCostBreakdown{
 				ElectricityCost:       elecCost,
 				ElectricityKwh:        math.Round(kwh*10) / 10,

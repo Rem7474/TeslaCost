@@ -241,3 +241,16 @@ func TestPriceSegment_MissingClosedPriceLeavesNil(t *testing.T) {
 		t.Errorf("expected no price when the pair is absent from ClosedPrice, got %+v", seg.EstimatedPrice)
 	}
 }
+
+func TestDefaultThresholdIsFiftyMeters(t *testing.T) {
+	// 0.00036° of latitude is about 40 m, 0.00072° about 80 m
+	trace := []LatLon{{Lat: 0, Lon: 0}, {Lat: 0, Lon: 0.01}}
+	stations := []Station{
+		{Name: "NEAR", Lat: 0.00036, Lon: 0.005},
+		{Name: "FAR", Lat: 0.00072, Lon: 0.005},
+	}
+	matches := DetectCrossings(trace, stations, DefaultThresholdMeters)
+	if len(matches) != 1 || matches[0].Station.Name != "NEAR" {
+		t.Fatalf("a station 40 m from the trace is crossed, one 80 m away is not: %+v", matches)
+	}
+}

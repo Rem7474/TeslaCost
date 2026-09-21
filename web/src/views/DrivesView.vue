@@ -284,6 +284,7 @@ async function markNoToll(d: any) {
   try {
     await api.setDriveTollReview(vehicleStore.activeVehicle.id, d.id, true)
     d.toll_reviewed_at = new Date().toISOString()
+    d.needs_toll_qualification = false
     unqualifiedCount.value = Math.max(0, unqualifiedCount.value - 1)
     if (unqualifiedOnly.value) {
       drives.value = drives.value.filter((x) => x.id !== d.id)
