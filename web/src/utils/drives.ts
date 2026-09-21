@@ -155,11 +155,19 @@ export function driveCsvRows(list: any[]) {
   ])
 }
 
-/** Expenses of several drives with the ones they share (a trip group's expense) counted once. */
-export function uniqueById<T extends { id: string }>(items: T[]): T[] {
+/**
+ * Expenses of several drives, each listed once. An expense attached to a trip group comes back once per drive,
+ * with that drive's share as allocated_amount: the shares are summed so the row shows what the trip as a whole bears.
+ */
+export function mergeExpensesByDrive<T extends { id: string; allocated_amount?: number | null }>(items: T[]): T[] {
   const map = new Map<string, T>()
   for (const e of items) {
-    if (!map.has(e.id)) map.set(e.id, e)
+    const seen = map.get(e.id)
+    if (!seen) {
+      map.set(e.id, { ...e })
+    } else if (e.allocated_amount != null) {
+      seen.allocated_amount = (seen.allocated_amount ?? 0) + e.allocated_amount
+    }
   }
   return Array.from(map.values())
 }
