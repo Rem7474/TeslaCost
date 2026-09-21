@@ -226,6 +226,34 @@ export function carpoolCoverage(trip: any) {
   return { total, paid, fair, paidPct: pct(paid), fairPct: pct(fair), status }
 }
 
+/** Days on each side of a date of the window of drives offered to build a carpool. */
+export const DRIVE_WINDOW_DAYS = 7
+
+/** A YYYY-MM-DD date moved by a number of days (calendar arithmetic, no time zone involved). */
+export function shiftDay(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + days)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Bounds (YYYY-MM-DD, inclusive) of the drives offered around a date. */
+export function driveWindow(date: string, days = DRIVE_WINDOW_DAYS) {
+  return { from: shiftDay(date, -days), to: shiftDay(date, days) }
+}
+
+/**
+ * The drives to offer: those of the window, plus the selected ones known from elsewhere (an edited carpool whose
+ * drives are older than the window keeps them listed), most recent first.
+ */
+export function pickerDrives(windowDrives: any[], known: Map<string, any>, selectedIds: string[]): any[] {
+  const byId = new Map<string, any>(windowDrives.map((d) => [d.id, d]))
+  for (const id of selectedIds) {
+    const d = known.get(id)
+    if (d && !byId.has(id)) byId.set(id, d)
+  }
+  return [...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+}
+
 export const carpoolCsvHeaders = () => t('carpool.csvHeaders').split(',')
 
 export function carpoolCsvRows(trips: any[]) {

@@ -142,7 +142,7 @@ const actionRowConfig = computed(() => ({
       :formats="formatsConfig"
       :placeholder="effectivePlaceholder"
       :disabled="disabled"
-      :clearable="isClearable"
+      :input-attrs="{ clearable: isClearable }"
       teleport="body"
       :action-row="actionRowConfig"
     />
@@ -175,7 +175,8 @@ const actionRowConfig = computed(() => ({
   color: #475569 !important;
 }
 
-.size-xs :deep(.dp__input) {
+.size-xs :deep(.dp__input),
+.size-xs :deep(.dp--input) {
   font-size: 0.75rem !important;
   line-height: 1rem !important;
   padding-top: 0.375rem !important;
@@ -184,18 +185,21 @@ const actionRowConfig = computed(() => ({
   padding-right: 0.375rem !important;
 }
 
-.size-xs :deep(.dp__input_icon) {
+.size-xs :deep(.dp__input_icon),
+.size-xs :deep(.dp--input-icon) {
   padding-left: 0.5rem !important;
 }
 
-.size-sm :deep(.dp__input) {
+.size-sm :deep(.dp__input),
+.size-sm :deep(.dp--input) {
   font-size: 0.875rem !important;
   line-height: 1.25rem !important;
   padding-top: 0.5rem !important;
   padding-bottom: 0.5rem !important;
 }
 
-.size-md :deep(.dp__input) {
+.size-md :deep(.dp__input),
+.size-md :deep(.dp--input) {
   font-size: 1rem !important;
   line-height: 1.5rem !important;
   padding-top: 0.625rem !important;

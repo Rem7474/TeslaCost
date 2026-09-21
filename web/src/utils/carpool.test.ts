@@ -5,10 +5,14 @@ import {
   carpoolCoverage,
   cents,
   clampPassengerStops,
+  DRIVE_WINDOW_DAYS,
+  driveWindow,
   earliestSelectedDriveDate,
   emptyLeg,
   estimateTitle,
   legTotalCents,
+  pickerDrives,
+  shiftDay,
   legsFromEstimate,
   legsFromTrip,
   newPassenger,
@@ -229,5 +233,35 @@ describe('carpoolCoverage', () => {
     expect(c.paidPct).toBe(0)
     expect(c.fairPct).toBe(0)
     expect(carpoolCoverage(undefined).total).toBe(0)
+  })
+})
+
+describe('drive window of the carpool form', () => {
+  it('moves a date across month and year ends', () => {
+    expect(shiftDay('2026-06-14', 7)).toBe('2026-06-21')
+    expect(shiftDay('2026-06-14', -14)).toBe('2026-05-31')
+    expect(shiftDay('2026-01-03', -7)).toBe('2025-12-27')
+    expect(shiftDay('2028-02-25', 7)).toBe('2028-03-03')
+  })
+
+  it('spans the days before and after the saved date', () => {
+    expect(DRIVE_WINDOW_DAYS).toBe(7)
+    expect(driveWindow('2026-06-14')).toEqual({ from: '2026-06-07', to: '2026-06-21' })
+    expect(driveWindow('2026-06-14', 2)).toEqual({ from: '2026-06-12', to: '2026-06-16' })
+  })
+
+  it('keeps the selected drives outside the window listed, most recent first', () => {
+    const d = (id: string, start: string) => ({ id, start_time: start })
+    const known = new Map([
+      ['old', d('old', '2026-03-01T10:00:00Z')],
+      ['a', d('a', '2026-06-14T08:00:00Z')],
+    ])
+    const list = pickerDrives([d('a', '2026-06-14T08:00:00Z'), d('b', '2026-06-15T09:00:00Z')], known, ['old', 'a', 'unknown'])
+    expect(list.map((x) => x.id)).toEqual(['b', 'a', 'old'])
+  })
+
+  it('does not list a selected drive twice or an unselected known one', () => {
+    const known = new Map([['x', { id: 'x', start_time: '2026-01-01T00:00:00Z' }]])
+    expect(pickerDrives([], known, [])).toEqual([])
   })
 })

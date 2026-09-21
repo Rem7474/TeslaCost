@@ -4,13 +4,15 @@ import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { useVehicleStore } from '@/stores/vehicle'
-import { Users, Plus, Trash2, X, CheckSquare, Square, Navigation, Calculator, Lock, RotateCw, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Users, Plus, Trash2, X, CheckSquare, Square, Navigation, Calculator, Lock, RotateCw, ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import {
   COST_FIELDS,
+  DRIVE_WINDOW_DAYS,
   allocate,
   cents,
   clampPassengerStops as clampStops,
+  driveWindow,
   earliestSelectedDriveDate,
   emptyLeg,
   estimateTitle,
@@ -21,7 +23,9 @@ import {
   legsFromTrip,
   newPassenger,
   passengersFromTrip,
+  pickerDrives,
   remapPassengerStops,
+  shiftDay,
   stopNames,
   toDateInputString,
   type LegForm,
@@ -49,7 +53,10 @@ const vehicleStore = useVehicleStore()
 // Trips are built from TeslaMate drives when the vehicle has them, from a typed distance otherwise
 const defaultSourceMode = (): 'DRIVES' | 'MANUAL' => (vehicleStore.hasTeslaMate ? 'DRIVES' : 'MANUAL')
 const sourceMode = ref<'DRIVES' | 'MANUAL'>(defaultSourceMode())
+// Drives offered to build the carpool: the latest ones, or the window around pickerDate (a saved carpool opens on its own date)
 const recentDrives = ref<any[]>([])
+const pickerDate = ref('')
+const knownDrives = new Map<string, any>()
 const selectedDriveIds = ref<string[]>([])
 const titleTouched = ref(false)
 const currentRates = ref<any>(null)
@@ -78,14 +85,37 @@ const liveRevenue = computed(() => form.value.passengers.reduce((s, p) => s + ce
 const liveNet = computed(() => live.value.total - liveRevenue.value)
 const liveCoverage = computed(() => (live.value.total > 0 ? Math.min(100, Math.round((liveRevenue.value / live.value.total) * 1000) / 10) : 0))
 
+// The selected drives are always listed, even when they are outside the window
 async function loadRecentDrives() {
   if (!props.vehicleId) return
   try {
-    const res = await api.getDrives(props.vehicleId, { limit: 200 })
-    recentDrives.value = res.drives || []
+    const params = pickerDate.value ? { ...driveWindow(pickerDate.value), limit: 200 } : { limit: 200 }
+    const res = await api.getDrives(props.vehicleId, params)
+    const windowDrives: any[] = res.drives || []
+    for (const d of windowDrives) knownDrives.set(d.id, d)
+    const missing = selectedDriveIds.value.filter((id) => !knownDrives.has(id))
+    await Promise.all(
+      missing.map(async (id) => {
+        const one = await api.getDrives(props.vehicleId, { driveId: id, limit: 1 })
+        if (one.drives?.[0]) knownDrives.set(id, one.drives[0])
+      }),
+    )
+    recentDrives.value = pickerDrives(windowDrives, knownDrives, selectedDriveIds.value)
   } catch (err) {
     console.error('Failed to load recent drives', err)
   }
+}
+
+function shiftPickerDate(days: number) {
+  pickerDate.value = shiftDay(pickerDate.value || toDateInputString(new Date()), days)
+  loadRecentDrives()
+}
+
+// After the drives are chosen (from a trip group or the drives page), the list moves to their date
+async function anchorPickerOnSelection() {
+  if (!selectedDriveIds.value.length || !form.value.date) return
+  pickerDate.value = form.value.date
+  await loadRecentDrives()
 }
 
 function clampPassengerStops(previousLegCount: number) {
@@ -192,6 +222,8 @@ function resetForm() {
   currentRates.value = null
   expandedPassengerIndex.value = null
   selectedDriveIds.value = []
+  pickerDate.value = ''
+  knownDrives.clear()
   sourceMode.value = defaultSourceMode()
   form.value = {
     title: '',
@@ -231,6 +263,7 @@ async function initCreate(options: { driveIds?: string[]; tripGroupId?: string }
       } else if (group?.start_time) {
         form.value.date = toDateInputString(group.start_time)
       }
+      await anchorPickerOnSelection()
     } catch (err: any) {
       showAlert(t('carpool.carpoolTripModal.estimateError', { message: err.message }), t('shell.confirm.error'), 'danger')
     } finally {
@@ -239,6 +272,7 @@ async function initCreate(options: { driveIds?: string[]; tripGroupId?: string }
   } else if (options.driveIds?.length) {
     selectedDriveIds.value = [...options.driveIds]
     await estimateFromDrives()
+    await anchorPickerOnSelection()
   }
 }
 
@@ -257,6 +291,7 @@ function initEdit(trip: any) {
     passengers: passengersFromTrip(trip, legs.length),
   }
   if (!form.value.passengers.length) addPassenger()
+  pickerDate.value = form.value.date
   loadRecentDrives()
 }
 
@@ -383,6 +418,27 @@ async function handleModalRecalculate() {
             <span class="text-slate-400">{{ $t('carpool.carpoolTripModal.tickTheDrivesThatMake') }}</span>
             <span class="text-rose-400 font-semibold">{{ $t('carpool.carpoolTripModal.legsSelected', { count: selectedDriveIds.length }) }}{{ estimating ? $t('carpool.carpoolTripModal.estimating') : '' }}</span>
           </div>
+          <!-- Which drives are listed: the latest ones, or those around a date -->
+          <div class="flex items-center gap-1.5 text-xs text-slate-400">
+            <button type="button" @click="shiftPickerDate(-2 * DRIVE_WINDOW_DAYS)" class="p-1 rounded-lg hover:bg-slate-800 hover:text-white" :title="$t('carpool.carpoolTripModal.earlierDrives')">
+              <ChevronLeft class="w-4 h-4" />
+            </button>
+            <div class="w-44">
+              <AppDatePicker
+                id="carpool-drive-window"
+                v-model="pickerDate"
+                size="xs"
+                :clearable="true"
+                :placeholder="$t('carpool.carpoolTripModal.latestDrives')"
+                @change="loadRecentDrives"
+              />
+            </div>
+            <button type="button" @click="shiftPickerDate(2 * DRIVE_WINDOW_DAYS)" class="p-1 rounded-lg hover:bg-slate-800 hover:text-white" :title="$t('carpool.carpoolTripModal.laterDrives')">
+              <ChevronRight class="w-4 h-4" />
+            </button>
+            <span v-if="pickerDate" class="text-[11px] text-slate-500">{{ $t('carpool.carpoolTripModal.aroundTheDate', { days: DRIVE_WINDOW_DAYS }) }}</span>
+          </div>
+          <p v-if="!recentDrives.length" class="text-[11px] text-slate-500">{{ $t('carpool.carpoolTripModal.noDriveInThisPeriod') }}</p>
           <div class="max-h-44 overflow-y-auto space-y-1 pr-1">
             <button
               v-for="d in recentDrives"

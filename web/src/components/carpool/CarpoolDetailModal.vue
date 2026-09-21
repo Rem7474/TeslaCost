@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
-import { Users, X, MapPin, Navigation, Pencil, RotateCw, CheckCircle2, Sparkles, Zap, Disc, Wrench, Shield, Receipt } from 'lucide-vue-next'
+import { Users, X, MapPin, Navigation, Pencil, RotateCw, CheckCircle2, Sparkles, ChevronRight, Zap, Disc, Wrench, Shield, Receipt } from 'lucide-vue-next'
 import CostDonut from '@/components/costs/CostDonut.vue'
 import CostItemRow from '@/components/costs/CostItemRow.vue'
 import { buildCarpoolBreakdown } from '@/utils/costBreakdown'
@@ -9,9 +9,10 @@ import { carpoolCoverage, fmt, formatDate, stopNames } from '@/utils/carpool'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Detail of a carpool trip, laid out like the drive and trip cost breakdown: summary, legs, cost split, passengers,
-// total. The form to change it is the edit modal, reached from the footer.
+// total. A leg made from a drive opens the cost detail of that drive, like the legs of a trip. The form to change the
+// carpool is the edit modal, reached from the footer.
 const props = defineProps<{ trip: any | null; recalculating: boolean }>()
-const emit = defineEmits<{ edit: [trip: any]; recalculate: [trip: any] }>()
+const emit = defineEmits<{ edit: [trip: any]; recalculate: [trip: any]; 'open-drive': [driveId: string] }>()
 const open = defineModel<boolean>('open', { required: true })
 useEscapeToClose(open, () => (open.value = false))
 const vehicleStore = useVehicleStore()
@@ -84,10 +85,14 @@ const recoveredPct = computed(() => (props.trip?.total_cost > 0 ? Math.min(100, 
             <Navigation class="w-3.5 h-3.5 text-indigo-400" />
             {{ $t('carpool.carpoolTripList.legs', { length: trip.legs.length }) }}
           </h4>
-          <div
+          <component
+            :is="leg.drive_id ? 'button' : 'div'"
             v-for="(leg, i) in trip.legs"
             :key="leg.id"
-            class="flex items-center justify-between gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2"
+            :type="leg.drive_id ? 'button' : undefined"
+            class="w-full text-left flex items-center justify-between gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2 transition-colors"
+            :class="leg.drive_id ? 'hover:bg-slate-800/70 hover:border-slate-700' : ''"
+            @click="leg.drive_id && emit('open-drive', leg.drive_id)"
           >
             <div class="min-w-0">
               <div class="text-xs text-slate-200 truncate">{{ stops[Number(i)] }} → {{ stops[Number(i) + 1] }}</div>
@@ -98,8 +103,9 @@ const recoveredPct = computed(() => (props.trip?.total_cost > 0 ? Math.min(100, 
             <div class="flex items-center gap-3 shrink-0">
               <span class="text-[11px] font-bold text-rose-400">{{ leg.distance_km }} km</span>
               <span class="text-xs font-mono font-bold text-white">{{ fmt(leg.total_cost) }} €</span>
+              <ChevronRight v-if="leg.drive_id" class="w-4 h-4 text-slate-500" />
             </div>
-          </div>
+          </component>
         </div>
 
         <!-- Same layout as the drive detail: donut on the left, itemized costs on the right -->
