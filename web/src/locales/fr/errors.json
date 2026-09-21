@@ -80,6 +80,7 @@
     "lifespan_invalid": "Durée de vie estimée invalide",
     "session_position": "Une session de montage requiert une position FL, FR, RL ou RR (ou STORAGE pour une session historique terminée)",
     "dismount_before_mount": "La date de démontage précède la date de montage",
+    "session_in_future": "Une date de montage ou de démontage ne peut pas être dans le futur",
     "dismount_odometer_lower": "L'odomètre de démontage est inférieur à celui du montage",
     "session_distance_negative": "La distance d'une session ne peut pas être négative",
     "swap_count": "Un échange de train requiert entre 1 et 4 pneus",

@@ -43,6 +43,10 @@ func parseSessionPayload(req *MountSessionPayload) (time.Time, *time.Time, error
 	if dismountedDate != nil && dismountedDate.Before(mountedDate) {
 		return time.Time{}, nil, apierror.New("tire.dismount_before_mount", "The removal date is before the fitting date")
 	}
+	// A day of slack covers the time zone of the client, which sends today's date.
+	if limit := time.Now().UTC().Add(24 * time.Hour); mountedDate.After(limit) || (dismountedDate != nil && dismountedDate.After(limit)) {
+		return time.Time{}, nil, apierror.New("tire.session_in_future", "A fitting or removal date cannot be in the future")
+	}
 	return mountedDate, dismountedDate, nil
 }
 
