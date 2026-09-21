@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
-import { Users, X, MapPin, Navigation, Pencil, RotateCw, CheckCircle2, Sparkles, ChevronRight } from 'lucide-vue-next'
+import { Users, X, MapPin, Navigation, Pencil, RotateCw, CheckCircle2, Sparkles, ChevronRight, Zap, Disc, Wrench, Shield, Receipt } from 'lucide-vue-next'
 import CostDonut from '@/components/costs/CostDonut.vue'
+import CostItemRow from '@/components/costs/CostItemRow.vue'
 import { buildCarpoolBreakdown } from '@/utils/costBreakdown'
-import { fmt, formatDate, stopNames } from '@/utils/carpool'
+import { carpoolCoverage, fmt, formatDate, stopNames } from '@/utils/carpool'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Detail of a carpool trip, laid out like the drive and trip cost breakdown: summary, legs, cost split, passengers,
@@ -17,6 +18,16 @@ useEscapeToClose(open, () => (open.value = false))
 const vehicleStore = useVehicleStore()
 
 const breakdown = computed(() => buildCarpoolBreakdown(props.trip))
+const coverage = computed(() => carpoolCoverage(props.trip))
+// Same icons, colors and labels as the cost rows of the drive detail
+const ROWS = {
+  energy: { icon: Zap, tone: 'sky', label: 'drives.driveCostModal.electricEnergy' },
+  tires: { icon: Disc, tone: 'emerald', label: 'drives.driveCostModal.tireWear' },
+  maintenance: { icon: Wrench, tone: 'pink', label: 'drives.driveCostModal.maintenanceProvision' },
+  insurance: { icon: Shield, tone: 'purple', label: 'drives.driveCostModal.insuranceShareFixedCost' },
+  tolls: { icon: Receipt, tone: 'amber', label: 'drives.driveCostModal.tollsAndRoadCosts' },
+  other: { icon: Receipt, tone: 'slate', label: 'dashboard.breakdown.other' },
+} as const
 const stops = computed(() => stopNames(props.trip?.legs || []))
 const recoveredPct = computed(() => (props.trip?.total_cost > 0 ? Math.min(100, Math.round((props.trip.total_revenue / props.trip.total_cost) * 100)) : 0))
 </script>
@@ -99,25 +110,57 @@ const recoveredPct = computed(() => (props.trip?.total_cost > 0 ? Math.min(100, 
 
         <!-- Same layout as the drive detail: donut on the left, itemized costs on the right -->
         <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
-          <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
-            <h4 class="text-xs font-bold text-white mb-2 self-start">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
-            <div class="w-full h-56 sm:h-64 relative">
-              <CostDonut :items="breakdown.items" :empty-label="$t('drives.driveCostModal.noCost')" :chart-label="$t('drives.driveCostModal.breakdownAria')" />
+          <div class="md:col-span-2 space-y-3">
+            <div class="bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
+              <h4 class="text-xs font-bold text-white mb-2 self-start">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
+              <div class="w-full h-56 sm:h-64 relative">
+                <CostDonut :items="breakdown.items" :empty-label="$t('drives.driveCostModal.noCost')" :chart-label="$t('drives.driveCostModal.breakdownAria')" />
+              </div>
+            </div>
+
+            <!-- What the passengers paid, against what they owed (the tick) -->
+            <div class="bg-slate-800/30 border border-slate-800 rounded-xl p-4 space-y-2">
+              <div class="flex items-baseline justify-between gap-2">
+                <h4 class="text-xs font-bold text-white">{{ $t('carpool.carpoolDetailModal.paidByPassengers') }}</h4>
+                <span class="text-sm font-bold font-mono" :class="coverage.status === 'below' ? 'text-amber-400' : 'text-emerald-400'">{{ coverage.paidPct.toFixed(0) }}%</span>
+              </div>
+              <div
+                class="relative h-2.5 rounded-full bg-slate-950 border border-slate-700/60"
+                role="progressbar"
+                :aria-valuenow="Math.round(coverage.paidPct)"
+                aria-valuemin="0"
+                aria-valuemax="100"
+                :aria-label="$t('carpool.carpoolDetailModal.paidByPassengers')"
+              >
+                <div
+                  class="absolute inset-y-0 left-0 rounded-full transition-all"
+                  :class="coverage.status === 'below' ? 'bg-amber-500' : 'bg-emerald-500'"
+                  :style="{ width: Math.min(100, coverage.paidPct) + '%' }"
+                ></div>
+                <div
+                  class="absolute -top-1 -bottom-1 w-0.5 rounded bg-white"
+                  :style="{ left: `calc(${Math.min(100, coverage.fairPct)}% - 1px)` }"
+                  :title="$t('carpool.carpoolDetailModal.fairShare', { percent: coverage.fairPct.toFixed(0) })"
+                ></div>
+              </div>
+              <div class="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                <span>{{ $t('carpool.carpoolDetailModal.received', { amount: fmt(coverage.paid) }) }}</span>
+                <span class="text-slate-300">{{ $t('carpool.carpoolDetailModal.fairShareAmount', { percent: coverage.fairPct.toFixed(0), amount: fmt(coverage.fair) }) }}</span>
+              </div>
             </div>
           </div>
 
           <div class="md:col-span-3 space-y-2.5">
             <template v-for="item in breakdown.items" :key="item.key">
-              <div v-if="item.amount > 0 || item.key !== 'other'" class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: item.color }"></span>
-                  <div class="text-xs font-semibold text-white">{{ item.label }}</div>
-                </div>
-                <div class="text-right">
-                  <div class="text-sm font-bold font-mono" :style="{ color: item.color }">{{ fmt(item.amount) }} €</div>
-                  <div class="text-[10px] text-slate-400 font-normal font-sans">({{ item.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ item.costPerKm.toFixed(3) }} €/km</span></div>
-                </div>
-              </div>
+              <CostItemRow
+                v-if="item.amount > 0 || item.key !== 'other'"
+                :icon="ROWS[item.key as keyof typeof ROWS].icon"
+                :tone="ROWS[item.key as keyof typeof ROWS].tone"
+                :label="$t(ROWS[item.key as keyof typeof ROWS].label)"
+                :amount="item.amount"
+                :share-pct="item.sharePct"
+                :cost-per-km="item.costPerKm"
+              />
             </template>
           </div>
         </div>

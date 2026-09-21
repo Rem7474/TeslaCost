@@ -11,6 +11,7 @@ import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, merg
 import { formatDayTime } from '@/utils/dates'
 import { buildDriveBreakdown } from '@/utils/costBreakdown'
 import CostDonut from '@/components/costs/CostDonut.vue'
+import CostItemRow from '@/components/costs/CostItemRow.vue'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Cost breakdown of a drive, or of a trip group (drive.is_trip_group, whose drives are tripDriveIds), with its
@@ -458,120 +459,85 @@ async function handleDeleteExpense(exp: any) {
       <!-- Cost Breakdown List -->
       <div class="md:col-span-3 space-y-2.5">
         <!-- 1. Électricité -->
-        <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-sky-500/10 text-sky-400 rounded-lg">
-              <Zap class="w-4 h-4" />
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-white flex items-center gap-1.5">
-                {{ $t('drives.driveCostModal.electricEnergy') }}
-                <span v-if="selectedCostDrive.costs?.energy_source === 'DEFAULT' || selectedCostDrive.costs?.electricity_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
-              </div>
-              <div class="text-[11px] text-slate-400 font-mono">
-                {{ $t('drives.driveCostModal.kwhKwh', { electricity_kwh: selectedCostDrive.costs?.electricity_kwh || 0, electricity_rate: (selectedCostDrive.costs?.electricity_rate || 0.22).toFixed(3) }) }}
-              </div>
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="text-sm font-bold text-sky-400 font-mono">{{ (selectedCostDrive.costs?.electricity_cost || 0).toFixed(2) }} €</div>
-            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.energy.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.energy.costPerKm.toFixed(3) }} €/km</span></div>
-          </div>
-        </div>
+        <CostItemRow
+          :icon="Zap"
+          tone="sky"
+          :label="$t('drives.driveCostModal.electricEnergy')"
+          :sub="$t('drives.driveCostModal.kwhKwh', { electricity_kwh: selectedCostDrive.costs?.electricity_kwh || 0, electricity_rate: (selectedCostDrive.costs?.electricity_rate || 0.22).toFixed(3) })"
+          :amount="selectedCostDrive.costs?.electricity_cost || 0"
+          :share-pct="breakdown.byKey.energy.sharePct"
+          :cost-per-km="breakdown.byKey.energy.costPerKm"
+        >
+          <template #badge>
+            <span v-if="selectedCostDrive.costs?.energy_source === 'DEFAULT' || selectedCostDrive.costs?.electricity_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
+          </template>
+        </CostItemRow>
 
         <!-- 2. Pneus -->
-        <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-lg">
-              <Disc class="w-4 h-4" />
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-white flex items-center gap-1.5">
-                {{ $t('drives.driveCostModal.tireWear') }}
-                <span v-if="selectedCostDrive.costs?.tires_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
-                <span v-else-if="selectedCostDrive.costs?.tires_rate_source === 'INCLUDED_IN_LEASE'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{{ $t('drives.driveCostModal.includedInTheLease2') }}</span>
-              </div>
-              <div class="text-[11px] text-slate-400 font-mono">
-                {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.tires_rate || 0.02).toFixed(3) }} €/km
-              </div>
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="text-sm font-bold text-emerald-400 font-mono">{{ (selectedCostDrive.costs?.tires_cost || 0).toFixed(2) }} €</div>
-            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tires.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tires.costPerKm.toFixed(3) }} €/km</span></div>
-          </div>
-        </div>
+        <CostItemRow
+          :icon="Disc"
+          tone="emerald"
+          :label="$t('drives.driveCostModal.tireWear')"
+          :sub="`${selectedCostDrive.distance_km} km × ${(selectedCostDrive.costs?.tires_rate || 0.02).toFixed(3)} €/km`"
+          :amount="selectedCostDrive.costs?.tires_cost || 0"
+          :share-pct="breakdown.byKey.tires.sharePct"
+          :cost-per-km="breakdown.byKey.tires.costPerKm"
+        >
+          <template #badge>
+            <span v-if="selectedCostDrive.costs?.tires_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
+            <span v-else-if="selectedCostDrive.costs?.tires_rate_source === 'INCLUDED_IN_LEASE'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{{ $t('drives.driveCostModal.includedInTheLease2') }}</span>
+          </template>
+        </CostItemRow>
 
         <!-- 3. Entretien -->
-        <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-pink-500/10 text-pink-400 rounded-lg">
-              <Wrench class="w-4 h-4" />
-            </div>
-            <div>
-              <div class="text-xs font-semibold text-white flex items-center gap-1.5">
-                {{ $t('drives.driveCostModal.maintenanceProvision') }}
-                <span v-if="selectedCostDrive.costs?.maintenance_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
-                <span v-else-if="selectedCostDrive.costs?.maintenance_rate_source === 'INCLUDED_IN_LEASE'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{{ $t('drives.driveCostModal.includedInTheLease2') }}</span>
-              </div>
-              <div class="text-[11px] text-slate-400 font-mono">
-                {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.maintenance_rate || 0.015).toFixed(3) }} €/km
-              </div>
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="text-sm font-bold text-pink-400 font-mono">{{ (selectedCostDrive.costs?.maintenance_cost || 0).toFixed(2) }} €</div>
-            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.maintenance.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.maintenance.costPerKm.toFixed(3) }} €/km</span></div>
-          </div>
-        </div>
+        <CostItemRow
+          :icon="Wrench"
+          tone="pink"
+          :label="$t('drives.driveCostModal.maintenanceProvision')"
+          :sub="`${selectedCostDrive.distance_km} km × ${(selectedCostDrive.costs?.maintenance_rate || 0.015).toFixed(3)} €/km`"
+          :amount="selectedCostDrive.costs?.maintenance_cost || 0"
+          :share-pct="breakdown.byKey.maintenance.sharePct"
+          :cost-per-km="breakdown.byKey.maintenance.costPerKm"
+        >
+          <template #badge>
+            <span v-if="selectedCostDrive.costs?.maintenance_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
+            <span v-else-if="selectedCostDrive.costs?.maintenance_rate_source === 'INCLUDED_IN_LEASE'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">{{ $t('drives.driveCostModal.includedInTheLease2') }}</span>
+          </template>
+        </CostItemRow>
 
         <!-- 4. Assurance -->
-        <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <div class="p-2 bg-purple-500/10 text-purple-400 rounded-lg">
-              <Shield class="w-4 h-4" />
-            </div>
-            <div>
-              <div class="flex items-center gap-1.5">
-                <span class="text-xs font-semibold text-white">{{ $t('drives.driveCostModal.insuranceShareFixedCost') }}</span>
-                <span
-                  v-if="selectedCostDrive.costs?.insurance_source === 'RECORDED_EXPENSES'"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
-                  :title="$t('drives.driveCostModal.premiumsPaidOverTheLast')"
-                >
-                  {{ $t('drives.driveCostModal.actualPremiums') }}
-                </span>
-                <span
-                  v-else-if="selectedCostDrive.costs?.insurance_source === 'INCLUDED_IN_LEASE'"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium"
-                >
-                  {{ $t('drives.driveCostModal.includedInTheLease') }}
-                </span>
-                <span
-                  v-else-if="selectedCostDrive.costs?.insurance_source === 'INSUFFICIENT_DISTANCE'"
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
-                  :title="$t('drives.driveCostModal.lessThan500KmDriven')"
-                >
-                  {{ $t('drives.driveCostModal.notEnoughKm') }}
-                </span>
-                <span
-                  v-else
-                  class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
-                  :title="$t('drives.driveCostModal.noInsurancePremiumRecordedIn')"
-                >
-                  {{ $t('drives.driveCostModal.notEntered') }}
-                </span>
-              </div>
-              <div class="text-[11px] text-slate-400 font-mono">
-                {{ selectedCostDrive.distance_km }} km × {{ (selectedCostDrive.costs?.insurance_rate || 0).toFixed(3) }} €/km
-              </div>
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="text-sm font-bold text-purple-400 font-mono">{{ (selectedCostDrive.costs?.insurance_cost || 0).toFixed(2) }} €</div>
-            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.insurance.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.insurance.costPerKm.toFixed(3) }} €/km</span></div>
-          </div>
-        </div>
+        <CostItemRow
+          :icon="Shield"
+          tone="purple"
+          :label="$t('drives.driveCostModal.insuranceShareFixedCost')"
+          :sub="`${selectedCostDrive.distance_km} km × ${(selectedCostDrive.costs?.insurance_rate || 0).toFixed(3)} €/km`"
+          :amount="selectedCostDrive.costs?.insurance_cost || 0"
+          :share-pct="breakdown.byKey.insurance.sharePct"
+          :cost-per-km="breakdown.byKey.insurance.costPerKm"
+        >
+          <template #badge>
+            <span
+              v-if="selectedCostDrive.costs?.insurance_source === 'RECORDED_EXPENSES'"
+              class="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-medium"
+              :title="$t('drives.driveCostModal.premiumsPaidOverTheLast')"
+            >
+              {{ $t('drives.driveCostModal.actualPremiums') }}
+            </span>
+            <span v-else-if="selectedCostDrive.costs?.insurance_source === 'INCLUDED_IN_LEASE'" class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium">
+              {{ $t('drives.driveCostModal.includedInTheLease') }}
+            </span>
+            <span
+              v-else-if="selectedCostDrive.costs?.insurance_source === 'INSUFFICIENT_DISTANCE'"
+              class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
+              :title="$t('drives.driveCostModal.lessThan500KmDriven')"
+            >
+              {{ $t('drives.driveCostModal.notEnoughKm') }}
+            </span>
+            <span v-else class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium" :title="$t('drives.driveCostModal.noInsurancePremiumRecordedIn')">
+              {{ $t('drives.driveCostModal.notEntered') }}
+            </span>
+          </template>
+        </CostItemRow>
 
         <!-- 5. Péages & Frais de route -->
         <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl space-y-2">
