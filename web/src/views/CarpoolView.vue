@@ -9,6 +9,7 @@ import { api } from '@/services/api'
 import CarpoolSummaryGrid from '@/components/carpool/CarpoolSummaryGrid.vue'
 import CarpoolTripList from '@/components/carpool/CarpoolTripList.vue'
 import CarpoolTripModal from '@/components/carpool/CarpoolTripModal.vue'
+import CarpoolDetailModal from '@/components/carpool/CarpoolDetailModal.vue'
 import { downloadCsv } from '@/utils/csv'
 import { carpoolCsvHeaders, carpoolCsvRows } from '@/utils/carpool'
 import { Users, Plus } from 'lucide-vue-next'
@@ -37,6 +38,15 @@ const summary = ref<any>({
 
 // Create / edit modal
 const showModal = ref(false)
+const showDetail = ref(false)
+const detailTripId = ref<string | null>(null)
+// Read from the list so the detail follows a recalculation or an edit
+const detailTrip = computed(() => trips.value.find((t) => t.id === detailTripId.value) ?? null)
+
+function openDetail(trip: any) {
+  detailTripId.value = trip.id
+  showDetail.value = true
+}
 const editingTrip = ref<any | null>(null)
 const createOptions = ref<{ driveIds?: string[]; tripGroupId?: string }>({})
 const openToken = ref(0)
@@ -270,8 +280,17 @@ onMounted(() => {
       @toggle-all="toggleSelectAll"
       @toggle="toggleTripSelection"
       @recalculate="handleRecalculateSingle"
+      @open="openDetail"
       @edit="openEditModal"
       @delete="handleDelete"
+    />
+
+    <CarpoolDetailModal
+      v-model:open="showDetail"
+      :trip="detailTrip"
+      :recalculating="recalculating"
+      @edit="(trip) => { showDetail = false; openEditModal(trip) }"
+      @recalculate="handleRecalculateSingle"
     />
 
     <CarpoolTripModal

@@ -2,13 +2,15 @@
 import { computed } from 'vue'
 import { useVehicleStore } from '@/stores/vehicle'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
-import { Users, Trash2, Edit2, Calendar, MapPin, Zap, Disc, Wrench, Shield, CreditCard, CheckCircle2, Receipt, Sparkles, CheckSquare, Square, Navigation, RotateCw, Download } from 'lucide-vue-next'
-import { fmt, formatDate, stopNames } from '@/utils/carpool'
+import { Users, Trash2, Edit2, Calendar, CheckSquare, Square, Navigation, RotateCw, Download, ChevronRight } from 'lucide-vue-next'
+import { fmt, formatDate } from '@/utils/carpool'
 
-// The carpool trips with their legs and passengers, and the selection actions (recalculate, export)
+// The carpool trips as compact cards (the legs, passengers and costs are in the detail, opened by a click), and the
+// selection actions (recalculate, export)
 const props = defineProps<{ trips: any[]; selectedTripIds: string[]; recalculating: boolean }>()
 const emit = defineEmits<{
   clear: []
+  open: [trip: any]
   'batch-recalculate': []
   export: []
   'toggle-all': []
@@ -69,16 +71,18 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
     <div
       v-for="trip in trips"
       :key="trip.id"
-      class="bg-slate-900 border rounded-2xl p-5 transition-all shadow-sm space-y-4"
+      @click="emit('open', trip)"
+      class="bg-slate-900 border rounded-2xl p-4 transition-all shadow-sm space-y-3 cursor-pointer"
       :class="selectedTripIds.includes(trip.id) ? 'border-rose-500/50 bg-rose-500/[0.02]' : 'border-slate-800 hover:border-slate-700'"
     >
       <!-- Trip Header -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/80">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div class="flex items-start gap-3 min-w-0 flex-1">
           <!-- Select Checkbox -->
           <label
             v-if="vehicleStore.canEdit"
             :for="'carpool-select-' + trip.id"
+            @click.stop
             class="mt-1 shrink-0 flex items-center cursor-pointer"
             :title="$t('carpool.carpoolTripList.selectThisCarpool')"
           >
@@ -110,7 +114,7 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
             </div>
           </div>
         </div>
-        <div v-if="vehicleStore.canEdit" class="flex items-center gap-1 sm:gap-2 shrink-0 self-end sm:self-auto">
+        <div v-if="vehicleStore.canEdit" @click.stop class="flex items-center gap-1 sm:gap-2 shrink-0 self-end sm:self-auto">
           <button
             @click="emit('recalculate', trip)"
             :disabled="recalculating"
@@ -128,103 +132,20 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
         </div>
       </div>
 
-      <!-- Legs -->
-      <div class="space-y-2">
-        <div class="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-          <Navigation class="w-3.5 h-3.5 text-indigo-400" />
-          {{ $t('carpool.carpoolTripList.legs', { length: trip.legs.length }) }}
+      <!-- One line: what it covers and what it cost; the rest is in the detail -->
+      <div class="flex items-center justify-between gap-3 text-xs text-slate-400 flex-wrap">
+        <div class="flex items-center gap-x-3 gap-y-1 flex-wrap">
+          <span class="flex items-center gap-1.5"><Navigation class="w-3.5 h-3.5 text-indigo-400" />{{ $t('carpool.carpoolTripList.legs', { length: trip.legs.length }) }}</span>
+          <span class="flex items-center gap-1.5"><Users class="w-3.5 h-3.5 text-blue-400" />{{ $t('carpool.carpoolTripList.passengers', { length: trip.passengers?.length || 0 }) }}</span>
+          <span>{{ $t('carpool.carpoolTripList.actualCost') }} <strong class="text-slate-200">{{ fmt(trip.total_cost) }} €</strong></span>
+          <span class="text-emerald-400 font-semibold">+{{ fmt(trip.total_revenue) }} €</span>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <div
-            v-for="(leg, i) in trip.legs"
-            :key="leg.id"
-            class="bg-slate-950/60 border border-slate-800/80 rounded-xl px-2.5 py-1.5 text-[11px] text-slate-300"
-          >
-            <div class="font-semibold text-slate-200">{{ stopNames(trip.legs)[Number(i)] }} → {{ stopNames(trip.legs)[Number(i) + 1] }}</div>
-            <div class="text-slate-400">
-              {{ $t('carpool.carpoolTripList.kmOnBoardPerson', { distance_km: leg.distance_km, total_cost: fmt(leg.total_cost), passenger_seats: 1 + leg.passenger_seats, cost_per_person: fmt(leg.cost_per_person) }) }}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Passengers -->
-      <div class="space-y-2">
-        <div class="text-xs font-semibold text-slate-300 flex items-center justify-between">
-          <span class="flex items-center gap-1.5">
-            <Users class="w-3.5 h-3.5 text-blue-400" />
-            {{ $t('carpool.carpoolTripList.passengers', { length: trip.passengers?.length || 0 }) }}
+        <div class="flex items-center gap-2">
+          <span v-if="trip.net_cost > 0" class="font-semibold text-slate-200">
+            {{ $t('carpool.carpoolTripList.leftToTheDriver') }} {{ fmt(trip.net_cost) }} €
           </span>
-          <span class="text-emerald-400 font-bold">{{ $t('carpool.carpoolTripList.totalReceived', { total_revenue: fmt(trip.total_revenue) }) }}</span>
-        </div>
-        <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
-          <div v-for="p in trip.passengers" :key="p.id" class="bg-slate-950/60 border border-slate-800/80 rounded-xl p-2.5 text-xs space-y-1">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold text-slate-200 truncate">{{ p.passenger_name }}</span>
-              <span class="font-bold text-emerald-400 shrink-0">+{{ fmt(p.amount_paid) }} €</span>
-            </div>
-            <div class="text-[11px] text-slate-400 flex items-center gap-1 truncate">
-              <MapPin class="w-3 h-3 shrink-0 text-slate-500" />
-              <span class="truncate">
-                {{ stopNames(trip.legs)[p.board_stop_index] }} → {{ stopNames(trip.legs)[p.alight_stop_index] }}
-                • {{ $t('carpool.carpoolTripList.seats', p.seats) }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between text-[11px]">
-              <span class="text-slate-400">{{ $t('carpool.carpoolTripList.share', { cost_share: fmt(p.cost_share) }) }}</span>
-              <span :class="p.balance >= 0 ? 'text-emerald-400' : 'text-amber-400'">
-                {{ p.balance >= 0 ? $t('carpool.above', { amount: fmt(p.balance) }) : $t('carpool.below', { amount: fmt(-p.balance) }) }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Cost Breakdown -->
-      <div class="pt-3 border-t border-slate-800/60 space-y-2">
-        <div class="text-xs font-semibold text-slate-400">{{ $t('carpool.carpoolTripList.actualCostsOfTheTrip') }}</div>
-        <div class="flex flex-wrap items-center gap-2 text-xs">
-          <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-            <Zap class="w-3.5 h-3.5 text-amber-400" /> {{ $t('carpool.carpoolTripList.electricity') }} <strong>{{ fmt(trip.electricity_cost) }} €</strong>
-          </div>
-          <div v-if="trip.tolls_cost > 0" class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-            <CreditCard class="w-3.5 h-3.5 text-blue-400" /> {{ $t('carpool.carpoolTripList.tolls') }} <strong>{{ fmt(trip.tolls_cost) }} €</strong>
-          </div>
-          <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-            <Disc class="w-3.5 h-3.5 text-rose-400" /> {{ $t('carpool.carpoolTripList.tireWear') }} <strong>{{ fmt(trip.tires_cost) }} €</strong>
-          </div>
-          <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-            <Wrench class="w-3.5 h-3.5 text-indigo-400" /> {{ $t('carpool.carpoolTripList.maintenance') }} <strong>{{ fmt(trip.maintenance_cost) }} €</strong>
-          </div>
-          <div class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-            <Shield class="w-3.5 h-3.5 text-emerald-400" /> {{ $t('carpool.carpoolTripList.insurance') }} <strong>{{ fmt(trip.insurance_cost) }} €</strong>
-          </div>
-          <div v-if="trip.other_cost > 0" class="bg-slate-800/80 border border-slate-700/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 text-slate-300">
-            <Receipt class="w-3.5 h-3.5 text-slate-400" /> {{ $t('carpool.carpoolTripList.other') }} <strong>{{ fmt(trip.other_cost) }} €</strong>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bottom Line -->
-      <div
-        class="rounded-xl p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs"
-        :class="trip.net_cost <= 0 ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-300' : 'bg-slate-950/80 border border-slate-800 text-slate-300'"
-      >
-        <div class="flex items-center gap-2 flex-wrap">
-          <CheckCircle2 v-if="trip.net_cost <= 0" class="w-4 h-4 text-emerald-400 shrink-0" />
-          <Sparkles v-else class="w-4 h-4 text-amber-400 shrink-0" />
-          <span>{{ $t('carpool.carpoolTripList.actualCost') }} <strong>{{ fmt(trip.total_cost) }} €</strong></span>
-          <span>•</span>
-          <span>{{ $t('carpool.carpoolTripList.passengersShare') }} <strong>{{ fmt(trip.passengers_cost_share) }} €</strong></span>
-          <span>•</span>
-          <span>{{ $t('carpool.carpoolTripList.driverSShare') }} <strong>{{ fmt(trip.driver_cost_share) }} €</strong></span>
-        </div>
-        <div>
-          <template v-if="trip.net_cost > 0">
-            {{ $t('carpool.carpoolTripList.leftToTheDriver') }} <strong class="text-white text-sm">{{ fmt(trip.net_cost) }} €</strong>
-            <span v-if="trip.distance_km > 0" class="text-slate-400 text-[11px] ml-1">({{ (trip.net_cost / trip.distance_km).toFixed(3) }} €/km)</span>
-          </template>
-          <span v-else class="font-bold text-emerald-400 text-sm">{{ $t('carpool.carpoolTripList.netSurplus', { net_cost: fmt(Math.abs(trip.net_cost)) }) }}</span>
+          <span v-else class="font-semibold text-emerald-400">{{ $t('carpool.carpoolTripList.netSurplus', { net_cost: fmt(Math.abs(trip.net_cost)) }) }}</span>
+          <ChevronRight class="w-4 h-4 text-slate-500" />
         </div>
       </div>
     </div>

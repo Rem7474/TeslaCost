@@ -37,23 +37,19 @@
     "covered": "Parts des passagers couvertes",
     "below": "{amount} € sous leur part"
   },
+  "carpoolDetailModal": {
+    "onBoard": "{count} à bord",
+    "perPerson": "{amount} €/pers."
+  },
   "carpoolTripList": {
     "netSurplus": "Excédent net : +{net_cost} €",
     "leftToTheDriver": "Reste à charge conducteur :",
     "driverSShare": "Part du conducteur :",
     "passengersShare": "Part des passagers :",
     "actualCost": "Coût réel :",
-    "other": "Divers :",
-    "insurance": "Assurance :",
-    "maintenance": "Entretien :",
-    "tireWear": "Usure pneus :",
-    "tolls": "Péages :",
-    "electricity": "Électricité :",
-    "actualCostsOfTheTrip": "Coûts réels du trajet :",
     "share": "Part : {cost_share} €",
     "totalReceived": "Total perçu : +{total_revenue} €",
     "passengers": "Passagers ({length})",
-    "kmOnBoardPerson": "{distance_km} km • {total_cost} € • {passenger_seats} à bord • {cost_per_person} €/pers.",
     "legs": "Étapes ({length})",
     "recalculateTheActualCostsOf": "Recalculer les coûts réels de ce covoiturage",
     "selectThisCarpool": "Sélectionner ce covoiturage",

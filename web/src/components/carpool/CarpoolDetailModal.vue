@@ -1,0 +1,202 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useVehicleStore } from '@/stores/vehicle'
+import { Users, X, MapPin, Navigation, Pencil, RotateCw, CheckCircle2, Sparkles } from 'lucide-vue-next'
+import CostDonut from '@/components/costs/CostDonut.vue'
+import { buildCarpoolBreakdown } from '@/utils/costBreakdown'
+import { fmt, formatDate, stopNames } from '@/utils/carpool'
+
+// Detail of a carpool trip, laid out like the drive and trip cost breakdown: summary, legs, cost split, passengers,
+// total. The form to change it is the edit modal, reached from the footer.
+const props = defineProps<{ trip: any | null; recalculating: boolean }>()
+const emit = defineEmits<{ edit: [trip: any]; recalculate: [trip: any] }>()
+const open = defineModel<boolean>('open', { required: true })
+const vehicleStore = useVehicleStore()
+
+const breakdown = computed(() => buildCarpoolBreakdown(props.trip))
+const stops = computed(() => stopNames(props.trip?.legs || []))
+const recoveredPct = computed(() => (props.trip?.total_cost > 0 ? Math.min(100, Math.round((props.trip.total_revenue / props.trip.total_cost) * 100)) : 0))
+</script>
+
+<template>
+  <div
+    v-if="open && trip"
+    class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+    @click.self="open = false"
+  >
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+      <!-- Header -->
+      <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+        <div class="flex items-center gap-2.5 min-w-0 pr-2">
+          <div class="p-2 rounded-xl shrink-0 bg-rose-500/10 text-rose-400">
+            <Users class="w-5 h-5" />
+          </div>
+          <div class="min-w-0 truncate">
+            <h3 class="text-base font-bold text-white truncate">{{ trip.title }}</h3>
+            <p class="text-xs text-slate-400">{{ formatDate(trip.date) }}</p>
+          </div>
+        </div>
+        <button @click="open = false" class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0" :title="$t('common.close')">
+          <X class="w-5 h-5" />
+        </button>
+      </div>
+
+      <!-- Body -->
+      <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4">
+        <!-- Summary route -->
+        <div class="bg-slate-800/60 border border-slate-700/60 p-3.5 rounded-2xl space-y-2">
+          <div class="text-sm font-semibold text-white flex items-center gap-2">
+            <MapPin class="w-4 h-4 text-rose-400 shrink-0" />
+            <span class="truncate">{{ stops[0] }}</span>
+            <span class="text-slate-500">→</span>
+            <span class="truncate">{{ stops[stops.length - 1] }}</span>
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-300 flex-wrap">
+            <span class="font-bold text-rose-400">{{ trip.distance_km }} km</span>
+            <span class="text-indigo-400 font-semibold">{{ $t('carpool.carpoolTripList.legs', { length: trip.legs.length }) }}</span>
+            <span class="text-blue-400 font-semibold">{{ $t('carpool.carpoolTripList.passengers', { length: trip.passengers?.length || 0 }) }}</span>
+            <span
+              class="px-2 py-0.5 rounded-full font-semibold border"
+              :class="trip.net_cost <= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'"
+            >
+              {{ trip.net_cost <= 0 ? $t('carpool.carpoolTripList.fullyRecovered') : $t('carpool.carpoolTripList.recovered', { percent: recoveredPct }) }}
+            </span>
+          </div>
+          <p v-if="trip.notes" class="text-xs text-slate-400 pt-2 border-t border-slate-700/60">{{ trip.notes }}</p>
+        </div>
+
+        <!-- Legs, as rows -->
+        <div class="space-y-1.5">
+          <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+            <Navigation class="w-3.5 h-3.5 text-indigo-400" />
+            {{ $t('carpool.carpoolTripList.legs', { length: trip.legs.length }) }}
+          </h4>
+          <div
+            v-for="(leg, i) in trip.legs"
+            :key="leg.id"
+            class="flex items-center justify-between gap-3 bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2"
+          >
+            <div class="min-w-0">
+              <div class="text-xs text-slate-200 truncate">{{ stops[Number(i)] }} → {{ stops[Number(i) + 1] }}</div>
+              <div class="text-[11px] text-slate-400">
+                {{ $t('carpool.carpoolDetailModal.onBoard', { count: 1 + leg.passenger_seats }) }} · {{ $t('carpool.carpoolDetailModal.perPerson', { amount: fmt(leg.cost_per_person) }) }}
+              </div>
+            </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <span class="text-[11px] font-bold text-rose-400">{{ leg.distance_km }} km</span>
+              <span class="text-xs font-mono font-bold text-white">{{ fmt(leg.total_cost) }} €</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Same layout as the drive detail: donut on the left, itemized costs on the right -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+          <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
+            <h4 class="text-xs font-bold text-white mb-2 self-start">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
+            <div class="w-full h-56 sm:h-64 relative">
+              <CostDonut :items="breakdown.items" :empty-label="$t('drives.driveCostModal.noCost')" :chart-label="$t('drives.driveCostModal.breakdownAria')" />
+            </div>
+          </div>
+
+          <div class="md:col-span-3 space-y-2.5">
+            <template v-for="item in breakdown.items" :key="item.key">
+              <div v-if="item.amount > 0 || item.key !== 'other'" class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: item.color }"></span>
+                  <div class="text-xs font-semibold text-white">{{ item.label }}</div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-bold font-mono" :style="{ color: item.color }">{{ fmt(item.amount) }} €</div>
+                  <div class="text-[10px] text-slate-400 font-normal font-sans">({{ item.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ item.costPerKm.toFixed(3) }} €/km</span></div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+
+        <!-- Passengers -->
+        <div class="space-y-1.5">
+          <h4 class="text-xs font-bold text-white flex items-center justify-between">
+            <span class="flex items-center gap-1.5">
+              <Users class="w-3.5 h-3.5 text-blue-400" />
+              {{ $t('carpool.carpoolTripList.passengers', { length: trip.passengers?.length || 0 }) }}
+            </span>
+            <span class="text-emerald-400">{{ $t('carpool.carpoolTripList.totalReceived', { total_revenue: fmt(trip.total_revenue) }) }}</span>
+          </h4>
+          <div v-for="p in trip.passengers" :key="p.id" class="bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2 text-xs space-y-1">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-semibold text-slate-200 truncate">{{ p.passenger_name }}</span>
+              <span class="font-bold text-emerald-400 shrink-0">+{{ fmt(p.amount_paid) }} €</span>
+            </div>
+            <div class="text-[11px] text-slate-400 truncate">
+              {{ stops[p.board_stop_index] }} → {{ stops[p.alight_stop_index] }} • {{ $t('carpool.carpoolTripList.seats', p.seats) }}
+            </div>
+            <div class="flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">{{ $t('carpool.carpoolTripList.share', { cost_share: fmt(p.cost_share) }) }}</span>
+              <span :class="p.balance >= 0 ? 'text-emerald-400' : 'text-amber-400'">
+                {{ p.balance >= 0 ? $t('carpool.above', { amount: fmt(p.balance) }) : $t('carpool.below', { amount: fmt(-p.balance) }) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Grand total: same card as the drive detail, with what is left to the driver -->
+        <div class="bg-gradient-to-r from-slate-800 to-slate-800/80 border p-4 rounded-2xl space-y-3 shadow-lg" :class="trip.net_cost <= 0 ? 'border-emerald-500/40' : 'border-emerald-500/30'">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.totalCostPrice') }}</span>
+              <div class="text-2xl font-black text-white">{{ fmt(trip.total_cost) }} €</div>
+            </div>
+            <div class="text-right">
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
+              <div class="text-lg font-extrabold text-emerald-400 font-mono">
+                {{ (trip.distance_km > 0 ? trip.total_cost / trip.distance_km : 0).toFixed(3) }} €<span class="text-xs font-normal text-slate-400">/km</span>
+              </div>
+            </div>
+          </div>
+          <div class="pt-3 border-t border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-300">
+            <div class="flex items-center gap-2 flex-wrap">
+              <CheckCircle2 v-if="trip.net_cost <= 0" class="w-4 h-4 text-emerald-400 shrink-0" />
+              <Sparkles v-else class="w-4 h-4 text-amber-400 shrink-0" />
+              <span>{{ $t('carpool.carpoolTripList.passengersShare') }} <strong>{{ fmt(trip.passengers_cost_share) }} €</strong></span>
+              <span>•</span>
+              <span>{{ $t('carpool.carpoolTripList.driverSShare') }} <strong>{{ fmt(trip.driver_cost_share) }} €</strong></span>
+            </div>
+            <div>
+              <template v-if="trip.net_cost > 0">
+                {{ $t('carpool.carpoolTripList.leftToTheDriver') }} <strong class="text-white text-sm">{{ fmt(trip.net_cost) }} €</strong>
+              </template>
+              <span v-else class="font-bold text-emerald-400 text-sm">{{ $t('carpool.carpoolTripList.netSurplus', { net_cost: fmt(Math.abs(trip.net_cost)) }) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer Actions -->
+      <div class="px-5 py-3.5 border-t border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
+        <button @click="open = false" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl transition-colors">
+          {{ $t('common.close') }}
+        </button>
+        <div v-if="vehicleStore.canEdit" class="flex items-center gap-2">
+          <button
+            type="button"
+            @click="emit('recalculate', trip)"
+            :disabled="recalculating"
+            class="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition-colors disabled:opacity-50"
+            :title="$t('carpool.carpoolTripList.recalculateTheActualCostsOf')"
+          >
+            <RotateCw class="w-3.5 h-3.5" :class="{ 'animate-spin': recalculating }" />
+          </button>
+          <button
+            type="button"
+            @click="emit('edit', trip)"
+            class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/25 transition-all"
+          >
+            <Pencil class="w-4 h-4" />
+            <span>{{ $t('common.edit') }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildDriveBreakdown, COST_COLORS } from './costBreakdown'
+import { buildCarpoolBreakdown, buildDriveBreakdown, COST_COLORS } from './costBreakdown'
 
 describe('buildDriveBreakdown', () => {
   const costs = { electricity_cost: 3, tires_cost: 1, maintenance_cost: 0.5, insurance_cost: 0.5, tolls_cost: 5 }
@@ -22,5 +22,19 @@ describe('buildDriveBreakdown', () => {
     const b = buildDriveBreakdown(undefined, 0)
     expect(b.total).toBe(0)
     expect(b.items.every((i) => i.sharePct === 0 && i.costPerKm === 0)).toBe(true)
+  })
+})
+
+describe('buildCarpoolBreakdown', () => {
+  it('adds the other costs to the drive categories', () => {
+    const b = buildCarpoolBreakdown({ electricity_cost: 4, tolls_cost: 3, tires_cost: 1, maintenance_cost: 1, insurance_cost: 0, other_cost: 1, distance_km: 200 })
+    expect(b.total).toBe(10)
+    expect(b.byKey.other.sharePct).toBeCloseTo(10)
+    expect(b.byKey.energy.costPerKm).toBeCloseTo(0.02)
+    expect(b.items.map((i) => i.key)).toContain('other')
+  })
+
+  it('copes with a trip without costs', () => {
+    expect(buildCarpoolBreakdown(undefined).total).toBe(0)
   })
 })

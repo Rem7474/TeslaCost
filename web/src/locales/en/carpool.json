@@ -37,23 +37,19 @@
     "covered": "Passengers' shares covered",
     "below": "{amount} € below their share"
   },
+  "carpoolDetailModal": {
+    "onBoard": "{count} on board",
+    "perPerson": "{amount} €/person"
+  },
   "carpoolTripList": {
     "netSurplus": "Net surplus: +{net_cost} €",
     "leftToTheDriver": "Left to the driver:",
     "driverSShare": "Driver's share:",
     "passengersShare": "Passengers' share:",
     "actualCost": "Actual cost:",
-    "other": "Other:",
-    "insurance": "Insurance:",
-    "maintenance": "Maintenance:",
-    "tireWear": "Tire wear:",
-    "tolls": "Tolls:",
-    "electricity": "Electricity:",
-    "actualCostsOfTheTrip": "Actual costs of the trip:",
     "share": "Share: {cost_share} €",
     "totalReceived": "Total received: +{total_revenue} €",
     "passengers": "Passengers ({length})",
-    "kmOnBoardPerson": "{distance_km} km • {total_cost} € • {passenger_seats} on board • {cost_per_person} €/person",
     "legs": "Legs ({length})",
     "recalculateTheActualCostsOf": "Recalculate the actual costs of this carpool",
     "selectThisCarpool": "Select this carpool",
