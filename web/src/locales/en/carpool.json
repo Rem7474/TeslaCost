@@ -49,10 +49,8 @@
     "netSurplus": "Net surplus: +{net_cost} €",
     "leftToTheDriver": "Left to the driver:",
     "driverSShare": "Driver's share:",
-    "passengersShare": "Passengers' share:",
     "actualCost": "Actual cost:",
     "share": "Share: {cost_share} €",
-    "totalReceived": "Total received: +{total_revenue} €",
     "passengers": "Passengers ({length})",
     "legs": "Legs ({length})",
     "recalculateTheActualCostsOf": "Recalculate the actual costs of this carpool",
@@ -63,7 +61,7 @@
     "recalculateActualCosts": "Recalculate actual costs ({length})",
     "recalculateTheActualCostsOf2": "Recalculate the actual costs of the selected carpools",
     "fullyRecovered": "Trip fully paid off!",
-    "recovered": "{percent}% recovered",
+    "recovered": "{percent}% paid by the passengers",
     "seats": "{count} seat | {count} seats"
   },
   "carpoolTripModal": {
