@@ -49,10 +49,8 @@
     "netSurplus": "Excédent net : +{net_cost} €",
     "leftToTheDriver": "Reste à charge conducteur :",
     "driverSShare": "Part du conducteur :",
-    "passengersShare": "Part des passagers :",
     "actualCost": "Coût réel :",
     "share": "Part : {cost_share} €",
-    "totalReceived": "Total perçu : +{total_revenue} €",
     "passengers": "Passagers ({length})",
     "legs": "Étapes ({length})",
     "recalculateTheActualCostsOf": "Recalculer les coûts réels de ce covoiturage",
@@ -63,7 +61,7 @@
     "recalculateActualCosts": "Recalculer coûts réels ({length})",
     "recalculateTheActualCostsOf2": "Recalculer les coûts réels des covoiturages sélectionnés",
     "fullyRecovered": "Trajet 100% rentabilisé !",
-    "recovered": "Amorti à {percent}%",
+    "recovered": "{percent} % payé par les passagers",
     "seats": "{count} place | {count} places"
   },
   "carpoolTripModal": {
