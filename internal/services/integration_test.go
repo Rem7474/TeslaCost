@@ -2084,3 +2084,59 @@ func TestIntegrationListDrivesByID(t *testing.T) {
 		t.Fatalf("expected only the requested drive, got %+v (total %d, err %v)", got, total, err)
 	}
 }
+
+func TestIntegrationTripTollQualification(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "trip-qualify@example.com")
+	other := mustVehicle(t, repo, "trip-qualify-other@example.com")
+	base := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
+	highway1 := mustDrive(t, repo, v.ID, 1, base, 10000, 120) // 100 km/h average: motorway-like
+	highway2 := mustDrive(t, repo, v.ID, 2, base.Add(3*time.Hour), 10120, 90)
+	local := mustDrive(t, repo, v.ID, 3, base.Add(5*time.Hour), 10210, 3) // short: never to qualify
+
+	tg := &models.TripGroup{VehicleID: v.ID, Name: "Retour"}
+	if err := repo.CreateTripGroup(ctx, tg, []string{highway1.ID, highway2.ID, local.ID}); err != nil {
+		t.Fatal(err)
+	}
+	unqualified := func() int {
+		groups, err := repo.ListTripGroups(ctx, v.ID)
+		if err != nil || len(groups) != 1 {
+			t.Fatalf("expected one trip group, got %+v (err %v)", groups, err)
+		}
+		return groups[0].UnqualifiedDriveCount
+	}
+	if n := unqualified(); n != 2 {
+		t.Fatalf("both motorway-like drives are still to qualify, got %d", n)
+	}
+
+	if err := repo.SetTripGroupTollReviewed(ctx, tg.ID, v.ID, true); err != nil {
+		t.Fatal(err)
+	}
+	if n := unqualified(); n != 0 {
+		t.Fatalf("reviewing the trip without toll qualifies all its drives, got %d left", n)
+	}
+	if err := repo.SetTripGroupTollReviewed(ctx, tg.ID, v.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if n := unqualified(); n != 2 {
+		t.Fatalf("reopening the trip puts its drives back in the queue, got %d", n)
+	}
+
+	// A toll entered on one drive only qualifies that drive.
+	exp := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 1000, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, exp, []string{highway1.ID}, ""); err != nil {
+		t.Fatal(err)
+	}
+	if n := unqualified(); n != 1 {
+		t.Fatalf("one drive has a toll, one is left to qualify, got %d", n)
+	}
+
+	// Another vehicle's trip group cannot be reviewed through this vehicle.
+	if err := repo.SetTripGroupTollReviewed(ctx, tg.ID, other.ID, true); !errors.Is(err, database.ErrNotFound) {
+		t.Fatalf("a foreign trip group must be reported as not found, got %v", err)
+	}
+	if n := unqualified(); n != 1 {
+		t.Fatalf("the foreign attempt must change nothing, got %d", n)
+	}
+}

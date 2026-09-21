@@ -11,6 +11,7 @@ import DriveCard from '@/components/drives/DriveCard.vue'
 import DrivesPagination from '@/components/drives/DrivesPagination.vue'
 import TripGroupsPanel from '@/components/drives/TripGroupsPanel.vue'
 import TripSuggestions from '@/components/drives/TripSuggestions.vue'
+import ToQualifyFilter from '@/components/drives/ToQualifyFilter.vue'
 import DriveCostModal from '@/components/drives/DriveCostModal.vue'
 import DriveGroupModal from '@/components/drives/DriveGroupModal.vue'
 import TripRenameModal from '@/components/drives/TripRenameModal.vue'
@@ -22,6 +23,7 @@ import {
   applyBatchTag,
   buildTripCostDrive,
   formatTripDates,
+  tripNeedsTollQualification,
   currentYearMonth,
   driveCsvRows,
   monthRange,
@@ -204,6 +206,9 @@ async function loadDrives() {
 const viewMode = ref<'DRIVES' | 'TRIPS'>('DRIVES')
 const tripGroups = ref<any[]>([])
 const tripSuggestions = ref<any[]>([])
+const tripUnqualifiedOnly = ref(false)
+const tripUnqualifiedCount = computed(() => tripGroups.value.filter(tripNeedsTollQualification).length)
+const visibleTripGroups = computed(() => (tripUnqualifiedOnly.value ? tripGroups.value.filter(tripNeedsTollQualification) : tripGroups.value))
 const creatingSuggestionKey = ref<string | null>(null)
 const loadingTrips = ref(false)
 const expandedTripId = ref<string | null>(null)
@@ -250,6 +255,16 @@ async function markNoToll(d: any) {
       drives.value = drives.value.filter((x) => x.id !== d.id)
       total.value = Math.max(0, total.value - 1)
     }
+  } catch (err: any) {
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
+  }
+}
+
+async function markTripNoToll(tg: any) {
+  if (!vehicleStore.activeVehicle) return
+  try {
+    await api.setTripTollReview(vehicleStore.activeVehicle.id, tg.id, true)
+    await Promise.all([loadTripGroups(), loadDrives()])
   } catch (err: any) {
     showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
@@ -404,13 +419,14 @@ async function fetchTripLegs(tripId: string) {
   return [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
 }
 
-async function openTripCostModal(tg: any) {
+async function openTripCostModal(tg: any, startWithToll = false) {
   if (!vehicleStore.activeVehicle) return
   try {
     const tgDrives = await fetchTripLegs(tg.id)
     selectedCostDrive.value = buildTripCostDrive(tg, tgDrives)
     costTripDriveIds.value = tgDrives.map((d: any) => d.id)
     costTripId.value = tg.id
+    costStartWithToll.value = startWithToll
     tripLegs.value = tgDrives
     showCostModal.value = true
   } catch (err: any) {
@@ -506,16 +522,12 @@ async function handleBulkApplyToll() {
 
       <!-- Tag Filters -->
       <div v-if="viewMode === 'DRIVES'" class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start sm:self-auto flex-wrap">
-        <button
-          v-if="unqualifiedCount > 0 || unqualifiedOnly"
-          @click="unqualifiedOnly = !unqualifiedOnly"
-          class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
-          :class="unqualifiedOnly ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'text-amber-400/80 hover:text-amber-300'"
+        <ToQualifyFilter
+          :count="unqualifiedCount"
+          :active="unqualifiedOnly"
           :title="$t('drives.drivesView.motorwayTypeDrivesWithNo')"
-        >
-          <AlertTriangle class="w-3.5 h-3.5" />
-          {{ $t('drives.drivesView.toQualify', { unqualifiedCount }) }}
-        </button>
+          @toggle="unqualifiedOnly = !unqualifiedOnly"
+        />
         <button
           @click="hasTollOnly = !hasTollOnly"
           class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors flex items-center gap-1.5"
@@ -662,6 +674,14 @@ async function handleBulkApplyToll() {
 
     <!-- TRIP GROUPS ("VOYAGES") -->
     <template v-else>
+    <div v-if="tripUnqualifiedCount > 0 || tripUnqualifiedOnly" class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start w-fit">
+      <ToQualifyFilter
+        :count="tripUnqualifiedCount"
+        :active="tripUnqualifiedOnly"
+        :title="$t('drives.tripGroupsPanel.toQualifyHint')"
+        @toggle="tripUnqualifiedOnly = !tripUnqualifiedOnly"
+      />
+    </div>
     <TripSuggestions
       :suggestions="tripSuggestions"
       :creating-key="creatingSuggestionKey"
@@ -669,10 +689,12 @@ async function handleBulkApplyToll() {
     />
     <TripGroupsPanel
       :loading-trips="loadingTrips"
-      :trip-groups="tripGroups"
+      :trip-groups="visibleTripGroups"
       :expanded-trip-id="expandedTripId"
       :trip-drives="tripDrives"
       @open-cost="openTripCostModal"
+      @toll-entry="(tg: any) => openTripCostModal(tg, true)"
+      @no-toll="markTripNoToll"
       @toggle-details="toggleTripDetails"
       @edit="openTripEdit"
       @delete="handleDeleteTrip"

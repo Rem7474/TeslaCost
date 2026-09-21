@@ -99,6 +99,8 @@ type TripGroup struct {
 	ExpenseCount  int         `json:"expense_count"`  // expenses attached to the group itself
 	TollsTotal    money.Cents `json:"tolls_total"`    // EUR, all expenses borne by its drives: attached to a drive or to the group
 	CarpoolCount  int         `json:"carpool_count"`
+	// UnqualifiedDriveCount counts its motorway-like drives with no toll attached and not reviewed yet (the drives' "to qualify" queue)
+	UnqualifiedDriveCount int `json:"unqualified_drive_count"`
 }
 
 // DriveExpense holds costs directly attached to a drive or a trip group (tolls, parking).

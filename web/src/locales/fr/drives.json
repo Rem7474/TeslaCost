@@ -214,6 +214,10 @@
     "all": "Tous"
   },
   "tripGroupsPanel": {
+    "legsToQualify": "{count} étape(s) à qualifier",
+    "toQualifyHint": "Voyages contenant des trajets de type autoroutier sans péage renseigné",
+    "enterTheTollOfThisTrip": "Renseigner le péage de ce voyage",
+    "confirmThatThisTripHasNoToll": "Confirmer que ce voyage n'a pas de péage",
     "loadingTheDrives": "Chargement des trajets...",
     "removeThisDriveFromThe": "Retirer ce trajet du voyage",
     "deleteTheTrip": "Supprimer le voyage",

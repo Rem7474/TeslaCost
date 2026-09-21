@@ -214,6 +214,10 @@
     "all": "All"
   },
   "tripGroupsPanel": {
+    "legsToQualify": "{count} leg(s) to qualify",
+    "toQualifyHint": "Trips containing motorway-type drives with no toll entered",
+    "enterTheTollOfThisTrip": "Enter the toll of this trip",
+    "confirmThatThisTripHasNoToll": "Confirm that this trip has no toll",
     "loadingTheDrives": "Loading the drives...",
     "removeThisDriveFromThe": "Remove this drive from the trip",
     "deleteTheTrip": "Delete the trip",

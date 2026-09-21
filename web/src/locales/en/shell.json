@@ -98,6 +98,7 @@
     "notReady": "Error ({status}): The database or the service is not ready",
     "requestFailed": "The request failed ({status})",
     "driveNoToll": "Drive marked as toll-free",
+    "tripNoToll": "Trip marked as toll-free",
     "toll": "Toll / parking of {amount} {currency}",
     "tollEdit": "Toll / parking edit",
     "expense": "Expense “{description}”",

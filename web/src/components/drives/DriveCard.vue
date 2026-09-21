@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
-import { MapPin, Clock, Users, Coins, Plus, Ban } from 'lucide-vue-next'
+import { MapPin, Clock, Users, Coins } from 'lucide-vue-next'
+import TollQualifyActions from '@/components/drives/TollQualifyActions.vue'
 import { needsTollQualification } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 
@@ -79,22 +80,13 @@ const formatDate = formatDayTime
     <!-- Right Side: Cost Badge & Actions -->
     <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0" @click.stop>
       <!-- Toll qualification: 2 taps -->
-      <div v-if="vehicleStore.canEdit && needsTollQualification(d)" class="flex items-center gap-1">
-        <button
-          @click="emit('toll-entry', d)"
-          class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 flex items-center gap-1"
-          :title="$t('drives.driveCard.enterTheTollOfThis')"
-        >
-          <Plus class="w-3.5 h-3.5" /> {{ $t('drives.driveCard.toll') }}
-        </button>
-        <button
-          @click="emit('no-toll', d)"
-          class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-700 bg-slate-800 text-slate-400 hover:text-white flex items-center gap-1"
-          :title="$t('drives.driveCard.confirmThatThisDriveHas')"
-        >
-          <Ban class="w-3.5 h-3.5" /> {{ $t('drives.driveCard.noToll') }}
-        </button>
-      </div>
+      <TollQualifyActions
+        v-if="vehicleStore.canEdit && needsTollQualification(d)"
+        :toll-title="$t('drives.driveCard.enterTheTollOfThis')"
+        :no-toll-title="$t('drives.driveCard.confirmThatThisDriveHas')"
+        @toll-entry="emit('toll-entry', d)"
+        @no-toll="emit('no-toll', d)"
+      />
 
       <!-- Real Cost Badge -->
       <div
