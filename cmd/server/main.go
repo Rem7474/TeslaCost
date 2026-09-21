@@ -419,6 +419,7 @@ func main() {
 				r.Post("/{vehicleId}/drives/apply-toll-estimates", driveHandler.ApplyTollEstimatesBulk)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
+				r.Get("/{vehicleId}/trip-suggestions", driveHandler.TripSuggestions)
 				r.Put("/{vehicleId}/trip-groups/{groupId}", driveHandler.UpdateTripGroup)
 				r.Delete("/{vehicleId}/trip-groups/{groupId}", driveHandler.DeleteTripGroup)
 

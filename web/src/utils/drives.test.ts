@@ -200,6 +200,12 @@ describe('buildTripCostDrive', () => {
     expect(t.costs.has_estimates).toBe(true)
   })
 
+  it('counts the tolls entered on a drive of the trip, not only those attached to the trip itself', () => {
+    const t = buildTripCostDrive({ id: 'tg1', name: 'Alpes', expenses_total: 0, tolls_total: 10.3 }, drives)
+    expect(t.costs.tolls_cost).toBe(10.3)
+    expect(t.costs.total_cost).toBeCloseTo(18 + 5 + 3 + 2 + 10.3)
+  })
+
   it('falls back to default rates and placeholders for an empty trip', () => {
     const t = buildTripCostDrive({ id: 'tg2', name: 'Vide', created_at: '2026-05-06' }, [])
     expect(t.start_time).toBe('2026-05-06')

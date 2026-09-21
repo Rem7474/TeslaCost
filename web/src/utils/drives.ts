@@ -173,7 +173,8 @@ export function buildTripCostDrive(tg: any, tgDrives: any[]) {
   const tiresCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.tires_cost) || 0), 0)
   const maintCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.maintenance_cost) || 0), 0)
   const insurCost = tgDrives.reduce((s, d) => s + (Number(d.costs?.insurance_cost) || 0), 0)
-  const tollsCost = Number(tg.expenses_total || 0)
+  // tolls_total covers expenses attached to a drive of the trip as well as those attached to the trip itself
+  const tollsCost = Number(tg.tolls_total ?? tg.expenses_total ?? 0)
   const totalCost = elecCost + tiresCost + maintCost + insurCost + tollsCost
   const costPerKm = totalKm > 0 ? totalCost / totalKm : 0
 
