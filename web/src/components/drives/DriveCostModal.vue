@@ -7,7 +7,7 @@ import { usePreferencesStore } from '@/stores/preferences'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save, ArrowLeft, ChevronRight } from 'lucide-vue-next'
-import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, uniqueById } from '@/utils/drives'
+import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, mergeExpensesByDrive } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 import { buildDriveBreakdown } from '@/utils/costBreakdown'
 import CostDonut from '@/components/costs/CostDonut.vue'
@@ -106,14 +106,14 @@ watch(open, (isOpen) => {
   loadTollDetection(drive)
 })
 
-// Expenses of a trip group: those of its drives, each counted once
+// Expenses of a trip group: those of its drives, each listed once with its full share across the trip
 async function loadTripExpenses() {
   if (!props.vehicleId) return
   loadingExpenses.value = true
   try {
     const expPromises = props.tripDriveIds.map((id) => api.getDriveExpensesForDrive(props.vehicleId, id).catch(() => []))
     const expResults = await Promise.all(expPromises)
-    driveExpenses.value = uniqueById(expResults.flat())
+    driveExpenses.value = mergeExpensesByDrive(expResults.flat())
   } finally {
     loadingExpenses.value = false
   }
@@ -595,7 +595,7 @@ async function handleDeleteExpense(exp: any) {
                   {{ exp.type === 'TOLL' ? $t('drives.driveCostModal.toll') : exp.type }}
                   <span v-if="exp.source === 'AUTO_TOLL'" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-medium" :title="$t('drives.driveCostModal.calculatedAutomaticallyFromTheGps')">{{ $t('drives.driveCostModal.auto') }}</span>
                   <span v-if="exp.notes" class="text-slate-500">({{ exp.notes }})</span>
-                  <span v-if="exp.trip_group_id" class="text-indigo-400"> {{ $t('drives.driveCostModal.shareOfATripCosting', { amount: exp.amount.toFixed(2), currency: exp.currency }) }}</span>
+                  <span v-if="exp.trip_group_id && !selectedCostDrive.is_trip_group" class="text-indigo-400"> {{ $t('drives.driveCostModal.shareOfATripCosting', { amount: exp.amount.toFixed(2), currency: exp.currency }) }}</span>
                 </span>
                 <span class="flex items-center gap-1.5">
                   <span class="font-mono text-amber-400">{{ (exp.allocated_amount ?? exp.amount).toFixed(2) }} €</span>
