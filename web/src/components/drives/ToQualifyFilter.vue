@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { AlertTriangle } from 'lucide-vue-next'
 
-// Filter toggle showing how many drives or trips still wait for their toll to be qualified.
+// Filter toggle showing how many items (drives to qualify, trips detected) still wait for a decision.
 defineProps<{ count: number; active: boolean; title: string }>()
 const emit = defineEmits<{ toggle: [] }>()
 </script>

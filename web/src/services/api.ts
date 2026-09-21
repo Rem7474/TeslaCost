@@ -247,12 +247,6 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify({ reviewed }) },
       t('shell.api.driveNoToll')
     ),
-  setTripTollReview: (vehicleId: string, groupId: string, reviewed: boolean) =>
-    request<any>(
-      `/vehicles/${vehicleId}/trip-groups/${groupId}/toll-review`,
-      { method: 'PATCH', body: JSON.stringify({ reviewed }) },
-      t('shell.api.tripNoToll')
-    ),
   getTollDetection: (vehicleId: string, driveId: string) =>
     request<any>(`/vehicles/${vehicleId}/drives/${driveId}/toll-detection`),
   applyTollEstimate: (vehicleId: string, driveId: string) =>
@@ -265,6 +259,12 @@ export const api = {
     request<any>(`/vehicles/${vehicleId}/trip-groups`, { method: 'POST', body: JSON.stringify(payload) }),
   getTripGroups: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-groups`),
   getTripSuggestions: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-suggestions`),
+  dismissTripSuggestion: (vehicleId: string, driveIds: string[]) =>
+    request<any>(
+      `/vehicles/${vehicleId}/trip-suggestions/dismiss`,
+      { method: 'POST', body: JSON.stringify({ drive_ids: driveIds }) },
+      t('shell.api.tripSuggestionDismiss')
+    ),
   updateTripGroup: (vehicleId: string, groupId: string, payload: { name: string; notes?: string | null; drive_ids?: string[] }) =>
     request<any>(`/vehicles/${vehicleId}/trip-groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteTripGroup: (vehicleId: string, groupId: string, deleteExpenses = false) =>

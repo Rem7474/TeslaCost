@@ -2,7 +2,7 @@
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { MapPin, Clock, Users, Coins } from 'lucide-vue-next'
-import TollQualifyActions from '@/components/drives/TollQualifyActions.vue'
+import QualifyActions from '@/components/drives/QualifyActions.vue'
 import { needsTollQualification } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 
@@ -80,12 +80,14 @@ const formatDate = formatDayTime
     <!-- Right Side: Cost Badge & Actions -->
     <div class="flex items-center gap-2 sm:gap-2.5 self-start lg:self-auto flex-wrap justify-start lg:justify-end shrink-0" @click.stop>
       <!-- Toll qualification: 2 taps -->
-      <TollQualifyActions
+      <QualifyActions
         v-if="vehicleStore.canEdit && needsTollQualification(d)"
-        :toll-title="$t('drives.driveCard.enterTheTollOfThis')"
-        :no-toll-title="$t('drives.driveCard.confirmThatThisDriveHas')"
-        @toll-entry="emit('toll-entry', d)"
-        @no-toll="emit('no-toll', d)"
+        :primary-label="$t('drives.driveCard.toll')"
+        :primary-title="$t('drives.driveCard.enterTheTollOfThis')"
+        :secondary-label="$t('drives.driveCard.noToll')"
+        :secondary-title="$t('drives.driveCard.confirmThatThisDriveHas')"
+        @primary="emit('toll-entry', d)"
+        @secondary="emit('no-toll', d)"
       />
 
       <!-- Real Cost Badge -->

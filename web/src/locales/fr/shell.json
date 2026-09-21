@@ -98,7 +98,7 @@
     "notReady": "Erreur ({status}): La base de données ou le service n'est pas prêt",
     "requestFailed": "La requête a échoué ({status})",
     "driveNoToll": "Trajet marqué sans péage",
-    "tripNoToll": "Voyage marqué sans péage",
+    "tripSuggestionDismiss": "Voyage détecté écarté",
     "toll": "Péage / parking de {amount} {currency}",
     "tollEdit": "Modification de péage / parking",
     "expense": "Dépense « {description} »",

@@ -9,7 +9,6 @@ import {
   isHighwayDrive,
   monthRange,
   needsTollQualification,
-  tripNeedsTollQualification,
   paginationPages,
   selectionSummary,
   shiftMonth,
@@ -47,14 +46,6 @@ describe('needsTollQualification', () => {
     expect(needsTollQualification({ ...highway, toll_reviewed_at: '2026-05-01' })).toBe(false)
     expect(needsTollQualification({ ...highway, costs: { tolls_cost: 8 } })).toBe(false)
     expect(needsTollQualification({ distance_km: 10, speed_avg: 30 })).toBe(false)
-  })
-})
-
-describe('tripNeedsTollQualification', () => {
-  it('follows the number of motorway-like drives left to qualify in the trip', () => {
-    expect(tripNeedsTollQualification({ unqualified_drive_count: 2 })).toBe(true)
-    expect(tripNeedsTollQualification({ unqualified_drive_count: 0 })).toBe(false)
-    expect(tripNeedsTollQualification({})).toBe(false)
   })
 })
 

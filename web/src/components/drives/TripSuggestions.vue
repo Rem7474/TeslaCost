@@ -1,13 +1,20 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { intlLocale } from '@/i18n'
 import { Sparkles, Zap, Timer } from 'lucide-vue-next'
 import { formatTripDates } from '@/utils/drives'
 import { useVehicleStore } from '@/stores/vehicle'
+import QualifyActions from '@/components/drives/QualifyActions.vue'
 
-// Chains of ungrouped drives that look like one trip (short stops, or a charge in between), to turn into a trip in one click.
-defineProps<{ suggestions: any[]; creatingKey: string | null }>()
-const emit = defineEmits<{ create: [suggestion: any] }>()
+// The "to qualify" queue of trips: chains of drives that look like one trip (short stops, or a charge in between).
+// Each one is either turned into a trip or ruled out ("not a trip"), like a drive is given a toll or marked without one.
+const props = defineProps<{ suggestions: any[]; busyKey: string | null }>()
+const emit = defineEmits<{ create: [suggestion: any]; dismiss: [suggestion: any] }>()
 const vehicleStore = useVehicleStore()
+
+const PAGE = 20
+const shown = ref(PAGE)
+const visible = computed(() => props.suggestions.slice(0, shown.value))
 
 const key = (s: any) => s.drive_ids[0]
 const route = (s: any) => [s.start_address, s.end_address].filter(Boolean).join(' → ')
@@ -24,7 +31,7 @@ const route = (s: any) => [s.start_address, s.end_address].filter(Boolean).join(
     </div>
 
     <div
-      v-for="s in suggestions"
+      v-for="s in visible"
       :key="key(s)"
       class="bg-slate-900/60 border border-dashed border-amber-500/30 p-4 rounded-2xl flex flex-col lg:flex-row lg:items-center justify-between gap-3"
     >
@@ -47,15 +54,25 @@ const route = (s: any) => [s.start_address, s.end_address].filter(Boolean).join(
         </div>
         <div class="text-sm font-bold text-white truncate">{{ route(s) || $t('drives.tripSuggestions.unnamed') }}</div>
       </div>
-      <button
+      <QualifyActions
         v-if="vehicleStore.canEdit"
-        type="button"
-        :disabled="creatingKey === key(s)"
-        @click="emit('create', s)"
-        class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl transition-colors disabled:opacity-50 self-start lg:self-auto shrink-0"
-      >
-        {{ creatingKey === key(s) ? '...' : $t('drives.tripSuggestions.create') }}
-      </button>
+        :busy="busyKey === key(s)"
+        :primary-label="$t('drives.tripSuggestions.create')"
+        :primary-title="$t('drives.tripSuggestions.createTitle')"
+        :secondary-label="$t('drives.tripSuggestions.dismiss')"
+        :secondary-title="$t('drives.tripSuggestions.dismissTitle')"
+        @primary="emit('create', s)"
+        @secondary="emit('dismiss', s)"
+      />
     </div>
+
+    <button
+      v-if="suggestions.length > visible.length"
+      type="button"
+      @click="shown += PAGE"
+      class="w-full py-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-900/60 border border-slate-800 rounded-xl transition-colors"
+    >
+      {{ $t('drives.tripSuggestions.showMore', { count: Math.min(PAGE, suggestions.length - visible.length) }) }}
+    </button>
   </div>
 </template>

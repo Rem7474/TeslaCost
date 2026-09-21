@@ -235,9 +235,10 @@ type TollReviewRequest struct {
 	Reviewed bool `json:"reviewed"`
 }
 
-// setTollReview decodes a toll review request and applies it; shared by drives and trip groups.
-func (h *DriveHandler) setTollReview(w http.ResponseWriter, r *http.Request, apply func(vehicleID string, reviewed bool) error) {
+// SetTollReview marks a drive as reviewed without toll (or reopens it).
+func (h *DriveHandler) SetTollReview(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
+	driveID := chi.URLParam(r, "driveId")
 
 	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
 		return
@@ -249,28 +250,12 @@ func (h *DriveHandler) setTollReview(w http.ResponseWriter, r *http.Request, app
 		return
 	}
 
-	if err := apply(vehicleID, req.Reviewed); err != nil {
+	if err := h.repo.SetDriveTollReviewed(r.Context(), driveID, vehicleID, req.Reviewed); err != nil {
 		writeRepoError(w, r, err, "Failed to update toll review")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "reviewed": req.Reviewed})
-}
-
-// SetTollReview marks a drive as reviewed without toll (or reopens it).
-func (h *DriveHandler) SetTollReview(w http.ResponseWriter, r *http.Request) {
-	driveID := chi.URLParam(r, "driveId")
-	h.setTollReview(w, r, func(vehicleID string, reviewed bool) error {
-		return h.repo.SetDriveTollReviewed(r.Context(), driveID, vehicleID, reviewed)
-	})
-}
-
-// SetTripGroupTollReview marks all the drives of a trip as reviewed without toll (or reopens them).
-func (h *DriveHandler) SetTripGroupTollReview(w http.ResponseWriter, r *http.Request) {
-	groupID := chi.URLParam(r, "groupId")
-	h.setTollReview(w, r, func(vehicleID string, reviewed bool) error {
-		return h.repo.SetTripGroupTollReviewed(r.Context(), groupID, vehicleID, reviewed)
-	})
 }
 
 // GetTollDetection returns the cached toll detection result for a drive, or null if
@@ -471,6 +456,32 @@ func (h *DriveHandler) TripSuggestions(w http.ResponseWriter, r *http.Request) {
 		suggestions = []models.TripSuggestion{}
 	}
 	writeJSON(w, http.StatusOK, suggestions)
+}
+
+type DismissTripSuggestionRequest struct {
+	DriveIDs []string `json:"drive_ids"`
+}
+
+// DismissTripSuggestion rules out a suggested trip: its drives are no longer proposed as a trip.
+func (h *DriveHandler) DismissTripSuggestion(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+		return
+	}
+
+	var req DismissTripSuggestionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.DriveIDs) == 0 || len(req.DriveIDs) > 200 {
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
+		return
+	}
+
+	if err := h.repo.DismissTripSuggestion(r.Context(), vehicleID, req.DriveIDs); err != nil {
+		writeRepoError(w, r, err, "Failed to dismiss the trip suggestion")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
 }
 
 type UpdateTripGroupRequest struct {

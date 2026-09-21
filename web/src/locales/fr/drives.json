@@ -80,12 +80,17 @@
     "unknownEnd": "Arrivée inconnue"
   },
   "tripSuggestions": {
-    "title": "{count} voyage(s) détecté(s) automatiquement",
-    "help": "Trajets consécutifs séparés par des arrêts de moins de 5 minutes, ou par un arrêt avec recharge : ils forment probablement un seul voyage.",
+    "title": "{count} voyage(s) à qualifier",
+    "help": "Trajets consécutifs séparés par des arrêts de moins de 5 minutes, ou par un arrêt avec recharge : ils forment probablement un seul voyage. Créez le voyage, ou indiquez que ce n'en est pas un.",
     "reasonPause": "arrêts courts",
     "reasonCharge": "recharge entre les étapes",
     "unnamed": "Voyage sans adresse",
-    "create": "Créer le voyage"
+    "create": "Créer le voyage",
+    "createTitle": "Créer un voyage avec ces trajets",
+    "dismiss": "Pas un voyage",
+    "dismissTitle": "Confirmer que ces trajets ne forment pas un voyage : ils ne seront plus proposés",
+    "showMore": "Afficher {count} de plus",
+    "toQualifyHint": "Voyages détectés automatiquement, à créer ou à écarter"
   },
   "driveCostModal": {
     "backToTrip": "Retour au voyage",
@@ -214,10 +219,6 @@
     "all": "Tous"
   },
   "tripGroupsPanel": {
-    "legsToQualify": "{count} étape(s) à qualifier",
-    "toQualifyHint": "Voyages contenant des trajets de type autoroutier sans péage renseigné",
-    "enterTheTollOfThisTrip": "Renseigner le péage de ce voyage",
-    "confirmThatThisTripHasNoToll": "Confirmer que ce voyage n'a pas de péage",
     "loadingTheDrives": "Chargement des trajets...",
     "removeThisDriveFromThe": "Retirer ce trajet du voyage",
     "deleteTheTrip": "Supprimer le voyage",

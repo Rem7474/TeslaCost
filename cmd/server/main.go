@@ -420,8 +420,8 @@ func main() {
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
 				r.Get("/{vehicleId}/trip-suggestions", driveHandler.TripSuggestions)
+				r.Post("/{vehicleId}/trip-suggestions/dismiss", driveHandler.DismissTripSuggestion)
 				r.Put("/{vehicleId}/trip-groups/{groupId}", driveHandler.UpdateTripGroup)
-				r.Patch("/{vehicleId}/trip-groups/{groupId}/toll-review", driveHandler.SetTripGroupTollReview)
 				r.Delete("/{vehicleId}/trip-groups/{groupId}", driveHandler.DeleteTripGroup)
 
 				// Carpooling

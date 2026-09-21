@@ -17,13 +17,12 @@ import DriveGroupModal from '@/components/drives/DriveGroupModal.vue'
 import TripRenameModal from '@/components/drives/TripRenameModal.vue'
 import AddToTripModal from '@/components/drives/AddToTripModal.vue'
 import { downloadCsv } from '@/utils/csv'
-import { CheckSquare, Square, Receipt, Layers, AlertTriangle, List, RotateCcw } from 'lucide-vue-next'
+import { CheckSquare, Square, Receipt, Layers, List, RotateCcw } from 'lucide-vue-next'
 import {
   driveCsvHeaders,
   applyBatchTag,
   buildTripCostDrive,
   formatTripDates,
-  tripNeedsTollQualification,
   currentYearMonth,
   driveCsvRows,
   monthRange,
@@ -206,10 +205,8 @@ async function loadDrives() {
 const viewMode = ref<'DRIVES' | 'TRIPS'>('DRIVES')
 const tripGroups = ref<any[]>([])
 const tripSuggestions = ref<any[]>([])
-const tripUnqualifiedOnly = ref(false)
-const tripUnqualifiedCount = computed(() => tripGroups.value.filter(tripNeedsTollQualification).length)
-const visibleTripGroups = computed(() => (tripUnqualifiedOnly.value ? tripGroups.value.filter(tripNeedsTollQualification) : tripGroups.value))
-const creatingSuggestionKey = ref<string | null>(null)
+const suggestionBusyKey = ref<string | null>(null)
+const tripQualifyOnly = ref(false)
 const loadingTrips = ref(false)
 const expandedTripId = ref<string | null>(null)
 const tripDrives = ref<any[]>([])
@@ -260,16 +257,6 @@ async function markNoToll(d: any) {
   }
 }
 
-async function markTripNoToll(tg: any) {
-  if (!vehicleStore.activeVehicle) return
-  try {
-    await api.setTripTollReview(vehicleStore.activeVehicle.id, tg.id, true)
-    await Promise.all([loadTripGroups(), loadDrives()])
-  } catch (err: any) {
-    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
-  }
-}
-
 function openTollEntry(d: any) {
   openCostModal(d, true)
 }
@@ -290,9 +277,22 @@ async function loadTripGroups() {
   }
 }
 
+async function dismissTripSuggestion(s: any) {
+  if (!vehicleStore.activeVehicle) return
+  suggestionBusyKey.value = s.drive_ids[0]
+  try {
+    await api.dismissTripSuggestion(vehicleStore.activeVehicle.id, s.drive_ids)
+    tripSuggestions.value = tripSuggestions.value.filter((x) => x.drive_ids[0] !== s.drive_ids[0])
+  } catch (err: any) {
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
+  } finally {
+    suggestionBusyKey.value = null
+  }
+}
+
 async function createTripFromSuggestion(s: any) {
   if (!vehicleStore.activeVehicle) return
-  creatingSuggestionKey.value = s.drive_ids[0]
+  suggestionBusyKey.value = s.drive_ids[0]
   try {
     const route = [s.start_address, s.end_address].filter(Boolean).join(' → ')
     const name = route || formatTripDates({ start_time: s.start_time, end_time: s.end_time })
@@ -301,7 +301,7 @@ async function createTripFromSuggestion(s: any) {
   } catch (err: any) {
     showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
   } finally {
-    creatingSuggestionKey.value = null
+    suggestionBusyKey.value = null
   }
 }
 
@@ -419,14 +419,13 @@ async function fetchTripLegs(tripId: string) {
   return [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
 }
 
-async function openTripCostModal(tg: any, startWithToll = false) {
+async function openTripCostModal(tg: any) {
   if (!vehicleStore.activeVehicle) return
   try {
     const tgDrives = await fetchTripLegs(tg.id)
     selectedCostDrive.value = buildTripCostDrive(tg, tgDrives)
     costTripDriveIds.value = tgDrives.map((d: any) => d.id)
     costTripId.value = tg.id
-    costStartWithToll.value = startWithToll
     tripLegs.value = tgDrives
     showCostModal.value = true
   } catch (err: any) {
@@ -674,27 +673,28 @@ async function handleBulkApplyToll() {
 
     <!-- TRIP GROUPS ("VOYAGES") -->
     <template v-else>
-    <div v-if="tripUnqualifiedCount > 0 || tripUnqualifiedOnly" class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start w-fit">
+    <div v-if="tripSuggestions.length > 0 || tripQualifyOnly" class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start w-fit">
       <ToQualifyFilter
-        :count="tripUnqualifiedCount"
-        :active="tripUnqualifiedOnly"
-        :title="$t('drives.tripGroupsPanel.toQualifyHint')"
-        @toggle="tripUnqualifiedOnly = !tripUnqualifiedOnly"
+        :count="tripSuggestions.length"
+        :active="tripQualifyOnly"
+        :title="$t('drives.tripSuggestions.toQualifyHint')"
+        @toggle="tripQualifyOnly = !tripQualifyOnly"
       />
     </div>
     <TripSuggestions
+      v-if="tripQualifyOnly"
       :suggestions="tripSuggestions"
-      :creating-key="creatingSuggestionKey"
+      :busy-key="suggestionBusyKey"
       @create="createTripFromSuggestion"
+      @dismiss="dismissTripSuggestion"
     />
     <TripGroupsPanel
+      v-else
       :loading-trips="loadingTrips"
-      :trip-groups="visibleTripGroups"
+      :trip-groups="tripGroups"
       :expanded-trip-id="expandedTripId"
       :trip-drives="tripDrives"
       @open-cost="openTripCostModal"
-      @toll-entry="(tg: any) => openTripCostModal(tg, true)"
-      @no-toll="markTripNoToll"
       @toggle-details="toggleTripDetails"
       @edit="openTripEdit"
       @delete="handleDeleteTrip"

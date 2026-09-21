@@ -17,11 +17,6 @@ export function needsTollQualification(d: any) {
   return !d.toll_reviewed_at && isHighwayDrive(d) && !(d.costs?.tolls_cost > 0)
 }
 
-/** Trip with at least one motorway-like drive still waiting for a toll or a "no toll" review (counted by the API). */
-export function tripNeedsTollQualification(tg: any) {
-  return (tg.unqualified_drive_count || 0) > 0
-}
-
 /** Link to the drive in the TeslaMate Grafana "Drive Details" dashboard (standard TeslaMate dashboard uid),
  * when the vehicle has a Grafana URL configured. The time range is padded so the whole drive is visible. */
 export function teslamateDriveUrl(vehicle: any, d: any): string | null {
