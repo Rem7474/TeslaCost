@@ -570,6 +570,19 @@ async function handleBulkApplyToll() {
           {{ $t('drives.drivesView.personal') }}
         </button>
       </div>
+
+      <!-- Same slot for the trips: the queue of detected trips to qualify -->
+      <div
+        v-else-if="tripSuggestions.length > 0 || tripQualifyOnly"
+        class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start sm:self-auto flex-wrap"
+      >
+        <ToQualifyFilter
+          :count="tripSuggestions.length"
+          :active="tripQualifyOnly"
+          :title="$t('drives.tripSuggestions.toQualifyHint')"
+          @toggle="tripQualifyOnly = !tripQualifyOnly"
+        />
+      </div>
     </div>
 
     <!-- Filters & Navigation Toolbar (Drives Mode) -->
@@ -673,14 +686,6 @@ async function handleBulkApplyToll() {
 
     <!-- TRIP GROUPS ("VOYAGES") -->
     <template v-else>
-    <div v-if="tripSuggestions.length > 0 || tripQualifyOnly" class="flex items-center gap-2 bg-slate-900 border border-slate-800 p-1 rounded-xl self-start w-fit">
-      <ToQualifyFilter
-        :count="tripSuggestions.length"
-        :active="tripQualifyOnly"
-        :title="$t('drives.tripSuggestions.toQualifyHint')"
-        @toggle="tripQualifyOnly = !tripQualifyOnly"
-      />
-    </div>
     <TripSuggestions
       v-if="tripQualifyOnly"
       :suggestions="tripSuggestions"
