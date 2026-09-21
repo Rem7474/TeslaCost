@@ -6,6 +6,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import SelectAllToggle from '@/components/SelectAllToggle.vue'
 import DrivesToolbar from '@/components/drives/DrivesToolbar.vue'
 import DriveBulkActions from '@/components/drives/DriveBulkActions.vue'
 import DriveCard from '@/components/drives/DriveCard.vue'
@@ -18,7 +19,7 @@ import DriveGroupModal from '@/components/drives/DriveGroupModal.vue'
 import TripRenameModal from '@/components/drives/TripRenameModal.vue'
 import AddToTripModal from '@/components/drives/AddToTripModal.vue'
 import { downloadCsv } from '@/utils/csv'
-import { CheckSquare, Square, Receipt, Layers, List, RotateCcw } from 'lucide-vue-next'
+import { Receipt, Layers, List, RotateCcw } from 'lucide-vue-next'
 import {
   driveCsvHeaders,
   applyBatchTag,
@@ -124,6 +125,7 @@ const selectedList = computed(() =>
 )
 const selectedOffPage = computed(() => selectedDriveIds.value.filter((id) => !drives.value.some((d) => d.id === id)).length)
 const allPageSelected = computed(() => drives.value.length > 0 && drives.value.every((d) => selectedDrives.value[d.id]))
+const somePageSelected = computed(() => !allPageSelected.value && drives.value.some((d) => selectedDrives.value[d.id]))
 
 // Unified selection summary metrics (same as a Voyage)
 const selectedSummaryMetrics = computed(() => selectionSummary(selectedList.value))
@@ -746,10 +748,13 @@ async function handleBulkApplyToll() {
     <div v-else class="space-y-3">
       <!-- Select all toggle & Total info -->
       <div class="flex items-center justify-between text-xs text-slate-400 px-2">
-        <button v-if="vehicleStore.canEdit" @click="selectAll" class="flex items-center gap-2 hover:text-slate-200 transition-colors">
-          <component :is="allPageSelected ? CheckSquare : Square" class="w-4 h-4 text-rose-400" />
-          <span>{{ allPageSelected ? $t('drives.drivesView.deselectPage') : $t('drives.drivesView.selectPage') }}</span>
-        </button>
+        <SelectAllToggle
+          v-if="vehicleStore.canEdit"
+          :checked="allPageSelected"
+          :indeterminate="somePageSelected"
+          :label="allPageSelected ? $t('drives.drivesView.deselectPage') : $t('drives.drivesView.selectPage')"
+          @toggle="selectAll"
+        />
         <span v-else></span>
         <span>{{ $t('drives.drivesView.pageOf', { page, totalPages }) }}</span>
       </div>

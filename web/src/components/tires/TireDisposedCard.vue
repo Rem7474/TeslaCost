@@ -21,7 +21,7 @@ const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
               type="checkbox"
               :checked="selected"
               @change="emit('toggle', t.tire.id)"
-              class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+              class="select-box"
             />
           </label>
           {{ t.tire.brand }} {{ t.tire.model }}

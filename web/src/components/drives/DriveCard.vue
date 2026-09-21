@@ -28,7 +28,7 @@ const formatDate = formatDayTime
         v-if="vehicleStore.canEdit"
         :for="'drive-select-' + d.id"
         @click.stop
-        class="mt-1 shrink-0 flex items-center cursor-pointer"
+        class="mt-0.5 -ml-1 p-1 shrink-0 flex items-center cursor-pointer"
         :title="$t('drives.driveCard.selectThisDrive')"
       >
         <span class="sr-only">{{ $t('drives.driveCard.selectThisDrive') }}</span>
@@ -37,7 +37,7 @@ const formatDate = formatDayTime
           type="checkbox"
           :checked="selected"
           @change="emit('toggle', d)"
-          class="w-5 h-5 rounded text-rose-500 focus:ring-rose-500/20 bg-slate-950 border-slate-700 cursor-pointer"
+          class="select-box"
         />
       </label>
 
