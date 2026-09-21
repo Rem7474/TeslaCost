@@ -37,6 +37,10 @@
     "covered": "Parts des passagers couvertes",
     "below": "{amount} € sous leur part"
   },
+  "carpoolDetailModal": {
+    "onBoard": "{count} à bord",
+    "perPerson": "{amount} €/pers."
+  },
   "carpoolTripList": {
     "netSurplus": "Excédent net : +{net_cost} €",
     "leftToTheDriver": "Reste à charge conducteur :",

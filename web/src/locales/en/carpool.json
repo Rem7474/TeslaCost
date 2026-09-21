@@ -37,6 +37,10 @@
     "covered": "Passengers' shares covered",
     "below": "{amount} € below their share"
   },
+  "carpoolDetailModal": {
+    "onBoard": "{count} on board",
+    "perPerson": "{amount} €/person"
+  },
   "carpoolTripList": {
     "netSurplus": "Net surplus: +{net_cost} €",
     "leftToTheDriver": "Left to the driver:",
