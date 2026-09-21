@@ -42,7 +42,7 @@ func (h *VehicleMemberHandler) ListMembers(w http.ResponseWriter, r *http.Reques
 
 	members, err := h.repo.ListVehicleMembers(r.Context(), vehicleID)
 	if err != nil {
-		writeRepoError(w, r, err, "Impossible de récupérer les membres")
+		writeRepoError(w, r, err, "Could not load the members")
 		return
 	}
 	if members == nil {
@@ -130,7 +130,7 @@ func (h *VehicleMemberHandler) UpdateMemberRole(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Rôle mis à jour avec succès"})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Role updated"})
 }
 
 // RemoveMember removes a member's access. Restricted to OWNER or the member themselves.
@@ -159,5 +159,5 @@ func (h *VehicleMemberHandler) RemoveMember(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Membre retiré avec succès"})
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Member removed"})
 }

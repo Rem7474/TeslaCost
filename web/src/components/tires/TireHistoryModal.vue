@@ -2,6 +2,7 @@
 import { intlLocale } from '@/i18n'
 import { Archive, ClipboardPaste, Copy, Edit2, History, Pencil, Plus, Ruler, Shuffle, Trash2, X, Zap } from 'lucide-vue-next'
 import { useVehicleStore } from '@/stores/vehicle'
+import { apiMessageText } from '@/services/apiError'
 import { formatDate, type SessionForm } from '@/utils/tires'
 
 const vehicleStore = useVehicleStore()
@@ -151,7 +152,7 @@ const open = defineModel<boolean>('open', { required: true })
         </div>
 
         <p v-if="selectedTireStats.wear_explanation" class="text-xs text-slate-300 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/80">
-          {{ selectedTireStats.wear_explanation }}
+          {{ apiMessageText(selectedTireStats.wear_explanation) }}
         </p>
       </div>
 

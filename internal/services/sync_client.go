@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/crypto"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/teslamate"
@@ -19,10 +20,10 @@ func formatTeslaMateError(err error, rawURL string) error {
 	msg := err.Error()
 	isDockerLocalhost := strings.Contains(rawURL, "localhost") || strings.Contains(rawURL, "127.0.0.1")
 	if isDockerLocalhost && (strings.Contains(msg, "connection refused") || strings.Contains(msg, "dial tcp")) {
-		return fmt.Errorf("%s (Remarque : dans Docker, 'localhost' désigne le conteneur AutoLedger lui-même. Utilisez 'http://host.docker.internal:PORT' ou l'IP locale de votre machine)", msg)
+		return apierror.Newf("teslamate.docker_localhost", "%s (Note: inside Docker, 'localhost' is the AutoLedger container itself. Use 'http://host.docker.internal:PORT' or your machine's local IP)", msg)
 	}
 	if strings.Contains(msg, "Client.Timeout exceeded") || strings.Contains(msg, "context deadline exceeded") {
-		return fmt.Errorf("%s (Délai d'attente dépassé : vérifiez que l'adresse et le port sont joignables et que TeslaMate répond)", msg)
+		return apierror.Newf("teslamate.timeout", "%s (Timed out: check that the address and port are reachable and that TeslaMate is responding)", msg)
 	}
 	return err
 }

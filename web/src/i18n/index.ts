@@ -50,6 +50,9 @@ export const i18n = createI18n({
 /** Translate outside a component (utils, stores). Reactive when called while a component renders. */
 export const t = i18n.global.t
 
+/** Whether a message key exists in the current language (or its fallback). */
+export const te = i18n.global.te
+
 export const currentLocale = (): AppLocale => i18n.global.locale.value as AppLocale
 
 /** Locale tag for Intl and date-fns formatting in the current language. */

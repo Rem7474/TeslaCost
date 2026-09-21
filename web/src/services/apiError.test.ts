@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { setLocale } from '@/i18n'
-import { apiErrorMessage } from './apiError'
+import { apiErrorMessage, apiMessageText } from './apiError'
 
 afterEach(() => setLocale('fr'))
 
@@ -22,5 +22,30 @@ describe('apiErrorMessage', () => {
     expect(apiErrorMessage({ error: 'Plain message' }, 'x')).toBe('Plain message')
     expect(apiErrorMessage({}, 'fallback')).toBe('fallback')
     expect(apiErrorMessage(null, 'fallback')).toBe('fallback')
+  })
+})
+
+describe('apiMessageText', () => {
+  it('translates a payload message and its keyword parameters', () => {
+    const warning = { code: 'sync.page_limit', message: 'x', params: { p0: 'kw:drives', p1: 500 } }
+    expect(apiMessageText(warning)).toBe('Trajets : limite de 500 pages atteinte, historique partiellement importé')
+    setLocale('en')
+    expect(apiMessageText(warning)).toBe('Drives: limit of 500 pages reached, history partially imported')
+  })
+
+  it('translates an error nested in the parameters of another one', () => {
+    const error = {
+      code: 'sync.unreachable',
+      error: 'x',
+      params: { p0: 'http://tm:8080', p1: { code: 'teslamate.timeout', message: 'y', params: { p0: 'dial failed' } } },
+    }
+    setLocale('en')
+    expect(apiErrorMessage(error, 'z')).toBe(
+      'Cannot reach TeslaMate (http://tm:8080): dial failed (Timed out: check that the address and port are reachable and that TeslaMate is responding)',
+    )
+  })
+
+  it('shows the server text of a message without a catalog entry', () => {
+    expect(apiMessageText({ code: 'unknown.thing', message: 'Server text' })).toBe('Server text')
   })
 })

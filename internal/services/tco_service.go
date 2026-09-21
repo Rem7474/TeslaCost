@@ -163,7 +163,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	}
 	if comp.ChargesWithoutCost > 0 {
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-			"%d recharge(s) sans coût (%.0f kWh) : coût énergétique sous-estimé", comp.ChargesWithoutCost, comp.KwhWithoutCost))
+			"%d charge(s) without a cost (%.0f kWh): energy cost underestimated", comp.ChargesWithoutCost, comp.KwhWithoutCost))
 	}
 
 	if isICE {
@@ -172,7 +172,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 		sum.AvgCostPerLiter = fuelStats.AvgPricePerLiter
 		sum.ConsumptionL100km = fuelStats.ConsumptionL100
 		if fuelStats.FillUps == 0 {
-			comp.Warnings = append(comp.Warnings, "Aucun plein enregistré : coût du carburant inconnu")
+			comp.Warnings = append(comp.Warnings, "No fill-up recorded: fuel cost unknown")
 		}
 	}
 
@@ -189,7 +189,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	comp.UnconvertedExpenses = unconvertedCharges + unconvertedOther
 	if comp.UnconvertedExpenses > 0 {
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-			"%d dépense(s) en devise étrangère sans taux de conversion : exclues des totaux", comp.UnconvertedExpenses))
+			"%d expense(s) in a foreign currency without a conversion rate: excluded from the totals", comp.UnconvertedExpenses))
 	}
 	switch {
 	case insuranceEntries > 0:
@@ -199,7 +199,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	default:
 		sum.InsuranceSource = InsuranceSourceNone
 		comp.InsuranceMissing = true
-		comp.Warnings = append(comp.Warnings, "Aucune prime d'assurance enregistrée (dépense récurrente « Assurance »)")
+		comp.Warnings = append(comp.Warnings, "No insurance premium recorded (recurring “Insurance” expense)")
 	}
 
 	// 6. Tires amortized by kilometers actually driven on each tire
@@ -274,10 +274,10 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	}
 	if comp.UnqualifiedDrives > 0 {
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-			"%d trajet(s) de type autoroutier sans péage renseigné ni qualification « sans péage »", comp.UnqualifiedDrives))
+			"%d motorway-type drive(s) with no toll entered and not qualified as “no toll”", comp.UnqualifiedDrives))
 	}
 	if basisKm <= 0 {
-		comp.Warnings = append(comp.Warnings, "Aucun kilométrage enregistré : le coût au kilomètre ne peut pas être calculé")
+		comp.Warnings = append(comp.Warnings, "No mileage recorded: the cost per kilometre cannot be calculated")
 	}
 
 	// 9. Odometer continuity
@@ -287,11 +287,11 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	}
 	if comp.OdometerGaps > 0 {
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-			"%d trou(s) d'odomètre entre trajets consécutifs (%.0f km sans trajet enregistré)", comp.OdometerGaps, gapKm))
+			"%d odometer gap(s) between consecutive drives (%.0f km with no recorded drive)", comp.OdometerGaps, gapKm))
 	}
 	if comp.OdometerAnomalies > 0 {
 		comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-			"%d incohérence(s) d'odomètre (odomètre en recul ou distance différente du relevé) à vérifier dans TeslaMate", comp.OdometerAnomalies))
+			"%d odometer inconsistency(ies) (odometer going backwards or distance differing from the reading) to check in TeslaMate", comp.OdometerAnomalies))
 	}
 
 	comp.IsComplete = len(comp.Warnings) == 0
@@ -400,10 +400,10 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	if comp.UntrackedDistanceKm > 0 {
 		if sum.EstimatedEnergyCost > 0 {
 			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-				"%.0f km parcourus avant le début du suivi : recharges estimées et complétées (%.1f kWh/100km à %.3f €/kWh)", sum.EstimatedEnergyDistanceKm, *estKwh100km, *estPricePerKwh))
+				"%.0f km driven before tracking started: charges estimated and completed (%.1f kWh/100km at %.3f €/kWh)", sum.EstimatedEnergyDistanceKm, *estKwh100km, *estPricePerKwh))
 		} else {
 			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-				"%.0f km parcourus n'apparaissent dans aucun trajet (avant TeslaMate ou TeslaMate hors ligne) : le coût au km utilise la distance odométrique", comp.UntrackedDistanceKm))
+				"%.0f km driven appear in no drive (before TeslaMate or TeslaMate offline): the cost per km uses the odometer distance", comp.UntrackedDistanceKm))
 		}
 	}
 	if sum.SmoothedDistanceKm > 0 {

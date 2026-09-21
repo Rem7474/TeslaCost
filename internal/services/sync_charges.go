@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 	"github.com/teslacost/teslacost/internal/teslamate"
@@ -27,7 +28,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 		if err != nil {
 			formattedErr := formatTeslaMateError(err, *v.TeslaMateAPIURL)
 			slog.Warn("could not fetch charges", "component", "sync", "vehicle_id", v.ID, "page", page, "error", formattedErr)
-			st.warnings = append(st.warnings, fmt.Sprintf("Recharges (page %d) : %v — l'import reprendra à la prochaine synchronisation", page, formattedErr))
+			st.warnings = append(st.warnings, apierror.NewMessagef("sync.page_failed", "%s (page %d): %v - the import resumes at the next synchronization", "kw:charges", page, formattedErr))
 			break
 		}
 		if len(chargeList) == 0 {
@@ -39,7 +40,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 		for _, tc := range chargeList {
 			startDate, err := tc.ParsedStartTime()
 			if err != nil || startDate.IsZero() {
-				st.recordUpsert(false, fmt.Errorf("date de début invalide (%q)", tc.StartDate), fmt.Sprintf("Recharge TeslaMate #%d", tc.ChargeID))
+				st.recordUpsert(false, fmt.Errorf("invalid start date (%q)", tc.StartDate), "kw:charge", tc.ChargeID)
 				continue
 			}
 			if stopBefore != nil && startDate.Before(*stopBefore) {
@@ -48,7 +49,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 			st.see(tc.ChargeID, startDate)
 
 			isInserted, err := s.repo.UpsertTeslaMateCharge(ctx, buildCharge(v.ID, tc, chargeUnits, startDate))
-			st.recordUpsert(isInserted, err, fmt.Sprintf("Recharge TeslaMate #%d", tc.ChargeID))
+			st.recordUpsert(isInserted, err, "kw:charge", tc.ChargeID)
 		}
 
 		if len(chargeList) < syncPageSize || reachedKnownHistory {
@@ -56,11 +57,11 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 			break
 		}
 		if page == syncMaxPages {
-			st.warnings = append(st.warnings, fmt.Sprintf("Recharges : limite de %d pages atteinte, historique partiellement importé", syncMaxPages))
+			st.warnings = append(st.warnings, apierror.NewMessagef("sync.page_limit", "%s: limit of %d pages reached, history partially imported", "kw:charges", syncMaxPages))
 		}
 	}
 
-	s.finishResourceSync(ctx, &st, v.ID, "charges", "Recharges", completed, stopBefore == nil)
+	s.finishResourceSync(ctx, &st, v.ID, "charges", completed, stopBefore == nil)
 	return st
 }
 

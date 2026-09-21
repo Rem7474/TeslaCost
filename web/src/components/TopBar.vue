@@ -5,6 +5,7 @@ import { useOfflineStore } from '@/stores/offline'
 import { RefreshCw, Car, Gauge, Plus, AlertCircle, AlertTriangle, X, CheckCircle2, WifiOff, CloudUpload } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { t } from '@/i18n'
+import { apiMessageText } from '@/services/apiError'
 import { APP_VERSION } from '@/version'
 
 const vehicleStore = useVehicleStore()
@@ -182,7 +183,7 @@ function onVehicleChange(event: Event) {
         <AlertTriangle class="w-4 h-4 shrink-0 text-amber-400" />
         <span>
           <strong>{{ $t('shell.topBar.syncFinishedWithWarnings') }}</strong> {{ syncSummary }}.
-          <span class="text-amber-200/80">({{ vehicleStore.syncResult.warnings.join(' ; ') }})</span>
+          <span class="text-amber-200/80">({{ vehicleStore.syncResult.warnings.map(apiMessageText).join(' ; ') }})</span>
         </span>
       </div>
       <button

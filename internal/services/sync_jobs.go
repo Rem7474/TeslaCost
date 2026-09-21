@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 )
 
@@ -63,6 +64,9 @@ type SyncJob struct {
 	FinishedAt *time.Time  `json:"finished_at,omitempty"`
 	Result     *SyncResult `json:"result,omitempty"`
 	Error      string      `json:"error,omitempty"`
+	// ErrorCode and ErrorParams let the front end translate Error.
+	ErrorCode   string         `json:"error_code,omitempty"`
+	ErrorParams map[string]any `json:"error_params,omitempty"`
 }
 
 // syncJobs holds in-memory job states; a vehicle never has two synchronizations running at once.
@@ -101,6 +105,9 @@ func (j *syncJobs) finish(vehicleID string, res *SyncResult, err error) {
 	if err != nil {
 		job.Status = SyncJobFailed
 		job.Error = err.Error()
+		if apiErr, ok := apierror.As(err); ok {
+			job.ErrorCode, job.ErrorParams = apiErr.Code, apiErr.Params
+		}
 	} else {
 		job.Status = SyncJobSucceeded
 	}

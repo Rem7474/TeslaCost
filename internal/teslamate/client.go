@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/teslacost/teslacost/internal/apierror"
 )
 
 // AuthType defines how to authenticate against teslamateapi.
@@ -117,9 +119,9 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, queryPa
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 		switch resp.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
-			return fmt.Errorf("teslamateapi returned status %d: authentification refusée", resp.StatusCode)
+			return apierror.Newf("teslamate.auth_refused", "teslamateapi returned status %d: authentication refused", resp.StatusCode)
 		case http.StatusNotFound:
-			return fmt.Errorf("teslamateapi returned status %d: ressource introuvable (URL ou identifiant de véhicule incorrect)", resp.StatusCode)
+			return apierror.Newf("teslamate.not_found", "teslamateapi returned status %d: resource not found (wrong URL or vehicle identifier)", resp.StatusCode)
 		}
 		return fmt.Errorf("teslamateapi returned status %d", resp.StatusCode)
 	}

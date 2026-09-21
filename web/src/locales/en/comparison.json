@@ -153,5 +153,12 @@
     "notReached": "not reached",
     "fromPurchase": "from the purchase",
     "years": "{years} year(s)"
+  },
+  "fuelTypes": {
+    "SP95_E10": "Petrol SP95-E10",
+    "SP98": "Petrol SP98",
+    "DIESEL": "Diesel",
+    "E85": "Superethanol E85",
+    "GPL": "LPG"
   }
 }

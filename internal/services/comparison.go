@@ -1,9 +1,9 @@
 package services
 
 import (
-	"fmt"
 	"math"
 
+	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
 )
@@ -57,23 +57,23 @@ type CumulativePoint struct {
 
 // SensitivityRow is the EV savings when one assumption varies.
 type SensitivityRow struct {
-	Label      string      `json:"label"`
-	EVSavings  money.Cents `json:"ev_savings"`
-	DeltaShift money.Cents `json:"delta_shift"` // Difference with the base savings
+	Label      *apierror.Message `json:"label"`
+	EVSavings  money.Cents       `json:"ev_savings"`
+	DeltaShift money.Cents       `json:"delta_shift"` // Difference with the base savings
 }
 
 // ComparisonResult is the outcome of a comparison. EVSavings > 0 means the EV is cheaper.
 type ComparisonResult struct {
-	Mode          string            `json:"mode"`
-	AnnualKm      float64           `json:"annual_km"`
-	YearsCount    int               `json:"years_count"`
-	EV            CostSide          `json:"ev"`
-	ICE           CostSide          `json:"ice"`
-	EVSavings     money.Cents       `json:"ev_savings"`
-	BreakEvenYear *float64          `json:"break_even_year,omitempty"` // Years until cumulated EV cost drops below ICE
-	Cumulative    []CumulativePoint `json:"cumulative"`
-	Sensitivity   []SensitivityRow  `json:"sensitivity"`
-	Assumptions   []string          `json:"assumptions"`
+	Mode          string              `json:"mode"`
+	AnnualKm      float64             `json:"annual_km"`
+	YearsCount    int                 `json:"years_count"`
+	EV            CostSide            `json:"ev"`
+	ICE           CostSide            `json:"ice"`
+	EVSavings     money.Cents         `json:"ev_savings"`
+	BreakEvenYear *float64            `json:"break_even_year,omitempty"` // Years until cumulated EV cost drops below ICE
+	Cumulative    []CumulativePoint   `json:"cumulative"`
+	Sensitivity   []SensitivityRow    `json:"sensitivity"`
+	Assumptions   []*apierror.Message `json:"assumptions"`
 }
 
 // sideRates is the internal, unit-free description of one vehicle.
@@ -190,13 +190,13 @@ func ComputeComparison(sc *models.ComparisonScenario, ev EVBaseline) ComparisonR
 
 	base := res.EVSavings
 	variants := []struct {
-		label    string
+		label    *apierror.Message
 		km, fuel float64
 	}{
-		{"Carburant −20 %", sc.AnnualKm, 0.8},
-		{"Carburant +20 %", sc.AnnualKm, 1.2},
-		{"Kilométrage −20 %", sc.AnnualKm * 0.8, 1},
-		{"Kilométrage +20 %", sc.AnnualKm * 1.2, 1},
+		{apierror.NewMessage("comparison.sensitivity.fuel_down", "Fuel −20%"), sc.AnnualKm, 0.8},
+		{apierror.NewMessage("comparison.sensitivity.fuel_up", "Fuel +20%"), sc.AnnualKm, 1.2},
+		{apierror.NewMessage("comparison.sensitivity.km_down", "Mileage −20%"), sc.AnnualKm * 0.8, 1},
+		{apierror.NewMessage("comparison.sensitivity.km_up", "Mileage +20%"), sc.AnnualKm * 1.2, 1},
 	}
 	for _, v := range variants {
 		savings := computeCore(sc, ev, v.km, v.fuel).EVSavings
@@ -229,18 +229,18 @@ func computeCore(sc *models.ComparisonScenario, ev EVBaseline, km, fuelFactor fl
 	return res
 }
 
-func comparisonAssumptions(sc *models.ComparisonScenario) []string {
-	a := []string{
-		fmt.Sprintf("%.0f km/an pendant %d an(s), même usage pour les deux véhicules", sc.AnnualKm, sc.Years),
-		"Dépréciation = (prix d'achat − revente) répartie linéairement sur la période",
-		"Financement, crédit et location non inclus",
-		"Le point d'équilibre compare les décaissements cumulés (achat + coûts d'usage), sans la revente",
+func comparisonAssumptions(sc *models.ComparisonScenario) []*apierror.Message {
+	a := []*apierror.Message{
+		apierror.NewMessagef("comparison.assumption.usage", "%.0f km/year for %d year(s), same usage for both vehicles", sc.AnnualKm, sc.Years),
+		apierror.NewMessage("comparison.assumption.depreciation", "Depreciation = (purchase price − resale) spread linearly over the period"),
+		apierror.NewMessage("comparison.assumption.no_financing", "Financing, loans and leases not included"),
+		apierror.NewMessage("comparison.assumption.break_even", "The break-even compares cumulative outlays (purchase + running costs), without resale"),
 	}
 	if sc.Options.FuelInflationPct != 0 || sc.Options.ElectricityInflationPct != 0 || sc.Options.CostInflationPct != 0 {
-		a = append(a, fmt.Sprintf("Inflation annuelle : carburant %.1f %%, électricité %.1f %%, entretien/assurance/taxes %.1f %%",
+		a = append(a, apierror.NewMessagef("comparison.assumption.inflation", "Yearly inflation: fuel %.1f%%, electricity %.1f%%, maintenance/insurance/taxes %.1f%%",
 			sc.Options.FuelInflationPct, sc.Options.ElectricityInflationPct, sc.Options.CostInflationPct))
 	} else {
-		a = append(a, "Prix constants (aucune inflation appliquée)")
+		a = append(a, apierror.NewMessage("comparison.assumption.constant_prices", "Constant prices (no inflation applied)"))
 	}
 	return a
 }

@@ -23,7 +23,7 @@ func TestFormatTeslaMateError(t *testing.T) {
 	// Test timeout hint
 	errTimeout := errors.New("context deadline exceeded (Client.Timeout exceeded while awaiting headers)")
 	formattedTimeout := formatTeslaMateError(errTimeout, "http://192.168.1.50:8087")
-	if !strings.Contains(formattedTimeout.Error(), "Délai d'attente dépassé") {
+	if !strings.Contains(formattedTimeout.Error(), "Timed out") {
 		t.Errorf("Expected timeout hint in error message, got %s", formattedTimeout.Error())
 	}
 }
