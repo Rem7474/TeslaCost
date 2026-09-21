@@ -149,7 +149,7 @@
   select,
   textarea,
   .dp__input {
-    font-size: 16px !important;
+    font-size: var(--touch-font-size, 16px) !important;
   }
 }
 
@@ -171,4 +171,9 @@
   .quick-chip {
     @apply min-h-12 rounded-xl border px-3 text-sm font-semibold transition-colors;
   }
+}
+
+/* The compact date pickers (the month navigator of a toolbar) trade the 16px of touch fields for a size that fits their width. */
+.app-datepicker-wrapper.size-xs {
+  --touch-font-size: 0.8125rem;
 }
