@@ -709,6 +709,21 @@ func TestIntegrationEditCapabilities(t *testing.T) {
 	if len(groups) != 1 || groups[0].Name != "Vacances - aller" || len(groups[0].DriveIDs) != 3 || groups[0].DistanceKm != 400 || groups[0].ExpensesTotal != 3000 {
 		t.Fatalf("unexpected trip group summary: %+v", groups)
 	}
+	if groups[0].TollsTotal != 3000 {
+		t.Fatalf("the group toll is shared over the drives of the trip, got %s", groups[0].TollsTotal)
+	}
+	// A toll entered on one drive of the trip counts in the trip's tolls too, without becoming a group expense.
+	driveToll := &models.DriveExpense{VehicleID: v.ID, Type: "TOLL", Amount: 1030, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, driveToll, []string{d3.ID}, ""); err != nil {
+		t.Fatal(err)
+	}
+	groups, _ = repo.ListTripGroups(ctx, v.ID)
+	if groups[0].TollsTotal != 4030 || groups[0].ExpensesTotal != 3000 || groups[0].ExpenseCount != 1 {
+		t.Fatalf("expected 40.30 tolls of which 30.00 attached to the group, got %+v", groups[0])
+	}
+	if err := repo.DeleteDriveExpense(ctx, v.ID, driveToll.ID); err != nil {
+		t.Fatal(err)
+	}
 	if err := repo.UpdateTripGroup(ctx, tg, []string{}); !errors.As(err, &vErr) {
 		t.Fatalf("an empty trip group must be rejected, got %v", err)
 	}
@@ -2003,5 +2018,55 @@ func TestIntegrationEstimatedEnergyStartsWithFirstManualCharge(t *testing.T) {
 	}
 	if sum.EstimatedEnergyDistanceKm < 499 || sum.EstimatedEnergyDistanceKm > 501 {
 		t.Errorf("with a charge halfway the estimate covers %v km, want 500", sum.EstimatedEnergyDistanceKm)
+	}
+}
+
+func TestIntegrationMultiLegCarpoolBecomesATrip(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "carpool-trip@example.com")
+	base := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
+	d1 := mustDrive(t, repo, v.ID, 1, base, 10000, 120)
+	d2 := mustDrive(t, repo, v.ID, 2, base.Add(3*time.Hour), 10120, 80)
+	d3 := mustDrive(t, repo, v.ID, 3, base.Add(9*time.Hour), 10200, 30)
+
+	legs := func(ids ...string) []models.CarpoolLeg {
+		out := make([]models.CarpoolLeg, len(ids))
+		for i := range ids {
+			id := ids[i]
+			out[i] = models.CarpoolLeg{DriveID: &id, DistanceKm: 50}
+		}
+		return out
+	}
+
+	single := &models.CarpoolTrip{VehicleID: v.ID, Title: "Course seule", Date: base}
+	if err := repo.CreateCarpoolTrip(ctx, single, legs(d3.ID), nil); err != nil {
+		t.Fatal(err)
+	}
+	if single.TripGroupID != nil {
+		t.Fatalf("a single-drive carpool is not a trip, got group %v", *single.TripGroupID)
+	}
+
+	multi := &models.CarpoolTrip{VehicleID: v.ID, Title: "Annecy → Lyon → Valence", Date: base}
+	if err := repo.CreateCarpoolTrip(ctx, multi, legs(d1.ID, d2.ID), nil); err != nil {
+		t.Fatal(err)
+	}
+	if multi.TripGroupID == nil {
+		t.Fatal("a carpool made of several drives must be attached to a trip group")
+	}
+	groups, err := repo.ListTripGroups(ctx, v.ID)
+	if err != nil || len(groups) != 1 {
+		t.Fatalf("expected exactly one trip group, got %+v (err %v)", groups, err)
+	}
+	if g := groups[0]; g.ID != *multi.TripGroupID || g.Name != multi.Title || len(g.DriveIDs) != 2 || g.CarpoolCount != 1 || g.DistanceKm != 200 {
+		t.Fatalf("unexpected trip group %+v", g)
+	}
+
+	// Saving it again keeps the same group instead of creating another one.
+	if err := repo.UpdateCarpoolTrip(ctx, multi, legs(d1.ID, d2.ID), nil); err != nil {
+		t.Fatal(err)
+	}
+	if groups, _ = repo.ListTripGroups(ctx, v.ID); len(groups) != 1 {
+		t.Fatalf("updating the carpool must not create a second group, got %d", len(groups))
 	}
 }

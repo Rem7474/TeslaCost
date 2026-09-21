@@ -60,7 +60,7 @@ func NewClient(cfg Config) (*Client, error) {
 
 	userAgent := cfg.UserAgent
 	if userAgent == "" {
-		userAgent = "TeslaCost/1.0"
+		userAgent = "AutoLedger/1.0"
 	}
 
 	return &Client{

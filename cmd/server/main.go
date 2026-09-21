@@ -147,7 +147,7 @@ func main() {
 	cfg := config.Load()
 	configureLogging(cfg)
 
-	slog.Info("Starting TeslaCost Full-Stack Server...")
+	slog.Info("Starting AutoLedger full-stack server...")
 
 	// A production deployment must not run with a secret published in the repository: anyone could forge
 	// sessions or decrypt the stored TeslaMate credentials.
@@ -419,6 +419,7 @@ func main() {
 				r.Post("/{vehicleId}/drives/apply-toll-estimates", driveHandler.ApplyTollEstimatesBulk)
 				r.Post("/{vehicleId}/trip-groups", driveHandler.CreateTripGroup)
 				r.Get("/{vehicleId}/trip-groups", driveHandler.ListTripGroups)
+				r.Get("/{vehicleId}/trip-suggestions", driveHandler.TripSuggestions)
 				r.Put("/{vehicleId}/trip-groups/{groupId}", driveHandler.UpdateTripGroup)
 				r.Delete("/{vehicleId}/trip-groups/{groupId}", driveHandler.DeleteTripGroup)
 
@@ -525,7 +526,7 @@ func main() {
 				os.Exit(1)
 			}
 		}()
-		slog.Info("TeslaCost API & Web listening", "port", cfg.Port, "base_url", cfg.AppBaseURL)
+		slog.Info("AutoLedger API & web listening", "port", cfg.Port, "base_url", cfg.AppBaseURL)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("server error", "error", err)
 			os.Exit(1)
@@ -544,5 +545,5 @@ func main() {
 		os.Exit(1)
 	}
 
-	slog.Info("TeslaCost server stopped cleanly.")
+	slog.Info("AutoLedger server stopped cleanly.")
 }

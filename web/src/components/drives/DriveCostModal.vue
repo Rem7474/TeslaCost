@@ -5,9 +5,11 @@ import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save } from 'lucide-vue-next'
+import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save, ArrowLeft, ChevronRight } from 'lucide-vue-next'
 import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, uniqueById } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
+import { buildDriveBreakdown } from '@/utils/costBreakdown'
+import CostDonut from '@/components/costs/CostDonut.vue'
 
 // Cost breakdown of a drive, or of a trip group (drive.is_trip_group, whose drives are tripDriveIds), with its
 // expenses (edit, delete, add a toll) and the toll detection. refreshDrive reloads the drives list and returns the
@@ -15,6 +17,7 @@ import { formatDayTime } from '@/utils/dates'
 const props = defineProps<{
   vehicleId: string
   tripDriveIds: string[]
+  tripLegs: any[]
   startWithTollEntry: boolean
   refreshDrive: (driveId: string) => Promise<any | null>
 }>()
@@ -25,6 +28,7 @@ const router = useRouter()
 const vehicleStore = useVehicleStore()
 const { showConfirm, showAlert } = useConfirm()
 const formatDate = formatDayTime
+const breakdown = computed(() => buildDriveBreakdown(selectedCostDrive.value?.costs, Number(selectedCostDrive.value?.distance_km) || 0))
 const teslamateDriveUrl = (d: any) => buildTeslamateDriveUrl(vehicleStore.activeVehicle, d)
 
 // Expense edition inside the cost modal
@@ -47,13 +51,50 @@ const tollDetectionEstimatedTotal = computed(() => {
   return priced.reduce((sum: number, s: any) => sum + s.estimated_price, 0)
 })
 
+// A trip shows its legs and carpools; opening a leg keeps the trip to come back to
+const parentTrip = ref<any | null>(null)
+const tripCarpools = ref<any[]>([])
+
+async function loadTripCarpools(tripId: string) {
+  tripCarpools.value = []
+  if (!props.vehicleId) return
+  try {
+    const res = await api.getCarpools(props.vehicleId)
+    tripCarpools.value = (res.trips || []).filter((c: any) => c.trip_group_id === tripId)
+  } catch {
+    tripCarpools.value = []
+  }
+}
+
+function openLeg(leg: any) {
+  parentTrip.value = selectedCostDrive.value
+  selectedCostDrive.value = leg
+  editingExpenseId.value = null
+  showAddTollInline.value = false
+  loadDriveExpenses(leg.id)
+  loadTollDetection(leg)
+}
+
+async function backToTrip() {
+  const trip = parentTrip.value
+  if (!trip) return
+  parentTrip.value = null
+  selectedCostDrive.value = trip
+  editingExpenseId.value = null
+  showAddTollInline.value = false
+  const [, refreshed] = await Promise.all([loadTripExpenses(), props.refreshDrive(trip.id)])
+  if (refreshed) selectedCostDrive.value = refreshed
+}
+
 watch(open, (isOpen) => {
   const drive = selectedCostDrive.value
+  if (!isOpen) parentTrip.value = null
   if (!isOpen || !drive) return
   editingExpenseId.value = null
   if (drive.is_trip_group) {
     showAddTollInline.value = false
     loadTripExpenses()
+    loadTripCarpools(drive.id)
     return
   }
   showAddTollInline.value = props.startWithTollEntry
@@ -174,7 +215,8 @@ async function handleAddTollToDrive() {
 async function refreshCostModal() {
   if (!selectedCostDrive.value) return
   const driveId = selectedCostDrive.value.id
-  const [, refreshed] = await Promise.all([loadDriveExpenses(driveId), props.refreshDrive(driveId)])
+  const reloadExpenses = selectedCostDrive.value.is_trip_group ? loadTripExpenses() : loadDriveExpenses(driveId)
+  const [, refreshed] = await Promise.all([reloadExpenses, props.refreshDrive(driveId)])
   if (refreshed) selectedCostDrive.value = refreshed
 }
 
@@ -234,10 +276,19 @@ async function handleDeleteExpense(exp: any) {
     class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
     @click.self="open = false"
   >
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
       <!-- Header -->
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <div class="flex items-center gap-2.5 min-w-0 pr-2">
+          <button
+            v-if="parentTrip"
+            type="button"
+            @click="backToTrip"
+            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+            :title="$t('drives.driveCostModal.backToTrip')"
+          >
+            <ArrowLeft class="w-4 h-4" />
+          </button>
           <div class="p-2 rounded-xl shrink-0" :class="selectedCostDrive.is_trip_group ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'">
             <component :is="selectedCostDrive.is_trip_group ? Layers : Coins" class="w-5 h-5" />
           </div>
@@ -320,8 +371,74 @@ async function handleDeleteExpense(exp: any) {
         <span>{{ $t('drives.driveCostModal.someItemsUseADefault') }}</span>
       </p>
 
+      <!-- Legs of the trip, as drive rows -->
+      <div v-if="selectedCostDrive.is_trip_group && tripLegs.length" class="space-y-1.5">
+        <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+          <Layers class="w-3.5 h-3.5 text-indigo-400" />
+          {{ $t('drives.driveCostModal.tripLegs', { count: tripLegs.length }) }}
+        </h4>
+        <button
+          v-for="leg in tripLegs"
+          :key="leg.id"
+          type="button"
+          @click="openLeg(leg)"
+          class="w-full text-left flex items-center justify-between gap-3 bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 hover:border-slate-700 rounded-xl px-3 py-2 transition-colors"
+        >
+          <div class="min-w-0">
+            <div class="text-[11px] text-slate-400">{{ formatDate(leg.start_time) }}</div>
+            <div class="text-xs text-slate-200 truncate">
+              {{ (leg.start_address || $t('drives.driveCostModal.start')).split(',')[0] }} → {{ (leg.end_address || $t('drives.driveCostModal.end')).split(',')[0] }}
+            </div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-[11px] font-bold text-rose-400">{{ Math.round(leg.distance_km) }} km</span>
+            <span class="text-xs font-mono font-bold text-white">{{ (leg.costs?.total_cost || 0).toFixed(2) }} €</span>
+            <ChevronRight class="w-4 h-4 text-slate-500" />
+          </div>
+        </button>
+      </div>
+
+      <!-- Carpools of the trip -->
+      <div v-if="selectedCostDrive.is_trip_group && tripCarpools.length" class="space-y-1.5">
+        <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+          <Users class="w-3.5 h-3.5 text-rose-400" />
+          {{ $t('drives.driveCostModal.tripCarpools', { count: tripCarpools.length }) }}
+        </h4>
+        <button
+          v-for="c in tripCarpools"
+          :key="c.id"
+          type="button"
+          @click="open = false; router.push({ path: '/carpools' })"
+          class="w-full text-left flex items-center justify-between gap-3 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2 transition-colors"
+        >
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-white truncate">{{ c.title }}</div>
+            <div class="text-[11px] text-slate-400">
+              {{ $t('drives.driveCostModal.carpoolLegsPassengers', { legs: c.legs?.length || 1, passengers: c.passengers?.length || 0 }) }}
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-xs font-mono font-bold text-emerald-400">+{{ Number(c.total_revenue || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400">{{ $t('drives.driveCostModal.carpoolNetCost', { amount: Number(c.net_cost || 0).toFixed(2) }) }}</div>
+          </div>
+        </button>
+      </div>
+
+      <!-- Same layout as the monthly detail: donut on the left, itemized costs on the right -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+      <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
+        <h4 class="text-xs font-bold text-white mb-2 self-start">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
+        <div class="w-full h-56 sm:h-64 relative">
+          <CostDonut
+            :items="breakdown.items"
+            :empty-label="$t('drives.driveCostModal.noCost')"
+            :chart-label="$t('drives.driveCostModal.breakdownAria')"
+          />
+        </div>
+      </div>
+
       <!-- Cost Breakdown List -->
-      <div class="space-y-2.5">
+      <div class="md:col-span-3 space-y-2.5">
         <!-- 1. Électricité -->
         <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -338,8 +455,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-sky-400 font-mono">
-            {{ (selectedCostDrive.costs?.electricity_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-sky-400 font-mono">{{ (selectedCostDrive.costs?.electricity_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.energy.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.energy.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -360,8 +478,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-emerald-400 font-mono">
-            {{ (selectedCostDrive.costs?.tires_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-emerald-400 font-mono">{{ (selectedCostDrive.costs?.tires_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tires.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tires.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -382,8 +501,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-pink-400 font-mono">
-            {{ (selectedCostDrive.costs?.maintenance_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-pink-400 font-mono">{{ (selectedCostDrive.costs?.maintenance_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.maintenance.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.maintenance.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -429,8 +549,9 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
           </div>
-          <div class="text-sm font-bold text-purple-400 font-mono">
-            {{ (selectedCostDrive.costs?.insurance_cost || 0).toFixed(2) }} €
+          <div class="text-right">
+            <div class="text-sm font-bold text-purple-400 font-mono">{{ (selectedCostDrive.costs?.insurance_cost || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.insurance.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.insurance.costPerKm.toFixed(3) }} €/km</span></div>
           </div>
         </div>
 
@@ -449,9 +570,10 @@ async function handleDeleteExpense(exp: any) {
               </div>
             </div>
             <div class="flex items-center gap-2">
-              <span class="text-sm font-bold text-amber-400 font-mono">
-                {{ (selectedCostDrive.costs?.tolls_cost || 0).toFixed(2) }} €
-              </span>
+              <div class="text-right">
+                <div class="text-sm font-bold text-amber-400 font-mono">{{ (selectedCostDrive.costs?.tolls_cost || 0).toFixed(2) }} €</div>
+                <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tolls.costPerKm.toFixed(3) }} €/km</span></div>
+              </div>
               <button
                 @click="showAddTollInline = !showAddTollInline"
                 class="p-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs"
@@ -606,22 +728,23 @@ async function handleDeleteExpense(exp: any) {
           </div>
           <p v-else-if="tollDetection" class="text-[11px] text-slate-500 pl-9">{{ $t('drives.driveCostModal.noTollDetectedOnThis') }}</p>
         </div>
-      </div>
 
-      <!-- Grand Total Card -->
-      <div class="bg-gradient-to-r from-slate-800 to-slate-800/80 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between shadow-lg">
-        <div>
-          <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.totalCostPrice') }}</span>
-          <div class="text-2xl font-black text-white">
-            {{ (selectedCostDrive.costs?.total_cost || 0).toFixed(2) }} €
+        <!-- Grand Total Card -->
+        <div class="bg-gradient-to-r from-slate-800 to-slate-800/80 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between shadow-lg">
+          <div>
+            <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.totalCostPrice') }}</span>
+            <div class="text-2xl font-black text-white">
+              {{ (selectedCostDrive.costs?.total_cost || 0).toFixed(2) }} €
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
+            <div class="text-lg font-extrabold text-emerald-400 font-mono">
+              {{ (selectedCostDrive.costs?.cost_per_km || 0).toFixed(3) }} €<span class="text-xs font-normal text-slate-400">/km</span>
+            </div>
           </div>
         </div>
-        <div class="text-right">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
-          <div class="text-lg font-extrabold text-emerald-400 font-mono">
-            {{ (selectedCostDrive.costs?.cost_per_km || 0).toFixed(3) }} €<span class="text-xs font-normal text-slate-400">/km</span>
-          </div>
-        </div>
+      </div>
       </div>
 
       </div>

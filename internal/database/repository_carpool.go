@@ -135,6 +135,20 @@ func (r *Repository) saveCarpoolTrip(ctx context.Context, trip *models.CarpoolTr
 		}
 	}
 
+	// A carpool made of several drives is a trip: it gets its own trip group so it shows up with the trips.
+	if trip.TripGroupID == nil {
+		if ids := uniqueStrings(driveIDs); len(ids) >= 2 {
+			tg := &models.TripGroup{VehicleID: trip.VehicleID, Name: trip.Title}
+			if err := insertTripGroup(ctx, tx, tg, ids); err != nil {
+				return fmt.Errorf("failed to group the carpool drives: %w", err)
+			}
+			if _, err := tx.Exec(ctx, `UPDATE carpool_trips SET trip_group_id = $1 WHERE id = $2;`, tg.ID, trip.ID); err != nil {
+				return fmt.Errorf("failed to link the carpool to its trip: %w", err)
+			}
+			trip.TripGroupID = &tg.ID
+		}
+	}
+
 	for i := range passengers {
 		p := &passengers[i]
 		p.CarpoolTripID = trip.ID

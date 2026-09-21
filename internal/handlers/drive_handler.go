@@ -426,6 +426,38 @@ func (h *DriveHandler) ListTripGroups(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, groups)
 }
 
+// TripSuggestions lists chains of ungrouped drives that look like a single trip (short stops, or a charge in between).
+func (h *DriveHandler) TripSuggestions(w http.ResponseWriter, r *http.Request) {
+	vehicleID := chi.URLParam(r, "vehicleId")
+
+	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleViewer); v == nil {
+		return
+	}
+
+	days, _ := strconv.Atoi(r.URL.Query().Get("days"))
+	if days <= 0 || days > 730 {
+		days = 180
+	}
+	since := time.Now().AddDate(0, 0, -days)
+
+	drives, err := h.repo.ListTripCandidateDrives(r.Context(), vehicleID, since)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to detect trips"))
+		return
+	}
+	charges, err := h.repo.ListChargeWindows(r.Context(), vehicleID, since)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, apierror.New("internal", "Failed to detect trips"))
+		return
+	}
+
+	suggestions := services.DetectTripSuggestions(drives, charges)
+	if suggestions == nil {
+		suggestions = []models.TripSuggestion{}
+	}
+	writeJSON(w, http.StatusOK, suggestions)
+}
+
 type UpdateTripGroupRequest struct {
 	Name     string   `json:"name"`
 	Notes    *string  `json:"notes"`

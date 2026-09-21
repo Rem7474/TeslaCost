@@ -79,7 +79,23 @@
     "unknownStart": "Unknown start",
     "unknownEnd": "Unknown destination"
   },
+  "tripSuggestions": {
+    "title": "{count} trip(s) detected automatically",
+    "help": "Consecutive drives separated by stops shorter than 5 minutes, or by a stop with a charge: they are probably a single trip.",
+    "reasonPause": "short stops",
+    "reasonCharge": "charge between legs",
+    "unnamed": "Trip without address",
+    "create": "Create the trip"
+  },
   "driveCostModal": {
+    "backToTrip": "Back to the trip",
+    "tripLegs": "Trip legs ({count})",
+    "tripCarpools": "Trip carpools ({count})",
+    "carpoolLegsPassengers": "{legs} leg(s) · {passengers} passenger(s)",
+    "carpoolNetCost": "net cost {amount} €",
+    "breakdownTitle": "Cost split",
+    "breakdownAria": "Cost breakdown of the drive by category",
+    "noCost": "No expense",
     "shareAsACarpool": "Share as a carpool",
     "costPerKilometre": "Cost per kilometre",
     "totalCostPrice": "Total cost price",

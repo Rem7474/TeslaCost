@@ -53,7 +53,7 @@ type syncStore interface {
 	UpsertBatterySnapshot(ctx context.Context, vehicleID string, day time.Time, snap models.BatterySnapshot) error
 }
 
-// SyncService orchestrates synchronization from TeslaMate to TeslaCost.
+// SyncService orchestrates synchronization from TeslaMate to AutoLedger.
 type SyncService struct {
 	repo          syncStore
 	encryptor     *crypto.Encryptor

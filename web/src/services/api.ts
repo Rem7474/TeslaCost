@@ -1,5 +1,5 @@
 import { t } from '@/i18n'
-// TeslaCost API Service
+// AutoLedger API Service
 import { newIdempotencyKey } from '@/services/offlineQueue'
 import { apiErrorMessage } from '@/services/apiError'
 
@@ -256,6 +256,7 @@ export const api = {
   createTripGroup: (vehicleId: string, payload: { name: string; notes?: string; drive_ids: string[] }) =>
     request<any>(`/vehicles/${vehicleId}/trip-groups`, { method: 'POST', body: JSON.stringify(payload) }),
   getTripGroups: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-groups`),
+  getTripSuggestions: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/trip-suggestions`),
   updateTripGroup: (vehicleId: string, groupId: string, payload: { name: string; notes?: string | null; drive_ids?: string[] }) =>
     request<any>(`/vehicles/${vehicleId}/trip-groups/${groupId}`, { method: 'PUT', body: JSON.stringify(payload) }),
   deleteTripGroup: (vehicleId: string, groupId: string, deleteExpenses = false) =>

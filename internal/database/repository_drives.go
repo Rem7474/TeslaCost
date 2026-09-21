@@ -303,7 +303,7 @@ func linkTripGroupDrives(ctx context.Context, tx pgx.Tx, tripGroupID string, dri
 }
 
 func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]models.TripGroup, error) {
-	rows, err := r.pool.Query(ctx, `
+	rows, err := r.pool.Query(ctx, DriveTollAllocationCTE+`
 		SELECT tg.id, tg.vehicle_id, tg.name, tg.notes, tg.created_at, tg.updated_at,
 		       ARRAY(SELECT tgd.drive_id::text FROM trip_group_drives tgd
 		             JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
@@ -311,7 +311,9 @@ func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]mo
 		       COALESCE(stats.km, 0), stats.first_start, stats.last_end,
 		       COALESCE((SELECT SUM(`+AmountEURExpr+`) FROM drive_expenses e WHERE e.trip_group_id = tg.id), 0),
 		       (SELECT COUNT(*) FROM drive_expenses e WHERE e.trip_group_id = tg.id),
-		       (SELECT COUNT(*) FROM carpool_trips c WHERE c.trip_group_id = tg.id)
+		       (SELECT COUNT(*) FROM carpool_trips c WHERE c.trip_group_id = tg.id),
+		       COALESCE((SELECT SUM(a.allocated) FROM allocations a
+		                 WHERE a.drive_id IN (SELECT tgd.drive_id FROM trip_group_drives tgd WHERE tgd.trip_group_id = tg.id)), 0)
 		FROM trip_groups tg
 		LEFT JOIN LATERAL (
 			SELECT SUM(d.distance_km) AS km, MIN(d.start_time) AS first_start, MAX(d.end_time) AS last_end
@@ -331,7 +333,7 @@ func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]mo
 	for rows.Next() {
 		var tg models.TripGroup
 		if err := rows.Scan(&tg.ID, &tg.VehicleID, &tg.Name, &tg.Notes, &tg.CreatedAt, &tg.UpdatedAt,
-			&tg.DriveIDs, &tg.DistanceKm, &tg.StartTime, &tg.EndTime, &tg.ExpensesTotal, &tg.ExpenseCount, &tg.CarpoolCount); err != nil {
+			&tg.DriveIDs, &tg.DistanceKm, &tg.StartTime, &tg.EndTime, &tg.ExpensesTotal, &tg.ExpenseCount, &tg.CarpoolCount, &tg.TollsTotal); err != nil {
 			return nil, err
 		}
 		list = append(list, tg)
