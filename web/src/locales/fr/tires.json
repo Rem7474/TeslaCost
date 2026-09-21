@@ -239,7 +239,6 @@
   "tireOdometerTimeline": {
     "details": "Fiche",
     "ongoing": "en cours",
-    "hoverOrClickASegment": "Survolez ou cliquez sur un segment pour voir le détail.",
     "noTireRecorded": "Aucun pneu enregistré",
     "noFittingSessionWithMileage": "Aucune session de montage avec kilométrage enregistrée.",
     "tiresFittedByMileage": "Pneus montés selon le kilométrage",
@@ -322,7 +321,10 @@
     },
     "rear": "Train arrière",
     "front": "Train avant",
-    "all": "Toutes les roues"
+    "all": "Toutes les roues",
+    "frontShort": "AV",
+    "rearShort": "AR",
+    "allShort": "Tous"
   },
   "sessionCount": "{count} session | {count} sessions"
 }
