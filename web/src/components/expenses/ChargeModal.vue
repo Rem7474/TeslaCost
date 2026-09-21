@@ -8,6 +8,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { Zap, X, Paperclip, FileText, Eye, UploadCloud } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { CURRENCIES, currencyPayload, formatDate, toLocalDateTimeInput } from '@/utils/expenses'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Records a charge made outside TeslaMate, or completes / corrects the cost of `editing`.
 const props = defineProps<{ vehicleId: string; editing: any | null; documents: ExpenseDocumentHeader[]; currentOdometer: number }>()
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   'view-document': [docId: string | null | undefined, filename?: string | null, download?: boolean]
 }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 const vehicleStore = useVehicleStore()
 const { isUploadingDocument, onSelectExistingDoc, onFileInputChange } = useDocumentAttach(

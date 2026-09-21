@@ -6,10 +6,12 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { getLastDismountInfo, isMountedPosition } from '@/utils/tires'
 import { todayIso } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const props = defineProps<{ vehicleId: string; selectedTireIds: string[]; tires: any[]; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const batchDisposeForm = ref({

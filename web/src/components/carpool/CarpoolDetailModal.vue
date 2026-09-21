@@ -5,12 +5,14 @@ import { Users, X, MapPin, Navigation, Pencil, RotateCw, CheckCircle2, Sparkles 
 import CostDonut from '@/components/costs/CostDonut.vue'
 import { buildCarpoolBreakdown } from '@/utils/costBreakdown'
 import { fmt, formatDate, stopNames } from '@/utils/carpool'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Detail of a carpool trip, laid out like the drive and trip cost breakdown: summary, legs, cost split, passengers,
 // total. The form to change it is the edit modal, reached from the footer.
 const props = defineProps<{ trip: any | null; recalculating: boolean }>()
 const emit = defineEmits<{ edit: [trip: any]; recalculate: [trip: any] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const vehicleStore = useVehicleStore()
 
 const breakdown = computed(() => buildCarpoolBreakdown(props.trip))

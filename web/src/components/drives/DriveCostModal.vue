@@ -11,6 +11,7 @@ import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, merg
 import { formatDayTime } from '@/utils/dates'
 import { buildDriveBreakdown } from '@/utils/costBreakdown'
 import CostDonut from '@/components/costs/CostDonut.vue'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Cost breakdown of a drive, or of a trip group (drive.is_trip_group, whose drives are tripDriveIds), with its
 // expenses (edit, delete, add a toll) and the toll detection. A detected trip that is not created yet
@@ -25,6 +26,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ 'toggle-tag': [drive: any, tag: string]; 'create-trip': [suggestion: any]; 'dismiss-trip': [suggestion: any] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const selectedCostDrive = defineModel<any | null>('drive', { required: true })
 const router = useRouter()
 const vehicleStore = useVehicleStore()

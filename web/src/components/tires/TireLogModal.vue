@@ -7,11 +7,13 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { type TireLogForm } from '@/utils/tires'
 import { todayIso } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Adds or edits (editingLogId set) a tread depth measurement of selectedTire; initialForm seeds the fields when the modal opens
 const props = defineProps<{ vehicleId: string; selectedTire: any | null; editingLogId: string | null; initialForm: TireLogForm }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const newLogForm = ref<TireLogForm>({

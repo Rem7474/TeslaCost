@@ -5,11 +5,13 @@ import { Copy, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { defaultTargetTireIds, formatDate } from '@/utils/tires'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Copies one mount session of the open tire onto other tires
 const props = defineProps<{ vehicleId: string; selectedTire: any | null; sessionToDuplicate: any | null; tires: any[] }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const duplicateTargetTireIds = ref<string[]>([])

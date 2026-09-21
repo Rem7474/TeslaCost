@@ -4,11 +4,13 @@ import { ref } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { Layers, X } from 'lucide-vue-next'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Merges the selected drives into a trip group, optionally with one expense (toll, parking, ferry) for the whole trip.
 const props = defineProps<{ vehicleId: string; selectedDriveIds: string[]; selectedList: any[] }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const groupName = ref('')

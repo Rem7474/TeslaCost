@@ -7,11 +7,13 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { getLastDismountInfo, isMountedPosition } from '@/utils/tires'
 import { todayIso } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Dispose (worn out, damaged, sold) keeps history and cost; deleting a tire removes an erroneous entry
 const props = defineProps<{ vehicleId: string; selectedTire: any | null; tires: any[]; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [tireId: string] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const disposeForm = ref({ date: todayIso(), odometer: 0 as number | string })

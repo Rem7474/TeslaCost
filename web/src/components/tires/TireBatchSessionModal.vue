@@ -6,11 +6,13 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { todayIso } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Records the same past session on several tires stored in the garage
 const props = defineProps<{ vehicleId: string; storageTires: any[]; selectedTireIds: string[]; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const batchSessionTireIds = ref<string[]>([])

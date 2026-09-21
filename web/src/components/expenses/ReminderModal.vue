@@ -7,11 +7,13 @@ import { X, Bell, Sparkles } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { reminderPresets, type ReminderPreset } from '@/utils/expenses'
 import { todayIso } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Creates a maintenance reminder, or edits `editing`. `preset` pre-fills a new one from a suggestion.
 const props = defineProps<{ vehicleId: string; editing: MaintenanceReminder | null; preset: ReminderPreset | null; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const editingReminderId = computed(() => props.editing?.id ?? null)

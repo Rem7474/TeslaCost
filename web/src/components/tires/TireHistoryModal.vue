@@ -4,6 +4,7 @@ import { Archive, ClipboardPaste, Copy, Edit2, History, Pencil, Plus, Ruler, Shu
 import { useVehicleStore } from '@/stores/vehicle'
 import { apiMessageText } from '@/services/apiError'
 import { formatDate, type SessionForm } from '@/utils/tires'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const vehicleStore = useVehicleStore()
 
@@ -31,6 +32,7 @@ const emit = defineEmits<{
   'delete-log': [log: any]
 }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 </script>
 
 <template>

@@ -16,12 +16,14 @@ import {
   ownershipPayload,
   ownershipStepError,
 } from '@/utils/vehicles'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // The acquisition contract of a vehicle (purchase, loan, LOA, LLD) in three steps. \`ownership\` is the saved
 // contract (null when there is none); saving reports the stored contract, deleting reports deleted.
 const props = defineProps<{ vehicle: any | null; ownership: any | null }>()
 const emit = defineEmits<{ saved: [ownership: any]; deleted: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showConfirm, showAlert } = useConfirm()
 
 const ownershipVehicle = computed(() => props.vehicle)

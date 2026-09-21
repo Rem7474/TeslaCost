@@ -7,10 +7,12 @@ import { useAuthStore } from '@/stores/auth'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { Trash2, RefreshCw, X, Users, UserPlus, ShieldCheck, LogOut } from 'lucide-vue-next'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Who can access a vehicle: the owner adds members and changes their role, a member can leave.
 const props = defineProps<{ vehicle: any | null }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const vehicleStore = useVehicleStore()
 const authStore = useAuthStore()
 const { showConfirm, showAlert } = useConfirm()

@@ -4,11 +4,13 @@ import { computed, ref, watch } from 'vue'
 import { api, type VehicleWebhook } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { X, AlertTriangle, Loader2, CheckCircle2, Radio } from 'lucide-vue-next'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // The vehicle's notification webhook. `webhook` is the saved one (null when none); changes are reported through update:webhook.
 const props = defineProps<{ vehicleId: string; webhook: VehicleWebhook | null }>()
 const emit = defineEmits<{ 'update:webhook': [webhook: VehicleWebhook | null] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showConfirm, showAlert } = useConfirm()
 
 const vehicleWebhook = computed(() => props.webhook)

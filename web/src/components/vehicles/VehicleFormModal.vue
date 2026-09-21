@@ -5,11 +5,13 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { RefreshCw, CheckCircle2, AlertCircle, X, Link2 } from 'lucide-vue-next'
 import { emptyVehicleForm, vehicleFormFrom } from '@/utils/vehicles'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Adds a vehicle, or edits \`editing\`. The TeslaMate connection can be tested with the values typed so far.
 const props = defineProps<{ editing: any | null }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const isEditing = computed(() => !!props.editing)

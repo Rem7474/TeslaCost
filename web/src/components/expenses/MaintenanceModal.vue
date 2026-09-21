@@ -9,6 +9,7 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
 import { CURRENCIES, currencyPayload, findCloseCandidate, formatDate } from '@/utils/expenses'
 import { todayIso } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Adds a maintenance / fixed expense, or edits it when `editing` is set. maintenanceExpenses lets a new one close an earlier revision.
 const props = defineProps<{
@@ -23,6 +24,7 @@ const emit = defineEmits<{
   'view-document': [docId: string | null | undefined, filename?: string | null, download?: boolean]
 }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 const { isUploadingDocument, onSelectExistingDoc, onDropzoneDirectUpload } = useDocumentAttach(
   () => props.vehicleId,

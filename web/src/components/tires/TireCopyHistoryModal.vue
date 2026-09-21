@@ -5,11 +5,13 @@ import { Copy, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { defaultTargetTireIds, getTireSelectLabel } from '@/utils/tires'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // source is the tire whose history is copied when the modal opens; it can be changed from inside the modal.
 const props = defineProps<{ vehicleId: string; tires: any[]; source: any | null }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const copyHistorySourceTire = ref<any | null>(null)
