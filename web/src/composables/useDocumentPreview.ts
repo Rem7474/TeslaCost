@@ -1,7 +1,8 @@
-import { onUnmounted, ref, watch } from 'vue'
+import { onUnmounted, ref } from 'vue'
 import { t } from '@/i18n'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 export interface DocumentPreviewState {
   id: string
@@ -24,24 +25,9 @@ export function useDocumentPreview(vehicleId: () => string | undefined) {
     previewDoc.value = null
   }
 
-  function handlePreviewKeydown(e: KeyboardEvent) {
-    if (e.key === 'Escape' && previewDoc.value) {
-      closeDocPreview()
-    }
-  }
+  useEscapeToClose(() => !!previewDoc.value, closeDocPreview)
 
-  watch(previewDoc, (val) => {
-    if (val) {
-      window.addEventListener('keydown', handlePreviewKeydown)
-    } else {
-      window.removeEventListener('keydown', handlePreviewKeydown)
-    }
-  })
-
-  onUnmounted(() => {
-    window.removeEventListener('keydown', handlePreviewKeydown)
-    closeDocPreview()
-  })
+  onUnmounted(closeDocPreview)
 
   async function viewOrDownloadDocument(docId: string | null | undefined, filename?: string | null, download = false) {
     const id = vehicleId()

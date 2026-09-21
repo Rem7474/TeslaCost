@@ -6,6 +6,7 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { emptySessionForm, formatDate, type SessionForm } from '@/utils/tires'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Adds or edits (editingSessionId set) a mount session of selectedTire; initialForm seeds the fields when the modal opens
 const props = defineProps<{
@@ -17,6 +18,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const sessionForm = ref<SessionForm>(emptySessionForm())

@@ -7,11 +7,13 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { isMountedPosition } from '@/utils/tires'
 import { toIsoDay } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Empty fields are left unchanged. fallbackTire / fallbackStats stand in for a tire the list does not carry (opened from its history).
 const props = defineProps<{ vehicleId: string; tires: any[]; tireIds: string[]; fallbackTire: any | null; fallbackStats: any | null }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const tireEditIds = ref<string[]>([])

@@ -13,6 +13,7 @@ import QuickChargeForm from './QuickChargeForm.vue'
 import QuickExpenseForm from './QuickExpenseForm.vue'
 import QuickFuelForm from './QuickFuelForm.vue'
 import QuickPendingCosts from './QuickPendingCosts.vue'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const route = useRoute()
 const router = useRouter()
@@ -177,10 +178,6 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]):not([ty
 
 function onKeydown(event: KeyboardEvent) {
   if (!quickAdd.isOpen) return
-  if (event.key === 'Escape') {
-    quickAdd.close()
-    return
-  }
   if (event.key !== 'Tab' || !panel.value) return
   const items = Array.from(panel.value.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => el.offsetParent !== null)
   if (items.length === 0) return
@@ -194,6 +191,8 @@ function onKeydown(event: KeyboardEvent) {
     first.focus()
   }
 }
+
+useEscapeToClose(() => quickAdd.isOpen, () => quickAdd.close())
 
 onMounted(() => document.addEventListener('keydown', onKeydown))
 onBeforeUnmount(() => {

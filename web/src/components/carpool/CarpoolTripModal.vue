@@ -27,6 +27,7 @@ import {
   type LegForm,
   type PassengerForm,
 } from '@/utils/carpool'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Creates a carpool trip, or edits `editing`. A new trip can start from drives or a trip group (createOptions).
 // openToken changes every time the page asks to open the modal, so the form is initialised again even if it is already open.
@@ -38,6 +39,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const editingTripId = computed<string | null>(() => props.editing?.id ?? null)

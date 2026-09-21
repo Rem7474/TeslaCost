@@ -1,21 +1,14 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, nextTick, ref } from 'vue'
+import { watch, nextTick, ref } from 'vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { Trash2, AlertTriangle, Info, CheckCircle2, X } from 'lucide-vue-next'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const { isOpen, options, onConfirm, onCancel } = useConfirm()
 const confirmBtnRef = ref<HTMLButtonElement | null>(null)
 const cancelBtnRef = ref<HTMLButtonElement | null>(null)
 
-function handleKeydown(e: KeyboardEvent) {
-  if (!isOpen.value) return
-  if (e.key === 'Escape') {
-    e.preventDefault()
-    onCancel()
-  } else if (e.key === 'Enter' && !options.value.isAlert) {
-    // Prevent accidental confirm on enter unless explicitly handled
-  }
-}
+useEscapeToClose(isOpen, onCancel)
 
 watch(isOpen, async (open) => {
   if (open) {
@@ -27,14 +20,6 @@ watch(isOpen, async (open) => {
       cancelBtnRef.value?.focus()
     }
   }
-})
-
-onMounted(() => {
-  window.addEventListener('keydown', handleKeydown)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeydown)
 })
 </script>
 

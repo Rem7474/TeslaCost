@@ -5,6 +5,7 @@ import { Fuel, Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const props = defineProps<{
   vehicleId: string
@@ -17,6 +18,7 @@ const stats = ref<any | null>(null)
 const loading = ref(false)
 const saving = ref(false)
 const showForm = ref(false)
+useEscapeToClose(showForm, () => (showForm.value = false))
 const editingId = ref<string | null>(null)
 const formError = ref('')
 

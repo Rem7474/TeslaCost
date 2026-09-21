@@ -5,10 +5,12 @@ import { Snowflake, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { getTireSelectLabel } from '@/utils/tires'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const props = defineProps<{ vehicleId: string; storageTires: any[]; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const packSwapForm = ref({

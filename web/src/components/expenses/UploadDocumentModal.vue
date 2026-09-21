@@ -5,11 +5,13 @@ import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { X, UploadCloud } from 'lucide-vue-next'
 import AppDropzone from '@/components/AppDropzone.vue'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Adds a receipt that is not attached to any expense yet
 const props = defineProps<{ vehicleId: string }>()
 const emit = defineEmits<{ 'document-added': [doc: ExpenseDocumentHeader] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const isUploadingDocument = ref(false)

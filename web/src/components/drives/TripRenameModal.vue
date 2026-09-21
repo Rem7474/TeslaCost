@@ -4,11 +4,13 @@ import { ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { Layers, X } from 'lucide-vue-next'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Renames a trip group and edits its notes.
 const props = defineProps<{ vehicleId: string; trip: any | null }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 
 const tripEditForm = ref({ id: '', name: '', notes: '' })

@@ -10,6 +10,7 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
 import { CURRENCIES, countUnlistedDrives, currencyPayload, formatDate, toLocalDateTimeInput } from '@/utils/expenses'
 import { formatDayTime } from '@/utils/dates'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Adds a toll / parking expense, or edits it when `editing` is set. Its form is seeded when the modal opens.
 const props = defineProps<{ vehicleId: string; editing: any | null; documents: ExpenseDocumentHeader[] }>()
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   'view-document': [docId: string | null | undefined, filename?: string | null, download?: boolean]
 }>()
 const open = defineModel<boolean>('open', { required: true })
+useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
 const { isUploadingDocument, onSelectExistingDoc, onDropzoneDirectUpload } = useDocumentAttach(
   () => props.vehicleId,

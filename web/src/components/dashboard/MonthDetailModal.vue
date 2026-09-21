@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info } from 'lucide-vue-next'
 import { buildMonthBreakdown, formatMonthName, type MonthDetailMode } from '@/utils/dashboard'
 import CostDonut from '@/components/costs/CostDonut.vue'
+import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Cost detail of one month with a donut chart and the itemized list; ← / → move between months, Esc closes.
 // The modal is open while a month is selected.
@@ -54,14 +55,14 @@ const selectedMonthBreakdown = computed(() => {
 
 function onKeydown(e: KeyboardEvent) {
   if (!selectedMonth.value) return
-  if (e.key === 'Escape') {
-    closeMonthDetail()
-  } else if (e.key === 'ArrowLeft') {
+  if (e.key === 'ArrowLeft') {
     selectPrevMonth()
   } else if (e.key === 'ArrowRight') {
     selectNextMonth()
   }
 }
+
+useEscapeToClose(() => !!selectedMonth.value, closeMonthDetail)
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
