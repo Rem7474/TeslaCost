@@ -80,6 +80,9 @@
     "unknownEnd": "Arrivée inconnue"
   },
   "driveCostModal": {
+    "breakdownTitle": "Répartition du trajet",
+    "breakdownAria": "Répartition des coûts du trajet par poste",
+    "noCost": "Aucune dépense",
     "shareAsACarpool": "Partager en covoiturage",
     "costPerKilometre": "Coût au kilomètre",
     "totalCostPrice": "Coût de Revient Total",

@@ -181,8 +181,7 @@
     "ofWhichKmSmoothed": "dont {smoothedKm} km lissés",
     "smoothingIncluded": "Lissage d'usage inclus",
     "cashAmounts": "Montants comptants",
-    "noExpense": "Aucune dépense",
-    "noExpenseRecorded": "Aucune dépense enregistrée"
+    "noExpense": "Aucune dépense"
   },
   "monthlyCostChart": {
     "monthlyCostTrendByCategory": "Évolution mensuelle du coût par poste",

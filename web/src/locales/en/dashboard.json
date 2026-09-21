@@ -181,8 +181,7 @@
     "ofWhichKmSmoothed": "of which {smoothedKm} km smoothed",
     "smoothingIncluded": "Usage smoothing included",
     "cashAmounts": "Cash amounts",
-    "noExpense": "No expense",
-    "noExpenseRecorded": "No expense recorded"
+    "noExpense": "No expense"
   },
   "monthlyCostChart": {
     "monthlyCostTrendByCategory": "Monthly cost trend by category",

@@ -1,19 +1,15 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Chart, registerables } from 'chart.js'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info } from 'lucide-vue-next'
 import { buildMonthBreakdown, formatMonthName, type MonthDetailMode } from '@/utils/dashboard'
-
-Chart.register(...registerables)
+import CostDonut from '@/components/costs/CostDonut.vue'
 
 // Cost detail of one month with a donut chart and the itemized list; ← / → move between months, Esc closes.
 // The modal is open while a month is selected.
 const props = defineProps<{ monthlyCosts: any[] }>()
 const selectedMonth = defineModel<any | null>('month', { required: true })
 
-const monthDonutRef = ref<HTMLCanvasElement | null>(null)
-let monthDonutChartInstance: Chart | null = null
 const monthDetailViewMode = ref<MonthDetailMode>('economic')
 
 const ITEM_ICONS: Record<string, any> = {
@@ -56,89 +52,6 @@ const selectedMonthBreakdown = computed(() => {
   return { ...breakdown, items: breakdown.items.map((it) => ({ ...it, icon: ITEM_ICONS[it.key] })) }
 })
 
-function renderMonthDonutChart() {
-  if (monthDonutChartInstance) {
-    monthDonutChartInstance.destroy()
-    monthDonutChartInstance = null
-  }
-  if (!monthDonutRef.value || !selectedMonthBreakdown.value) return
-
-  const breakdown = selectedMonthBreakdown.value
-  const activeItems = breakdown.items.filter((it) => it.displayAmount > 0.005)
-
-  let labels: string[]
-  let data: number[]
-  let backgroundColors: string[]
-
-  if (activeItems.length > 0) {
-    labels = activeItems.map((it) => it.label)
-    data = activeItems.map((it) => it.displayAmount)
-    backgroundColors = activeItems.map((it) => it.color)
-  } else {
-    labels = [t('dashboard.monthDetailModal.noExpense')]
-    data = [1]
-    backgroundColors = ['#334155']
-  }
-
-  monthDonutChartInstance = new Chart(monthDonutRef.value, {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets: [
-        {
-          data,
-          backgroundColor: backgroundColors,
-          borderWidth: 0,
-        },
-      ],
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: '#94a3b8',
-            font: { size: 11 },
-            boxWidth: 10,
-            padding: 10,
-          },
-        },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => {
-              if (activeItems.length === 0) return ' ' + t('dashboard.monthDetailModal.noExpenseRecorded')
-              const val = Number(ctx.raw || 0).toFixed(2)
-              const total = breakdown.activeTotal
-              const pct = total > 0 ? ((Number(ctx.raw || 0) / total) * 100).toFixed(1) : '0'
-              return ` ${ctx.label} : ${val} € (${pct}%)`
-            },
-          },
-        },
-      },
-      cutout: '68%',
-    },
-  })
-}
-
-// Opening or changing the month draws the chart once the canvas exists; closing destroys it
-watch(selectedMonth, async (month) => {
-  if (!month) {
-    if (monthDonutChartInstance) {
-      monthDonutChartInstance.destroy()
-      monthDonutChartInstance = null
-    }
-    return
-  }
-  await nextTick()
-  renderMonthDonutChart()
-})
-
-watch(monthDetailViewMode, () => {
-  renderMonthDonutChart()
-})
-
 function onKeydown(e: KeyboardEvent) {
   if (!selectedMonth.value) return
   if (e.key === 'Escape') {
@@ -151,10 +64,7 @@ function onKeydown(e: KeyboardEvent) {
 }
 
 onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeydown)
-  if (monthDonutChartInstance) monthDonutChartInstance.destroy()
-})
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
@@ -292,7 +202,11 @@ onUnmounted(() => {
             <span>{{ $t('dashboard.monthDetailModal.breakdownOfTheMonth') }}</span>
           </h4>
           <div class="w-full h-56 sm:h-64 relative">
-            <canvas ref="monthDonutRef" role="img" :aria-label="$t('dashboard.monthDetailModal.costBreakdownOfTheSelected')"></canvas>
+            <CostDonut
+              :items="selectedMonthBreakdown.items.map((it) => ({ label: it.label, color: it.color, amount: it.displayAmount }))"
+              :empty-label="$t('dashboard.monthDetailModal.noExpense')"
+              :chart-label="$t('dashboard.monthDetailModal.costBreakdownOfTheSelected')"
+            />
           </div>
         </div>
 
