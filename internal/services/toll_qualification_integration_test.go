@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/migrations"
 )
 
 func TestIntegrationDrivesNeedingTollQualification(t *testing.T) {
@@ -59,5 +60,36 @@ func TestIntegrationDrivesNeedingTollQualification(t *testing.T) {
 	}
 	if none, err := repo.DrivesNeedingTollQualification(ctx, v.ID, nil); err != nil || len(none) != 0 {
 		t.Fatalf("no drive, no result: %v %v", none, err)
+	}
+}
+
+func TestIntegrationResetTollDetections(t *testing.T) {
+	db, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "reset@example.com")
+	start := time.Date(2026, 9, 18, 18, 0, 0, 0, time.UTC)
+	d := &models.Drive{VehicleID: v.ID, TeslaMateDriveID: intPtr(1), StartTime: start, EndTime: start.Add(time.Hour), DistanceKm: 50, Tags: []string{}}
+	if _, err := repo.UpsertTeslaMateDrive(ctx, d); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.UpsertTollDetection(ctx, &models.TollDetection{DriveID: d.ID, VehicleID: v.ID, Segments: []models.TollSegment{{Type: "open", Entry: "A"}}}); err != nil {
+		t.Fatal(err)
+	}
+	up, err := migrations.FS.ReadFile("000031_reset_toll_detections.up.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, string(up)); err != nil {
+		t.Fatal(err)
+	}
+	var left int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM toll_detections`).Scan(&left); err != nil {
+		t.Fatal(err)
+	}
+	if left != 0 {
+		t.Fatalf("the stored detections are dropped, %d left", left)
+	}
+	if got, _ := repo.DrivesNeedingTollQualification(ctx, v.ID, []string{d.ID}); got[d.ID] {
+		t.Fatal("without its detection a 50 km drive with no speed data leaves the queue")
 	}
 }
