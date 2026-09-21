@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyBatchTag,
+  buildSuggestionCostDrive,
   buildTripCostDrive,
   currentYearMonth,
   driveCsvRows,
+  filterTrips,
   formatMonthLabel,
   formatTripDates,
   isHighwayDrive,
@@ -12,6 +14,7 @@ import {
   paginationPages,
   selectionSummary,
   shiftMonth,
+  suggestionTripId,
   teslamateDriveUrl,
   toggleTag,
   tollApplyStatusLabel,
@@ -248,5 +251,48 @@ describe('buildTripCostDrive', () => {
     expect(t.costs.tires_rate).toBe(0.02)
     expect(t.costs.maintenance_rate).toBe(0.015)
     expect(t.costs.cost_per_km).toBe(0)
+  })
+})
+
+describe('filterTrips', () => {
+  const trips = [
+    { id: 'a', name: 'Annecy → Lyon', start_time: '2026-09-13T16:00:00Z' },
+    { id: 'b', name: 'Valloire', notes: 'week-end ski', start_time: '2026-09-17T16:41:00Z' },
+    { id: 'c', name: '', start_address: 'Grenoble', end_address: 'Valence', start_time: '2026-08-30T09:00:00Z' },
+  ]
+
+  it('keeps everything without a filter', () => {
+    expect(filterTrips(trips, {})).toHaveLength(3)
+  })
+
+  it('applies both bounds of the period on whole days', () => {
+    expect(filterTrips(trips, { from: '2026-09-13', to: '2026-09-13' }).map((t) => t.id)).toEqual(['a'])
+    expect(filterTrips(trips, { from: '2026-09-01' }).map((t) => t.id)).toEqual(['a', 'b'])
+    expect(filterTrips(trips, { to: '2026-09-12' }).map((t) => t.id)).toEqual(['c'])
+  })
+
+  it('searches name, notes and addresses without case or blanks', () => {
+    expect(filterTrips(trips, { q: ' LYON ' }).map((t) => t.id)).toEqual(['a'])
+    expect(filterTrips(trips, { q: 'ski' }).map((t) => t.id)).toEqual(['b'])
+    expect(filterTrips(trips, { q: 'valence' }).map((t) => t.id)).toEqual(['c'])
+    expect(filterTrips(trips, { q: 'nowhere' })).toEqual([])
+  })
+})
+
+describe('buildSuggestionCostDrive', () => {
+  const legs = [
+    { id: 'd1', start_time: '2026-09-17T16:00:00Z', start_address: 'A, France', end_address: 'B, France', distance_km: 80, costs: { electricity_cost: 8, tolls_cost: 7.53, tires_cost: 1, maintenance_cost: 1, insurance_cost: 0 } },
+    { id: 'd2', start_time: '2026-09-17T18:00:00Z', start_address: 'B, France', end_address: 'C, France', distance_km: 70, costs: { electricity_cost: 7, tolls_cost: 4.37, tires_cost: 1, maintenance_cost: 1, insurance_cost: 0 } },
+  ]
+  const s = { drive_ids: ['d1', 'd2'], start_time: '2026-09-17T16:00:00Z' }
+
+  it('is a read-only trip whose tolls are those already attached to its drives', () => {
+    const trip = buildSuggestionCostDrive(s, legs, 'A → C')
+    expect(trip.id).toBe(suggestionTripId(s))
+    expect(trip.is_trip_group).toBe(true)
+    expect(trip.is_suggestion).toBe(true)
+    expect(trip.trip_group_name).toBe('A → C')
+    expect(trip.costs.tolls_cost).toBeCloseTo(11.9, 2)
+    expect(trip.distance_km).toBe(150)
   })
 })

@@ -81,7 +81,7 @@
   },
   "tripSuggestions": {
     "title": "{count} voyage(s) à qualifier",
-    "help": "Trajets consécutifs séparés par des arrêts de moins de 5 minutes, ou par un arrêt avec recharge : ils forment probablement un seul voyage. Créez le voyage, ou indiquez que ce n'en est pas un.",
+    "help": "Trajets consécutifs séparés par des arrêts de moins de 5 minutes, ou par un arrêt avec recharge, sur au moins 50 km au total : ils forment probablement un seul voyage. Ouvrez-en un pour voir son détail, créez le voyage, ou indiquez que ce n'en est pas un.",
     "reasonPause": "arrêts courts",
     "reasonCharge": "recharge entre les étapes",
     "unnamed": "Voyage sans adresse",
@@ -93,6 +93,7 @@
     "toQualifyHint": "Voyages détectés automatiquement, à créer ou à écarter"
   },
   "driveCostModal": {
+    "suggestionNotice": "Voyage détecté automatiquement, pas encore créé. Créez-le pour y rattacher des frais ou un covoiturage.",
     "backToTrip": "Retour au voyage",
     "tripLegs": "Étapes du voyage ({count})",
     "tripCarpools": "Covoiturages du voyage ({count})",
@@ -201,6 +202,8 @@
     "display": "Affichage"
   },
   "drivesToolbar": {
+    "tripSFound": "voyage(s) trouvé(s)",
+    "totalDistance": "Distance totale :",
     "pageCost": "Coût page :",
     "kwh": "{pageEnergy} kWh",
     "pageEnergy": "Énergie page :",
@@ -219,6 +222,7 @@
     "all": "Tous"
   },
   "tripGroupsPanel": {
+    "noTripMatchesTheFilters": "Aucun voyage ne correspond aux filtres.",
     "loadingTheDrives": "Chargement des trajets...",
     "removeThisDriveFromThe": "Retirer ce trajet du voyage",
     "deleteTheTrip": "Supprimer le voyage",

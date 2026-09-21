@@ -178,6 +178,46 @@ function pickSource(tgDrives: any[], field: string, cautious: string[] = []): st
   return cautious.find((c) => values.includes(c)) ?? values[0]
 }
 
+export interface TripListFilter {
+  from?: string // YYYY-MM-DD, inclusive
+  to?: string // YYYY-MM-DD, inclusive
+  q?: string
+}
+
+/**
+ * Trip groups or trip suggestions narrowed like the drives list: start time inside the period (same day-boundary
+ * rule as the API, in UTC) and the query found in the name, notes or addresses.
+ */
+export function filterTrips<T extends { start_time: string; name?: string; notes?: string | null; start_address?: string; end_address?: string }>(
+  trips: T[],
+  { from, to, q }: TripListFilter
+): T[] {
+  const fromMs = from ? Date.parse(`${from}T00:00:00Z`) : null
+  const toMs = to ? Date.parse(`${to}T23:59:59Z`) : null
+  const needle = (q || '').trim().toLowerCase()
+  return trips.filter((tr) => {
+    const start = Date.parse(tr.start_time)
+    if (fromMs != null && start < fromMs) return false
+    if (toMs != null && start > toMs) return false
+    if (!needle) return true
+    return [tr.name, tr.notes, tr.start_address, tr.end_address].some((field) => field?.toLowerCase().includes(needle))
+  })
+}
+
+/** Id a trip suggestion goes by in the cost modal, before any trip group exists for it. */
+export function suggestionTripId(s: { drive_ids: string[] }) {
+  return `suggestion:${s.drive_ids[0]}`
+}
+
+/** A trip suggestion presented like a trip group for the cost modal, from the drives it is made of (with their costs). */
+export function buildSuggestionCostDrive(s: any, legs: any[], name: string) {
+  const tolls = legs.reduce((sum, d) => sum + (Number(d.costs?.tolls_cost) || 0), 0)
+  return {
+    ...buildTripCostDrive({ id: suggestionTripId(s), name, start_time: s.start_time, tolls_total: tolls }, legs),
+    is_suggestion: true,
+  }
+}
+
 /** A trip group presented like a drive for the cost modal: distances and costs summed over its drives. */
 export function buildTripCostDrive(tg: any, tgDrives: any[]) {
   const totalKm = tgDrives.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
