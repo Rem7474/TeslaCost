@@ -7,7 +7,7 @@ import { formatTripDates } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 
 // The trip groups ("voyages") list; a trip can be expanded to show its drives.
-defineProps<{ loadingTrips: boolean; tripGroups: any[]; expandedTripId: string | null; tripDrives: any[] }>()
+defineProps<{ loadingTrips: boolean; tripGroups: any[]; hasFilters: boolean; expandedTripId: string | null; tripDrives: any[] }>()
 const emit = defineEmits<{
   'open-cost': [trip: any]
   'toggle-details': [trip: any]
@@ -24,7 +24,7 @@ const formatDate = formatDayTime
   <div class="space-y-3">
     <div v-if="loadingTrips" class="text-center py-12 text-slate-400">{{ $t('common.loading') }}</div>
     <div v-else-if="!tripGroups.length" class="p-8 text-center bg-slate-900 border border-slate-800 rounded-2xl text-slate-400">
-      {{ $t('drives.tripGroupsPanel.noTripsSelectSeveralDrives') }}
+      {{ hasFilters ? $t('drives.tripGroupsPanel.noTripMatchesTheFilters') : $t('drives.tripGroupsPanel.noTripsSelectSeveralDrives') }}
     </div>
     <template v-else>
     <template

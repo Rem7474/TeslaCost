@@ -13,7 +13,8 @@ import { buildDriveBreakdown } from '@/utils/costBreakdown'
 import CostDonut from '@/components/costs/CostDonut.vue'
 
 // Cost breakdown of a drive, or of a trip group (drive.is_trip_group, whose drives are tripDriveIds), with its
-// expenses (edit, delete, add a toll) and the toll detection. refreshDrive reloads the drives list and returns the
+// expenses (edit, delete, add a toll) and the toll detection. A detected trip that is not created yet
+// (drive.is_suggestion) is shown read-only, with a button to create it. refreshDrive reloads the drives list and returns the
 // refreshed drive so the breakdown follows the server-side costs.
 const props = defineProps<{
   vehicleId: string
@@ -22,7 +23,7 @@ const props = defineProps<{
   startWithTollEntry: boolean
   refreshDrive: (driveId: string) => Promise<any | null>
 }>()
-const emit = defineEmits<{ 'toggle-tag': [drive: any, tag: string] }>()
+const emit = defineEmits<{ 'toggle-tag': [drive: any, tag: string]; 'create-trip': [suggestion: any] }>()
 const open = defineModel<boolean>('open', { required: true })
 const selectedCostDrive = defineModel<any | null>('drive', { required: true })
 const router = useRouter()
@@ -96,7 +97,7 @@ watch(open, (isOpen) => {
   if (drive.is_trip_group) {
     showAddTollInline.value = false
     loadTripExpenses()
-    loadTripCarpools(drive.id)
+    if (!drive.is_suggestion) loadTripCarpools(drive.id)
     return
   }
   showAddTollInline.value = props.startWithTollEntry
@@ -369,6 +370,10 @@ async function handleDeleteExpense(exp: any) {
         </div>
       </div>
 
+      <p v-if="selectedCostDrive.is_suggestion" class="text-[11px] text-indigo-300 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-3 py-2">
+        {{ $t('drives.driveCostModal.suggestionNotice') }}
+      </p>
+
       <p v-if="selectedCostDrive.costs?.has_estimates" class="text-[11px] text-amber-400/90 bg-amber-500/10 border border-amber-500/20 rounded-xl px-3 py-2 flex items-start gap-2">
         <AlertTriangle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <span>{{ $t('drives.driveCostModal.someItemsUseADefault') }}</span>
@@ -578,6 +583,7 @@ async function handleDeleteExpense(exp: any) {
                 <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tolls.costPerKm.toFixed(3) }} €/km</span></div>
               </div>
               <button
+                v-if="!selectedCostDrive.is_suggestion"
                 @click="showAddTollInline = !showAddTollInline"
                 class="p-1 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg text-xs"
                 :title="$t('drives.driveCostModal.addATollOrParking')"
@@ -599,10 +605,10 @@ async function handleDeleteExpense(exp: any) {
                 </span>
                 <span class="flex items-center gap-1.5">
                   <span class="font-mono text-amber-400">{{ (exp.allocated_amount ?? exp.amount).toFixed(2) }} €</span>
-                  <button @click="startEditExpense(exp)" class="p-0.5 text-slate-500 hover:text-amber-400" :title="$t('drives.driveCostModal.editThisCost')">
+                  <button v-if="!selectedCostDrive.is_suggestion" @click="startEditExpense(exp)" class="p-0.5 text-slate-500 hover:text-amber-400" :title="$t('drives.driveCostModal.editThisCost')">
                     <Pencil class="w-3 h-3" />
                   </button>
-                  <button @click="handleDeleteExpense(exp)" class="p-0.5 text-slate-500 hover:text-rose-400" :title="$t('drives.driveCostModal.deleteThisCost')">
+                  <button v-if="!selectedCostDrive.is_suggestion" @click="handleDeleteExpense(exp)" class="p-0.5 text-slate-500 hover:text-rose-400" :title="$t('drives.driveCostModal.deleteThisCost')">
                     <Trash2 class="w-3 h-3" />
                   </button>
                 </span>
@@ -761,6 +767,16 @@ async function handleDeleteExpense(exp: any) {
           {{ $t('common.close') }}
         </button>
         <button
+          v-if="selectedCostDrive.is_suggestion"
+          type="button"
+          @click="emit('create-trip', selectedCostDrive)"
+          class="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-indigo-600/25 transition-all"
+        >
+          <Layers class="w-4 h-4" />
+          <span>{{ $t('drives.tripSuggestions.create') }}</span>
+        </button>
+        <button
+          v-else
           @click="open = false; router.push({ path: '/carpools', query: selectedCostDrive.is_trip_group ? { new_trip_group_id: selectedCostDrive.id } : { new_drive_id: selectedCostDrive.id } })"
           class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-rose-600/25 transition-all"
         >

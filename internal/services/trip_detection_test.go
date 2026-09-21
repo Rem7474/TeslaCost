@@ -51,6 +51,17 @@ func TestDetectTripSuggestionsChargeStopCap(t *testing.T) {
 	}
 }
 
+func TestDetectTripSuggestionsMinDistance(t *testing.T) {
+	short := []models.TripCandidateDrive{tripDrive("a", 0, 20, 20), tripDrive("b", 22, 40, 29)}
+	if got := DetectTripSuggestions(short, nil); len(got) != 0 {
+		t.Fatalf("49 km in total is below the minimum trip distance: %+v", got)
+	}
+	enough := []models.TripCandidateDrive{tripDrive("a", 0, 20, 20), tripDrive("b", 22, 40, 30)}
+	if got := DetectTripSuggestions(enough, nil); len(got) != 1 {
+		t.Fatalf("exactly the minimum distance is a trip: %+v", got)
+	}
+}
+
 func TestDetectTripSuggestionsIgnoresGroupedDrives(t *testing.T) {
 	a, b := tripDrive("a", 0, 60, 10), tripDrive("b", 62, 90, 10)
 	b.Grouped = true
@@ -61,7 +72,7 @@ func TestDetectTripSuggestionsIgnoresGroupedDrives(t *testing.T) {
 
 func TestDetectTripSuggestionsUnsortedInputAndOrder(t *testing.T) {
 	got := DetectTripSuggestions([]models.TripCandidateDrive{
-		tripDrive("d", 1000, 1030, 5), tripDrive("b", 61, 90, 5), tripDrive("a", 0, 60, 5), tripDrive("c", 1033, 1100, 5),
+		tripDrive("d", 1000, 1030, 25), tripDrive("b", 61, 90, 25), tripDrive("a", 0, 60, 25), tripDrive("c", 1033, 1100, 25),
 	}, nil)
 	if len(got) != 2 || len(got[0].DriveIDs) != 2 || got[0].DriveIDs[0] != "d" || got[0].DriveIDs[1] != "c" || got[1].DriveIDs[0] != "a" || got[1].DriveIDs[1] != "b" {
 		t.Fatalf("expected the recent chain first, each in chronological order: %+v", got)

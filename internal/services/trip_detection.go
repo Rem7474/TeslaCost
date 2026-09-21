@@ -15,6 +15,8 @@ const (
 	TripChargeStopMax = 1 * time.Hour
 	// Charge timestamps and drive ends are recorded independently, so a charge may start slightly before a drive ends.
 	tripChargeSlack = 5 * time.Minute
+	// A chain of drives shorter than this in total is errands around town, not a trip.
+	TripMinDistanceKm = 50.0
 )
 
 func chargedBetween(charges []models.ChargeWindow, from, to time.Time) bool {
@@ -32,7 +34,8 @@ func chargedBetween(charges []models.ChargeWindow, from, to time.Time) bool {
 
 // DetectTripSuggestions groups consecutive drives into probable trips: a stop shorter than TripPauseMax, or a
 // stop up to TripChargeStopMax during which the car was charging, keeps the drives in the same trip. Only chains
-// of at least two drives that are all still ungrouped are suggested, most recent first.
+// of at least two drives that are all still ungrouped and cover at least TripMinDistanceKm are suggested, most
+// recent first.
 func DetectTripSuggestions(drives []models.TripCandidateDrive, charges []models.ChargeWindow) []models.TripSuggestion {
 	sorted := append([]models.TripCandidateDrive(nil), drives...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Start.Before(sorted[j].Start) })
@@ -56,6 +59,9 @@ func DetectTripSuggestions(drives []models.TripCandidateDrive, charges []models.
 			s.DistanceKm += d.DistanceKm
 		}
 		s.DistanceKm = math.Round(s.DistanceKm*10) / 10
+		if s.DistanceKm < TripMinDistanceKm {
+			return
+		}
 		if l := placeLabel(chain[0].StartAddress); l != nil {
 			s.StartAddress = *l
 		}

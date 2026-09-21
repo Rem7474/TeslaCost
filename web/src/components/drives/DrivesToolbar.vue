@@ -7,9 +7,10 @@ import { currentYearMonth, formatMonthLabel, shiftMonth } from '@/utils/drives'
 
 type PeriodMode = 'ALL' | 'MONTH' | 'CUSTOM'
 
-// Period, month and address filters of the drives list, plus the metrics of the current page.
+// Period, month and address filters shared by the drives list and the trips list, plus the metrics of what is listed
+// (the current page of drives, or the trips in trip mode).
 // Every change of a filter is reported with change so the page reloads from the first page.
-const props = defineProps<{ total: number; loading: boolean; drives: any[] }>()
+const props = withDefaults(defineProps<{ total: number; loading: boolean; drives: any[]; mode?: 'DRIVES' | 'TRIPS' }>(), { mode: 'DRIVES' })
 const emit = defineEmits<{ change: [] }>()
 const periodMode = defineModel<PeriodMode>('periodMode', { required: true })
 const selectedMonth = defineModel<string>('selectedMonth', { required: true })
@@ -181,7 +182,15 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
     </div>
 
     <!-- Quick Metrics Summary for Current Selection -->
-    <div v-if="total > 0 && !loading" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
+    <div v-if="total > 0 && !loading && mode === 'TRIPS'" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
+      <span class="font-medium text-slate-300">
+        <strong class="text-white">{{ total }}</strong> {{ $t('drives.drivesToolbar.tripSFound') }}
+        <span v-if="periodMode === 'MONTH'">en <span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></span>
+      </span>
+      <span class="text-slate-600">•</span>
+      <span>{{ $t('drives.drivesToolbar.totalDistance') }} <strong class="text-white">{{ Math.round(pageDistance).toLocaleString(intlLocale()) }} km</strong></span>
+    </div>
+    <div v-else-if="total > 0 && !loading" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
       <span class="font-medium text-slate-300">
         <strong class="text-white">{{ total }}</strong> {{ $t('drives.drivesToolbar.driveSFound') }}
         <span v-if="periodMode === 'MONTH'">en <span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></span>
