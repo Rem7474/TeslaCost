@@ -101,21 +101,18 @@ watch(
     </div>
     <p v-if="!drives.length" class="text-[11px] text-slate-500">{{ $t('drives.drivePicker.noDriveInThisPeriod') }}</p>
     <div class="max-h-44 overflow-y-auto space-y-1 pr-1">
-      <button
+      <label
         v-for="d in drives"
         :key="d.id"
-        type="button"
-        @click="emit('toggle', d.id)"
-        class="w-full flex items-center justify-between gap-3 p-2 rounded-lg text-xs border text-left transition-colors"
+        class="w-full flex items-center justify-between gap-3 p-2 rounded-lg text-xs border text-left cursor-pointer transition-colors"
         :class="selectedIds.includes(d.id) ? 'bg-rose-500/10 border-rose-500/40 text-rose-100' : 'bg-slate-800/60 border-slate-700 text-slate-300 hover:bg-slate-800'"
-        :aria-pressed="selectedIds.includes(d.id)"
       >
         <span class="flex items-center gap-2 truncate">
-          <input type="checkbox" class="select-box pointer-events-none" :checked="selectedIds.includes(d.id)" tabindex="-1" aria-hidden="true" />
+          <input type="checkbox" class="select-box" :checked="selectedIds.includes(d.id)" @change="emit('toggle', d.id)" />
           <span class="truncate">{{ formatDriveTime(d.start_time) }}{{ $t('drives.tripGroupsPanel.dateSeparator') }}{{ (d.start_address || $t('drives.driveCostModal.start')).split(',')[0] }} → {{ (d.end_address || $t('drives.driveCostModal.end')).split(',')[0] }}</span>
         </span>
         <span class="font-mono text-[11px] text-slate-400 shrink-0">{{ Number(d.distance_km).toFixed(0) }} km</span>
-      </button>
+      </label>
     </div>
   </div>
 </template>
