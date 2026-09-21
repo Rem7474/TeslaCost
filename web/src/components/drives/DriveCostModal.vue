@@ -237,7 +237,7 @@ async function handleDeleteExpense(exp: any) {
     class="fixed inset-0 z-[60] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
     @click.self="open = false"
   >
-    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-3xl w-full max-h-[calc(100dvh-2rem)] flex flex-col shadow-2xl overflow-hidden my-auto">
       <!-- Header -->
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <div class="flex items-center gap-2.5 min-w-0 pr-2">
@@ -323,10 +323,11 @@ async function handleDeleteExpense(exp: any) {
         <span>{{ $t('drives.driveCostModal.someItemsUseADefault') }}</span>
       </p>
 
-      <!-- Cost split, same donut as the monthly detail -->
-      <div class="bg-slate-800/30 border border-slate-800 rounded-xl p-4">
-        <h4 class="text-xs font-bold text-white mb-2">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
-        <div class="w-full h-48 relative">
+      <!-- Same layout as the monthly detail: donut on the left, itemized costs on the right -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">
+      <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
+        <h4 class="text-xs font-bold text-white mb-2 self-start">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
+        <div class="w-full h-56 sm:h-64 relative">
           <CostDonut
             :items="breakdown.items"
             :empty-label="$t('drives.driveCostModal.noCost')"
@@ -336,7 +337,7 @@ async function handleDeleteExpense(exp: any) {
       </div>
 
       <!-- Cost Breakdown List -->
-      <div class="space-y-2.5">
+      <div class="md:col-span-3 space-y-2.5">
         <!-- 1. Électricité -->
         <div class="bg-slate-800/40 border border-slate-800 p-3 rounded-xl flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -626,22 +627,23 @@ async function handleDeleteExpense(exp: any) {
           </div>
           <p v-else-if="tollDetection" class="text-[11px] text-slate-500 pl-9">{{ $t('drives.driveCostModal.noTollDetectedOnThis') }}</p>
         </div>
-      </div>
 
-      <!-- Grand Total Card -->
-      <div class="bg-gradient-to-r from-slate-800 to-slate-800/80 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between shadow-lg">
-        <div>
-          <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.totalCostPrice') }}</span>
-          <div class="text-2xl font-black text-white">
-            {{ (selectedCostDrive.costs?.total_cost || 0).toFixed(2) }} €
+        <!-- Grand Total Card -->
+        <div class="bg-gradient-to-r from-slate-800 to-slate-800/80 border border-emerald-500/30 p-4 rounded-2xl flex items-center justify-between shadow-lg">
+          <div>
+            <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.totalCostPrice') }}</span>
+            <div class="text-2xl font-black text-white">
+              {{ (selectedCostDrive.costs?.total_cost || 0).toFixed(2) }} €
+            </div>
+          </div>
+          <div class="text-right">
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
+            <div class="text-lg font-extrabold text-emerald-400 font-mono">
+              {{ (selectedCostDrive.costs?.cost_per_km || 0).toFixed(3) }} €<span class="text-xs font-normal text-slate-400">/km</span>
+            </div>
           </div>
         </div>
-        <div class="text-right">
-          <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
-          <div class="text-lg font-extrabold text-emerald-400 font-mono">
-            {{ (selectedCostDrive.costs?.cost_per_km || 0).toFixed(3) }} €<span class="text-xs font-normal text-slate-400">/km</span>
-          </div>
-        </div>
+      </div>
       </div>
 
       </div>
