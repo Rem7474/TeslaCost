@@ -2070,3 +2070,17 @@ func TestIntegrationMultiLegCarpoolBecomesATrip(t *testing.T) {
 		t.Fatalf("updating the carpool must not create a second group, got %d", len(groups))
 	}
 }
+
+func TestIntegrationListDrivesByID(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "drive-by-id@example.com")
+	base := time.Date(2026, 6, 1, 8, 0, 0, 0, time.UTC)
+	d1 := mustDrive(t, repo, v.ID, 1, base, 10000, 120)
+	mustDrive(t, repo, v.ID, 2, base.Add(3*time.Hour), 10120, 80)
+
+	got, total, err := repo.ListDrives(ctx, v.ID, database.DriveFilter{DriveID: d1.ID}, 10, 0)
+	if err != nil || total != 1 || len(got) != 1 || got[0].ID != d1.ID {
+		t.Fatalf("expected only the requested drive, got %+v (total %d, err %v)", got, total, err)
+	}
+}

@@ -28,6 +28,13 @@ func TestParseDriveFilter(t *testing.T) {
 		}
 	})
 
+	t.Run("a single drive can be requested by id", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/vehicles/v1/drives?drive_id=abc-123", nil)
+		if f := parseDriveFilter(req); f.DriveID != "abc-123" {
+			t.Errorf("expected DriveID abc-123, got %q", f.DriveID)
+		}
+	})
+
 	t.Run("dates formatted as YYYY-MM-DD", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/vehicles/v1/drives?from=2026-08-01&to=2026-08-31&q=Paris&tag=Pro&unqualified=true", nil)
 		f := parseDriveFilter(req)
