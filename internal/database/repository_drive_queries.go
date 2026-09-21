@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -275,3 +276,52 @@ type ReconcileResult struct {
 
 // Share of the covered window above which missing records are considered an API anomaly rather than deletions.
 const maxUpstreamDeletionShare = 0.2
+
+// ListTripCandidateDrives returns the vehicle's drives since a date, with whether each already belongs to a trip group.
+func (r *Repository) ListTripCandidateDrives(ctx context.Context, vehicleID string, since time.Time) ([]models.TripCandidateDrive, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT d.id::text, d.start_time, COALESCE(d.end_time, d.start_time), d.distance_km, d.start_address, d.end_address,
+		       EXISTS(SELECT 1 FROM trip_group_drives tgd WHERE tgd.drive_id = d.id)
+		FROM drives d
+		WHERE d.vehicle_id = $1 AND d.deleted_upstream_at IS NULL AND d.start_time >= $2
+		ORDER BY d.start_time;
+	`, vehicleID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.TripCandidateDrive
+	for rows.Next() {
+		var d models.TripCandidateDrive
+		if err := rows.Scan(&d.ID, &d.Start, &d.End, &d.DistanceKm, &d.StartAddress, &d.EndAddress, &d.Grouped); err != nil {
+			return nil, err
+		}
+		list = append(list, d)
+	}
+	return list, rows.Err()
+}
+
+// ListChargeWindows returns the charging sessions of the vehicle since a date.
+func (r *Repository) ListChargeWindows(ctx context.Context, vehicleID string, since time.Time) ([]models.ChargeWindow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT date, COALESCE(end_date, date)
+		FROM charge_logs
+		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND COALESCE(end_date, date) >= $2
+		ORDER BY date;
+	`, vehicleID, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []models.ChargeWindow
+	for rows.Next() {
+		var c models.ChargeWindow
+		if err := rows.Scan(&c.Start, &c.End); err != nil {
+			return nil, err
+		}
+		list = append(list, c)
+	}
+	return list, rows.Err()
+}

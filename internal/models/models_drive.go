@@ -95,8 +95,9 @@ type TripGroup struct {
 	DistanceKm    float64     `json:"distance_km"`
 	StartTime     *time.Time  `json:"start_time,omitempty"`
 	EndTime       *time.Time  `json:"end_time,omitempty"`
-	ExpensesTotal money.Cents `json:"expenses_total"` // EUR
-	ExpenseCount  int         `json:"expense_count"`
+	ExpensesTotal money.Cents `json:"expenses_total"` // EUR, expenses attached to the group itself
+	ExpenseCount  int         `json:"expense_count"`  // expenses attached to the group itself
+	TollsTotal    money.Cents `json:"tolls_total"`    // EUR, all expenses borne by its drives: attached to a drive or to the group
 	CarpoolCount  int         `json:"carpool_count"`
 }
 
@@ -135,4 +136,44 @@ type DataQualityIssue struct {
 	PreviousDriveID *string   `json:"previous_drive_id,omitempty"`
 	Date            time.Time `json:"date"`
 	Km              float64   `json:"km"`
+}
+
+// TripSuggestion is a set of ungrouped consecutive drives that looks like a single trip.
+type TripSuggestion struct {
+	DriveIDs     []string  `json:"drive_ids"`
+	StartTime    time.Time `json:"start_time"`
+	EndTime      time.Time `json:"end_time"`
+	DistanceKm   float64   `json:"distance_km"`
+	StartAddress string    `json:"start_address"`
+	EndAddress   string    `json:"end_address"`
+	Reason       string    `json:"reason"` // PAUSE: stops shorter than TripPauseMax; CHARGE: at least one stop with a charge in between
+}
+
+// Reasons why consecutive drives are suggested as one trip.
+const (
+	TripReasonPause  = "PAUSE"
+	TripReasonCharge = "CHARGE"
+)
+
+// TripCandidateDrive is the part of a drive needed to detect trips.
+type TripCandidateDrive struct {
+	ID           string
+	Start, End   time.Time
+	DistanceKm   float64
+	StartAddress *string
+	EndAddress   *string
+	Grouped      bool // already belongs to a trip group
+}
+
+// EndOrStart returns the end of the drive, or its start when the end is unknown.
+func (d TripCandidateDrive) EndOrStart() time.Time {
+	if d.End.IsZero() {
+		return d.Start
+	}
+	return d.End
+}
+
+// ChargeWindow is a charging session (End equals Start when its end is unknown).
+type ChargeWindow struct {
+	Start, End time.Time
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
-import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save } from 'lucide-vue-next'
+import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wrench, Disc, Plus, AlertTriangle, Pencil, Trash2, Save, ArrowLeft, ChevronRight } from 'lucide-vue-next'
 import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, uniqueById } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 import { buildDriveBreakdown } from '@/utils/costBreakdown'
@@ -17,6 +17,7 @@ import CostDonut from '@/components/costs/CostDonut.vue'
 const props = defineProps<{
   vehicleId: string
   tripDriveIds: string[]
+  tripLegs: any[]
   startWithTollEntry: boolean
   refreshDrive: (driveId: string) => Promise<any | null>
 }>()
@@ -50,13 +51,50 @@ const tollDetectionEstimatedTotal = computed(() => {
   return priced.reduce((sum: number, s: any) => sum + s.estimated_price, 0)
 })
 
+// A trip shows its legs and carpools; opening a leg keeps the trip to come back to
+const parentTrip = ref<any | null>(null)
+const tripCarpools = ref<any[]>([])
+
+async function loadTripCarpools(tripId: string) {
+  tripCarpools.value = []
+  if (!props.vehicleId) return
+  try {
+    const res = await api.getCarpools(props.vehicleId)
+    tripCarpools.value = (res.trips || []).filter((c: any) => c.trip_group_id === tripId)
+  } catch {
+    tripCarpools.value = []
+  }
+}
+
+function openLeg(leg: any) {
+  parentTrip.value = selectedCostDrive.value
+  selectedCostDrive.value = leg
+  editingExpenseId.value = null
+  showAddTollInline.value = false
+  loadDriveExpenses(leg.id)
+  loadTollDetection(leg)
+}
+
+async function backToTrip() {
+  const trip = parentTrip.value
+  if (!trip) return
+  parentTrip.value = null
+  selectedCostDrive.value = trip
+  editingExpenseId.value = null
+  showAddTollInline.value = false
+  const [, refreshed] = await Promise.all([loadTripExpenses(), props.refreshDrive(trip.id)])
+  if (refreshed) selectedCostDrive.value = refreshed
+}
+
 watch(open, (isOpen) => {
   const drive = selectedCostDrive.value
+  if (!isOpen) parentTrip.value = null
   if (!isOpen || !drive) return
   editingExpenseId.value = null
   if (drive.is_trip_group) {
     showAddTollInline.value = false
     loadTripExpenses()
+    loadTripCarpools(drive.id)
     return
   }
   showAddTollInline.value = props.startWithTollEntry
@@ -177,7 +215,8 @@ async function handleAddTollToDrive() {
 async function refreshCostModal() {
   if (!selectedCostDrive.value) return
   const driveId = selectedCostDrive.value.id
-  const [, refreshed] = await Promise.all([loadDriveExpenses(driveId), props.refreshDrive(driveId)])
+  const reloadExpenses = selectedCostDrive.value.is_trip_group ? loadTripExpenses() : loadDriveExpenses(driveId)
+  const [, refreshed] = await Promise.all([reloadExpenses, props.refreshDrive(driveId)])
   if (refreshed) selectedCostDrive.value = refreshed
 }
 
@@ -241,6 +280,15 @@ async function handleDeleteExpense(exp: any) {
       <!-- Header -->
       <div class="px-5 py-4 border-b border-slate-800/80 flex items-center justify-between shrink-0 bg-slate-900/95">
         <div class="flex items-center gap-2.5 min-w-0 pr-2">
+          <button
+            v-if="parentTrip"
+            type="button"
+            @click="backToTrip"
+            class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors shrink-0"
+            :title="$t('drives.driveCostModal.backToTrip')"
+          >
+            <ArrowLeft class="w-4 h-4" />
+          </button>
           <div class="p-2 rounded-xl shrink-0" :class="selectedCostDrive.is_trip_group ? 'bg-indigo-500/10 text-indigo-400' : 'bg-emerald-500/10 text-emerald-400'">
             <component :is="selectedCostDrive.is_trip_group ? Layers : Coins" class="w-5 h-5" />
           </div>
@@ -322,6 +370,59 @@ async function handleDeleteExpense(exp: any) {
         <AlertTriangle class="w-3.5 h-3.5 shrink-0 mt-0.5" />
         <span>{{ $t('drives.driveCostModal.someItemsUseADefault') }}</span>
       </p>
+
+      <!-- Legs of the trip, as drive rows -->
+      <div v-if="selectedCostDrive.is_trip_group && tripLegs.length" class="space-y-1.5">
+        <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+          <Layers class="w-3.5 h-3.5 text-indigo-400" />
+          {{ $t('drives.driveCostModal.tripLegs', { count: tripLegs.length }) }}
+        </h4>
+        <button
+          v-for="leg in tripLegs"
+          :key="leg.id"
+          type="button"
+          @click="openLeg(leg)"
+          class="w-full text-left flex items-center justify-between gap-3 bg-slate-800/40 hover:bg-slate-800/70 border border-slate-800 hover:border-slate-700 rounded-xl px-3 py-2 transition-colors"
+        >
+          <div class="min-w-0">
+            <div class="text-[11px] text-slate-400">{{ formatDate(leg.start_time) }}</div>
+            <div class="text-xs text-slate-200 truncate">
+              {{ (leg.start_address || $t('drives.driveCostModal.start')).split(',')[0] }} → {{ (leg.end_address || $t('drives.driveCostModal.end')).split(',')[0] }}
+            </div>
+          </div>
+          <div class="flex items-center gap-3 shrink-0">
+            <span class="text-[11px] font-bold text-rose-400">{{ Math.round(leg.distance_km) }} km</span>
+            <span class="text-xs font-mono font-bold text-white">{{ (leg.costs?.total_cost || 0).toFixed(2) }} €</span>
+            <ChevronRight class="w-4 h-4 text-slate-500" />
+          </div>
+        </button>
+      </div>
+
+      <!-- Carpools of the trip -->
+      <div v-if="selectedCostDrive.is_trip_group && tripCarpools.length" class="space-y-1.5">
+        <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
+          <Users class="w-3.5 h-3.5 text-rose-400" />
+          {{ $t('drives.driveCostModal.tripCarpools', { count: tripCarpools.length }) }}
+        </h4>
+        <button
+          v-for="c in tripCarpools"
+          :key="c.id"
+          type="button"
+          @click="open = false; router.push({ path: '/carpools' })"
+          class="w-full text-left flex items-center justify-between gap-3 bg-rose-500/5 hover:bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2 transition-colors"
+        >
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-white truncate">{{ c.title }}</div>
+            <div class="text-[11px] text-slate-400">
+              {{ $t('drives.driveCostModal.carpoolLegsPassengers', { legs: c.legs?.length || 1, passengers: c.passengers?.length || 0 }) }}
+            </div>
+          </div>
+          <div class="text-right shrink-0">
+            <div class="text-xs font-mono font-bold text-emerald-400">+{{ Number(c.total_revenue || 0).toFixed(2) }} €</div>
+            <div class="text-[10px] text-slate-400">{{ $t('drives.driveCostModal.carpoolNetCost', { amount: Number(c.net_cost || 0).toFixed(2) }) }}</div>
+          </div>
+        </button>
+      </div>
 
       <!-- Same layout as the monthly detail: donut on the left, itemized costs on the right -->
       <div class="grid grid-cols-1 md:grid-cols-5 gap-6 items-start">

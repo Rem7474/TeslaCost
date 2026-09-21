@@ -10,6 +10,7 @@ import DriveBulkActions from '@/components/drives/DriveBulkActions.vue'
 import DriveCard from '@/components/drives/DriveCard.vue'
 import DrivesPagination from '@/components/drives/DrivesPagination.vue'
 import TripGroupsPanel from '@/components/drives/TripGroupsPanel.vue'
+import TripSuggestions from '@/components/drives/TripSuggestions.vue'
 import DriveCostModal from '@/components/drives/DriveCostModal.vue'
 import DriveGroupModal from '@/components/drives/DriveGroupModal.vue'
 import TripRenameModal from '@/components/drives/TripRenameModal.vue'
@@ -20,6 +21,7 @@ import {
   driveCsvHeaders,
   applyBatchTag,
   buildTripCostDrive,
+  formatTripDates,
   currentYearMonth,
   driveCsvRows,
   monthRange,
@@ -201,6 +203,8 @@ async function loadDrives() {
 // View mode: drives list or trip groups ("voyages")
 const viewMode = ref<'DRIVES' | 'TRIPS'>('DRIVES')
 const tripGroups = ref<any[]>([])
+const tripSuggestions = ref<any[]>([])
+const creatingSuggestionKey = ref<string | null>(null)
 const loadingTrips = ref(false)
 const expandedTripId = ref<string | null>(null)
 const tripDrives = ref<any[]>([])
@@ -213,6 +217,8 @@ const showGroupModal = ref(false)
 const showCostModal = ref(false)
 const selectedCostDrive = ref<any | null>(null)
 const costTripDriveIds = ref<string[]>([])
+const costTripId = ref<string | null>(null)
+const tripLegs = ref<any[]>([])
 const costStartWithToll = ref(false)
 const bulkApplyingToll = ref(false)
 
@@ -258,11 +264,29 @@ async function loadTripGroups() {
   if (!vehicleStore.activeVehicle) return
   loadingTrips.value = true
   try {
-    tripGroups.value = await api.getTripGroups(vehicleStore.activeVehicle.id)
+    const vehicleId = vehicleStore.activeVehicle.id
+    const [groups, suggestions] = await Promise.all([api.getTripGroups(vehicleId), api.getTripSuggestions(vehicleId).catch(() => [])])
+    tripGroups.value = groups
+    tripSuggestions.value = suggestions
   } catch (err) {
     console.error('Failed to load trip groups', err)
   } finally {
     loadingTrips.value = false
+  }
+}
+
+async function createTripFromSuggestion(s: any) {
+  if (!vehicleStore.activeVehicle) return
+  creatingSuggestionKey.value = s.drive_ids[0]
+  try {
+    const route = [s.start_address, s.end_address].filter(Boolean).join(' → ')
+    const name = route || formatTripDates({ start_time: s.start_time, end_time: s.end_time })
+    await api.createTripGroup(vehicleStore.activeVehicle.id, { name, drive_ids: s.drive_ids })
+    await loadTripGroups()
+  } catch (err: any) {
+    showAlert(t('common.errorWithMessage', { message: err.message }), t('shell.confirm.error'), 'danger')
+  } finally {
+    creatingSuggestionKey.value = null
   }
 }
 
@@ -375,13 +399,19 @@ async function handleCarpoolSelectedDrives() {
 }
 
 // Cost breakdown modal
+async function fetchTripLegs(tripId: string) {
+  const res = await api.getDrives(vehicleStore.activeVehicle!.id, { tripGroupId: tripId, limit: 200 })
+  return [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+}
+
 async function openTripCostModal(tg: any) {
   if (!vehicleStore.activeVehicle) return
   try {
-    const res = await api.getDrives(vehicleStore.activeVehicle.id, { tripGroupId: tg.id, limit: 200 })
-    const tgDrives = [...res.drives].sort((a: any, b: any) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())
+    const tgDrives = await fetchTripLegs(tg.id)
     selectedCostDrive.value = buildTripCostDrive(tg, tgDrives)
     costTripDriveIds.value = tgDrives.map((d: any) => d.id)
+    costTripId.value = tg.id
+    tripLegs.value = tgDrives
     showCostModal.value = true
   } catch (err: any) {
     showAlert(t('drives.drivesView.detailsLoadError', { message: err.message }), t('shell.confirm.error'), 'danger')
@@ -391,13 +421,26 @@ async function openTripCostModal(tg: any) {
 function openCostModal(drive: any, startWithToll = false) {
   selectedCostDrive.value = drive
   costStartWithToll.value = startWithToll
+  costTripId.value = null
+  tripLegs.value = []
   showCostModal.value = true
 }
 
-// Reloads the list and returns the refreshed drive, so the open cost breakdown follows the server-side costs
-async function refreshCostDrive(driveId: string) {
+// Reloads the costs and returns the refreshed drive or trip, so the open cost breakdown follows the server-side costs.
+// Inside a trip, its legs are reloaded too since they are what the trip total and each leg are built from.
+async function refreshCostDrive(id: string) {
+  const tripId = costTripId.value
+  if (tripId) {
+    const [, legs] = await Promise.all([loadTripGroups(), fetchTripLegs(tripId)])
+    tripLegs.value = legs
+    costTripDriveIds.value = legs.map((d: any) => d.id)
+    const tg = tripGroups.value.find((g) => g.id === tripId)
+    if (id === tripId) return tg ? buildTripCostDrive(tg, legs) : null
+    const leg = legs.find((d: any) => d.id === id)
+    if (leg) return leg
+  }
   await loadDrives()
-  return drives.value.find((d) => d.id === driveId) ?? null
+  return drives.value.find((d) => d.id === id) ?? null
 }
 
 async function handleBulkApplyToll() {
@@ -617,8 +660,13 @@ async function handleBulkApplyToll() {
     </template>
 
     <!-- TRIP GROUPS ("VOYAGES") -->
+    <template v-else>
+    <TripSuggestions
+      :suggestions="tripSuggestions"
+      :creating-key="creatingSuggestionKey"
+      @create="createTripFromSuggestion"
+    />
     <TripGroupsPanel
-      v-else
       :loading-trips="loadingTrips"
       :trip-groups="tripGroups"
       :expanded-trip-id="expandedTripId"
@@ -629,12 +677,14 @@ async function handleBulkApplyToll() {
       @delete="handleDeleteTrip"
       @remove-drive="removeDriveFromTrip"
     />
+    </template>
 
     <DriveCostModal
       v-model:open="showCostModal"
       v-model:drive="selectedCostDrive"
       :vehicle-id="vehicleId"
       :trip-drive-ids="costTripDriveIds"
+      :trip-legs="tripLegs"
       :start-with-toll-entry="costStartWithToll"
       :refresh-drive="refreshCostDrive"
       @toggle-tag="toggleDriveTag"

@@ -79,7 +79,20 @@
     "unknownStart": "Départ inconnu",
     "unknownEnd": "Arrivée inconnue"
   },
+  "tripSuggestions": {
+    "title": "{count} voyage(s) détecté(s) automatiquement",
+    "help": "Trajets consécutifs séparés par des arrêts de moins de 5 minutes, ou par un arrêt avec recharge : ils forment probablement un seul voyage.",
+    "reasonPause": "arrêts courts",
+    "reasonCharge": "recharge entre les étapes",
+    "unnamed": "Voyage sans adresse",
+    "create": "Créer le voyage"
+  },
   "driveCostModal": {
+    "backToTrip": "Retour au voyage",
+    "tripLegs": "Étapes du voyage ({count})",
+    "tripCarpools": "Covoiturages du voyage ({count})",
+    "carpoolLegsPassengers": "{legs} étape(s) · {passengers} passager(s)",
+    "carpoolNetCost": "coût net {amount} €",
     "breakdownTitle": "Répartition du trajet",
     "breakdownAria": "Répartition des coûts du trajet par poste",
     "noCost": "Aucune dépense",
