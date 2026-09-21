@@ -234,11 +234,14 @@ func (r *Repository) CountUnqualifiedDrives(ctx context.Context, vehicleID strin
 	return count, err
 }
 
+// tollReviewedExpr sets or clears the "reviewed without toll" mark from a boolean parameter $1.
+const tollReviewedExpr = `CASE WHEN $1 THEN COALESCE(toll_reviewed_at, NOW()) ELSE NULL END`
+
 // SetDriveTollReviewed marks (or unmarks) a drive as explicitly reviewed without toll.
 func (r *Repository) SetDriveTollReviewed(ctx context.Context, driveID, vehicleID string, reviewed bool) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE drives
-		SET toll_reviewed_at = CASE WHEN $1 THEN NOW() ELSE NULL END, updated_at = NOW()
+		SET toll_reviewed_at = `+tollReviewedExpr+`, updated_at = NOW()
 		WHERE id::text = $2 AND vehicle_id = $3;
 	`, reviewed, driveID, vehicleID)
 	if err != nil {
@@ -248,6 +251,23 @@ func (r *Repository) SetDriveTollReviewed(ctx context.Context, driveID, vehicleI
 		return ErrNotFound
 	}
 	return nil
+}
+
+// SetTripGroupTollReviewed marks (or unmarks) every drive of a trip group as reviewed without toll.
+func (r *Repository) SetTripGroupTollReviewed(ctx context.Context, tripGroupID, vehicleID string, reviewed bool) error {
+	if err := ensureTripGroupOwned(ctx, r.pool, vehicleID, tripGroupID); err != nil {
+		if errors.Is(err, ErrForeignReference) {
+			return ErrNotFound
+		}
+		return err
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE drives
+		SET toll_reviewed_at = `+tollReviewedExpr+`, updated_at = NOW()
+		WHERE vehicle_id = $2 AND deleted_upstream_at IS NULL
+		  AND id IN (SELECT tgd.drive_id FROM trip_group_drives tgd WHERE tgd.trip_group_id::text = $3);
+	`, reviewed, vehicleID, tripGroupID)
+	return err
 }
 
 func (r *Repository) UpdateDriveTags(ctx context.Context, driveID, vehicleID string, tags []string) error {
@@ -320,7 +340,10 @@ func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]mo
 		       (SELECT COUNT(*) FROM drive_expenses e WHERE e.trip_group_id = tg.id),
 		       (SELECT COUNT(*) FROM carpool_trips c WHERE c.trip_group_id = tg.id),
 		       COALESCE((SELECT SUM(a.allocated) FROM allocations a
-		                 WHERE a.drive_id IN (SELECT tgd.drive_id FROM trip_group_drives tgd WHERE tgd.trip_group_id = tg.id)), 0)
+		                 WHERE a.drive_id IN (SELECT tgd.drive_id FROM trip_group_drives tgd WHERE tgd.trip_group_id = tg.id)), 0),
+		       (SELECT COUNT(*) FROM drives
+		        WHERE drives.id IN (SELECT tgd.drive_id FROM trip_group_drives tgd WHERE tgd.trip_group_id = tg.id)
+		          AND drives.deleted_upstream_at IS NULL AND `+UnqualifiedDrivePredicate+`)
 		FROM trip_groups tg
 		LEFT JOIN LATERAL (
 			SELECT SUM(d.distance_km) AS km, MIN(d.start_time) AS first_start, MAX(d.end_time) AS last_end
@@ -340,7 +363,7 @@ func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]mo
 	for rows.Next() {
 		var tg models.TripGroup
 		if err := rows.Scan(&tg.ID, &tg.VehicleID, &tg.Name, &tg.Notes, &tg.CreatedAt, &tg.UpdatedAt,
-			&tg.DriveIDs, &tg.DistanceKm, &tg.StartTime, &tg.EndTime, &tg.ExpensesTotal, &tg.ExpenseCount, &tg.CarpoolCount, &tg.TollsTotal); err != nil {
+			&tg.DriveIDs, &tg.DistanceKm, &tg.StartTime, &tg.EndTime, &tg.ExpensesTotal, &tg.ExpenseCount, &tg.CarpoolCount, &tg.TollsTotal, &tg.UnqualifiedDriveCount); err != nil {
 			return nil, err
 		}
 		list = append(list, tg)

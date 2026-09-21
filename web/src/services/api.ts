@@ -247,6 +247,12 @@ export const api = {
       { method: 'PATCH', body: JSON.stringify({ reviewed }) },
       t('shell.api.driveNoToll')
     ),
+  setTripTollReview: (vehicleId: string, groupId: string, reviewed: boolean) =>
+    request<any>(
+      `/vehicles/${vehicleId}/trip-groups/${groupId}/toll-review`,
+      { method: 'PATCH', body: JSON.stringify({ reviewed }) },
+      t('shell.api.tripNoToll')
+    ),
   getTollDetection: (vehicleId: string, driveId: string) =>
     request<any>(`/vehicles/${vehicleId}/drives/${driveId}/toll-detection`),
   applyTollEstimate: (vehicleId: string, driveId: string) =>

@@ -92,7 +92,9 @@ watch(open, (isOpen) => {
   if (!isOpen || !drive) return
   editingExpenseId.value = null
   if (drive.is_trip_group) {
-    showAddTollInline.value = false
+    showAddTollInline.value = props.startWithTollEntry
+    inlineTollAmount.value = ''
+    inlineTollNotes.value = ''
     loadTripExpenses()
     loadTripCarpools(drive.id)
     return
