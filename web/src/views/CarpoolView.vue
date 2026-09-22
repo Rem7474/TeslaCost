@@ -102,7 +102,8 @@ async function loadData() {
   }
 }
 
-// A leg of a carpool opens the cost detail of its drive, over the carpool detail
+// A leg of a carpool opens the cost detail of its drive in place of the carpool detail, with an arrow back to it (like the
+// legs of a trip)
 const showDriveModal = ref(false)
 const legDrive = ref<any | null>(null)
 
@@ -116,10 +117,16 @@ async function openLegDrive(driveId: string) {
     const drive = await fetchDrive(driveId)
     if (!drive) return
     legDrive.value = drive
+    showDetail.value = false
     showDriveModal.value = true
   } catch (err: any) {
     showAlert(t('drives.drivesView.detailsLoadError', { message: err.message }), t('shell.confirm.error'), 'danger')
   }
+}
+
+function backToCarpool() {
+  showDriveModal.value = false
+  showDetail.value = true
 }
 
 async function toggleLegDriveTag(drive: any, tag: string) {
@@ -334,6 +341,8 @@ onMounted(() => {
       :trip-legs="[]"
       :start-with-toll-entry="false"
       :refresh-drive="fetchDrive"
+      :back-label="$t('carpool.carpoolView.backToTheCarpool')"
+      @back="backToCarpool"
       @toggle-tag="toggleLegDriveTag"
     />
 

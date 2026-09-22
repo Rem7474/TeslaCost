@@ -79,6 +79,13 @@
     "unknownStart": "Départ inconnu",
     "unknownEnd": "Arrivée inconnue"
   },
+  "drivePicker": {
+    "earlierDrives": "Trajets plus anciens",
+    "laterDrives": "Trajets plus récents",
+    "latestDrives": "Derniers trajets",
+    "aroundTheDate": "± {days} jours autour de cette date",
+    "noDriveInThisPeriod": "Aucun trajet sur cette période."
+  },
   "tripSuggestions": {
     "title": "{count} voyage(s) à qualifier",
     "help": "Trajets consécutifs séparés par des arrêts de moins de 5 minutes, ou par un arrêt avec recharge, sur au moins 50 km au total : ils forment probablement un seul voyage. Ouvrez-en un pour voir son détail, créez le voyage, ou indiquez que ce n'en est pas un.",
@@ -237,9 +244,11 @@
     "legs": "Étapes",
     "dateSeparator": " : "
   },
-  "tripRenameModal": {
+  "tripEditModal": {
     "name": "Nom",
-    "editTheTrip": "Modifier le voyage"
+    "editTheTrip": "Modifier le voyage",
+    "tickTheLegs": "Cochez les trajets qui composent le voyage : chaque trajet est une étape.",
+    "legsSelected": "{count} étape(s)"
   },
   "toll": {
     "skippedManual": "Un péage saisi manuellement existe déjà : il n'est pas remplacé.",
