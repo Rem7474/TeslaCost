@@ -13,8 +13,9 @@ const props = withDefaults(
     emptyLabel?: string
     showLegend?: boolean
     cutout?: string
+    unit?: string
   }>(),
-  { emptyLabel: '', showLegend: true, cutout: '68%' },
+  { emptyLabel: '', showLegend: true, cutout: '68%', unit: '€' },
 )
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -44,7 +45,7 @@ function render() {
               if (!items.length) return ' ' + props.emptyLabel
               const value = Number(ctx.raw || 0)
               const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
-              return ` ${ctx.label} : ${value.toFixed(2)} € (${pct}%)`
+              return ` ${ctx.label} : ${value.toFixed(2)} ${props.unit} (${pct}%)`
             },
           },
         },
