@@ -3,7 +3,8 @@ import { intlLocale, t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Activity, PieChart } from 'lucide-vue-next'
-import { filterMonthsByRange, monthlyRangeOptions, type MonthlyRangeKey } from '@/utils/dashboard'
+import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
+import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
 
 Chart.register(...registerables)
 
@@ -12,7 +13,7 @@ const props = defineProps<{ monthlyCosts: any[] | null }>()
 const emit = defineEmits<{ 'open-month': [month: any] }>()
 
 const mileageChartRef = ref<HTMLCanvasElement | null>(null)
-const mileageChartRange = ref<MonthlyRangeKey>('ALL')
+const mileageChartRange = ref<MonthlyRangeKey>('1Y')
 const filteredMileageCosts = computed(() => filterMonthsByRange(props.monthlyCosts || [], mileageChartRange.value))
 let mileageChartInstance: Chart | null = null
 
@@ -152,20 +153,7 @@ onUnmounted(() => {
           <PieChart class="w-3.5 h-3.5" />
           <span>{{ $t('dashboard.mileageCostChart.lastMonthSDetail') }}</span>
         </button>
-        <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5">
-          <button
-            v-for="opt in monthlyRangeOptions"
-            :key="opt.key"
-            type="button"
-            @click="mileageChartRange = opt.key"
-            :class="[
-              'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
-              mileageChartRange === opt.key ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white',
-            ]"
-          >
-            {{ $t(opt.labelKey) }}
-          </button>
-        </div>
+        <MonthlyRangeSelector v-model="mileageChartRange" :label="$t('dashboard.mileageCostChart.monthlyMileageAndCostPer')" />
         <div class="flex items-center gap-3 text-xs">
           <span class="flex items-center gap-1.5 text-indigo-300">
             <span class="w-3 h-3 rounded bg-indigo-500/80 inline-block"></span>
