@@ -2,7 +2,8 @@
 import { t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
-import { filterMonthsByRange, monthlyRangeOptions, type MonthlyRangeKey } from '@/utils/dashboard'
+import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
+import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
 
 Chart.register(...registerables)
 
@@ -11,7 +12,7 @@ const props = defineProps<{ monthlyCosts: any[] | null }>()
 const emit = defineEmits<{ 'open-month': [month: any] }>()
 
 const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
-const monthlyChartRange = ref<MonthlyRangeKey>('ALL')
+const monthlyChartRange = ref<MonthlyRangeKey>('1Y')
 const filteredMonthlyCosts = computed(() => filterMonthsByRange(props.monthlyCosts || [], monthlyChartRange.value))
 let monthlyChartInstance: Chart | null = null
 
@@ -112,20 +113,7 @@ onUnmounted(() => {
       <h3 class="text-sm font-bold text-white flex items-center gap-2">
         <span>{{ $t('dashboard.monthlyCostChart.monthlyExpenseTrend') }}</span>
       </h3>
-      <div class="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5 self-start sm:self-auto">
-        <button
-          v-for="opt in monthlyRangeOptions"
-          :key="opt.key"
-          type="button"
-          @click="monthlyChartRange = opt.key"
-          :class="[
-            'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
-            monthlyChartRange === opt.key ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white',
-          ]"
-        >
-          {{ $t(opt.labelKey) }}
-        </button>
-      </div>
+      <MonthlyRangeSelector v-model="monthlyChartRange" class="self-start sm:self-auto" :label="$t('dashboard.monthlyCostChart.monthlyCostTrendByCategory')" />
     </div>
     <div class="h-64 sm:h-72">
       <canvas ref="monthlyChartRef" role="img" :aria-label="$t('dashboard.monthlyCostChart.monthlyCostTrendByCategory')"></canvas>
