@@ -54,7 +54,6 @@
   },
   "energyEfficiencyPanel": {
     "theEnergyEfficiencyStatisticsCould": "The energy efficiency statistics could not be loaded.",
-    "rankedByTheAveragePower": "Ranked by the average power of each charge (energy added over its duration).",
     "kwhKwhEfficiency": "{value} kWh · {value2} €/kWh · efficiency {value3}",
     "ofTheEnergyChargeS": "{value}% of the energy · {sessions} charge(s)",
     "howTheCarIsCharged": "How the car is charged",
@@ -80,22 +79,16 @@
     "energyEfficiency": "Energy efficiency",
     "chargeSWithoutAKnown": "{sessions_without_cost} charge(s) without a known cost: they are not counted in the cost per 100 km.",
     "thatIsKwhOnAverage": "That is {price_per_kwh} €/kWh on average when charging.",
+    "noCharge": "No charge",
+    "unknownDurationSessions": "+ {count} charge(s) with no known duration (manual entries), not shown above.",
     "chargeClass": {
-      "SLOW": {
-        "label": "Household socket",
-        "hint": "under 3.5 kW on average"
-      },
       "AC": {
-        "label": "Wallbox / AC charger",
+        "label": "Wallbox / AC post",
         "hint": "3.5 to 25 kW on average"
       },
       "DC": {
-        "label": "DC fast charging",
-        "hint": "over 25 kW on average"
-      },
-      "UNKNOWN": {
-        "label": "Unknown duration",
-        "hint": "manual entries"
+        "label": "Fast charging (DC)",
+        "hint": "more than 25 kW on average"
       }
     },
     "consumption": "Consumption",

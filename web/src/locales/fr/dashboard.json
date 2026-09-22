@@ -54,7 +54,6 @@
   },
   "energyEfficiencyPanel": {
     "theEnergyEfficiencyStatisticsCould": "Les statistiques d'efficacité énergétique n'ont pas pu être chargées.",
-    "rankedByTheAveragePower": "Classement d'après la puissance moyenne de chaque recharge (énergie ajoutée sur sa durée).",
     "kwhKwhEfficiency": "{value} kWh · {value2} €/kWh · rendement {value3}",
     "ofTheEnergyChargeS": "{value} % de l'énergie · {sessions} recharge(s)",
     "howTheCarIsCharged": "Comment la voiture est rechargée",
@@ -80,11 +79,9 @@
     "energyEfficiency": "Efficacité énergétique",
     "chargeSWithoutAKnown": "{sessions_without_cost} recharge(s) sans coût connu : elles ne sont pas comptées dans le coût aux 100 km.",
     "thatIsKwhOnAverage": "Soit {price_per_kwh} €/kWh en moyenne à la recharge.",
+    "noCharge": "Aucune recharge",
+    "unknownDurationSessions": "+ {count} recharge(s) sans durée connue (saisies manuelles), non représentée(s) ci-dessus.",
     "chargeClass": {
-      "SLOW": {
-        "label": "Prise domestique",
-        "hint": "moins de 3,5 kW en moyenne"
-      },
       "AC": {
         "label": "Wallbox / borne AC",
         "hint": "3,5 à 25 kW en moyenne"
@@ -92,10 +89,6 @@
       "DC": {
         "label": "Recharge rapide DC",
         "hint": "plus de 25 kW en moyenne"
-      },
-      "UNKNOWN": {
-        "label": "Durée inconnue",
-        "hint": "saisies manuelles"
       }
     },
     "consumption": "Consommation",

@@ -6,7 +6,8 @@ import { Gauge } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import EnergyBatterySection from './EnergyBatterySection.vue'
 import EnergyTemperatureSection from './EnergyTemperatureSection.vue'
-import { AXIS_TEXT, GRID_COLOR, fmt, fmtPercent, type ChargeClass, type EnergyStats } from './energyStats'
+import CostDonut from '@/components/costs/CostDonut.vue'
+import { AXIS_TEXT, GRID_COLOR, fmt, fmtPercent, mergeAcDcClasses, type ChargeClass, type EnergyStats } from './energyStats'
 
 Chart.register(...registerables)
 
@@ -30,6 +31,11 @@ const classLabel = (c: ChargeClass['class']) => ({
   label: t(`dashboard.energyEfficiencyPanel.chargeClass.${c}.label`),
   hint: t(`dashboard.energyEfficiencyPanel.chargeClass.${c}.hint`),
 })
+const CLASS_COLOR: Record<'AC' | 'DC', string> = { AC: '#38bdf8', DC: '#f59e0b' }
+const acDc = computed(() => mergeAcDcClasses(stats.value?.charge_classes ?? []))
+const donutItems = computed(() =>
+  acDc.value.classes.map((c) => ({ label: classLabel(c.class).label, color: CLASS_COLOR[c.class as 'AC' | 'DC'], amount: c.kwh_added })),
+)
 
 const visibleMonths = computed(() => {
   const months = stats.value?.months ?? []
@@ -38,7 +44,7 @@ const visibleMonths = computed(() => {
 
 const hasData = computed(() => (stats.value?.months.length ?? 0) > 0)
 
-const totalKwh = computed(() => (stats.value?.charge_classes ?? []).reduce((sum, c) => sum + c.kwh_added, 0))
+const totalKwh = computed(() => acDc.value.classes.reduce((sum, c) => sum + c.kwh_added, 0))
 
 const share = (c: ChargeClass) => (totalKwh.value > 0 ? Math.round((c.kwh_added / totalKwh.value) * 100) : 0)
 
@@ -240,26 +246,38 @@ onBeforeUnmount(() => {
       </table>
     </div>
 
-    <div v-if="stats && stats.charge_classes.length > 0">
+    <div v-if="acDc.classes.length > 0">
       <h4 class="mb-2 text-xs font-bold text-slate-200">{{ $t('dashboard.energyEfficiencyPanel.howTheCarIsCharged') }}</h4>
-      <ul class="space-y-2">
-        <li v-for="c in stats.charge_classes" :key="c.class" class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
-          <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-            <span class="text-sm font-semibold text-white">
-              {{ classLabel(c.class).label }}
-              <span class="text-[11px] font-normal text-slate-400">({{ classLabel(c.class).hint }})</span>
-            </span>
-            <span class="text-xs text-slate-300">{{ $t('dashboard.energyEfficiencyPanel.ofTheEnergyChargeS', { value: share(c), sessions: c.sessions }) }}</span>
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-start">
+        <div class="md:col-span-2 bg-slate-950/60 border border-slate-800 rounded-xl p-3 flex flex-col items-center justify-center">
+          <div class="w-full h-40 relative">
+            <CostDonut
+              :items="donutItems"
+              unit="kWh"
+              :empty-label="$t('dashboard.energyEfficiencyPanel.noCharge')"
+              :chart-label="$t('dashboard.energyEfficiencyPanel.howTheCarIsCharged')"
+            />
           </div>
-          <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" aria-hidden="true">
-            <div class="h-full rounded-full" :class="c.class === 'DC' ? 'bg-amber-400' : c.class === 'AC' ? 'bg-sky-400' : 'bg-emerald-400'" :style="{ width: `${share(c)}%` }"></div>
-          </div>
-          <p class="mt-2 text-xs text-slate-400">
-            {{ $t('dashboard.energyEfficiencyPanel.kwhKwhEfficiency', { value: fmt(c.kwh_added, 0), value2: fmt(c.price_per_kwh, 3), value3: fmtPercent(c.charge_efficiency) }) }}<template v-if="c.cost_per_full_charge !== undefined"> · 0 → 100 % : {{ fmt(c.cost_per_full_charge, 2) }} €</template>
-          </p>
-        </li>
-      </ul>
-      <p class="mt-2 text-[11px] text-slate-500">{{ $t('dashboard.energyEfficiencyPanel.rankedByTheAveragePower') }}</p>
+        </div>
+
+        <ul class="md:col-span-3 space-y-2">
+          <li v-for="c in acDc.classes" :key="c.class" class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
+            <div class="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <span class="text-sm font-semibold text-white flex items-center gap-1.5">
+                <span class="w-2.5 h-2.5 rounded-full shrink-0" :style="{ backgroundColor: CLASS_COLOR[c.class as 'AC' | 'DC'] }"></span>
+                {{ classLabel(c.class).label }}
+              </span>
+              <span class="text-xs text-slate-300">{{ $t('dashboard.energyEfficiencyPanel.ofTheEnergyChargeS', { value: share(c), sessions: c.sessions }) }}</span>
+            </div>
+            <p class="mt-2 text-xs text-slate-400">
+              {{ $t('dashboard.energyEfficiencyPanel.kwhKwhEfficiency', { value: fmt(c.kwh_added, 0), value2: fmt(c.price_per_kwh, 3), value3: fmtPercent(c.charge_efficiency) }) }}<template v-if="c.cost_per_full_charge !== undefined"> · 0 → 100 % : {{ fmt(c.cost_per_full_charge, 2) }} €</template>
+            </p>
+          </li>
+        </ul>
+      </div>
+      <p v-if="acDc.unknownSessions > 0" class="mt-2 text-[11px] text-slate-500">
+        {{ $t('dashboard.energyEfficiencyPanel.unknownDurationSessions', { count: acDc.unknownSessions }) }}
+      </p>
     </div>
 
     <template v-if="stats">
