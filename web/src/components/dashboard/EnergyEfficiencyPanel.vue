@@ -7,6 +7,8 @@ import { api } from '@/services/api'
 import EnergyBatterySection from './EnergyBatterySection.vue'
 import EnergyTemperatureSection from './EnergyTemperatureSection.vue'
 import { AXIS_TEXT, GRID_COLOR, fmt, fmtPercent, type ChargeClass, type EnergyStats } from './energyStats'
+import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
+import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
 
 Chart.register(...registerables)
 
@@ -19,7 +21,7 @@ const props = defineProps<{
 
 const stats = ref<EnergyStats | null>(null)
 const failed = ref(false)
-const range = ref<12 | 0>(12) // 0 = whole history
+const range = ref<MonthlyRangeKey>('1Y')
 
 const consumptionRef = ref<HTMLCanvasElement | null>(null)
 const costRef = ref<HTMLCanvasElement | null>(null)
@@ -31,10 +33,7 @@ const classLabel = (c: ChargeClass['class']) => ({
   hint: t(`dashboard.energyEfficiencyPanel.chargeClass.${c}.hint`),
 })
 
-const visibleMonths = computed(() => {
-  const months = stats.value?.months ?? []
-  return range.value === 0 ? months : months.slice(-range.value)
-})
+const visibleMonths = computed(() => filterMonthsByRange(stats.value?.months ?? [], range.value))
 
 const hasData = computed(() => (stats.value?.months.length ?? 0) > 0)
 
@@ -161,26 +160,7 @@ onBeforeUnmount(() => {
         </h3>
         <p class="mt-0.5 text-xs text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.whatTheCarUsesAnd') }}</p>
       </div>
-      <div class="flex gap-1 self-start rounded-lg border border-slate-800 bg-slate-950 p-0.5" role="group" :aria-label="$t('dashboard.energyEfficiencyPanel.period')">
-        <button
-          type="button"
-          class="min-h-9 rounded-md px-3 text-[11px] font-semibold transition-colors"
-          :class="range === 12 ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'"
-          :aria-pressed="range === 12"
-          @click="range = 12"
-        >
-          {{ $t('dashboard.energyEfficiencyPanel.12Months') }}
-        </button>
-        <button
-          type="button"
-          class="min-h-9 rounded-md px-3 text-[11px] font-semibold transition-colors"
-          :class="range === 0 ? 'bg-indigo-500 text-white' : 'text-slate-400 hover:text-white'"
-          :aria-pressed="range === 0"
-          @click="range = 0"
-        >
-          {{ $t('dashboard.energyEfficiencyPanel.all') }}
-        </button>
-      </div>
+      <MonthlyRangeSelector v-model="range" class="self-start" :label="$t('dashboard.energyEfficiencyPanel.period')" />
     </div>
 
     <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
