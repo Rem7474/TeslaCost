@@ -164,36 +164,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         </div>
       </div>
 
-      <!-- Toggle View Mode: Economic Cost vs Cash-Flow -->
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-slate-800/40 border border-slate-700/50 rounded-xl text-xs">
-        <span class="text-slate-300 font-medium flex items-center gap-1.5">
-          <Info class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-          <span>{{ $t('dashboard.monthDetailModal.breakdownCalculationMode') }}</span>
-        </span>
-        <div class="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-700/70">
-          <button
-            type="button"
-            @click="monthDetailViewMode = 'economic'"
-            :class="[
-              'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
-              monthDetailViewMode === 'economic' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-            ]"
-          >
-            {{ $t('dashboard.monthDetailModal.costPriceKm') }}
-          </button>
-          <button
-            type="button"
-            @click="monthDetailViewMode = 'cash'"
-            :class="[
-              'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
-              monthDetailViewMode === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
-            ]"
-          >
-            {{ $t('dashboard.monthDetailModal.cashExpenses') }}
-          </button>
-        </div>
-      </div>
-
       <!-- Fixed vs Variable Cost Structure -->
       <div v-if="selectedMonthBreakdown.fixedVar && selectedMonthBreakdown.fixedVar.totalAmount > 0" class="p-3.5 bg-slate-800/40 border border-slate-700/50 rounded-xl space-y-2">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
@@ -231,6 +201,36 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <div class="flex items-center justify-between text-[10px] text-slate-400 flex-wrap gap-1">
           <span>{{ $t('dashboard.monthDetailModal.fixedCostsSub') }}</span>
           <span>{{ $t('dashboard.monthDetailModal.variableCostsSub') }}</span>
+        </div>
+      </div>
+
+      <!-- Toggle View Mode: Economic Cost vs Cash-Flow -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-slate-800/40 border border-slate-700/50 rounded-xl text-xs">
+        <span class="text-slate-300 font-medium flex items-center gap-1.5">
+          <Info class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+          <span>{{ $t('dashboard.monthDetailModal.breakdownCalculationMode') }}</span>
+        </span>
+        <div class="flex items-center gap-1 bg-slate-900/80 p-0.5 rounded-lg border border-slate-700/70">
+          <button
+            type="button"
+            @click="monthDetailViewMode = 'economic'"
+            :class="[
+              'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+              monthDetailViewMode === 'economic' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+            ]"
+          >
+            {{ $t('dashboard.monthDetailModal.costPriceKm') }}
+          </button>
+          <button
+            type="button"
+            @click="monthDetailViewMode = 'cash'"
+            :class="[
+              'px-2.5 py-1 text-[11px] font-semibold rounded-md transition-colors',
+              monthDetailViewMode === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+            ]"
+          >
+            {{ $t('dashboard.monthDetailModal.cashExpenses') }}
+          </button>
         </div>
       </div>
 
