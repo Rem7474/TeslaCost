@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
+import DistanceUnitSwitcher from '@/components/DistanceUnitSwitcher.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { KeyRound, Laptop, LogOut, ShieldCheck, SlidersHorizontal, Smartphone, UserRound } from 'lucide-vue-next'
@@ -191,6 +192,10 @@ onMounted(load)
           @change="prefs.setProPersoEnabled(($event.target as HTMLInputElement).checked)"
         />
       </label>
+      <div class="mt-4 flex flex-wrap items-center justify-between gap-4 border-t border-slate-800 pt-4">
+        <span class="text-sm font-medium text-white">{{ $t('account.distanceUnit') }}</span>
+        <DistanceUnitSwitcher />
+      </div>
     </section>
 
     <section v-if="hasPassword" class="rounded-2xl border border-slate-800 bg-slate-900 p-5" aria-labelledby="account-password">

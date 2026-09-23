@@ -285,6 +285,34 @@ func TestUpdateLanguageStoresAValidChoiceAndRejectsAnythingElse(t *testing.T) {
 	}
 }
 
+func TestUpdateDistanceUnitStoresAValidChoiceAndRejectsAnythingElse(t *testing.T) {
+	repo := authTestRepo(t)
+	ctx := context.Background()
+	hash, _ := auth.HashPassword("Correct-Horse-9")
+	user, _ := repo.CreateUser(ctx, "units@example.org", hash)
+	if user.DistanceUnit != "km" {
+		t.Fatalf("expected the default distance unit to be km, got %q", user.DistanceUnit)
+	}
+	h := NewAuthHandler(repo, authTestConfig(), nil)
+
+	rec := as(user.ID, nil, http.MethodPut, "/api/auth/distance-unit", `{"distance_unit":"mi"}`, h.UpdateDistanceUnit, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update to mi: %d %s", rec.Code, rec.Body.String())
+	}
+	got, err := repo.GetUserByID(ctx, user.ID)
+	if err != nil || got.DistanceUnit != "mi" {
+		t.Fatalf("expected the stored distance unit to be mi, got %q (err=%v)", got.DistanceUnit, err)
+	}
+
+	rec = as(user.ID, nil, http.MethodPut, "/api/auth/distance-unit", `{"distance_unit":"furlong"}`, h.UpdateDistanceUnit, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("an unsupported unit: got %d, want 400", rec.Code)
+	}
+	if got, _ := repo.GetUserByID(ctx, user.ID); got.DistanceUnit != "mi" {
+		t.Errorf("a rejected update must not change the stored unit, got %q", got.DistanceUnit)
+	}
+}
+
 func TestListSessionsHidesExpiredAndRevokedTokens(t *testing.T) {
 	repo := authTestRepo(t)
 	ctx := context.Background()

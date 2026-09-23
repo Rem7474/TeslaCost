@@ -1,6 +1,7 @@
 {
   "account": {
-    "language_invalid": "La langue doit être « en » ou « fr »"
+    "language_invalid": "La langue doit être « en » ou « fr »",
+    "distance_unit_invalid": "L'unité de distance doit être « km » ou « mi »"
   },
   "access": {
     "read_only": "Accès en lecture seule : modifications non autorisées",
