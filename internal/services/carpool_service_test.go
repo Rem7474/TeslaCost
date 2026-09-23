@@ -42,34 +42,43 @@ func TestCarpoolUnitRatesDefaults(t *testing.T) {
 	}
 }
 
-func TestDailyInsuranceAllocationFormula(t *testing.T) {
-	annualInsuranceEUR := 365.25
-	dailyInsuranceEUR := annualInsuranceEUR / 365.25 // 1.00 EUR/day
+func TestMonthlyInsuranceAllocationFormula(t *testing.T) {
+	monthlyInsuranceEUR := 60.0 // 60.00 EUR/month
 
-	// Day 1: 40 km leg 1, 60 km leg 2, 100 km other driving -> total 200 km
-	totalDay1Km := 200.0
+	// Month 1 (past completed month):
+	// Leg 1: 40 km, Leg 2: 60 km, Other driving: 100 km -> Total month = 200 km
+	totalMonth1Km := 200.0
 	leg1Km := 40.0
 	leg2Km := 60.0
 
-	leg1Cost := money.FromFloat(dailyInsuranceEUR * (leg1Km / totalDay1Km))
-	leg2Cost := money.FromFloat(dailyInsuranceEUR * (leg2Km / totalDay1Km))
+	// Each km in Month 1 costs 60 / 200 = 0.30 EUR/km
+	leg1Cost := money.FromFloat(monthlyInsuranceEUR * (leg1Km / totalMonth1Km))
+	leg2Cost := money.FromFloat(monthlyInsuranceEUR * (leg2Km / totalMonth1Km))
 
-	if leg1Cost != 20 {
-		t.Fatalf("expected 20 cents, got %d", leg1Cost)
+	if leg1Cost != 1200 { // 12.00 EUR (40 * 0.30)
+		t.Fatalf("expected 1200 cents, got %d", leg1Cost)
 	}
-	if leg2Cost != 30 {
-		t.Fatalf("expected 30 cents, got %d", leg2Cost)
+	if leg2Cost != 1800 { // 18.00 EUR (60 * 0.30)
+		t.Fatalf("expected 1800 cents, got %d", leg2Cost)
 	}
 	totalTripCost := leg1Cost + leg2Cost
-	if totalTripCost != 50 {
-		t.Fatalf("expected 50 cents, got %d", totalTripCost)
+	if totalTripCost != 3000 { // 30.00 EUR (50% of monthly insurance)
+		t.Fatalf("expected 3000 cents, got %d", totalTripCost)
 	}
 
-	// Day 2: 50 km leg, 50 km total (only driving of the day)
-	totalDay2Km := 50.0
-	leg3Km := 50.0
-	leg3Cost := money.FromFloat(dailyInsuranceEUR * (leg3Km / totalDay2Km))
-	if leg3Cost != 100 {
-		t.Fatalf("expected 100 cents (100%% of daily insurance), got %d", leg3Cost)
+	// Inactive days: If the car drove only on these 2 trips plus 1 other 100 km drive,
+	// and was parked for 25 days out of 30, the total allocated across all drives in Month 1 is:
+	otherDriveKm := 100.0
+	otherCost := money.FromFloat(monthlyInsuranceEUR * (otherDriveKm / totalMonth1Km))
+	if totalTripCost+otherCost != 6000 { // 60.00 EUR (100% of monthly insurance)
+		t.Fatalf("expected 6000 cents (100%% of monthly insurance), got %d", totalTripCost+otherCost)
+	}
+
+	// Month in progress (ongoing month): uses reference rate
+	refRatePerKm := 0.05 // 0.05 EUR/km
+	currentMonthDriveKm := 40.0
+	currentMonthCost := money.FromFloat(currentMonthDriveKm * refRatePerKm)
+	if currentMonthCost != 200 { // 2.00 EUR
+		t.Fatalf("expected 200 cents, got %d", currentMonthCost)
 	}
 }
