@@ -184,13 +184,14 @@ func (r *Repository) GetTollExpensesForTripGroup(ctx context.Context, vehicleID,
 
 // GetDriveExpensesByDriveID lists expenses attached to a drive directly or through its trip groups,
 // with the share allocated to this drive.
-func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, driveID string) ([]models.DriveExpense, error) {
+func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, driveID, lang string) ([]models.DriveExpense, error) {
+	start, end := tripLabelWords(lang)
 	rows, err := r.pool.Query(ctx, DriveTollAllocationCTE+`
 		SELECT
 			e.id, e.vehicle_id, e.trip_group_id, tg.name,
 			e.drive_id,
 			CASE
-				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
+				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), $3) || ' → ' || COALESCE(NULLIF(d.end_address, ''), $4)
 				ELSE NULL
 			END,
 			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes,
@@ -204,7 +205,7 @@ func (r *Repository) GetDriveExpensesByDriveID(ctx context.Context, vehicleID, d
 		LEFT JOIN expense_documents doc ON e.document_id = doc.id
 		WHERE a.drive_id::text = $2
 		ORDER BY e.date ASC;
-	`, vehicleID, driveID)
+	`, vehicleID, driveID, start, end)
 	if err != nil {
 		return nil, err
 	}

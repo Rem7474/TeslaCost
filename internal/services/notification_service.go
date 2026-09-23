@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/servertext"
 )
 
 // notificationStore is the narrow slice of *database.Repository that NotificationService
@@ -20,6 +21,7 @@ type notificationStore interface {
 	GetVehicleWebhook(ctx context.Context, vehicleID string) (*models.VehicleWebhook, error)
 	ListMaintenanceReminders(ctx context.Context, vehicleID string, currentOdo float64) ([]models.MaintenanceReminder, error)
 	MarkReminderNotified(ctx context.Context, reminderID string, notifiedAt time.Time, notifiedOdo float64) error
+	GetUserByID(ctx context.Context, id string) (*models.User, error)
 }
 
 // NotificationService handles evaluation of maintenance reminders and dispatching homelab webhooks.
@@ -36,6 +38,20 @@ func NewNotificationService(repo notificationStore) *NotificationService {
 			Timeout: 10 * time.Second,
 		},
 	}
+}
+
+// language is the stored language of userID ("en" or "fr", defaulting to "en"), used for webhook
+// text built here in the background: there is no HTTP request whose Accept-Language or vue-i18n
+// catalog could translate it instead.
+func (s *NotificationService) language(ctx context.Context, userID string) string {
+	if s.repo == nil || userID == "" {
+		return "en"
+	}
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil || user == nil || user.Language != "fr" {
+		return "en"
+	}
+	return "fr"
 }
 
 // CheckAndNotify evaluates reminders for a vehicle and sends webhooks if due thresholds are crossed.
@@ -57,6 +73,7 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 		return fmt.Errorf("failed to list reminders: %w", err)
 	}
 
+	lang := s.language(ctx, vehicle.UserID)
 	now := time.Now()
 	for _, rem := range reminders {
 		if !rem.WebhookEnabled || rem.Status == "OK" {
@@ -79,7 +96,7 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 		}
 
 		// Dispatch notification
-		if err := s.sendReminderWebhook(ctx, webhook, vehicle.Name, &rem, currentOdometer); err != nil {
+		if err := s.sendReminderWebhook(ctx, webhook, lang, vehicle.Name, &rem, currentOdometer); err != nil {
 			slog.Error("failed to dispatch webhook", "component", "notification", "vehicle_id", vehicle.ID, "reminder_id", rem.ID, "error", err)
 			continue
 		}
@@ -94,9 +111,9 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 }
 
 // TestWebhook dispatches a test message to verify connectivity and configuration.
-func (s *NotificationService) TestWebhook(ctx context.Context, webhook *models.VehicleWebhook, vehicleName string) error {
+func (s *NotificationService) TestWebhook(ctx context.Context, webhook *models.VehicleWebhook, vehicle *models.Vehicle) error {
 	testReminder := &models.MaintenanceReminder{
-		Title:  "Test de notification",
+		Title:  servertext.Text(s.language(ctx, vehicle.UserID), "reminder.test_title"),
 		Status: "DUE_SOON",
 	}
 	remKm := 500.0
@@ -104,17 +121,18 @@ func (s *NotificationService) TestWebhook(ctx context.Context, webhook *models.V
 	remDays := 15
 	testReminder.RemainingDays = &remDays
 
-	return s.sendReminderWebhook(ctx, webhook, vehicleName, testReminder, 50000)
+	return s.sendReminderWebhook(ctx, webhook, s.language(ctx, vehicle.UserID), vehicle.Name, testReminder, 50000)
 }
 
 func (s *NotificationService) sendReminderWebhook(
 	ctx context.Context,
 	webhook *models.VehicleWebhook,
+	lang string,
 	vehicleName string,
 	rem *models.MaintenanceReminder,
 	currentOdo float64,
 ) error {
-	payload, err := formatPayload(webhook.Type, vehicleName, rem, currentOdo)
+	payload, err := formatPayload(lang, webhook.Type, vehicleName, rem, currentOdo)
 	if err != nil {
 		return err
 	}
@@ -138,7 +156,7 @@ func (s *NotificationService) NotifySyncCircuitOpen(ctx context.Context, vehicle
 		return nil // No active webhook configured
 	}
 
-	payload := formatSyncAlertPayload(webhook.Type, vehicle.Name, cause, retryAt)
+	payload := formatSyncAlertPayload(s.language(ctx, vehicle.UserID), webhook.Type, vehicle.Name, cause, retryAt)
 	return s.postWebhook(ctx, webhook.URL, payload)
 }
 
@@ -175,21 +193,21 @@ func (s *NotificationService) postWebhook(ctx context.Context, webhookURL string
 }
 
 func formatPayload(
-	webhookType, vehicleName string,
+	lang, webhookType, vehicleName string,
 	rem *models.MaintenanceReminder,
 	currentOdo float64,
 ) (any, error) {
-	statusLabel := "À prévoir prochainement"
+	statusLabel := servertext.Text(lang, "reminder.status_due_soon")
 	statusEmoji := "??"
 	color := 16753920 // Amber
 
 	if rem.Status == "OVERDUE" {
-		statusLabel = "EN RETARD"
+		statusLabel = servertext.Text(lang, "reminder.status_overdue")
 		statusEmoji = "??"
 		color = 15158332 // Red
 	}
 
-	details := buildDetailsString(rem)
+	details := buildDetailsString(lang, rem)
 
 	switch strings.ToUpper(webhookType) {
 	case "DISCORD":
@@ -198,11 +216,11 @@ func formatPayload(
 			"avatar_url": "https://raw.githubusercontent.com/Rem7474/TeslaCost/main/web/public/favicon.svg",
 			"embeds": []map[string]any{
 				{
-					"title":       fmt.Sprintf("%s %s : %s", statusEmoji, statusLabel, rem.Title),
-					"description": fmt.Sprintf("**Véhicule :** %s\n**Odomètre :** %.0f km\n\n%s", vehicleName, currentOdo, details),
+					"title":       servertext.Text(lang, "reminder.discord_title", statusEmoji, statusLabel, rem.Title),
+					"description": servertext.Text(lang, "reminder.discord_description", vehicleName, currentOdo, details),
 					"color":       color,
 					"footer": map[string]string{
-						"text": "AutoLedger • Suivi d'entretien",
+						"text": servertext.Text(lang, "reminder.discord_footer"),
 					},
 					"timestamp": time.Now().Format(time.RFC3339),
 				},
@@ -210,10 +228,7 @@ func formatPayload(
 		}, nil
 
 	case "TELEGRAM":
-		text := fmt.Sprintf(
-			"?? *AutoLedger — Rappel d'Entretien*\n\n%s *%s*\nOpération : *%s*\nVéhicule : *%s*\nOdomètre : %.0f km\n%s",
-			statusEmoji, statusLabel, rem.Title, vehicleName, currentOdo, details,
-		)
+		text := servertext.Text(lang, "reminder.telegram_text", statusEmoji, statusLabel, rem.Title, vehicleName, currentOdo, details)
 		return map[string]any{
 			"text":       text,
 			"parse_mode": "Markdown",
@@ -225,8 +240,8 @@ func formatPayload(
 			priority = 8
 		}
 		return map[string]any{
-			"title":    fmt.Sprintf("AutoLedger : %s (%s)", rem.Title, statusLabel),
-			"message":  fmt.Sprintf("Véhicule : %s\nOdomètre : %.0f km\n%s", vehicleName, currentOdo, details),
+			"title":    servertext.Text(lang, "reminder.gotify_title", rem.Title, statusLabel),
+			"message":  servertext.Text(lang, "reminder.gotify_message", vehicleName, currentOdo, details),
 			"priority": priority,
 		}, nil
 
@@ -246,11 +261,8 @@ func formatPayload(
 
 // formatSyncAlertPayload builds a webhook payload announcing that automatic TeslaMate
 // synchronization has been suspended for a vehicle after repeated failures.
-func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryAt time.Time) any {
-	message := fmt.Sprintf(
-		"La synchronisation TeslaMate a échoué plusieurs fois de suite et a été suspendue automatiquement (nouvel essai après %s).\nDernière erreur : %v",
-		retryAt.Format("02/01/2006 15:04 MST"), cause,
-	)
+func formatSyncAlertPayload(lang, webhookType, vehicleName string, cause error, retryAt time.Time) any {
+	message := servertext.Text(lang, "sync_alert.body", retryAt.Format("02/01/2006 15:04 MST"), cause)
 
 	switch strings.ToUpper(webhookType) {
 	case "DISCORD":
@@ -259,11 +271,11 @@ func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryA
 			"avatar_url": "https://raw.githubusercontent.com/Rem7474/TeslaCost/main/web/public/favicon.svg",
 			"embeds": []map[string]any{
 				{
-					"title":       fmt.Sprintf("[ALERTE] Synchronisation TeslaMate en échec : %s", vehicleName),
+					"title":       servertext.Text(lang, "sync_alert.discord_title", vehicleName),
 					"description": message,
 					"color":       15158332, // Red
 					"footer": map[string]string{
-						"text": "AutoLedger • Alerte système",
+						"text": servertext.Text(lang, "sync_alert.discord_footer"),
 					},
 					"timestamp": time.Now().Format(time.RFC3339),
 				},
@@ -272,13 +284,13 @@ func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryA
 
 	case "TELEGRAM":
 		return map[string]any{
-			"text":       fmt.Sprintf("*AutoLedger — Alerte synchronisation*\n\nVéhicule : *%s*\n%s", vehicleName, message),
+			"text":       servertext.Text(lang, "sync_alert.telegram_text", vehicleName, message),
 			"parse_mode": "Markdown",
 		}
 
 	case "GOTIFY":
 		return map[string]any{
-			"title":    fmt.Sprintf("AutoLedger : synchronisation en échec (%s)", vehicleName),
+			"title":    servertext.Text(lang, "sync_alert.gotify_title", vehicleName),
 			"message":  message,
 			"priority": 8,
 		}
@@ -294,24 +306,24 @@ func formatSyncAlertPayload(webhookType, vehicleName string, cause error, retryA
 	}
 }
 
-func buildDetailsString(rem *models.MaintenanceReminder) string {
+func buildDetailsString(lang string, rem *models.MaintenanceReminder) string {
 	var parts []string
 	if rem.RemainingKm != nil {
 		if *rem.RemainingKm <= 0 {
-			parts = append(parts, fmt.Sprintf("Kilométrage : Dépassé de %.0f km", -*rem.RemainingKm))
+			parts = append(parts, servertext.Text(lang, "reminder.details_mileage_overdue", -*rem.RemainingKm))
 		} else {
-			parts = append(parts, fmt.Sprintf("Kilométrage : Dans %.0f km", *rem.RemainingKm))
+			parts = append(parts, servertext.Text(lang, "reminder.details_mileage_in", *rem.RemainingKm))
 		}
 	}
 	if rem.RemainingDays != nil {
 		if *rem.RemainingDays <= 0 {
-			parts = append(parts, fmt.Sprintf("Échéance : Dépassée de %d jour(s)", -*rem.RemainingDays))
+			parts = append(parts, servertext.Text(lang, "reminder.details_due_overdue", -*rem.RemainingDays))
 		} else {
-			parts = append(parts, fmt.Sprintf("Échéance : Dans %d jour(s)", *rem.RemainingDays))
+			parts = append(parts, servertext.Text(lang, "reminder.details_due_in", *rem.RemainingDays))
 		}
 	}
 	if len(parts) == 0 {
-		return "Échéance atteinte"
+		return servertext.Text(lang, "reminder.details_due_reached")
 	}
 	return strings.Join(parts, " • ")
 }

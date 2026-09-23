@@ -55,14 +55,23 @@ func TestSumEstimatedPrice(t *testing.T) {
 }
 
 func TestAutoTollNotes(t *testing.T) {
-	notes := autoTollNotes([]models.TollSegment{
+	segments := []models.TollSegment{
 		{Type: "close", Entry: "ANNECY CENTRE", Exit: strPtr("LES ABRETS")},
 		{Type: "open", Entry: "CHESNES"},
 		{Type: "close", Entry: "VIENNE"},
-	})
+	}
+
+	notes := autoTollNotes("fr", segments)
 	for _, want := range []string{"Péage auto", "ANNECY CENTRE → LES ABRETS", "Barrière CHESNES", "VIENNE (sortie non identifiée)"} {
 		if !strings.Contains(notes, want) {
 			t.Errorf("notes %q missing %q", notes, want)
+		}
+	}
+
+	enNotes := autoTollNotes("en", segments)
+	for _, want := range []string{"Auto toll", "ANNECY CENTRE → LES ABRETS", "Barrier CHESNES", "VIENNE (exit not identified)"} {
+		if !strings.Contains(enNotes, want) {
+			t.Errorf("notes %q missing %q", enNotes, want)
 		}
 	}
 }

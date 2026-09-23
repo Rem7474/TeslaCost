@@ -44,6 +44,22 @@ func writeErr(w http.ResponseWriter, status int, err error) {
 	writeError(w, status, err.Error())
 }
 
+// requestLanguage is the signed-in user's stored language ("en" or "fr", defaulting to "en"),
+// used for short text built here and returned as plain strings rather than an apierror code
+// (a default trip label, an auto-generated toll note): there is no catalog entry for the
+// frontend to translate through.
+func requestLanguage(r *http.Request, repo *database.Repository) string {
+	userID := middleware.GetUserID(r.Context())
+	if userID == "" {
+		return "en"
+	}
+	user, err := repo.GetUserByID(r.Context(), userID)
+	if err != nil || user == nil || user.Language != "fr" {
+		return "en"
+	}
+	return "fr"
+}
+
 // requireVehicleAccess checks that the authenticated user has access to the vehicle with at least minRole.
 func requireVehicleAccess(w http.ResponseWriter, r *http.Request, repo *database.Repository, vehicleID string, minRole models.VehicleRole) *models.Vehicle {
 	userID := middleware.GetUserID(r.Context())

@@ -195,7 +195,7 @@ func (h *DriveHandler) GetDriveExpenses(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	expenses, err := h.repo.GetDriveExpensesByDriveID(r.Context(), vehicleID, driveID)
+	expenses, err := h.repo.GetDriveExpensesByDriveID(r.Context(), vehicleID, driveID, requestLanguage(r, h.repo))
 	if err != nil {
 		writeRepoError(w, r, err, "Failed to load drive expenses")
 		return

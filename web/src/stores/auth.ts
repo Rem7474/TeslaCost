@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { api } from '@/services/api'
+import { currentLocale } from '@/i18n'
 
 // The access/refresh tokens live in HttpOnly cookies set by the API — this store never
 // holds a token value, only whether the current cookie-backed session is valid.
@@ -34,6 +35,9 @@ export const useAuthStore = defineStore('auth', () => {
     const res = await api.register(payload)
     user.value = res.user
     status.value = 'authenticated'
+    // New account: match the language of reminder and sync-failure webhooks to the UI the
+    // person is already using, rather than the server-side default.
+    api.updateLanguage(currentLocale()).catch(() => {})
   }
 
   async function logout() {

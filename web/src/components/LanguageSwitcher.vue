@@ -2,13 +2,22 @@
 import { computed } from 'vue'
 import { Languages } from 'lucide-vue-next'
 import { currentLocale, setLocale, SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
+import { useAuthStore } from '@/stores/auth'
+import { api } from '@/services/api'
 
 // Each language is named in itself, so it stays readable whatever the current language is.
 const LANGUAGE_NAMES: Record<AppLocale, string> = { en: 'English', fr: 'Français' }
 
+const authStore = useAuthStore()
+
 const selected = computed({
   get: () => currentLocale(),
-  set: (value: AppLocale) => setLocale(value),
+  set: (value: AppLocale) => {
+    setLocale(value)
+    // Reminder and sync-failure webhooks are built outside any request: the server needs its
+    // own copy of the choice. Best-effort — the UI itself already switched.
+    if (authStore.isAuthenticated) api.updateLanguage(value).catch(() => {})
+  },
 })
 </script>
 

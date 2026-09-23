@@ -9,6 +9,7 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
+	"github.com/teslacost/teslacost/internal/servertext"
 )
 
 // MaxBulkTollDrives bounds a bulk application: each drive triggers a TeslaMateAPI call.
@@ -91,20 +92,36 @@ func sumEstimatedPrice(segments []models.TollSegment) (money.Cents, bool) {
 	return total, priced && total > 0
 }
 
-// autoTollNotes describes the detected crossings, e.g. "Péage auto : A → B, Barrière : C".
-func autoTollNotes(segments []models.TollSegment) string {
+// autoTollNotes describes the detected crossings, e.g. "Auto toll: A → B, Barrier C", in the
+// acting user's language: the result is stored as plain text on the expense, so there is no
+// code left for the frontend to translate later.
+func autoTollNotes(lang string, segments []models.TollSegment) string {
 	parts := make([]string, 0, len(segments))
 	for _, s := range segments {
 		switch {
 		case s.Type == "close" && s.Exit != nil:
 			parts = append(parts, s.Entry+" → "+*s.Exit)
 		case s.Type == "close":
-			parts = append(parts, s.Entry+" (sortie non identifiée)")
+			parts = append(parts, s.Entry+" "+servertext.Text(lang, "toll.unidentified_exit"))
 		default:
-			parts = append(parts, "Barrière "+s.Entry)
+			parts = append(parts, servertext.Text(lang, "toll.barrier")+" "+s.Entry)
 		}
 	}
-	return "Péage auto : " + strings.Join(parts, ", ")
+	return servertext.Text(lang, "toll.auto_prefix") + strings.Join(parts, ", ")
+}
+
+// language is the stored language of userID ("en" or "fr", defaulting to "en"), used for the
+// notes attached to an auto-detected toll expense and the bulk-apply error text: both are plain
+// strings with no request/response cycle left for the frontend to translate through.
+func (s *TollDetectionService) language(ctx context.Context, userID string) string {
+	if userID == "" {
+		return "en"
+	}
+	user, err := s.repo.GetUserByID(ctx, userID)
+	if err != nil || user == nil || user.Language != "fr" {
+		return "en"
+	}
+	return "fr"
 }
 
 // ApplyTollEstimate re-detects the drive's tolls and records the estimated total as an
@@ -117,7 +134,8 @@ func (s *TollDetectionService) ApplyTollEstimate(ctx context.Context, vehicle *m
 		return res, err
 	}
 
-	existing, err := s.repo.GetDriveExpensesByDriveID(ctx, vehicle.ID, driveID)
+	// decideTollAction only looks at Type/TripGroupID/Source, never the translated DriveTitle fallback.
+	existing, err := s.repo.GetDriveExpensesByDriveID(ctx, vehicle.ID, driveID, "en")
 	if err != nil {
 		return res, err
 	}
@@ -146,7 +164,7 @@ func (s *TollDetectionService) ApplyTollEstimate(ctx context.Context, vehicle *m
 		return res, nil
 	}
 
-	notes := autoTollNotes(detection.Segments)
+	notes := autoTollNotes(s.language(ctx, vehicle.UserID), detection.Segments)
 	exp := &models.DriveExpense{
 		ID:        expenseID,
 		VehicleID: vehicle.ID,
@@ -173,15 +191,16 @@ func (s *TollDetectionService) ApplyTollEstimate(ctx context.Context, vehicle *m
 // ApplyTollEstimatesBulk applies the estimate to each drive in turn; a failure on one drive
 // is recorded and does not stop the others.
 func (s *TollDetectionService) ApplyTollEstimatesBulk(ctx context.Context, vehicle *models.Vehicle, driveIDs []string) BulkApplyResult {
+	lang := s.language(ctx, vehicle.UserID)
 	out := BulkApplyResult{Results: make([]ApplyResult, 0, len(driveIDs))}
 	for _, id := range driveIDs {
 		res, err := s.ApplyTollEstimate(ctx, vehicle, id)
 		if err != nil {
 			res.Status = ApplyFailed
 			if errors.Is(err, database.ErrNotFound) {
-				res.Error = "Trajet introuvable"
+				res.Error = servertext.Text(lang, "toll.trip_not_found")
 			} else {
-				res.Error = "Échec de la détection ou de l'enregistrement"
+				res.Error = servertext.Text(lang, "toll.detection_failed")
 			}
 		}
 		switch res.Status {

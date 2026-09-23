@@ -1,4 +1,7 @@
 {
+  "account": {
+    "language_invalid": "La langue doit être « en » ou « fr »"
+  },
   "access": {
     "read_only": "Accès en lecture seule : modifications non autorisées",
     "owner_only": "Action réservée au propriétaire du véhicule",

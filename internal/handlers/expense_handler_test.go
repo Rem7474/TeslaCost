@@ -6,6 +6,19 @@ import (
 	"github.com/teslacost/teslacost/internal/money"
 )
 
+func TestExpenseGroupNameFallsBackToTheAskedLanguage(t *testing.T) {
+	notes := "Paris → Lyon"
+	if got := expenseGroupName(&notes, "en"); got != notes {
+		t.Errorf("notes take priority over the fallback: got %q", got)
+	}
+	if got := expenseGroupName(nil, "en"); got != "Multi-leg trip" {
+		t.Errorf("got %q, want the English fallback", got)
+	}
+	if got := expenseGroupName(nil, "fr"); got != "Trajet multi-étapes" {
+		t.Errorf("got %q, want the French fallback", got)
+	}
+}
+
 func TestBuildDriveExpenseWithDocumentID(t *testing.T) {
 	docID := "123e4567-e89b-12d3-a456-426614174000"
 	req := &CreateDriveExpenseRequest{
