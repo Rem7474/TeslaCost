@@ -1,0 +1,61 @@
+package database
+
+import (
+	"context"
+	"regexp"
+	"testing"
+	"time"
+)
+
+// port1 is reserved and nothing ever listens there: dialing it fails immediately (connection refused) instead of
+// timing out, keeping these tests fast regardless of the environment they run in.
+const unreachableDSN = "postgres://user:pass@127.0.0.1:1/db?sslmode=disable&connect_timeout=1"
+
+func TestConnectGivesUpWhenContextExpires(t *testing.T) {
+	withFastRetries(t, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+		defer cancel()
+
+		start := time.Now()
+		_, err := Connect(ctx, unreachableDSN)
+		elapsed := time.Since(start)
+
+		if err == nil {
+			t.Fatal("expected an error: nothing listens on port 1")
+		}
+		// Returns close to the deadline, not after a long fixed wait swallowing the context cancellation.
+		if elapsed > 500*time.Millisecond {
+			t.Fatalf("Connect took %s to give up after a 60ms deadline", elapsed)
+		}
+	})
+}
+
+func TestConnectRetriesUntilItGivesUp(t *testing.T) {
+	withFastRetries(t, func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Millisecond)
+		defer cancel()
+
+		_, err := Connect(ctx, unreachableDSN)
+		if err == nil {
+			t.Fatal("expected an error")
+		}
+
+		m := regexp.MustCompile(`after (\d+) attempt`).FindStringSubmatch(err.Error())
+		if m == nil {
+			t.Fatalf("expected the error to report an attempt count, got: %v", err)
+		}
+		if m[1] == "1" {
+			t.Fatalf("expected more than one attempt within the deadline, got: %v", err)
+		}
+	})
+}
+
+// withFastRetries lowers the pause between two connection attempts for the duration of fn, so tests exercising the
+// retry loop do not each take connectRetryInterval (3s) per attempt.
+func withFastRetries(t *testing.T, fn func()) {
+	t.Helper()
+	original := connectRetryInterval
+	connectRetryInterval = time.Millisecond
+	t.Cleanup(func() { connectRetryInterval = original })
+	fn()
+}

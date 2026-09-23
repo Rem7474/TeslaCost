@@ -112,6 +112,10 @@ func purgeExpiredRefreshTokens(ctx context.Context, repo *database.Repository, i
 // maxJSONBodyBytes caps the body of API requests; uploads have their own limit in their handler.
 const maxJSONBodyBytes = 1 << 20
 
+// dbConnectTimeout is how long the server waits for PostgreSQL to become reachable on startup before giving up.
+// It covers a slow crash recovery after an unclean shutdown, not just a normal container boot race.
+const dbConnectTimeout = 3 * time.Minute
+
 // contentSecurityPolicy is the policy sent with every response: the built-in one, a custom one from the
 // environment, or none ("off").
 func contentSecurityPolicy(cfg *config.Config) string {
@@ -169,12 +173,31 @@ func main() {
 		os.Exit(1)
 	}
 
-	// 3. Connect to PostgreSQL (with retry to wait for DB startup)
+	// 3. Connect to PostgreSQL. A container restarted after a host reboot can come up before PostgreSQL has
+	// finished crash recovery: retry for up to dbConnectTimeout rather than fail immediately. If PostgreSQL is
+	// still unreachable after that, exit non-zero so restart: unless-stopped (docker-compose.yml) retries the
+	// whole startup, instead of quietly running with no database and no API routes until someone notices and
+	// restarts the container by hand.
+	connectCtx, cancelConnect := context.WithTimeout(context.Background(), dbConnectTimeout)
+	dbPool, err := database.Connect(connectCtx, cfg.DatabaseURL)
+	cancelConnect()
+	if err != nil {
+		slog.Error("giving up on PostgreSQL, exiting so the container restarts and retries", "error", err)
+		os.Exit(1)
+	}
+	defer dbPool.Close()
+
+	// A fresh, short-lived context for the rest of startup: it must not inherit whatever is left of the (possibly
+	// long) connection wait above.
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
-	dbPool, err := database.Connect(ctx, cfg.DatabaseURL)
-	var repo *database.Repository
+	if migErr := dbPool.Migrate(ctx); migErr != nil {
+		slog.Error("database migration failed", "error", migErr)
+		os.Exit(1)
+	}
+	repo := database.NewRepository(dbPool.Pool)
+
 	var syncService *services.SyncService
 	var tireWearService *services.TireWearService
 	var tcoService *services.TCOService
@@ -183,41 +206,30 @@ func main() {
 	var carpoolService *services.CarpoolService
 	var notificationService *services.NotificationService
 
-	if err != nil {
-		slog.Warn("database connection failed, running in offline/unconnected mode for now", "error", err)
-	} else {
-		defer dbPool.Close()
-		if migErr := dbPool.Migrate(ctx); migErr != nil {
-			slog.Error("database migration failed", "error", migErr)
-			os.Exit(1)
-		}
-		repo = database.NewRepository(dbPool.Pool)
-
-		// Seed initial admin if configured and user does not exist
-		if cfg.InitialAdminEmail != "" && cfg.InitialAdminPassword != "" {
-			_, err := repo.GetUserByEmail(ctx, cfg.InitialAdminEmail)
-			if err != nil && errors.Is(err, database.ErrNotFound) {
-				hash, err := auth.HashPassword(cfg.InitialAdminPassword)
+	// Seed initial admin if configured and user does not exist
+	if cfg.InitialAdminEmail != "" && cfg.InitialAdminPassword != "" {
+		_, err := repo.GetUserByEmail(ctx, cfg.InitialAdminEmail)
+		if err != nil && errors.Is(err, database.ErrNotFound) {
+			hash, err := auth.HashPassword(cfg.InitialAdminPassword)
+			if err == nil {
+				adminUser, err := repo.CreateUser(ctx, cfg.InitialAdminEmail, hash)
 				if err == nil {
-					adminUser, err := repo.CreateUser(ctx, cfg.InitialAdminEmail, hash)
-					if err == nil {
-						slog.Info("initial admin account created successfully", "component", "auth", "email", adminUser.Email)
-					} else {
-						slog.Error("failed to create initial admin account", "component", "auth", "error", err)
-					}
+					slog.Info("initial admin account created successfully", "component", "auth", "email", adminUser.Email)
+				} else {
+					slog.Error("failed to create initial admin account", "component", "auth", "error", err)
 				}
 			}
 		}
-
-		notificationService = services.NewNotificationService(repo)
-		syncService = services.NewSyncService(repo, encryptor)
-		syncService.SetNotificationService(notificationService)
-		tireWearService = services.NewTireWearService(repo)
-		tcoService = services.NewTCOService(dbPool.Pool, cfg.ReportingTimezone)
-		energyStatsService = services.NewEnergyStatsService(dbPool.Pool, cfg.ReportingTimezone)
-		comparisonService = services.NewComparisonService(tcoService)
-		carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
 	}
+
+	notificationService = services.NewNotificationService(repo)
+	syncService = services.NewSyncService(repo, encryptor)
+	syncService.SetNotificationService(notificationService)
+	tireWearService = services.NewTireWearService(repo)
+	tcoService = services.NewTCOService(dbPool.Pool, cfg.ReportingTimezone)
+	energyStatsService = services.NewEnergyStatsService(dbPool.Pool, cfg.ReportingTimezone)
+	comparisonService = services.NewComparisonService(tcoService)
+	carpoolService = services.NewCarpoolService(dbPool.Pool, repo)
 
 	// 4. Setup Chi router
 	r := chi.NewRouter()
