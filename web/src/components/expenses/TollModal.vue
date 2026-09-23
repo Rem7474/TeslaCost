@@ -31,6 +31,7 @@ const { isUploadingDocument, onSelectExistingDoc, onDropzoneDirectUpload } = use
 const vehicleStore = useVehicleStore()
 
 const editingTollId = computed(() => props.editing?.id ?? null)
+const baseCurrency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 
 const recentDrives = ref<any[]>([])
 const associationMode = ref<'NONE' | 'SINGLE' | 'MULTI'>('NONE')
@@ -40,7 +41,7 @@ const selectedDriveIds = ref<string[]>([])
 const tollForm = ref({
   type: 'TOLL',
   amount: '',
-  currency: 'EUR',
+  currency: baseCurrency.value,
   fx_rate: '',
   date: toLocalDateTimeInput(new Date()),
   notes: '',
@@ -58,7 +59,7 @@ watch(open, (isOpen) => {
     tollForm.value = {
       type: 'TOLL',
       amount: '',
-      currency: 'EUR',
+      currency: baseCurrency.value,
       fx_rate: '',
       date: toLocalDateTimeInput(new Date()),
       notes: '',
@@ -72,7 +73,7 @@ watch(open, (isOpen) => {
     tollForm.value = {
       type: e.type || 'TOLL',
       amount: String(e.amount),
-      currency: e.currency || 'EUR',
+      currency: e.currency || baseCurrency.value,
       fx_rate: e.fx_rate ? String(e.fx_rate) : '',
       date: toLocalDateTimeInput(new Date(e.date)),
       notes: e.notes || '',
@@ -147,7 +148,7 @@ async function handleCreateToll() {
     const payload: any = {
       type: tollForm.value.type,
       amount: Number(tollForm.value.amount),
-      ...currencyPayload(tollForm.value),
+      ...currencyPayload(tollForm.value, baseCurrency.value),
       date: new Date(tollForm.value.date).toISOString(),
       notes: tollForm.value.notes,
       document_id: tollForm.value.document_id || null,

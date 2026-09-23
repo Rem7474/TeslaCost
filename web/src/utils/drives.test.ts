@@ -134,8 +134,14 @@ describe('selectionSummary and CSV rows', () => {
   ]
 
   it('sums distance, energy and cost', () => {
-    expect(selectionSummary(list)).toBe(`${Math.round(150.4).toLocaleString('fr-FR')} km • 27 kWh • 7.75 €`)
-    expect(selectionSummary([])).toBe('')
+    expect(selectionSummary(list, 'EUR')).toBe(
+      `${Math.round(150.4).toLocaleString('fr-FR')} km • 27 kWh • ${new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(7.75)}`
+    )
+    expect(selectionSummary([], 'EUR')).toBe('')
+  })
+
+  it('formats the total in the vehicle\'s own currency', () => {
+    expect(selectionSummary(list, 'USD')).toContain(new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(7.75))
   })
 
   it('escapes quotes and joins tags in the CSV rows', () => {

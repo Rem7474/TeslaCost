@@ -5,6 +5,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { Layers, X, Users, Coins, Pencil, Trash2 } from 'lucide-vue-next'
 import { formatTripDates } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
+import { formatAmount } from '@/currency'
 
 // The trip groups ("voyages") list; a trip can be expanded to show its drives.
 defineProps<{ loadingTrips: boolean; tripGroups: any[]; hasFilters: boolean; expandedTripId: string | null; tripDrives: any[] }>()
@@ -78,7 +79,7 @@ const formatDate = formatDayTime
               <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
                 <span>{{ Number(tg.tolls_total || 0) > 0 ? $t('drives.tripGroupsPanel.costsAmount', { amount: Number(tg.tolls_total).toFixed(2) }) : $t('drives.tripGroupsPanel.costDetail') }}</span>
                 <span v-if="tg.distance_km > 0 && tg.tolls_total" class="text-[10px] font-normal text-emerald-400 font-mono">
-                  {{ (Number(tg.tolls_total) / tg.distance_km).toFixed(3) }} €/km
+                  {{ formatAmount(Number(tg.tolls_total) / tg.distance_km, vehicleStore.activeVehicle?.currency || 'EUR', 3) }}/km
                 </span>
               </div>
             </div>

@@ -3,9 +3,12 @@ import { intlLocale } from '@/i18n'
 import { computed } from 'vue'
 import { ArrowRight, Calendar, PieChart } from 'lucide-vue-next'
 import { currentMonthStats as buildCurrentMonthStats } from '@/utils/dashboard'
+import { formatAmount } from '@/currency'
+import { useVehicleStore } from '@/stores/vehicle'
 
 // Highlight of the current month; opens its cost detail
 const props = defineProps<{ monthlyCosts: any[] | undefined }>()
+const vehicleStore = useVehicleStore()
 const emit = defineEmits<{ 'open-month': [month: any] }>()
 const currentMonthStats = computed(() => buildCurrentMonthStats(props.monthlyCosts))
 </script>
@@ -23,7 +26,7 @@ const currentMonthStats = computed(() => buildCurrentMonthStats(props.monthlyCos
         <div class="text-base sm:text-lg font-bold text-white flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
           <span>{{ $t('dashboard.currentMonthBanner.kmDriven', { distance_km: Math.round(currentMonthStats.distance_km).toLocaleString(intlLocale()) }) }}</span>
           <span class="text-slate-500">•</span>
-          <span class="text-emerald-400">{{ currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km.toFixed(3) + ' €/km' : '0.000 €/km' }}</span>
+          <span class="text-emerald-400">{{ formatAmount(currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km : 0, vehicleStore.activeVehicle?.currency || 'EUR', 3) }}/km</span>
           <span class="text-slate-500">•</span>
           <span class="text-slate-300">{{ $t('dashboard.currentMonthBanner.spent', { value: currentMonthStats.total.toFixed(2) }) }}</span>
         </div>

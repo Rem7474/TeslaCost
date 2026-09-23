@@ -64,7 +64,7 @@ async function submit() {
   error.value = ''
   let payload: ReturnType<typeof buildChargePayload>
   try {
-    payload = buildChargePayload({ ...form })
+    payload = buildChargePayload({ ...form }, props.vehicle.currency || 'EUR')
   } catch (err: any) {
     error.value = err.message
     return

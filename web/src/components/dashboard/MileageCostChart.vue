@@ -5,12 +5,15 @@ import { Chart, registerables } from 'chart.js'
 import { Activity, PieChart } from 'lucide-vue-next'
 import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
 import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
+import { formatAmount } from '@/currency'
+import { useVehicleStore } from '@/stores/vehicle'
 
 Chart.register(...registerables)
 
 // Monthly distance and average cost per km on two axes; a click on a month opens its detail
 const props = defineProps<{ monthlyCosts: any[] | null }>()
 const emit = defineEmits<{ 'open-month': [month: any] }>()
+const vehicleStore = useVehicleStore()
 
 const mileageChartRef = ref<HTMLCanvasElement | null>(null)
 const mileageChartRange = ref<MonthlyRangeKey>('1Y')
@@ -117,7 +120,7 @@ function renderChart() {
           grid: { display: false },
           ticks: {
             color: '#10b981',
-            callback: (v) => `${Number(v).toFixed(3)} €`,
+            callback: (v) => formatAmount(Number(v), vehicleStore.activeVehicle?.currency || 'EUR', 3),
           },
           title: { display: true, text: t('dashboard.mileageCostChart.axisCostPerKm'), color: '#10b981', font: { size: 11 } },
         },

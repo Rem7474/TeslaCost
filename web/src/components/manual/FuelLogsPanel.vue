@@ -5,6 +5,8 @@ import { Fuel, Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
+import { useVehicleStore } from '@/stores/vehicle'
+import { formatAmount } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const props = defineProps<{
@@ -12,6 +14,8 @@ const props = defineProps<{
   canEdit: boolean
 }>()
 
+const vehicleStore = useVehicleStore()
+const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 const { showConfirm, showAlert } = useConfirm()
 
 const stats = ref<any | null>(null)
@@ -58,8 +62,8 @@ const derivedHint = computed(() => {
   return ''
 })
 
-function fmtEur(v: number | null | undefined, digits = 2): string {
-  return Number(v || 0).toLocaleString(intlLocale(), { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
+function fmtMoney(v: number | null | undefined, digits = 2): string {
+  return formatAmount(Number(v || 0), currency.value, digits)
 }
 
 function fmtNum(v: number | null | undefined, digits = 1): string {
@@ -147,7 +151,7 @@ async function save() {
 async function remove(log: any) {
   const ok = await showConfirm({
     title: t('manual.fuelLogsPanel.deleteTitle'),
-    message: t('manual.fuelLogsPanel.deleteMessage', { date: fmtDate(log.date), amount: fmtEur(log.amount) }),
+    message: t('manual.fuelLogsPanel.deleteMessage', { date: fmtDate(log.date), amount: fmtMoney(log.amount) }),
     confirmText: t('common.delete'),
     type: 'danger',
   })
@@ -187,11 +191,11 @@ onMounted(load)
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
         <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.totalSpent') }}</div>
-        <div class="text-lg font-bold text-white">{{ fmtEur(stats.total_cost, 0) }}</div>
+        <div class="text-lg font-bold text-white">{{ fmtMoney(stats.total_cost, 0) }}</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
         <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.averagePricePerLitre') }}</div>
-        <div class="text-lg font-bold text-white">{{ stats.avg_price_per_liter ? `${fmtNum(stats.avg_price_per_liter, 3)} €/L` : '—' }}</div>
+        <div class="text-lg font-bold text-white">{{ stats.avg_price_per_liter ? `${fmtMoney(stats.avg_price_per_liter, 3)}/L` : '—' }}</div>
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
         <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.averageConsumption') }}</div>
@@ -223,11 +227,11 @@ onMounted(load)
             <span v-if="!log.is_full_tank" class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('manual.fuelLogsPanel.partial') }}</span>
           </div>
           <div class="text-xs text-slate-400 mt-0.5">
-            {{ fmtEur(log.amount) }}
+            {{ fmtMoney(log.amount) }}
             <template v-if="log.liters"> · {{ fmtNum(log.liters, 2) }} L</template>
-            <template v-if="log.price_per_liter"> · {{ fmtNum(log.price_per_liter, 3) }} €/L</template>
+            <template v-if="log.price_per_liter"> · {{ fmtMoney(log.price_per_liter, 3) }}/L</template>
             <template v-if="log.consumption_l_100km"> · <span class="text-emerald-300">{{ log.segment_estimated ? '≈ ' : '' }}{{ fmtNum(log.consumption_l_100km, 2) }} L/100</span></template>
-            <template v-if="log.cost_per_km"> · {{ fmtNum(log.cost_per_km, 3) }} €/km</template>
+            <template v-if="log.cost_per_km"> · {{ fmtMoney(log.cost_per_km, 3) }}/km</template>
           </div>
         </div>
         <div v-if="canEdit" class="flex items-center gap-1.5 shrink-0">

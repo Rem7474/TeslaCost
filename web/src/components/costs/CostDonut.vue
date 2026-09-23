@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
+import { formatAmount } from '@/currency'
 
 Chart.register(...registerables)
 
 // Doughnut of cost items, shared by the monthly detail and the drive detail. Items without an amount are left out;
-// with none left, a neutral ring is drawn with emptyLabel.
+// with none left, a neutral ring is drawn with emptyLabel. Money items pass the vehicle's currency; a non-money
+// chart (the AC/DC energy split, in kWh) passes unit instead.
 const props = withDefaults(
   defineProps<{
     items: { label: string; color: string; amount: number }[]
@@ -14,8 +16,9 @@ const props = withDefaults(
     showLegend?: boolean
     cutout?: string
     unit?: string
+    currency?: string
   }>(),
-  { emptyLabel: '', showLegend: true, cutout: '68%', unit: '€' },
+  { emptyLabel: '', showLegend: true, cutout: '68%', unit: '', currency: 'EUR' },
 )
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -45,7 +48,8 @@ function render() {
               if (!items.length) return ' ' + props.emptyLabel
               const value = Number(ctx.raw || 0)
               const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0'
-              return ` ${ctx.label} : ${value.toFixed(2)} ${props.unit} (${pct}%)`
+              const formatted = props.unit ? `${value.toFixed(2)} ${props.unit}` : formatAmount(value, props.currency)
+              return ` ${ctx.label} : ${formatted} (${pct}%)`
             },
           },
         },

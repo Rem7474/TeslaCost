@@ -3,6 +3,7 @@ import { intlLocale } from '@/i18n'
 import { Archive, ClipboardPaste, Copy, Edit2, History, Pencil, Plus, Ruler, Shuffle, Trash2, X, Zap } from 'lucide-vue-next'
 import { useVehicleStore } from '@/stores/vehicle'
 import { apiMessageText } from '@/services/apiError'
+import { formatAmount } from '@/currency'
 import { formatDate, type SessionForm } from '@/utils/tires'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
@@ -108,7 +109,7 @@ useEscapeToClose(open, () => (open.value = false))
           </div>
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
             <div class="text-[10px] text-slate-500">{{ $t('tires.tireHistoryModal.actualCostKm') }}</div>
-            <div class="font-bold text-amber-400">{{ Number(selectedTireStats?.cost_per_km).toFixed(4) }} €</div>
+            <div class="font-bold text-amber-400">{{ formatAmount(Number(selectedTireStats?.cost_per_km), vehicleStore.activeVehicle?.currency || 'EUR', 4) }}</div>
           </div>
         </div>
       </div>

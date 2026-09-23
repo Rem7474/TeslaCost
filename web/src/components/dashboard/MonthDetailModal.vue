@@ -4,12 +4,16 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info } from 'lucide-vue-next'
 import { buildMonthBreakdown, formatMonthName, type MonthDetailMode } from '@/utils/dashboard'
 import CostDonut from '@/components/costs/CostDonut.vue'
+import { formatAmount } from '@/currency'
+import { useVehicleStore } from '@/stores/vehicle'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Cost detail of one month with a donut chart and the itemized list; ← / → move between months, Esc closes.
 // The modal is open while a month is selected.
 const props = defineProps<{ monthlyCosts: any[] }>()
 const selectedMonth = defineModel<any | null>('month', { required: true })
+const vehicleStore = useVehicleStore()
+const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 
 const monthDetailViewMode = ref<MonthDetailMode>('economic')
 
@@ -142,7 +146,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <div class="bg-emerald-500/5 border border-emerald-500/30 p-3 rounded-xl">
           <span class="text-[11px] font-medium text-emerald-400 block">{{ $t('dashboard.monthDetailModal.costPerKilometre') }}</span>
           <div class="text-base sm:text-lg font-extrabold text-emerald-400 mt-0.5">
-            {{ selectedMonthBreakdown.costPerKm.toFixed(3) }} <span class="text-xs font-normal text-emerald-500/80">€/km</span>
+            {{ formatAmount(selectedMonthBreakdown.costPerKm, currency, 3) }}<span class="text-xs font-normal text-emerald-500/80">/km</span>
           </div>
           <span class="text-[10px] text-emerald-400/70 block">{{ $t('dashboard.monthDetailModal.actualCostPrice') }}</span>
         </div>
@@ -150,7 +154,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
           <span class="text-[11px] font-medium text-slate-400 block">{{ $t('dashboard.monthDetailModal.calculatedRunningCost') }}</span>
           <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
-            {{ selectedMonthBreakdown.economicTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
+            {{ formatAmount(selectedMonthBreakdown.economicTotal, currency) }}
           </div>
           <span class="text-[10px] text-slate-400 block">{{ $t('dashboard.monthDetailModal.costPerKmBasis') }}</span>
         </div>
@@ -158,7 +162,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <div class="bg-slate-800/50 border border-slate-700/50 p-3 rounded-xl">
           <span class="text-[11px] font-medium text-slate-400 block">{{ $t('dashboard.monthDetailModal.totalPaidOutCash') }}</span>
           <div class="text-base sm:text-lg font-extrabold text-white mt-0.5">
-            {{ selectedMonthBreakdown.cashTotal.toFixed(2) }} <span class="text-xs font-normal text-slate-400">€</span>
+            {{ formatAmount(selectedMonthBreakdown.cashTotal, currency) }}
           </div>
           <span class="text-[10px] text-slate-400 block">{{ $t('dashboard.monthDetailModal.paymentsThisMonth') }}</span>
         </div>
@@ -207,6 +211,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               :items="selectedMonthBreakdown.items.map((it) => ({ label: it.label, color: it.color, amount: it.displayAmount }))"
               :empty-label="$t('dashboard.monthDetailModal.noExpense')"
               :chart-label="$t('dashboard.monthDetailModal.costBreakdownOfTheSelected')"
+              :currency="currency"
             />
           </div>
         </div>
@@ -248,14 +253,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               <div class="text-right shrink-0">
                 <div class="flex items-baseline justify-end gap-2">
                   <span class="font-bold text-white text-xs sm:text-sm">
-                    {{ item.displayAmount.toFixed(2) }} €
+                    {{ formatAmount(item.displayAmount, currency) }}
                   </span>
                   <span class="text-[10px] text-slate-400 font-medium">
                     ({{ item.sharePct.toFixed(1) }}%)
                   </span>
                 </div>
                 <div class="text-[10px] text-emerald-400 font-medium">
-                  {{ item.costPerKm.toFixed(3) }} €/km
+                  {{ formatAmount(item.costPerKm, currency, 3) }}/km
                 </div>
               </div>
             </div>
@@ -269,10 +274,10 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             </div>
             <div class="text-right">
               <div class="font-extrabold text-white text-sm sm:text-base">
-                {{ selectedMonthBreakdown.activeTotal.toFixed(2) }} €
+                {{ formatAmount(selectedMonthBreakdown.activeTotal, currency) }}
               </div>
               <div class="text-[11px] font-bold text-emerald-400">
-                {{ (selectedMonthBreakdown.distanceKm > 0 ? selectedMonthBreakdown.activeTotal / selectedMonthBreakdown.distanceKm : 0).toFixed(3) }} €/km
+                {{ formatAmount(selectedMonthBreakdown.distanceKm > 0 ? selectedMonthBreakdown.activeTotal / selectedMonthBreakdown.distanceKm : 0, currency, 3) }}/km
               </div>
             </div>
           </div>

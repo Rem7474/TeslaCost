@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatAmount, formatMoney } from './currency'
+import { currencySymbol, formatAmount, formatMoney } from './currency'
 
 describe('formatMoney', () => {
   it('divides cents into the main unit before formatting', () => {
@@ -15,5 +15,12 @@ describe('formatAmount', () => {
   it('respects maximumFractionDigits for a per-km rate', () => {
     const got = formatAmount(0.15, 'EUR', 3)
     expect(got).toContain('0,15')
+  })
+})
+
+describe('currencySymbol', () => {
+  it('extracts just the symbol for a chart label', () => {
+    expect(currencySymbol('EUR')).toBe('€')
+    expect(currencySymbol('USD')).toBe('$US')
   })
 })

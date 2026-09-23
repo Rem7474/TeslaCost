@@ -9,16 +9,20 @@ import {
 } from './expenses'
 
 describe('currencyPayload', () => {
-  it('drops the rate for EUR whatever the form holds', () => {
-    expect(currencyPayload({ currency: 'EUR', fx_rate: '1.2' })).toEqual({ currency: 'EUR', fx_rate: null })
+  it('drops the rate for the vehicle\'s own currency whatever the form holds', () => {
+    expect(currencyPayload({ currency: 'EUR', fx_rate: '1.2' }, 'EUR')).toEqual({ currency: 'EUR', fx_rate: null })
+  })
+
+  it('drops the rate for a non-EUR vehicle currency too', () => {
+    expect(currencyPayload({ currency: 'USD', fx_rate: '1.2' }, 'USD')).toEqual({ currency: 'USD', fx_rate: null })
   })
 
   it('carries the rate of a foreign currency as a number', () => {
-    expect(currencyPayload({ currency: 'CHF', fx_rate: '1.05' })).toEqual({ currency: 'CHF', fx_rate: 1.05 })
+    expect(currencyPayload({ currency: 'CHF', fx_rate: '1.05' }, 'EUR')).toEqual({ currency: 'CHF', fx_rate: 1.05 })
   })
 
   it('leaves the rate null when a foreign currency has none yet', () => {
-    expect(currencyPayload({ currency: 'USD', fx_rate: '' })).toEqual({ currency: 'USD', fx_rate: null })
+    expect(currencyPayload({ currency: 'USD', fx_rate: '' }, 'EUR')).toEqual({ currency: 'USD', fx_rate: null })
   })
 })
 

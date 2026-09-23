@@ -6,6 +6,7 @@ import { Zap, CheckCircle2 } from 'lucide-vue-next'
 import { useConfirm } from '@/composables/useConfirm'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
+import { formatAmount } from '@/currency'
 
 const props = defineProps<{
   vehicle: any
@@ -142,7 +143,7 @@ onMounted(() => {
           <div class="text-slate-300 font-semibold flex items-center justify-between">
             <span>{{ $t('manual.estimatedEnergyPanel.estimateOverSmoothedKm', { distance: Math.round(preview.distance).toLocaleString(intlLocale()) }) }}</span>
             <span class="text-sky-400 font-bold font-mono">
-              ≈ {{ preview.cost.toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+              ≈ {{ formatAmount(preview.cost, vehicleStore.activeVehicle?.currency || 'EUR') }}
             </span>
           </div>
           <p class="text-slate-400 text-[11px]">

@@ -72,8 +72,9 @@ export interface ChargeFormValues {
   documentId: string | null
 }
 
-// A manual charge always carries a cost: the API requires it (0 when the charge was free).
-export function buildChargePayload(f: ChargeFormValues) {
+// A manual charge always carries a cost: the API requires it (0 when the charge was free). currency is the
+// vehicle's own (the quick sheet has no fx_rate field, so it never enters a foreign one).
+export function buildChargePayload(f: ChargeFormValues, currency: string) {
   const kwh = toNumber(f.kwh)
   const cost = toNumber(f.cost)
   if (kwh === null || kwh <= 0) throw new Error(t('quickadd.errors.kwh'))
@@ -83,7 +84,7 @@ export function buildChargePayload(f: ChargeFormValues) {
     date: new Date(f.date).toISOString(),
     kwh_added: kwh,
     cost,
-    currency: 'EUR',
+    currency,
     fx_rate: null,
     address: clean(f.address),
     odometer: odometer !== null && odometer > 0 ? odometer : null,
@@ -124,13 +125,13 @@ export interface ExpenseFormValues {
   documentId: string | null
 }
 
-export function buildExpensePayload(f: ExpenseFormValues) {
+export function buildExpensePayload(f: ExpenseFormValues, currency: string) {
   const amount = toNumber(f.amount)
   if (amount === null || amount <= 0) throw new Error(t('quickadd.errors.amount'))
   return {
     type: f.type,
     amount,
-    currency: 'EUR',
+    currency,
     fx_rate: null,
     date: new Date(f.date).toISOString(),
     notes: clean(f.notes) ?? '',
@@ -151,14 +152,14 @@ export interface PendingCharge {
 
 // The update endpoint validates date and energy, then keeps the TeslaMate values but overwrites notes and
 // attachment with what it receives: both are sent back unchanged so completing the cost never wipes them.
-export function buildPendingCostPayload(charge: PendingCharge, costText: string) {
+export function buildPendingCostPayload(charge: PendingCharge, costText: string, currency: string) {
   const cost = toNumber(costText)
   if (cost === null || cost < 0) throw new Error(t('quickadd.errors.cost'))
   return {
     date: charge.date,
     kwh_added: charge.kwh_added,
     cost,
-    currency: 'EUR',
+    currency,
     fx_rate: null,
     address: charge.address ?? null,
     odometer: charge.odometer ?? null,

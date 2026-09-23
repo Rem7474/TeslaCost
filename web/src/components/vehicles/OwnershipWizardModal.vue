@@ -2,6 +2,7 @@
 import { intlLocale, t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
+import { formatAmount } from '@/currency'
 import { useConfirm } from '@/composables/useConfirm'
 import { RefreshCw, X, FileText, ChevronLeft, ChevronRight, Check, Wallet, CreditCard, KeyRound } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -22,6 +23,7 @@ import { useEscapeToClose } from '@/composables/useEscapeToClose'
 // contract (null when there is none); saving reports the stored contract, deleting reports deleted.
 const props = defineProps<{ vehicle: any | null; ownership: any | null }>()
 const emit = defineEmits<{ saved: [ownership: any]; deleted: [] }>()
+const currency = computed(() => props.vehicle?.currency || 'EUR')
 const open = defineModel<boolean>('open', { required: true })
 useEscapeToClose(open, () => (open.value = false))
 const { showConfirm, showAlert } = useConfirm()
@@ -317,11 +319,11 @@ async function handleDeleteOwnership() {
               </div>
               <div class="flex items-center justify-between text-slate-400 text-[11px]">
                 <span>{{ $t('vehicles.ownershipWizardModal.totalBankInterest') }}</span>
-                <span>{{ loanPreview.totalInterest.toFixed(2) }} €</span>
+                <span>{{ formatAmount(loanPreview.totalInterest, currency) }}</span>
               </div>
               <div class="flex items-center justify-between text-slate-400 text-[11px]">
                 <span>{{ $t('vehicles.ownershipWizardModal.totalCostOfTheLoan') }}</span>
-                <span class="text-slate-200 font-medium">{{ loanPreview.totalCost.toFixed(2) }} €</span>
+                <span class="text-slate-200 font-medium">{{ formatAmount(loanPreview.totalCost, currency) }}</span>
               </div>
             </div>
           </div>
@@ -359,7 +361,7 @@ async function handleDeleteOwnership() {
             <div v-if="leasePreview" class="p-3 bg-slate-800/70 border border-indigo-500/20 rounded-xl space-y-1 text-xs">
               <div class="flex items-center justify-between text-white font-semibold">
                 <span>{{ $t('vehicles.ownershipWizardModal.totalRentCommitted') }}</span>
-                <span class="text-indigo-300 font-bold text-sm">{{ leasePreview.total.toFixed(2) }} €</span>
+                <span class="text-indigo-300 font-bold text-sm">{{ formatAmount(leasePreview.total, currency) }}</span>
               </div>
               <div class="flex items-center justify-between text-slate-400 text-[11px]">
                 <span>{{ $t('vehicles.ownershipWizardModal.averageSmoothedOverTheTerm') }}</span>

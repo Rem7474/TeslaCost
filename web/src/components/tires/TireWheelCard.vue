@@ -2,10 +2,13 @@
 import { intlLocale } from '@/i18n'
 import { Disc } from 'lucide-vue-next'
 import { getConditionBadge } from '@/utils/tires'
+import { formatAmount } from '@/currency'
+import { useVehicleStore } from '@/stores/vehicle'
 
 // One wheel of the chassis view: the mounted tire with its wear, or a placeholder when the wheel is empty
 defineProps<{ pos: string; label: string; stat: any | null; selected: boolean }>()
 const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
+const vehicleStore = useVehicleStore()
 </script>
 
 <template>
@@ -46,7 +49,7 @@ const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
       </div>
       <div>
         <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireWheelCard.costKm') }}</div>
-        <div class="text-sm font-bold text-amber-400">{{ Number(stat.cost_per_km).toFixed(4) }} €</div>
+        <div class="text-sm font-bold text-amber-400">{{ formatAmount(Number(stat.cost_per_km), vehicleStore.activeVehicle?.currency || 'EUR', 4) }}</div>
       </div>
     </div>
 

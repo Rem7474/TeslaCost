@@ -6,6 +6,7 @@ import { MapPin, Clock, Users, Coins } from 'lucide-vue-next'
 import QualifyActions from '@/components/drives/QualifyActions.vue'
 import { needsTollQualification } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
+import { formatAmount } from '@/currency'
 
 // One drive of the list: click opens its cost breakdown.
 defineProps<{ d: any; selected: boolean }>()
@@ -102,9 +103,9 @@ const formatDate = formatDayTime
         </div>
         <div>
           <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
-            <span>{{ d.costs?.has_estimates ? '~' : '' }}{{ (d.costs?.total_cost || 0).toFixed(2) }} €</span>
+            <span>{{ d.costs?.has_estimates ? '~' : '' }}{{ formatAmount(d.costs?.total_cost || 0, vehicleStore.activeVehicle?.currency || 'EUR') }}</span>
             <span class="text-[10px] font-normal text-emerald-400 font-mono">
-              {{ (d.costs?.cost_per_km || 0).toFixed(3) }} €/km
+              {{ formatAmount(d.costs?.cost_per_km || 0, vehicleStore.activeVehicle?.currency || 'EUR', 3) }}/km
             </span>
           </div>
         </div>

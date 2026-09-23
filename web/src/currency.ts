@@ -13,3 +13,9 @@ export function formatMoney(cents: number, currency: string): string {
 export function formatAmount(amount: number, currency: string, maximumFractionDigits = 2): string {
   return new Intl.NumberFormat(intlLocale(), { style: 'currency', currency, maximumFractionDigits }).format(amount)
 }
+
+/** Just the symbol ("€", "$"...), for a chart axis or dataset label that cannot show a full amount. */
+export function currencySymbol(currency: string): string {
+  const part = new Intl.NumberFormat(intlLocale(), { style: 'currency', currency }).formatToParts(0).find((p) => p.type === 'currency')
+  return part?.value ?? currency
+}
