@@ -142,7 +142,7 @@
     "lessThan500KmDriven": "Less than 500 km driven since the first premium: share not calculated",
     "includedInTheLease": "Included in the lease",
     "actualPremiums": "Actual premiums",
-    "premiumsPaidOverTheLast": "Premiums paid over the last 12 months divided by the kilometres driven over the same period",
+    "premiumsPaidOverTheLast": "Monthly insurance share based on the month's actual kilometers (or reference average for ongoing month)",
     "insuranceShareFixedCost": "Insurance share (fixed cost)",
     "includedInTheLease2": "included in the lease",
     "estimate": "estimate",

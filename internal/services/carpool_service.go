@@ -75,7 +75,8 @@ type UnitRates struct {
 	InsuranceSource     string // RECORDED_EXPENSES | INCLUDED_IN_LEASE | INSUFFICIENT_DISTANCE | NONE
 	InsuranceWindowCost *money.Cents
 	InsuranceWindowKm   *float64
-	DailyInsuranceCost  money.Cents
+	DailyInsuranceCost   money.Cents
+	MonthlyInsuranceCost money.Cents
 }
 
 // DefaultUnitRates returns the fallback assumptions, all flagged as defaults.
@@ -292,6 +293,7 @@ func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID st
 	}
 	if annualInsurance > 0 {
 		rates.DailyInsuranceCost = money.FromFloat(annualInsurance.Float() / 365.25)
+		rates.MonthlyInsuranceCost = money.FromFloat(annualInsurance.Float() / 12.0)
 	}
 
 	// Services included in a running lease contract
@@ -312,6 +314,7 @@ func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID st
 		rates.InsuranceSource = InsuranceSourceIncluded
 		rates.InsurancePerKm = 0
 		rates.DailyInsuranceCost = 0
+		rates.MonthlyInsuranceCost = 0
 	} else {
 		switch {
 		case windowStart != nil && insuranceCost > 0 && windowKm >= minInsuranceWindowKm:
@@ -435,6 +438,7 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		MaintenanceRatePerKm:  rates.MaintenancePerKm,
 		InsuranceRatePerKm:    rates.InsurancePerKm,
 		DailyInsuranceCost:    &rates.DailyInsuranceCost,
+		MonthlyInsuranceCost:  &rates.MonthlyInsuranceCost,
 		InsuranceSource:       rates.InsuranceSource,
 		InsuranceWindowCost:   rates.InsuranceWindowCost,
 		InsuranceWindowKm:     rates.InsuranceWindowKm,
@@ -458,85 +462,103 @@ func (s *CarpoolService) EstimateCosts(ctx context.Context, vehicleID string, dr
 		est.InsuranceCost += legs[i].InsuranceCost
 	}
 	est.DistanceKm = round1(est.DistanceKm)
-	if len(drives) > 0 && est.DistanceKm > 0 && rates.DailyInsuranceCost > 0 {
+	if len(drives) > 0 && est.DistanceKm > 0 && (rates.MonthlyInsuranceCost > 0 || rates.DailyInsuranceCost > 0) {
 		est.InsuranceRatePerKm = round3(est.InsuranceCost.Float() / est.DistanceKm)
 	}
 	est.TotalCost = est.ElectricityCost + est.TollsCost + est.TiresCost + est.MaintenanceCost + est.InsuranceCost
 	return est, nil
 }
 
-// AllocateInsuranceCosts shares the vehicle's insurance cost across drives. Insurance is a
-// monthly/annual premium that costs the same regardless of distance driven, so it must first be
-// allocated per day (rates.DailyInsuranceCost), then split among that day's drives in proportion
-// to their share of the day's total distance. When no fixed daily cost is known (e.g. insufficient
-// history), each drive falls back to rates.InsurancePerKm applied to its own distance.
+// AllocateInsuranceCosts shares the vehicle's insurance cost across drives.
+// For past completed months, the fixed monthly insurance cost (rates.MonthlyInsuranceCost) is
+// allocated across all kilometers driven in that month, ensuring 100% of the month's premium
+// is accounted for regardless of inactive days.
+// For the current (ongoing) month, to prevent artificial cost spikes when monthly mileage is
+// still accumulating, each drive uses the vehicle's stable reference rate (rates.InsurancePerKm).
 func (s *CarpoolService) AllocateInsuranceCosts(ctx context.Context, vehicleID string, drives []models.Drive, rates *UnitRates) (map[string]money.Cents, error) {
 	costs := make(map[string]money.Cents, len(drives))
 	if len(drives) == 0 {
 		return costs, nil
 	}
-	if rates.InsuranceSource == InsuranceSourceIncluded || rates.DailyInsuranceCost <= 0 {
+	if rates.InsuranceSource == InsuranceSourceIncluded || (rates.MonthlyInsuranceCost <= 0 && rates.DailyInsuranceCost <= 0) {
 		for _, d := range drives {
 			costs[d.ID] = money.FromFloat(d.DistanceKm * rates.InsurancePerKm)
 		}
 		return costs, nil
 	}
 
-	dateSet := make(map[string]struct{}, len(drives))
-	dayKm := make(map[string]float64, len(drives))
+	currentMonthKey := time.Now().UTC().Format("2006-01")
+
+	monthSet := make(map[string]struct{}, len(drives))
+	drivesInMonthKm := make(map[string]float64, len(drives))
 	for _, d := range drives {
-		dateStr := d.StartTime.UTC().Format("2006-01-02")
-		dateSet[dateStr] = struct{}{}
-		dayKm[dateStr] += d.DistanceKm
+		mStr := d.StartTime.UTC().Format("2006-01")
+		monthSet[mStr] = struct{}{}
+		drivesInMonthKm[mStr] += d.DistanceKm
 	}
-	dates := make([]string, 0, len(dateSet))
-	for dStr := range dateSet {
-		dates = append(dates, dStr)
+
+	months := make([]string, 0, len(monthSet))
+	for mStr := range monthSet {
+		if mStr < currentMonthKey {
+			months = append(months, mStr)
+		}
 	}
-	dailyKmMap, err := s.getDailyDistances(ctx, vehicleID, dates)
+
+	monthlyKmMap, err := s.getMonthlyDistances(ctx, vehicleID, months)
 	if err != nil {
 		return nil, err
 	}
 
+	monthlyCost := rates.MonthlyInsuranceCost
+	if monthlyCost <= 0 && rates.DailyInsuranceCost > 0 {
+		monthlyCost = money.FromFloat(rates.DailyInsuranceCost.Float() * (365.25 / 12.0))
+	}
+
 	for _, d := range drives {
-		dateStr := d.StartTime.UTC().Format("2006-01-02")
-		totalDayKm := math.Max(dailyKmMap[dateStr], dayKm[dateStr])
-		if totalDayKm > 0 {
-			costs[d.ID] = money.FromFloat(rates.DailyInsuranceCost.Float() * (d.DistanceKm / totalDayKm))
-		} else {
+		mStr := d.StartTime.UTC().Format("2006-01")
+		if mStr >= currentMonthKey {
+			// Ongoing month: use the vehicle's stable reference rate
 			costs[d.ID] = money.FromFloat(d.DistanceKm * rates.InsurancePerKm)
+		} else {
+			// Past completed month: consolidate on actual monthly kilometers
+			totalMonthKm := math.Max(monthlyKmMap[mStr], drivesInMonthKm[mStr])
+			if totalMonthKm >= 1.0 && monthlyCost > 0 {
+				costs[d.ID] = money.FromFloat(monthlyCost.Float() * (d.DistanceKm / totalMonthKm))
+			} else {
+				costs[d.ID] = money.FromFloat(d.DistanceKm * rates.InsurancePerKm)
+			}
 		}
 	}
 	return costs, nil
 }
 
-// getDailyDistances returns a map of date string "YYYY-MM-DD" (UTC) to total km driven by the vehicle on that date.
-func (s *CarpoolService) getDailyDistances(ctx context.Context, vehicleID string, dates []string) (map[string]float64, error) {
-	if len(dates) == 0 {
+// getMonthlyDistances returns a map of month string "YYYY-MM" (UTC) to total km driven by the vehicle in that month.
+func (s *CarpoolService) getMonthlyDistances(ctx context.Context, vehicleID string, months []string) (map[string]float64, error) {
+	if len(months) == 0 {
 		return make(map[string]float64), nil
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT (start_time AT TIME ZONE 'UTC')::date::text,
+		SELECT to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM'),
 		       COALESCE(SUM(distance_km), 0)
 		FROM drives
 		WHERE vehicle_id = $1
 		  AND deleted_upstream_at IS NULL
-		  AND (start_time AT TIME ZONE 'UTC')::date::text = ANY($2)
+		  AND to_char(start_time AT TIME ZONE 'UTC', 'YYYY-MM') = ANY($2)
 		GROUP BY 1;
-	`, vehicleID, dates)
+	`, vehicleID, months)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	res := make(map[string]float64, len(dates))
+	res := make(map[string]float64, len(months))
 	for rows.Next() {
-		var dStr string
+		var mStr string
 		var totalKm float64
-		if err := rows.Scan(&dStr, &totalKm); err != nil {
+		if err := rows.Scan(&mStr, &totalKm); err != nil {
 			return nil, err
 		}
-		res[dStr] = totalKm
+		res[mStr] = totalKm
 	}
 	return res, rows.Err()
 }

@@ -18,7 +18,7 @@
 - **🔔 Maintenance reminders & homelab webhooks**: due-date and/or mileage alerts with outbound connectors to Telegram, Discord, Gotify and a generic JSON webhook.
 - **📁 Document & invoice manager**: attachments (PDFs, photos) stored on a dedicated Docker volume with strict application-level access control.
 - **🛞 Tire lifecycle management**: tread-depth tracking, transactional mount/dismount sessions, storage periods excluded automatically, and remaining-mileage projection.
-- **👥 Fair carpooling module**: automatic sync of trip dates, batch recomputation of real costs, an electricity price weighted on recent charges, and a per-day/km insurance share.
+- **👥 Fair carpooling module**: automatic sync of trip dates, batch recomputation of real costs, an electricity price weighted on recent charges, and a monthly consolidated per-km insurance share.
 - **📱 PWA, quick add & offline mode**: a "+" button (charge, fill-up, toll/parking) in the bottom bar, a one-field prompt to complete the cost of a TeslaMate charge, a receipt photo straight from the device, and offline entry with an IndexedDB queue deduplicated by idempotency key.
 
 ---
@@ -76,7 +76,7 @@
 ### 7. Carpooling Module
 - **Split into legs**: linked to real TeslaMate drives or entered manually.
 - **Date sync & batch recompute**: automatically realigns the carpool date to the actual drives and immediately recomputes each passenger's share.
-- **Accurate energy & insurance**: electricity price computed from a weighted average of recent charges (a 5-day window), and an exact per-km insurance share prorated to the distance driven that day.
+- **Accurate energy & insurance**: electricity price computed from a weighted average of recent charges (a 5-day window), and an exact monthly insurance share prorated across the distance driven in that month (with stable reference rates for the ongoing month).
 
 ### 8. Trip Search & Navigation
 - **Time filters**: filter by month, year, a custom range, or show everything.
