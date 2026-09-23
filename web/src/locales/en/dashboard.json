@@ -17,7 +17,8 @@
     "viewTheBreakdown": "View the breakdown",
     "spent": "{value} € spent",
     "activityThisMonth": "Activity this month ({month})",
-    "kmDriven": "{distance_km} km driven"
+    "kmDriven": "{distance_km} km driven",
+    "fixedVariableRatio": "{fixedPct}% fixed • {variablePct}% variable"
   },
   "dataQualityCard": {
     "estimateTheUntrackedEnergy": "Estimate the untracked energy",
@@ -172,7 +173,12 @@
     "ofWhichKmSmoothed": "of which {smoothedKm} km smoothed",
     "smoothingIncluded": "Usage smoothing included",
     "cashAmounts": "Cash amounts",
-    "noExpense": "No expense"
+    "noExpense": "No expense",
+    "fixedVsVariable": "Cost structure: fixed vs variable",
+    "fixedCosts": "Fixed costs",
+    "variableCosts": "Variable costs",
+    "fixedCostsSub": "Insurance, financing, taxes & subscriptions",
+    "variableCostsSub": "Energy, tolls, tires & maintenance"
   },
   "monthlyCostChart": {
     "monthlyCostTrendByCategory": "Monthly cost trend by category",
@@ -180,7 +186,8 @@
     "tires": "Tires",
     "maintenance": "Maintenance",
     "financing": "Financing",
-    "monthTotal": "Month total: {total} €"
+    "monthTotal": "Month total: {total} €",
+    "fixedVariableTooltip": "{fixedPct}% fixed • {variablePct}% variable"
   },
   "tagBreakdown": {
     "ofTollsAndParking": "{value} € of tolls and parking",
