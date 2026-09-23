@@ -11,6 +11,7 @@ import (
 	"github.com/teslacost/teslacost/internal/database"
 	"github.com/teslacost/teslacost/internal/models"
 	"github.com/teslacost/teslacost/internal/money"
+	"github.com/teslacost/teslacost/internal/servertext"
 	"github.com/teslacost/teslacost/internal/storage"
 )
 
@@ -71,11 +72,11 @@ func buildDriveExpense(vehicleID string, req *CreateDriveExpenseRequest) (*model
 	}, nil
 }
 
-func expenseGroupName(notes *string) string {
+func expenseGroupName(notes *string, lang string) string {
 	if notes != nil && strings.TrimSpace(*notes) != "" {
 		return *notes
 	}
-	return "Trajet multi-étapes"
+	return servertext.Text(lang, "expense.multi_leg_trip")
 }
 
 func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Request) {
@@ -96,7 +97,7 @@ func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	if err := h.repo.SaveDriveExpense(r.Context(), exp, req.DriveIDs, expenseGroupName(req.Notes)); err != nil {
+	if err := h.repo.SaveDriveExpense(r.Context(), exp, req.DriveIDs, expenseGroupName(req.Notes, requestLanguage(r, h.repo))); err != nil {
 		writeRepoError(w, r, err, "Failed to record expense")
 		return
 	}
@@ -110,7 +111,7 @@ func (h *ExpenseHandler) ListDriveExpenses(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	list, err := h.repo.ListDriveExpenses(r.Context(), vehicleID)
+	list, err := h.repo.ListDriveExpenses(r.Context(), vehicleID, requestLanguage(r, h.repo))
 	if err != nil {
 		writeRepoError(w, r, err, "Failed to list expenses")
 		return
@@ -142,7 +143,7 @@ func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Reque
 	}
 	exp.ID = expenseID
 
-	if err := h.repo.SaveDriveExpense(r.Context(), exp, req.DriveIDs, expenseGroupName(req.Notes)); err != nil {
+	if err := h.repo.SaveDriveExpense(r.Context(), exp, req.DriveIDs, expenseGroupName(req.Notes, requestLanguage(r, h.repo))); err != nil {
 		writeRepoError(w, r, err, "Failed to update expense")
 		return
 	}

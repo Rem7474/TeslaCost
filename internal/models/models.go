@@ -21,6 +21,7 @@ type User struct {
 	OIDCSubject  *string   `json:"-"`
 	OIDCProvider *string   `json:"-"`
 	DisplayName  *string   `json:"display_name,omitempty"` // from IdP "name" claim
+	Language     string    `json:"language"`               // "en" or "fr": used for messages built outside a request (reminder webhooks, sync alerts)
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

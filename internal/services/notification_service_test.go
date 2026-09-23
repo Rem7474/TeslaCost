@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ type fakeNotificationStore struct {
 	webhook          *models.VehicleWebhook
 	reminders        []models.MaintenanceReminder
 	markedNotifiedID string
+	language         string
 }
 
 func (f *fakeNotificationStore) GetVehicleWebhook(ctx context.Context, vehicleID string) (*models.VehicleWebhook, error) {
@@ -30,6 +32,14 @@ func (f *fakeNotificationStore) ListMaintenanceReminders(ctx context.Context, ve
 func (f *fakeNotificationStore) MarkReminderNotified(ctx context.Context, reminderID string, notifiedAt time.Time, notifiedOdo float64) error {
 	f.markedNotifiedID = reminderID
 	return nil
+}
+
+func (f *fakeNotificationStore) GetUserByID(ctx context.Context, id string) (*models.User, error) {
+	lang := f.language
+	if lang == "" {
+		lang = "en"
+	}
+	return &models.User{ID: id, Language: lang}, nil
 }
 
 func TestCheckAndNotifyDispatchesDueReminder(t *testing.T) {
@@ -96,7 +106,7 @@ func TestFormatPayloadDiscord(t *testing.T) {
 		RemainingKm: &remKm,
 	}
 
-	payload, err := formatPayload("DISCORD", "Model 3", rem, 42000)
+	payload, err := formatPayload("en", "DISCORD", "Model 3", rem, 42000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -112,6 +122,18 @@ func TestFormatPayloadDiscord(t *testing.T) {
 	if embeds[0]["color"] != 16753920 { // Amber for DUE_SOON
 		t.Errorf("expected amber color, got %v", embeds[0]["color"])
 	}
+	if !strings.Contains(embeds[0]["title"].(string), "Due soon") {
+		t.Errorf("expected the English status label, got %v", embeds[0]["title"])
+	}
+
+	frPayload, err := formatPayload("fr", "DISCORD", "Model 3", rem, 42000)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	frEmbeds := frPayload.(map[string]any)["embeds"].([]map[string]any)
+	if !strings.Contains(frEmbeds[0]["footer"].(map[string]string)["text"], "Suivi d'entretien") {
+		t.Errorf("expected the French footer, got %v", frEmbeds[0]["footer"])
+	}
 }
 
 func TestFormatPayloadTelegramAndGotify(t *testing.T) {
@@ -123,7 +145,7 @@ func TestFormatPayloadTelegramAndGotify(t *testing.T) {
 	}
 
 	// Telegram
-	tgPayload, err := formatPayload("TELEGRAM", "Model Y", rem, 55000)
+	tgPayload, err := formatPayload("en", "TELEGRAM", "Model Y", rem, 55000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -133,7 +155,7 @@ func TestFormatPayloadTelegramAndGotify(t *testing.T) {
 	}
 
 	// Gotify
-	gotifyPayload, err := formatPayload("GOTIFY", "Model Y", rem, 55000)
+	gotifyPayload, err := formatPayload("en", "GOTIFY", "Model Y", rem, 55000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -147,7 +169,7 @@ func TestFormatSyncAlertPayload(t *testing.T) {
 	cause := context.DeadlineExceeded
 	retryAt := time.Date(2026, 9, 17, 18, 0, 0, 0, time.UTC)
 
-	discord := formatSyncAlertPayload("DISCORD", "Model 3", cause, retryAt).(map[string]any)
+	discord := formatSyncAlertPayload("en", "DISCORD", "Model 3", cause, retryAt).(map[string]any)
 	embeds, ok := discord["embeds"].([]map[string]any)
 	if !ok || len(embeds) == 0 {
 		t.Fatalf("expected embeds array")
@@ -155,8 +177,17 @@ func TestFormatSyncAlertPayload(t *testing.T) {
 	if embeds[0]["color"] != 15158332 {
 		t.Errorf("expected red color for a sync failure alert, got %v", embeds[0]["color"])
 	}
+	if !strings.Contains(embeds[0]["title"].(string), "[ALERT]") {
+		t.Errorf("expected the English alert title, got %v", embeds[0]["title"])
+	}
 
-	generic := formatSyncAlertPayload("GENERIC", "Model 3", cause, retryAt).(map[string]any)
+	frDiscord := formatSyncAlertPayload("fr", "DISCORD", "Model 3", cause, retryAt).(map[string]any)
+	frEmbeds := frDiscord["embeds"].([]map[string]any)
+	if !strings.Contains(frEmbeds[0]["title"].(string), "[ALERTE]") {
+		t.Errorf("expected the French alert title, got %v", frEmbeds[0]["title"])
+	}
+
+	generic := formatSyncAlertPayload("en", "GENERIC", "Model 3", cause, retryAt).(map[string]any)
 	if generic["event"] != "sync_circuit_open" {
 		t.Errorf("expected sync_circuit_open event, got %v", generic["event"])
 	}
@@ -188,7 +219,7 @@ func TestSendReminderWebhook(t *testing.T) {
 		Enabled: true,
 	}
 
-	err := svc.TestWebhook(context.Background(), webhook, "Tesla Test")
+	err := svc.TestWebhook(context.Background(), webhook, &models.Vehicle{Name: "Tesla Test"})
 	if err != nil {
 		t.Fatalf("unexpected test webhook error: %v", err)
 	}

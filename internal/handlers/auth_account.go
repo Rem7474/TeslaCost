@@ -38,7 +38,7 @@ func (h *AuthHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	sessions, err := h.repo.ListSessions(r.Context(), userID)
 	if err != nil {
-		writeRepoError(w, r, err, "Impossible de lister les sessions")
+		writeRepoError(w, r, err, "Could not list sessions")
 		return
 	}
 	current := h.currentFamily(r)
@@ -148,7 +148,7 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusUnauthorized, apierror.New("auth.unauthorized", "Unauthorized"))
 			return
 		}
-		writeRepoError(w, r, err, "Impossible de modifier le mot de passe")
+		writeRepoError(w, r, err, "Could not change the password")
 		return
 	}
 
@@ -160,4 +160,30 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"message": "Password changed", "sessions_revoked": revoked})
+}
+
+type UpdateLanguageRequest struct {
+	Language string `json:"language"`
+}
+
+// UpdateLanguage stores the language used for text the server builds outside a request (reminder
+// webhooks, sync failure alerts, auto-generated toll notes): the UI's own language is chosen
+// client-side and does not go through this endpoint.
+func (h *AuthHandler) UpdateLanguage(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var req UpdateLanguageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
+		return
+	}
+	if req.Language != "en" && req.Language != "fr" {
+		writeAPIError(w, http.StatusBadRequest, apierror.New("account.language_invalid", "Language must be \"en\" or \"fr\""))
+		return
+	}
+	if err := h.repo.UpdateUserLanguage(r.Context(), userID, req.Language); err != nil {
+		writeRepoError(w, r, err, "Could not update the language")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Language updated"})
 }

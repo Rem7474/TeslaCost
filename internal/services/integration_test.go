@@ -139,7 +139,7 @@ func TestIntegrationDriveExpenseOwnershipAndGroupAllocation(t *testing.T) {
 	if alloc[d1.ID] != 1000 || alloc[d2.ID] != 3000 {
 		t.Fatalf("unexpected allocation: %v", alloc)
 	}
-	perDrive, err := repo.GetDriveExpensesByDriveID(ctx, alice.ID, d1.ID)
+	perDrive, err := repo.GetDriveExpensesByDriveID(ctx, alice.ID, d1.ID, "en")
 	if err != nil || len(perDrive) != 1 || perDrive[0].AllocatedAmount == nil || *perDrive[0].AllocatedAmount != 1000 {
 		t.Fatalf("expected one expense allocated 10 € to d1, got %+v (err %v)", perDrive, err)
 	}
@@ -159,7 +159,7 @@ func TestIntegrationDriveExpenseOwnershipAndGroupAllocation(t *testing.T) {
 	}
 
 	// Editing without links keeps nothing hidden: the list exposes group drive IDs for the UI.
-	list, _ := repo.ListDriveExpenses(ctx, alice.ID)
+	list, _ := repo.ListDriveExpenses(ctx, alice.ID, "en")
 	if len(list) != 1 || len(list[0].TripGroupDriveIDs) != 2 {
 		t.Fatalf("expected group drive IDs in listing, got %+v", list)
 	}
@@ -176,6 +176,36 @@ func TestIntegrationDriveExpenseOwnershipAndGroupAllocation(t *testing.T) {
 	}
 	if n, _ := repo.CountUnqualifiedDrives(ctx, bob.ID); n != 0 {
 		t.Fatalf("expected reviewed drive to leave the queue, got %d", n)
+	}
+}
+
+// TestIntegrationDriveExpenseTitleFallsBackToTheAskedLanguage covers a drive missing a
+// reverse-geocoded address: the "Start"/"Arrival" (or "Départ"/"Arrivée") placeholder is built
+// in the query itself, in the language passed to it, not translated by the frontend afterward.
+func TestIntegrationDriveExpenseTitleFallsBackToTheAskedLanguage(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	v := mustVehicle(t, repo, "dana@example.com")
+	base := time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC)
+	d := mustDrive(t, repo, v.ID, 1, base, 10000, 100)
+
+	exp := &models.DriveExpense{VehicleID: v.ID, DriveID: &d.ID, Type: "PARKING", Amount: 500, Currency: "EUR", Date: base}
+	if err := repo.SaveDriveExpense(ctx, exp, nil, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	enList, err := repo.ListDriveExpenses(ctx, v.ID, "en")
+	if err != nil || len(enList) != 1 || enList[0].DriveTitle == nil || *enList[0].DriveTitle != "Start → Arrival" {
+		t.Fatalf("expected the English fallback title, got %+v (err %v)", enList, err)
+	}
+	frList, err := repo.ListDriveExpenses(ctx, v.ID, "fr")
+	if err != nil || len(frList) != 1 || frList[0].DriveTitle == nil || *frList[0].DriveTitle != "Départ → Arrivée" {
+		t.Fatalf("expected the French fallback title, got %+v (err %v)", frList, err)
+	}
+
+	enByDrive, err := repo.GetDriveExpensesByDriveID(ctx, v.ID, d.ID, "en")
+	if err != nil || len(enByDrive) != 1 || enByDrive[0].DriveTitle == nil || *enByDrive[0].DriveTitle != "Start → Arrival" {
+		t.Fatalf("expected the English fallback title by drive, got %+v (err %v)", enByDrive, err)
 	}
 }
 
@@ -730,7 +760,7 @@ func TestIntegrationEditCapabilities(t *testing.T) {
 	if err := repo.DeleteTripGroup(ctx, v.ID, tg.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	expenses, _ := repo.ListDriveExpenses(ctx, v.ID)
+	expenses, _ := repo.ListDriveExpenses(ctx, v.ID, "en")
 	if len(expenses) != 1 || expenses[0].TripGroupID != nil {
 		t.Fatalf("the expense must be kept unlinked, got %+v", expenses)
 	}
@@ -1272,7 +1302,7 @@ func TestExpenseDocumentsIntegration(t *testing.T) {
 	}
 
 	// 7. Verify listing includes DocumentID and DocumentFilename
-	tolls, err := repo.ListDriveExpenses(ctx, v.ID)
+	tolls, err := repo.ListDriveExpenses(ctx, v.ID, "en")
 	if err != nil || len(tolls) != 2 {
 		t.Fatalf("expected 2 tolls, got %d (err %v)", len(tolls), err)
 	}
@@ -1306,7 +1336,7 @@ func TestExpenseDocumentsIntegration(t *testing.T) {
 		t.Fatalf("DeleteExpenseDocument failed: %v", err)
 	}
 
-	tollsAfter, err := repo.ListDriveExpenses(ctx, v.ID)
+	tollsAfter, err := repo.ListDriveExpenses(ctx, v.ID, "en")
 	if err != nil || len(tollsAfter) != 2 {
 		t.Fatalf("expected tolls to be preserved, got %d (err %v)", len(tollsAfter), err)
 	}
@@ -1477,7 +1507,7 @@ func TestIntegrationTollSourceAndHasTollFilter(t *testing.T) {
 	if m.Source != models.ExpenseSourceManual {
 		t.Fatalf("expected default source MANUAL, got %q", m.Source)
 	}
-	perDrive, err := repo.GetDriveExpensesByDriveID(ctx, v.ID, auto.ID)
+	perDrive, err := repo.GetDriveExpensesByDriveID(ctx, v.ID, auto.ID, "en")
 	if err != nil || len(perDrive) != 1 || perDrive[0].Source != models.ExpenseSourceAutoToll {
 		t.Fatalf("expected the auto expense to expose its source, got %+v (err %v)", perDrive, err)
 	}

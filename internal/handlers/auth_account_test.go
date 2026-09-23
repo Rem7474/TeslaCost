@@ -257,6 +257,34 @@ func TestChangePasswordSharesTheSignInThrottleAndRefusesSSOOnlyAccounts(t *testi
 	}
 }
 
+func TestUpdateLanguageStoresAValidChoiceAndRejectsAnythingElse(t *testing.T) {
+	repo := authTestRepo(t)
+	ctx := context.Background()
+	hash, _ := auth.HashPassword("Correct-Horse-9")
+	user, _ := repo.CreateUser(ctx, "lang@example.org", hash)
+	if user.Language != "en" {
+		t.Fatalf("expected the default language to be en, got %q", user.Language)
+	}
+	h := NewAuthHandler(repo, authTestConfig(), nil)
+
+	rec := as(user.ID, nil, http.MethodPut, "/api/auth/language", `{"language":"fr"}`, h.UpdateLanguage, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("update to fr: %d %s", rec.Code, rec.Body.String())
+	}
+	got, err := repo.GetUserByID(ctx, user.ID)
+	if err != nil || got.Language != "fr" {
+		t.Fatalf("expected the stored language to be fr, got %q (err=%v)", got.Language, err)
+	}
+
+	rec = as(user.ID, nil, http.MethodPut, "/api/auth/language", `{"language":"de"}`, h.UpdateLanguage, nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("an unsupported language: got %d, want 400", rec.Code)
+	}
+	if got, _ := repo.GetUserByID(ctx, user.ID); got.Language != "fr" {
+		t.Errorf("a rejected update must not change the stored language, got %q", got.Language)
+	}
+}
+
 func TestListSessionsHidesExpiredAndRevokedTokens(t *testing.T) {
 	repo := authTestRepo(t)
 	ctx := context.Background()

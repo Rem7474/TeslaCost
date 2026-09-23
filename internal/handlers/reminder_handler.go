@@ -325,7 +325,7 @@ func (h *ReminderHandler) TestWebhook(w http.ResponseWriter, r *http.Request) {
 		Enabled:   true,
 	}
 
-	if err := h.notifications.TestWebhook(r.Context(), webhook, veh.Name); err != nil {
+	if err := h.notifications.TestWebhook(r.Context(), webhook, veh); err != nil {
 		writeAPIError(w, http.StatusBadGateway, apierror.Newf("webhook.test_failed", "Webhook test failed: %s", err.Error()))
 		return
 	}

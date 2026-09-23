@@ -373,6 +373,7 @@ func main() {
 			r.Delete("/api/auth/sessions/{sessionId}", authHandler.RevokeSession)
 			r.Post("/api/auth/logout-all", authHandler.LogoutAll)
 			r.With(httprate.LimitByIP(10, time.Minute)).Post("/api/auth/password", authHandler.ChangePassword)
+			r.Put("/api/auth/language", authHandler.UpdateLanguage)
 
 			// EV vs ICE cost comparison (informational)
 			r.Route("/api/comparison-scenarios", func(r chi.Router) {

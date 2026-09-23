@@ -11,6 +11,7 @@ import (
 
 	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/models"
+	"github.com/teslacost/teslacost/internal/servertext"
 )
 
 // TeslaMate drive ingestion, trip groups and per-drive expenses (tolls, parking...).
@@ -538,14 +539,22 @@ func (r *Repository) reusableExpenseGroup(ctx context.Context, tx pgx.Tx, exp *m
 	return *previousGroupID, nil
 }
 
-func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([]models.DriveExpense, error) {
+// tripLabelWords is the fallback wording for a drive missing a reverse-geocoded address, in the
+// acting user's language: the CASE below returns a display string built at read time, not a
+// code, so it is translated here rather than by the frontend.
+func tripLabelWords(lang string) (start, end string) {
+	return servertext.Text(lang, "trip.departure"), servertext.Text(lang, "trip.arrival")
+}
+
+func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID, lang string) ([]models.DriveExpense, error) {
+	start, end := tripLabelWords(lang)
 	query := `
 		SELECT
 			e.id, e.vehicle_id, e.trip_group_id, tg.name,
 			ARRAY(SELECT tgd.drive_id::text FROM trip_group_drives tgd WHERE tgd.trip_group_id = e.trip_group_id ORDER BY tgd.order_index),
 			e.drive_id,
 			CASE
-				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), 'Départ') || ' → ' || COALESCE(NULLIF(d.end_address, ''), 'Arrivée')
+				WHEN d.id IS NOT NULL THEN COALESCE(NULLIF(d.start_address, ''), $2) || ' → ' || COALESCE(NULLIF(d.end_address, ''), $3)
 				ELSE NULL
 			END,
 			e.type, e.amount, e.currency, e.fx_rate, e.date, e.notes,
@@ -558,7 +567,7 @@ func (r *Repository) ListDriveExpenses(ctx context.Context, vehicleID string) ([
 		WHERE e.vehicle_id = $1
 		ORDER BY e.date DESC;
 	`
-	rows, err := r.pool.Query(ctx, query, vehicleID)
+	rows, err := r.pool.Query(ctx, query, vehicleID, start, end)
 	if err != nil {
 		return nil, err
 	}
