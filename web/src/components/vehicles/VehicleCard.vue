@@ -2,6 +2,7 @@
 import { intlLocale } from '@/i18n'
 import { ref } from 'vue'
 import { formatDistance } from '@/units'
+import { formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { Car, Plus, Trash2, Edit2, RefreshCw, CheckCircle2, AlertCircle, X, Gauge, Link2, FileText, Zap, Users, Pencil } from 'lucide-vue-next'
@@ -153,7 +154,7 @@ function clearCardTestResult() {
         <span class="text-slate-400">{{ $t('vehicles.vehicleCard.estimatedEnergy') }}</span>
         <p v-if="v.estimated_kwh_100km && v.estimated_price_per_kwh" class="text-xs font-semibold text-sky-400 flex items-center gap-1 mt-1">
           <Zap class="w-3.5 h-3.5 text-sky-400" />
-          {{ $t('vehicles.vehicleCard.kwh100kmKwh', { estimated_kwh_100km: v.estimated_kwh_100km, estimated_price_per_kwh: v.estimated_price_per_kwh }) }}
+          {{ $t('vehicles.vehicleCard.kwh100kmKwh', { estimated_kwh_100km: v.estimated_kwh_100km, price: `${formatAmount(v.estimated_price_per_kwh, v.currency || 'EUR', 3)}/kWh` }) }}
         </p>
         <p v-else class="text-xs text-slate-500 mt-1">{{ $t('vehicles.vehicleCard.notConfigured') }}</p>
       </div>

@@ -122,6 +122,7 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
                 :amount="item.amount"
                 :share-pct="item.sharePct"
                 :cost-per-km="item.costPerKm"
+                :currency="vehicleStore.activeVehicle?.currency || 'EUR'"
               />
             </template>
           </div>

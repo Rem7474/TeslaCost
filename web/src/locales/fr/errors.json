@@ -113,13 +113,14 @@
     "name_required": "Le nom du véhicule est requis",
     "url_required": "L'URL est requise",
     "estimate_consumption_range": "La consommation moyenne doit être comprise entre 0 et 100 kWh/100km",
-    "estimate_rate_range": "Le tarif de l'électricité doit être compris entre 0 et 10 €/kWh",
+    "estimate_rate_range": "Le tarif de l'électricité doit être compris entre 0 et 10 par kWh",
     "ice_no_teslamate": "Un véhicule thermique ne peut pas être relié à TeslaMate",
     "grafana_url_too_long": "URL Grafana trop longue (300 caractères maximum)",
     "grafana_url_base": "L'URL Grafana doit être une adresse de base, sans paramètres",
     "grafana_url_invalid": "URL Grafana invalide (http:// ou https:// requis)",
     "grafana_url_credentials": "L'URL Grafana ne doit pas contenir d'identifiants",
-    "powertrain_invalid": "Motorisation invalide (EV ou ICE)"
+    "powertrain_invalid": "Motorisation invalide (EV ou ICE)",
+    "currency_invalid": "Devise invalide : {p0}"
   },
   "drive": {
     "not_found": "Trajet introuvable"
@@ -127,7 +128,7 @@
   "fuel": {
     "combustion_only": "Les pleins de carburant ne concernent que les véhicules thermiques",
     "liters_range": "Quantité invalide (0,01 à 500 L)",
-    "price_range": "Prix au litre invalide (0 à 10 €/L)",
+    "price_range": "Prix au litre invalide (0 à 10)",
     "type_invalid": "Carburant invalide",
     "amount_required": "Montant du plein requis (ou litres et prix au litre)"
   },
@@ -178,7 +179,7 @@
     "recurrence_interval": "Une dépense récurrente requiert une périodicité en mois (1 à 120)",
     "recurrence_end": "La fin de récurrence précède la première échéance",
     "amount_positive": "Le montant doit être positif",
-    "fx_required": "Un taux de conversion vers l'euro est requis pour une dépense en {p0}",
+    "fx_required": "Un taux de conversion vers {p0} est requis pour une dépense en {p1}",
     "description_required": "La description est requise",
     "amortization_mode": "Mode d'amortissement invalide (NONE, DISTANCE, DURATION, HYBRID)",
     "amount_invalid": "Montant invalide",
@@ -201,7 +202,7 @@
     "loan_above_cost": "Le montant emprunté dépasse le coût d'achat",
     "loan_rate": "Le taux du crédit doit être compris entre 0 et 30 %",
     "allowance_invalid": "Forfait kilométrique invalide",
-    "excess_price": "Prix du kilomètre supplémentaire invalide (0 à 5 €/km)",
+    "excess_price": "Prix du kilomètre supplémentaire invalide (0 à 5)",
     "option_date_range": "La date de levée de l'option doit être comprise dans la période de détention",
     "option_needs_price": "La levée de l'option requiert le prix de l'option d'achat",
     "leased_no_resale": "Un véhicule loué sans levée d'option ne peut pas avoir de prix de revente",
@@ -220,12 +221,12 @@
     "annual_km": "Kilométrage annuel invalide (1 à 200 000 km)",
     "years": "Durée invalide (1 à 15 ans)",
     "ice_consumption": "Consommation thermique invalide (0,1 à 50 L/100 km)",
-    "fuel_price": "Prix du carburant invalide (0 à 10 €/L)",
+    "fuel_price": "Prix du carburant invalide (0 à 10 par litre)",
     "inflation": "Inflation invalide (−10 à 30 %)",
     "vehicle_required": "Un véhicule est requis en mode rétrospectif",
     "ev_required": "Les données du véhicule électrique sont requises en mode projection",
     "ev_consumption": "Consommation électrique invalide (0,1 à 100 kWh/100 km)",
-    "electricity_price": "Prix de l'électricité invalide (0 à 5 €/kWh)",
+    "electricity_price": "Prix de l'électricité invalide (0 à 5 par kWh)",
     "needs_ev": "Le comparatif « véhicule suivi » s'appuie sur un véhicule électrique ; utilisez le mode projection",
     "mode_invalid": "Mode invalide (RETROSPECTIVE ou PROJECTION)"
   },

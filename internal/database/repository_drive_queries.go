@@ -76,10 +76,10 @@ func (r *Repository) GetTripGroupDrives(ctx context.Context, vehicleID, tripGrou
 	return list, rows.Err()
 }
 
-// DriveTollAllocationCTE allocates drive expenses (in EUR) to drives of vehicle $1: an expense attached to
+// DriveTollAllocationCTE allocates drive expenses (in the vehicle's own currency) to drives of vehicle $1: an expense attached to
 // a drive counts fully for it; an expense attached to a trip group is split across the group's drives
 // proportionally to their distance (equally when the group has no distance).
-const DriveTollAllocationCTE = `
+var DriveTollAllocationCTE = `
 	WITH group_stats AS (
 		SELECT tgd.trip_group_id, SUM(d.distance_km) AS km, COUNT(*) AS n
 		FROM trip_group_drives tgd
@@ -88,13 +88,13 @@ const DriveTollAllocationCTE = `
 		GROUP BY tgd.trip_group_id
 	),
 	allocations AS (
-		SELECT e.id AS expense_id, e.drive_id, ` + AmountEURExpr + ` AS allocated
+		SELECT e.id AS expense_id, e.drive_id, ` + amountInVehicleCurrencyExpr("e.vehicle_id") + ` AS allocated
 		FROM drive_expenses e
 		JOIN drives d ON d.id = e.drive_id AND d.deleted_upstream_at IS NULL
 		WHERE e.vehicle_id = $1
 		UNION ALL
 		SELECT e.id, tgd.drive_id,
-		       ` + AmountEURExpr + ` * CASE WHEN gs.km > 0 THEN d.distance_km / gs.km ELSE 1.0 / gs.n END
+		       ` + amountInVehicleCurrencyExpr("e.vehicle_id") + ` * CASE WHEN gs.km > 0 THEN d.distance_km / gs.km ELSE 1.0 / gs.n END
 		FROM drive_expenses e
 		JOIN group_stats gs ON gs.trip_group_id = e.trip_group_id
 		JOIN trip_group_drives tgd ON tgd.trip_group_id = e.trip_group_id
@@ -103,7 +103,7 @@ const DriveTollAllocationCTE = `
 	)
 `
 
-// GetTollExpensesForDrives returns the drive expenses allocated to each drive (EUR).
+// GetTollExpensesForDrives returns the drive expenses allocated to each drive (in the vehicle's currency).
 func (r *Repository) GetTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (map[string]money.Cents, error) {
 	result := make(map[string]money.Cents)
 	ids := uniqueStrings(driveIDs)
@@ -159,7 +159,7 @@ func (r *Repository) DrivesNeedingTollQualification(ctx context.Context, vehicle
 	return result, rows.Err()
 }
 
-// GetTotalTollExpensesForDrives sums the expenses allocated to a set of drives (EUR).
+// GetTotalTollExpensesForDrives sums the expenses allocated to a set of drives (in the vehicle's currency).
 func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleID string, driveIDs []string) (money.Cents, error) {
 	perDrive, err := r.GetTollExpensesForDrives(ctx, vehicleID, driveIDs)
 	var total money.Cents
@@ -169,7 +169,7 @@ func (r *Repository) GetTotalTollExpensesForDrives(ctx context.Context, vehicleI
 	return total, err
 }
 
-// GetTollExpensesForTripGroup sums the expenses allocated to the drives of a trip group (EUR).
+// GetTollExpensesForTripGroup sums the expenses allocated to the drives of a trip group (in the vehicle's currency).
 func (r *Repository) GetTollExpensesForTripGroup(ctx context.Context, vehicleID, tripGroupID string) (money.Cents, error) {
 	drives, err := r.GetTripGroupDrives(ctx, vehicleID, tripGroupID)
 	if err != nil {

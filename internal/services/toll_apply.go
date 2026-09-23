@@ -171,7 +171,7 @@ func (s *TollDetectionService) ApplyTollEstimate(ctx context.Context, vehicle *m
 		DriveID:   &drive.ID,
 		Type:      "TOLL",
 		Amount:    total,
-		Currency:  "EUR",
+		Currency:  "EUR", // the toll dataset (French autoroutes, OpenTollData) is priced in euros regardless of the vehicle's own currency
 		Date:      drive.StartTime,
 		Notes:     &notes,
 		Source:    models.ExpenseSourceAutoToll,

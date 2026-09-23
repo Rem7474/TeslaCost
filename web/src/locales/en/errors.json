@@ -113,13 +113,14 @@
     "name_required": "Vehicle name is required",
     "url_required": "URL is required",
     "estimate_consumption_range": "The average consumption must be between 0 and 100 kWh/100km",
-    "estimate_rate_range": "The electricity rate must be between 0 and 10 €/kWh",
+    "estimate_rate_range": "The electricity rate must be between 0 and 10 per kWh",
     "ice_no_teslamate": "A combustion vehicle cannot be linked to TeslaMate",
     "grafana_url_too_long": "Grafana URL too long (300 characters maximum)",
     "grafana_url_base": "The Grafana URL must be a base address, without parameters",
     "grafana_url_invalid": "Invalid Grafana URL (http:// or https:// required)",
     "grafana_url_credentials": "The Grafana URL must not contain credentials",
-    "powertrain_invalid": "Invalid powertrain (EV or ICE)"
+    "powertrain_invalid": "Invalid powertrain (EV or ICE)",
+    "currency_invalid": "Invalid currency: {p0}"
   },
   "drive": {
     "not_found": "Drive not found"
@@ -127,7 +128,7 @@
   "fuel": {
     "combustion_only": "Fuel fill-ups only apply to combustion vehicles",
     "liters_range": "Invalid quantity (0.01 to 500 L)",
-    "price_range": "Invalid price per litre (0 to 10 €/L)",
+    "price_range": "Invalid price per litre (0 to 10)",
     "type_invalid": "Invalid fuel",
     "amount_required": "The fill-up amount is required (or litres and price per litre)"
   },
@@ -178,7 +179,7 @@
     "recurrence_interval": "A recurring expense needs a frequency in months (1 to 120)",
     "recurrence_end": "The end of the recurrence is before the first due date",
     "amount_positive": "The amount must be positive",
-    "fx_required": "A conversion rate to the euro is required for an expense in {p0}",
+    "fx_required": "A conversion rate to {p0} is required for an expense in {p1}",
     "description_required": "The description is required",
     "amortization_mode": "Invalid smoothing mode (NONE, DISTANCE, DURATION, HYBRID)",
     "amount_invalid": "Invalid amount",
@@ -201,7 +202,7 @@
     "loan_above_cost": "The amount borrowed exceeds the purchase cost",
     "loan_rate": "The loan rate must be between 0 and 30%",
     "allowance_invalid": "Invalid mileage allowance",
-    "excess_price": "Invalid price per extra kilometre (0 to 5 €/km)",
+    "excess_price": "Invalid price per extra kilometre (0 to 5)",
     "option_date_range": "The option exercise date must fall within the ownership period",
     "option_needs_price": "Exercising the option needs the purchase option price",
     "leased_no_resale": "A leased vehicle without an exercised option cannot have a resale price",
@@ -220,12 +221,12 @@
     "annual_km": "Invalid yearly mileage (1 to 200,000 km)",
     "years": "Invalid duration (1 to 15 years)",
     "ice_consumption": "Invalid combustion consumption (0.1 to 50 L/100 km)",
-    "fuel_price": "Invalid fuel price (0 to 10 €/L)",
+    "fuel_price": "Invalid fuel price (0 to 10 per litre)",
     "inflation": "Invalid inflation (−10 to 30%)",
     "vehicle_required": "A vehicle is required in retrospective mode",
     "ev_required": "The electric vehicle data is required in projection mode",
     "ev_consumption": "Invalid electric consumption (0.1 to 100 kWh/100 km)",
-    "electricity_price": "Invalid electricity price (0 to 5 €/kWh)",
+    "electricity_price": "Invalid electricity price (0 to 5 per kWh)",
     "needs_ev": "The “tracked vehicle” comparison relies on an electric vehicle; use the projection mode",
     "mode_invalid": "Invalid mode (RETROSPECTIVE or PROJECTION)"
   },

@@ -43,6 +43,7 @@ type SaveVehicleRequest struct {
 	TeslaMateBasicPass   *string         `json:"teslamate_basic_pass"` // Plain text from frontend
 	EstimatedKwh100km    *float64        `json:"estimated_kwh_100km"`
 	EstimatedPricePerKwh *float64        `json:"estimated_price_per_kwh"`
+	Currency             string          `json:"currency"`              // ISO 4217 code, fixed at creation; ignored on update
 	Powertrain           string          `json:"powertrain"`            // EV (default) or ICE
 	TeslaMateGrafanaURL  *string         `json:"teslamate_grafana_url"` // Optional; empty clears it
 }
@@ -72,6 +73,20 @@ func normalizeGrafanaURL(raw *string) (*string, error) {
 	}
 	out := strings.TrimRight(u.String(), "/")
 	return &out, nil
+}
+
+// normalizeVehicleCurrency validates and uppercases a vehicle's base currency, defaulting to EUR.
+// Unlike normalizeCurrency (an individual expense's currency, checked against the vehicle's own),
+// this is the vehicle's own currency: fixed at creation, never read again on update.
+func normalizeVehicleCurrency(raw string) (string, error) {
+	cur := strings.ToUpper(strings.TrimSpace(raw))
+	if cur == "" {
+		cur = "EUR"
+	}
+	if !currencyPattern.MatchString(cur) {
+		return "", apierror.Newf("vehicle.currency_invalid", "Invalid currency: %q", raw)
+	}
+	return cur, nil
 }
 
 // validatePowertrain checks the powertrain of a vehicle payload and that an ICE vehicle has no TeslaMate link.
@@ -124,6 +139,11 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if powertrain == "" {
 		powertrain = models.PowertrainEV
 	}
+	currency, err := normalizeVehicleCurrency(req.Currency)
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
 	grafanaURL, err := normalizeGrafanaURL(req.TeslaMateGrafanaURL)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
@@ -162,6 +182,7 @@ func (h *VehicleHandler) Create(w http.ResponseWriter, r *http.Request) {
 		TeslaMateBasicPassEnc:    encPass,
 		EstimatedKwh100km:        req.EstimatedKwh100km,
 		EstimatedPricePerKwh:     req.EstimatedPricePerKwh,
+		Currency:                 currency,
 		Powertrain:               powertrain,
 		TeslaMateGrafanaURL:      grafanaURL,
 	}
@@ -285,7 +306,7 @@ func (h *VehicleHandler) UpdateEstimatedEnergy(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if req.EstimatedPricePerKwh != nil && (*req.EstimatedPricePerKwh <= 0 || *req.EstimatedPricePerKwh > 10) {
-		writeAPIError(w, http.StatusBadRequest, apierror.New("vehicle.estimate_rate_range", "The electricity rate must be between 0 and 10 €/kWh"))
+		writeAPIError(w, http.StatusBadRequest, apierror.New("vehicle.estimate_rate_range", "The electricity rate must be between 0 and 10 per kWh"))
 		return
 	}
 

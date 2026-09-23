@@ -188,7 +188,7 @@ func (c OwnershipCosts) LeaseWarnings(now time.Time) []string {
 	var warnings []string
 	if c.LeaseExcessKmProjected > 0 {
 		warnings = append(warnings, fmt.Sprintf(
-			"At the current pace the mileage allowance will be exceeded: estimated end-of-contract penalty of %s €", c.LeaseExcessKmProjected))
+			"At the current pace the mileage allowance will be exceeded: estimated end-of-contract penalty of %s", c.LeaseExcessKmProjected))
 	}
 	if c.ContractEndDate != nil && now.Before(*c.ContractEndDate) && monthsBetween(now, *c.ContractEndDate) <= 3 {
 		warnings = append(warnings, fmt.Sprintf(

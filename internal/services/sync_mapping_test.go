@@ -18,7 +18,7 @@ func TestBuildChargeStoresBatteryLevelsAndCelsius(t *testing.T) {
 	}
 
 	// TeslaMate configured in Fahrenheit: 41 F is 5 C
-	c := buildCharge("v1", tc, &teslamate.Units{UnitOfLength: "km", UnitOfTemperature: "F"}, start)
+	c := buildCharge("v1", "EUR", tc, &teslamate.Units{UnitOfLength: "km", UnitOfTemperature: "F"}, start)
 	if c.StartBatteryLevel == nil || *c.StartBatteryLevel != 22 || c.EndBatteryLevel == nil || *c.EndBatteryLevel != 71 {
 		t.Errorf("battery levels: %v %v", c.StartBatteryLevel, c.EndBatteryLevel)
 	}
@@ -28,11 +28,11 @@ func TestBuildChargeStoresBatteryLevelsAndCelsius(t *testing.T) {
 
 	// Celsius is kept as is, and an unknown temperature stays unknown
 	tc.OutsideTempAvg = fptr(7.34)
-	if c = buildCharge("v1", tc, &teslamate.Units{UnitOfTemperature: "C"}, start); c.OutsideTempC == nil || *c.OutsideTempC != 7.3 {
+	if c = buildCharge("v1", "EUR", tc, &teslamate.Units{UnitOfTemperature: "C"}, start); c.OutsideTempC == nil || *c.OutsideTempC != 7.3 {
 		t.Errorf("rounded Celsius: %v", c.OutsideTempC)
 	}
 	tc.OutsideTempAvg = nil
-	if c = buildCharge("v1", tc, nil, start); c.OutsideTempC != nil {
+	if c = buildCharge("v1", "EUR", tc, nil, start); c.OutsideTempC != nil {
 		t.Errorf("unknown temperature: got %v", *c.OutsideTempC)
 	}
 }
@@ -41,7 +41,7 @@ func TestBuildChargeWithoutEndLevelHasNoLevels(t *testing.T) {
 	start := time.Date(2026, 2, 3, 18, 0, 0, 0, time.UTC)
 	// TeslaMateApi reports 0 for a level it does not know: storing 0 % would fake a huge state-of-charge swing
 	tc := teslamate.Charge{ChargeID: 8, ChargeEnergyAdded: 10, BatteryDetails: teslamate.BatteryDetails{StartBatteryLevel: 40}}
-	c := buildCharge("v1", tc, nil, start)
+	c := buildCharge("v1", "EUR", tc, nil, start)
 	if c.StartBatteryLevel != nil || c.EndBatteryLevel != nil {
 		t.Errorf("levels must be unknown, got %v %v", c.StartBatteryLevel, c.EndBatteryLevel)
 	}

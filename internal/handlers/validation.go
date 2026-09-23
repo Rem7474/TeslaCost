@@ -98,20 +98,22 @@ func validateQuantity(v float64, max float64) error {
 	return nil
 }
 
-// normalizeCurrency defaults to EUR and requires a conversion rate to EUR for other currencies.
-func normalizeCurrency(currency string, fxRate *float64) (string, *float64, error) {
+// normalizeCurrency defaults to the vehicle's own currency and requires a conversion rate to it
+// for anything else — a one-off foreign expense (a toll paid abroad), not a change of the
+// vehicle's base currency, which is fixed at creation.
+func normalizeCurrency(currency, baseCurrency string, fxRate *float64) (string, *float64, error) {
 	cur := strings.ToUpper(strings.TrimSpace(currency))
 	if cur == "" {
-		cur = "EUR"
+		cur = baseCurrency
 	}
 	if !currencyPattern.MatchString(cur) {
 		return "", nil, apierror.Newf("expense.currency_invalid", "Invalid currency: %q", currency)
 	}
-	if cur == "EUR" {
+	if cur == baseCurrency {
 		return cur, nil, nil
 	}
 	if fxRate == nil || math.IsNaN(*fxRate) || math.IsInf(*fxRate, 0) || *fxRate <= 0 {
-		return "", nil, apierror.Newf("expense.fx_required", "A conversion rate to the euro is required for an expense in %s", cur)
+		return "", nil, apierror.Newf("expense.fx_required", "A conversion rate to %s is required for an expense in %s", baseCurrency, cur)
 	}
 	return cur, fxRate, nil
 }

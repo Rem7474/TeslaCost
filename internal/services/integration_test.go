@@ -209,6 +209,98 @@ func TestIntegrationDriveExpenseTitleFallsBackToTheAskedLanguage(t *testing.T) {
 	}
 }
 
+// TestIntegrationVehicleCurrencyIsFixedAtCreation covers the immutability guarantee the currency
+// column relies on: UpdateVehicle's SET clause never includes currency, so a value sent on update
+// is silently ignored rather than retroactively reconverting stored amounts.
+func TestIntegrationVehicleCurrencyIsFixedAtCreation(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+
+	defaultUser, err := repo.CreateUser(ctx, "eur@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaultVehicle := &models.Vehicle{UserID: defaultUser.ID, Name: "Model 3", TeslaMateAuthType: models.AuthModeNone}
+	if err := repo.CreateVehicle(ctx, defaultVehicle); err != nil {
+		t.Fatal(err)
+	}
+	if defaultVehicle.Currency != "EUR" {
+		t.Fatalf("expected the default currency to be EUR, got %q", defaultVehicle.Currency)
+	}
+
+	usdUser, err := repo.CreateUser(ctx, "usd@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	usdVehicle := &models.Vehicle{UserID: usdUser.ID, Name: "Bolt", Currency: "USD", TeslaMateAuthType: models.AuthModeNone}
+	if err := repo.CreateVehicle(ctx, usdVehicle); err != nil {
+		t.Fatal(err)
+	}
+	if usdVehicle.Currency != "USD" {
+		t.Fatalf("expected the chosen currency to be USD, got %q", usdVehicle.Currency)
+	}
+
+	usdVehicle.Currency = "GBP"
+	usdVehicle.Name = "Bolt EUV"
+	if err := repo.UpdateVehicle(ctx, usdVehicle); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := repo.GetVehicleByID(ctx, usdVehicle.ID, usdUser.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Currency != "USD" {
+		t.Fatalf("expected the currency to stay USD after an update, got %q", reloaded.Currency)
+	}
+	if reloaded.Name != "Bolt EUV" {
+		t.Fatalf("expected the name change to still go through, got %q", reloaded.Name)
+	}
+}
+
+// TestIntegrationTollAllocationConvertsToTheVehicleCurrency covers amountInVehicleCurrencyExpr:
+// an expense in the vehicle's own currency needs no rate, a foreign one is converted by fx_rate,
+// and a foreign one without a rate is excluded — the same rule that used to hard-code the euro.
+func TestIntegrationTollAllocationConvertsToTheVehicleCurrency(t *testing.T) {
+	_, repo := setupIntegrationDB(t, false)
+	ctx := context.Background()
+	u, err := repo.CreateUser(ctx, "usd-tolls@example.com", "hash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := &models.Vehicle{UserID: u.ID, Name: "Model 3", Currency: "USD", TeslaMateAuthType: models.AuthModeNone}
+	if err := repo.CreateVehicle(ctx, v); err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC)
+	native := mustDrive(t, repo, v.ID, 1, base, 10000, 100)
+	converted := mustDrive(t, repo, v.ID, 2, base.Add(time.Hour), 10100, 50)
+	unconverted := mustDrive(t, repo, v.ID, 3, base.Add(2*time.Hour), 10150, 50)
+
+	fxRate := 0.9
+	nativeExp := &models.DriveExpense{VehicleID: v.ID, DriveID: &native.ID, Type: "TOLL", Amount: 1000, Currency: "USD"}
+	convertedExp := &models.DriveExpense{VehicleID: v.ID, DriveID: &converted.ID, Type: "TOLL", Amount: 1000, Currency: "EUR", FxRate: &fxRate}
+	unconvertedExp := &models.DriveExpense{VehicleID: v.ID, DriveID: &unconverted.ID, Type: "TOLL", Amount: 1000, Currency: "EUR"}
+	for _, exp := range []*models.DriveExpense{nativeExp, convertedExp, unconvertedExp} {
+		if err := repo.SaveDriveExpense(ctx, exp, nil, ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := repo.GetTollExpensesForDrives(ctx, v.ID, []string{native.ID, converted.ID, unconverted.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got[native.ID] != 1000 {
+		t.Errorf("same-currency expense: got %v, want 1000 (no conversion needed)", got[native.ID])
+	}
+	if got[converted.ID] != 900 {
+		t.Errorf("foreign expense with a rate: got %v, want 900 (1000 * 0.9)", got[converted.ID])
+	}
+	if got[unconverted.ID] != 0 {
+		t.Errorf("foreign expense without a rate: got %v, want 0 (excluded)", got[unconverted.ID])
+	}
+}
+
 func TestIntegrationTCOCompletenessRecurringAndInsurance(t *testing.T) {
 	db, repo := setupIntegrationDB(t, false)
 	ctx := context.Background()

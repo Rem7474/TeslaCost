@@ -57,6 +57,7 @@ export function emptyVehicleForm() {
   return {
     name: '',
     powertrain: 'EV',
+    currency: 'EUR',
     vin: '',
     current_odometer: 0,
     teslamate_car_id: 1,
@@ -78,6 +79,7 @@ export function vehicleFormFrom(v: any): VehicleForm {
   return {
     name: v.name,
     powertrain: v.powertrain || 'EV',
+    currency: v.currency || 'EUR',
     vin: v.vin || '',
     current_odometer: v.current_odometer ? Math.round(v.current_odometer) : 0,
     teslamate_car_id: v.teslamate_car_id || 1,

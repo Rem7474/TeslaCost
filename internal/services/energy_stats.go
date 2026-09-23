@@ -451,12 +451,13 @@ func (s *EnergyStatsService) Compute(ctx context.Context, vehicleID string) (*En
 		return nil, err
 	}
 
-	// The cost is converted to EUR the same way as in the cost ledger; a foreign cost without rate stays unknown.
+	// The cost is converted to the vehicle's currency the same way as in the cost ledger; a foreign
+	// cost without rate stays unknown.
 	chargeRows, err := s.pool.Query(ctx, `
 		SELECT TO_CHAR(date AT TIME ZONE $2, 'YYYY-MM') AS m, date, end_date, kwh_added::float8, kwh_used::float8,
 		       start_battery_level, end_battery_level,
 		       CASE WHEN cost IS NULL THEN NULL
-		            WHEN currency = 'EUR' THEN ROUND(cost, 2)
+		            WHEN currency = (SELECT currency FROM vehicles WHERE id = $1) THEN ROUND(cost, 2)
 		            WHEN fx_rate IS NOT NULL THEN ROUND(cost * fx_rate, 2) END AS cost_eur
 		FROM charge_logs
 		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL

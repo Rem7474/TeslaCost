@@ -10,6 +10,7 @@ import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wr
 import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, mergeExpensesByDrive } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 import { buildDriveBreakdown } from '@/utils/costBreakdown'
+import { formatAmount } from '@/currency'
 import CostDonut from '@/components/costs/CostDonut.vue'
 import CostItemRow from '@/components/costs/CostItemRow.vue'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
@@ -43,6 +44,7 @@ const prefs = usePreferencesStore()
 const { showConfirm, showAlert } = useConfirm()
 const formatDate = formatDayTime
 const breakdown = computed(() => buildDriveBreakdown(selectedCostDrive.value?.costs, Number(selectedCostDrive.value?.distance_km) || 0))
+const vehicleCurrency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 const teslamateDriveUrl = (d: any) => buildTeslamateDriveUrl(vehicleStore.activeVehicle, d)
 
 // Expense edition inside the cost modal
@@ -475,6 +477,7 @@ async function handleDeleteExpense(exp: any) {
           :amount="selectedCostDrive.costs?.electricity_cost || 0"
           :share-pct="breakdown.byKey.energy.sharePct"
           :cost-per-km="breakdown.byKey.energy.costPerKm"
+          :currency="vehicleCurrency"
         >
           <template #badge>
             <span v-if="selectedCostDrive.costs?.energy_source === 'DEFAULT' || selectedCostDrive.costs?.electricity_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
@@ -486,10 +489,11 @@ async function handleDeleteExpense(exp: any) {
           :icon="Disc"
           tone="emerald"
           :label="$t('drives.driveCostModal.tireWear')"
-          :sub="`${selectedCostDrive.distance_km} km × ${(selectedCostDrive.costs?.tires_rate || 0.02).toFixed(3)} €/km`"
+          :sub="`${selectedCostDrive.distance_km} km × ${formatAmount(selectedCostDrive.costs?.tires_rate || 0.02, vehicleCurrency, 3)}/km`"
           :amount="selectedCostDrive.costs?.tires_cost || 0"
           :share-pct="breakdown.byKey.tires.sharePct"
           :cost-per-km="breakdown.byKey.tires.costPerKm"
+          :currency="vehicleCurrency"
         >
           <template #badge>
             <span v-if="selectedCostDrive.costs?.tires_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
@@ -502,10 +506,11 @@ async function handleDeleteExpense(exp: any) {
           :icon="Wrench"
           tone="pink"
           :label="$t('drives.driveCostModal.maintenanceProvision')"
-          :sub="`${selectedCostDrive.distance_km} km × ${(selectedCostDrive.costs?.maintenance_rate || 0.015).toFixed(3)} €/km`"
+          :sub="`${selectedCostDrive.distance_km} km × ${formatAmount(selectedCostDrive.costs?.maintenance_rate || 0.015, vehicleCurrency, 3)}/km`"
           :amount="selectedCostDrive.costs?.maintenance_cost || 0"
           :share-pct="breakdown.byKey.maintenance.sharePct"
           :cost-per-km="breakdown.byKey.maintenance.costPerKm"
+          :currency="vehicleCurrency"
         >
           <template #badge>
             <span v-if="selectedCostDrive.costs?.maintenance_rate_source === 'DEFAULT'" class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">{{ $t('drives.driveCostModal.estimate') }}</span>
@@ -518,10 +523,11 @@ async function handleDeleteExpense(exp: any) {
           :icon="Shield"
           tone="purple"
           :label="$t('drives.driveCostModal.insuranceShareFixedCost')"
-          :sub="`${selectedCostDrive.distance_km} km × ${(selectedCostDrive.costs?.insurance_rate || 0).toFixed(3)} €/km`"
+          :sub="`${selectedCostDrive.distance_km} km × ${formatAmount(selectedCostDrive.costs?.insurance_rate || 0, vehicleCurrency, 3)}/km`"
           :amount="selectedCostDrive.costs?.insurance_cost || 0"
           :share-pct="breakdown.byKey.insurance.sharePct"
           :cost-per-km="breakdown.byKey.insurance.costPerKm"
+          :currency="vehicleCurrency"
         >
           <template #badge>
             <span

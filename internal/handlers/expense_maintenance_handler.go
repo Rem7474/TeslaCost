@@ -32,7 +32,7 @@ type CreateMaintenanceRequest struct {
 }
 
 // buildMaintenanceExpense validates a maintenance / fixed expense payload.
-func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*models.MaintenanceExpense, error) {
+func buildMaintenanceExpense(vehicleID, baseCurrency string, req *CreateMaintenanceRequest) (*models.MaintenanceExpense, error) {
 	category := strings.ToUpper(strings.TrimSpace(req.Category))
 	if !maintenanceCategories[category] {
 		return nil, apierror.New("expense.category_invalid", "Invalid expense category")
@@ -44,7 +44,7 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 	if err != nil {
 		return nil, err
 	}
-	curr, fxRate, err := normalizeCurrency(req.Currency, req.FxRate)
+	curr, fxRate, err := normalizeCurrency(req.Currency, baseCurrency, req.FxRate)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,8 @@ func buildMaintenanceExpense(vehicleID string, req *CreateMaintenanceRequest) (*
 
 func (h *ExpenseHandler) CreateMaintenance(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if v == nil {
 		return
 	}
 
@@ -136,7 +137,7 @@ func (h *ExpenseHandler) CreateMaintenance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	m, err := buildMaintenanceExpense(vehicleID, &req)
+	m, err := buildMaintenanceExpense(vehicleID, v.Currency, &req)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -177,7 +178,8 @@ func (h *ExpenseHandler) ListMaintenance(w http.ResponseWriter, r *http.Request)
 func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
 	maintID := chi.URLParam(r, "maintenanceId")
-	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if v == nil {
 		return
 	}
 
@@ -187,7 +189,7 @@ func (h *ExpenseHandler) UpdateMaintenance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	m, err := buildMaintenanceExpense(vehicleID, &req)
+	m, err := buildMaintenanceExpense(vehicleID, v.Currency, &req)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

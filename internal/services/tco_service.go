@@ -152,10 +152,10 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	var unconvertedCharges int
 	if err := s.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(kwh_added), 0),
-		       COALESCE(SUM(kwh_added) FILTER (WHERE cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL)), 0),
+		       COALESCE(SUM(kwh_added) FILTER (WHERE cost IS NOT NULL AND (currency = (SELECT currency FROM vehicles WHERE id = $1) OR fx_rate IS NOT NULL)), 0),
 		       COUNT(*) FILTER (WHERE cost IS NULL),
 		       COALESCE(SUM(kwh_added) FILTER (WHERE cost IS NULL), 0),
-		       COUNT(*) FILTER (WHERE cost IS NOT NULL AND currency <> 'EUR' AND fx_rate IS NULL)
+		       COUNT(*) FILTER (WHERE cost IS NOT NULL AND currency <> (SELECT currency FROM vehicles WHERE id = $1) AND fx_rate IS NULL)
 		FROM charge_logs
 		WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL;
 	`, vehicleID).Scan(&kwhAdded, &kwhPriced, &comp.ChargesWithoutCost, &comp.KwhWithoutCost, &unconvertedCharges); err != nil {
@@ -179,8 +179,8 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	// 5. Unconverted foreign amounts, insurance expenses, carpool revenue
 	var unconvertedOther, insuranceEntries int
 	if err := s.pool.QueryRow(ctx, `
-		SELECT (SELECT COUNT(*) FROM drive_expenses WHERE vehicle_id = $1 AND currency <> 'EUR' AND fx_rate IS NULL)
-		     + (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND currency <> 'EUR' AND fx_rate IS NULL),
+		SELECT (SELECT COUNT(*) FROM drive_expenses WHERE vehicle_id = $1 AND currency <> (SELECT currency FROM vehicles WHERE id = $1) AND fx_rate IS NULL)
+		     + (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND currency <> (SELECT currency FROM vehicles WHERE id = $1) AND fx_rate IS NULL),
 		       (SELECT COUNT(*) FROM maintenance_expenses WHERE vehicle_id = $1 AND category = 'INSURANCE'),
 		       (SELECT COALESCE(SUM(total_revenue), 0) FROM carpool_trips WHERE vehicle_id = $1);
 	`, vehicleID).Scan(&unconvertedOther, &insuranceEntries, &sum.CarpoolRevenue); err != nil {
@@ -400,7 +400,7 @@ func (s *TCOService) ComputeVehicleTCO(ctx context.Context, vehicleID string) (*
 	if comp.UntrackedDistanceKm > 0 {
 		if sum.EstimatedEnergyCost > 0 {
 			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
-				"%.0f km driven before tracking started: charges estimated and completed (%.1f kWh/100km at %.3f €/kWh)", sum.EstimatedEnergyDistanceKm, *estKwh100km, *estPricePerKwh))
+				"%.0f km driven before tracking started: charges estimated and completed (%.1f kWh/100km at %.3f/kWh)", sum.EstimatedEnergyDistanceKm, *estKwh100km, *estPricePerKwh))
 		} else {
 			comp.Warnings = append(comp.Warnings, fmt.Sprintf(
 				"%.0f km driven appear in no drive (before TeslaMate or TeslaMate offline): the cost per km uses the odometer distance", comp.UntrackedDistanceKm))

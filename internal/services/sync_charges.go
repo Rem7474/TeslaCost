@@ -48,7 +48,7 @@ func (s *SyncService) syncCharges(ctx context.Context, client *teslamate.Client,
 			}
 			st.see(tc.ChargeID, startDate)
 
-			isInserted, err := s.repo.UpsertTeslaMateCharge(ctx, buildCharge(v.ID, tc, chargeUnits, startDate))
+			isInserted, err := s.repo.UpsertTeslaMateCharge(ctx, buildCharge(v.ID, v.Currency, tc, chargeUnits, startDate))
 			st.recordUpsert(isInserted, err, "kw:charge", tc.ChargeID)
 		}
 
@@ -74,7 +74,7 @@ func costCents(cost *float64) *money.Cents {
 	return &c
 }
 
-func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, startDate time.Time) *models.ChargeLog {
+func buildCharge(vehicleID, currency string, tc teslamate.Charge, units *teslamate.Units, startDate time.Time) *models.ChargeLog {
 	endDate, _ := tc.ParsedEndTime()
 
 	odo := tc.Odometer
@@ -114,7 +114,7 @@ func buildCharge(vehicleID string, tc teslamate.Charge, units *teslamate.Units, 
 		KwhUsed:           kwhUsedPtr,
 		Cost:              costCents(tc.Cost),
 		CostSource:        "TESLAMATE",
-		Currency:          "EUR",
+		Currency:          currency,
 		Odometer:          odoPtr,
 		StartBatteryLevel: startLevel,
 		EndBatteryLevel:   endLevel,
