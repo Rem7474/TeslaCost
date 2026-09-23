@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
 import { ref } from 'vue'
+import { formatDistance } from '@/units'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { Car, Plus, Trash2, Edit2, RefreshCw, CheckCircle2, AlertCircle, X, Gauge, Link2, FileText, Zap, Users, Pencil } from 'lucide-vue-next'
@@ -86,7 +87,7 @@ function clearCardTestResult() {
         <span class="text-slate-400">{{ $t('vehicles.vehicleCard.currentOdometer') }}</span>
         <p class="text-sm font-bold text-slate-200 flex items-center gap-1.5 mt-0.5">
           <Gauge class="w-3.5 h-3.5 text-rose-400" />
-          {{ Math.round(v.current_odometer).toLocaleString(intlLocale()) }} km
+          {{ formatDistance(v.current_odometer) }}
         </p>
       </div>
 

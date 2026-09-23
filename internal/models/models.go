@@ -22,6 +22,7 @@ type User struct {
 	OIDCProvider *string   `json:"-"`
 	DisplayName  *string   `json:"display_name,omitempty"` // from IdP "name" claim
 	Language     string    `json:"language"`               // "en" or "fr": used for messages built outside a request (reminder webhooks, sync alerts)
+	DistanceUnit string    `json:"distance_unit"`          // "km" or "mi": distances are always stored in km, this only drives display/input conversion
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
