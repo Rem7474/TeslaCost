@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildLeaseSummary,
   buildMonthBreakdown,
+  computeMonthFixedVariable,
   currentMonthStats,
   filterMonthsByRange,
   formatMonthName,
@@ -185,5 +186,67 @@ describe('buildMonthBreakdown', () => {
     expect(empty.economicTotal).toBe(0)
     expect(empty.costPerKm).toBe(0)
     expect(empty.items.every((i) => i.sharePct === 0 && i.costPerKm === 0)).toBe(true)
+    expect(empty.fixedVar.totalAmount).toBe(0)
+    expect(empty.fixedVar.fixedPct).toBe(0)
+    expect(empty.fixedVar.variablePct).toBe(0)
+  })
+
+  it('computes fixed vs variable ratio on the monthly breakdown', () => {
+    const eco = buildMonthBreakdown(month, 'economic')
+    expect(eco.fixedVar.variableAmount).toBe(95)
+    expect(eco.fixedVar.fixedAmount).toBe(375)
+    expect(eco.fixedVar.totalAmount).toBe(470)
+    expect(eco.fixedVar.fixedPct).toBe(80)
+    expect(eco.fixedVar.variablePct).toBe(20)
+
+    const cash = buildMonthBreakdown(month, 'cash')
+    expect(cash.fixedVar.variableAmount).toBe(460)
+    expect(cash.fixedVar.fixedAmount).toBe(365)
+    expect(cash.fixedVar.totalAmount).toBe(825)
+    expect(cash.fixedVar.fixedPct).toBe(44)
+    expect(cash.fixedVar.variablePct).toBe(56)
+  })
+})
+
+describe('computeMonthFixedVariable', () => {
+  it('returns zeroes for empty or null month', () => {
+    const res = computeMonthFixedVariable(null)
+    expect(res).toEqual({ fixedAmount: 0, variableAmount: 0, totalAmount: 0, fixedPct: 0, variablePct: 0 })
+    expect(computeMonthFixedVariable({})).toEqual({ fixedAmount: 0, variableAmount: 0, totalAmount: 0, fixedPct: 0, variablePct: 0 })
+  })
+
+  it('splits variable and fixed costs in economic mode', () => {
+    const m = {
+      energy: 80,
+      tolls: 20,
+      tires_amortized: 30,
+      maintenance_amortized: 20,
+      insurance: 50,
+      financing_amortized: 200,
+      other: 0,
+    }
+    const res = computeMonthFixedVariable(m, 'economic')
+    expect(res.variableAmount).toBe(150)
+    expect(res.fixedAmount).toBe(250)
+    expect(res.totalAmount).toBe(400)
+    expect(res.fixedPct).toBe(63) // 250 / 400 = 62.5 -> 63
+    expect(res.variablePct).toBe(37) // 100 - 63 = 37
+  })
+
+  it('splits variable and fixed costs in cash mode', () => {
+    const m = {
+      energy: 80,
+      tolls: 20,
+      tires: 0,
+      maintenance: 0,
+      insurance: 50,
+      financing: 200,
+      other: 10,
+    }
+    const res = computeMonthFixedVariable(m, 'cash')
+    expect(res.variableAmount).toBe(100)
+    expect(res.fixedAmount).toBe(260)
+    expect(res.totalAmount).toBe(360)
+    expect(res.fixedPct + res.variablePct).toBe(100)
   })
 })
