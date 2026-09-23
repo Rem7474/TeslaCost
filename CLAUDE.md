@@ -5,7 +5,7 @@ Self-hosted total-cost-of-ownership tracker for cars: energy/fuel, maintenance, 
 - Backend: Go (`go.mod` pins the toolchain), chi router, pgx/pgxpool, PostgreSQL. Module path `github.com/teslacost/teslacost`.
 - Frontend: Vue 3 `<script setup>` + TypeScript, Pinia, vue-router, Tailwind 4, Chart.js, Vite. Built into `web/dist` and embedded in the Go binary (`web/embed.go`).
 - One Docker image serves API + SPA. `docker-compose.yml` runs `postgres`, `api` and `backup`.
-- The user-facing docs (`README.md`) and UI strings are in French for now.
+- `README.md` and code comments are in English. UI strings and API error/message text are bilingual (English and French) through vue-i18n; see the Conventions section below.
 
 ## Commands
 
