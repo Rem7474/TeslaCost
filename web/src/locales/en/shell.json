@@ -99,7 +99,7 @@
     "requestFailed": "The request failed ({status})",
     "driveNoToll": "Drive marked as toll-free",
     "tripSuggestionDismiss": "Detected trip ruled out",
-    "toll": "Toll / parking of {amount} {currency}",
+    "toll": "Toll / parking of {amount}",
     "tollEdit": "Toll / parking edit",
     "expense": "Expense “{description}”",
     "chargeCost": "Charge cost",
@@ -110,7 +110,7 @@
     "webhookSaved": "Webhook saved",
     "webhookDeleted": "Webhook deleted",
     "webhookTest": "Notification test sent",
-    "fillUp": "Fill-up of {amount} €",
+    "fillUp": "Fill-up of {amount}",
     "charge": "Charge of {kwh} kWh",
     "documentLoadFailed": "Could not load the document"
   }

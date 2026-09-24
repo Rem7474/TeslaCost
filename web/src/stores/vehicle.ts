@@ -30,6 +30,8 @@ export const useVehicleStore = defineStore('vehicle', () => {
   const isIce = computed(() => activeVehicle.value?.powertrain === 'ICE')
   // TeslaMate-fed data (drives, battery, temperature, synchronization) only exists for a vehicle linked to a teslamateapi
   const hasTeslaMate = computed(() => vehicleHasTeslaMate(activeVehicle.value))
+  // Every amount of a vehicle is stored and shown in the currency chosen at its creation
+  const currency = computed<string>(() => activeVehicle.value?.currency || 'EUR')
 
   async function fetchVehicles() {
     isLoading.value = true
@@ -177,6 +179,7 @@ export const useVehicleStore = defineStore('vehicle', () => {
     canEdit,
     isIce,
     hasTeslaMate,
+    currency,
     isSyncing,
     syncResult,
     syncError,

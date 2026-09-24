@@ -4,6 +4,7 @@ import {
   buildSuggestionCostDrive,
   buildTripCostDrive,
   currentYearMonth,
+  driveCsvHeaders,
   driveCsvRows,
   filterTrips,
   formatMonthLabel,
@@ -153,6 +154,12 @@ describe('selectionSummary and CSV rows', () => {
     expect(rows[0][10]).toBe('"Pro, X"')
     expect(rows[1][1]).toBe('')
     expect(rows[1][10]).toBe('""')
+  })
+  it('names the vehicle currency in the cost columns of the CSV header', () => {
+    const headers = driveCsvHeaders('USD')
+    expect(headers).toHaveLength(driveCsvRows(list)[0].length)
+    expect(headers[8]).toMatch(/_USD$/)
+    expect(headers.join(',')).not.toContain('EUR')
   })
 })
 

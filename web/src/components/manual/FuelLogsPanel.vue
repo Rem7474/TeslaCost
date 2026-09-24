@@ -6,7 +6,7 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import { useVehicleStore } from '@/stores/vehicle'
-import { formatAmount } from '@/currency'
+import { currencySymbol, formatAmount } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 const props = defineProps<{
@@ -15,7 +15,7 @@ const props = defineProps<{
 }>()
 
 const vehicleStore = useVehicleStore()
-const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
+const currency = computed(() => vehicleStore.currency)
 const { showConfirm, showAlert } = useConfirm()
 
 const stats = ref<any | null>(null)
@@ -56,9 +56,9 @@ const logs = computed<any[]>(() => [...(stats.value?.logs || [])].reverse())
 // Any two of amount / liters / price per liter determine the third (the server derives the missing one)
 const derivedHint = computed(() => {
   const { amount, liters, price_per_liter: price } = form.value
-  if (amount && liters && !price) return t('manual.fuelLogsPanel.derivedPrice', { value: (amount / liters).toFixed(3).replace('.', ',') })
-  if (amount && price && !liters) return t('manual.fuelLogsPanel.derivedQuantity', { value: (amount / price).toFixed(2).replace('.', ',') })
-  if (liters && price && !amount) return t('manual.fuelLogsPanel.derivedAmount', { value: (liters * price).toFixed(2).replace('.', ',') })
+  if (amount && liters && !price) return t('manual.fuelLogsPanel.derivedPrice', { value: formatAmount(amount / liters, currency.value, 3) })
+  if (amount && price && !liters) return t('manual.fuelLogsPanel.derivedQuantity', { value: (amount / price).toLocaleString(intlLocale(), { maximumFractionDigits: 2 }) })
+  if (liters && price && !amount) return t('manual.fuelLogsPanel.derivedAmount', { value: formatAmount(liters * price, currency.value) })
   return ''
 })
 
@@ -137,7 +137,7 @@ async function save() {
     if (editingId.value) {
       await api.updateFuelLog(props.vehicleId, editingId.value, payload())
     } else {
-      await api.createFuelLog(props.vehicleId, payload())
+      await api.createFuelLog(props.vehicleId, payload(), currency.value)
     }
     showForm.value = false
     await load()
@@ -268,7 +268,7 @@ onMounted(load)
 
         <div class="grid grid-cols-3 gap-3">
           <div>
-            <label for="fuel-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.amount') }}</label>
+            <label for="fuel-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.amount', { cur: currencySymbol(currency) }) }}</label>
             <input id="fuel-amount" v-model.number="form.amount" type="number" inputmode="decimal" min="0.01" step="0.01" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
@@ -276,7 +276,7 @@ onMounted(load)
             <input id="fuel-liters" v-model.number="form.liters" type="number" inputmode="decimal" min="0.01" step="0.01" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
-            <label for="fuel-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.priceL') }}</label>
+            <label for="fuel-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.priceL', { cur: currencySymbol(currency) }) }}</label>
             <input id="fuel-price" v-model.number="form.price_per_liter" type="number" inputmode="decimal" min="0.001" step="0.001" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>

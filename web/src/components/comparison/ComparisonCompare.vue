@@ -3,6 +3,7 @@ import { intlLocale, t } from '@/i18n'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { downloadCsv } from '@/utils/csv'
+import { useVehicleStore } from '@/stores/vehicle'
 
 Chart.register(...registerables)
 
@@ -10,14 +11,17 @@ const props = defineProps<{
   items: { scenario: any; result: any }[]
 }>()
 
-function fmtEur(v: number | null | undefined, digits = 0): string {
-  return Number(v || 0).toLocaleString(intlLocale(), { style: 'currency', currency: 'EUR', minimumFractionDigits: digits, maximumFractionDigits: digits })
+const vehicleStore = useVehicleStore()
+
+// Same currency as the comparison page these scenarios were built on
+function fmtMoney(v: number | null | undefined, digits = 0): string {
+  return Number(v || 0).toLocaleString(intlLocale(), { style: 'currency', currency: vehicleStore.currency, minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
 
 function breakEven(r: any): string {
   if (r.break_even_year === undefined || r.break_even_year === null) return t('comparison.compare.notReached')
   if (r.break_even_year === 0) return t('comparison.compare.fromPurchase')
-  return t('comparison.compare.years', { years: String(r.break_even_year).replace('.', ',') })
+  return t('comparison.compare.years', { years: Number(r.break_even_year).toLocaleString(intlLocale()) })
 }
 
 const rows = computed(() =>
@@ -56,11 +60,11 @@ function render() {
       maintainAspectRatio: false,
       plugins: {
         legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
-        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtEur(Number(ctx.raw))}` } },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtMoney(Number(ctx.raw))}` } },
       },
       scales: {
         x: { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } },
-        y: { ticks: { color: '#94a3b8', callback: (v) => fmtEur(Number(v)) }, grid: { color: '#1e293b' } },
+        y: { ticks: { color: '#94a3b8', callback: (v) => fmtMoney(Number(v)) }, grid: { color: '#1e293b' } },
       },
     },
   })
@@ -69,7 +73,7 @@ function render() {
 function exportCsv() {
   downloadCsv(
     t('comparison.csv.scenariosFile'),
-    t('comparison.csv.scenariosHeader').split(','),
+    t('comparison.csv.scenariosHeader', { cur: vehicleStore.currency }).split(','),
     rows.value.map((r) => [
       `"${r.name.replace(/"/g, '""')}"`,
       r.mode,
@@ -116,10 +120,10 @@ onBeforeUnmount(() => chart?.destroy())
               <div class="font-semibold text-white">{{ r.name }}</div>
               <div class="text-[11px] text-slate-500">{{ r.mode }} · {{ $t('comparison.comparisonCompare.usage', { km: Math.round(r.km).toLocaleString(intlLocale()), years: r.years }) }}</div>
             </th>
-            <td>{{ fmtEur(r.ev) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month2', { evMonth: fmtEur(r.evMonth) }) }}</div></td>
-            <td>{{ fmtEur(r.ice) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month', { iceMonth: fmtEur(r.iceMonth) }) }}</div></td>
+            <td>{{ fmtMoney(r.ev) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month2', { evMonth: fmtMoney(r.evMonth) }) }}</div></td>
+            <td>{{ fmtMoney(r.ice) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month', { iceMonth: fmtMoney(r.iceMonth) }) }}</div></td>
             <td :class="r.savings >= 0 ? 'text-emerald-400' : 'text-amber-400'">
-              {{ r.savings >= 0 ? '−' : '+' }}{{ fmtEur(Math.abs(r.savings)) }}
+              {{ r.savings >= 0 ? '−' : '+' }}{{ fmtMoney(Math.abs(r.savings)) }}
               <div class="text-[11px] text-slate-500">{{ r.savings >= 0 ? $t('comparison.compare.saves') : $t('comparison.compare.costsMore') }}</div>
             </td>
             <td>{{ r.breakEven }}</td>

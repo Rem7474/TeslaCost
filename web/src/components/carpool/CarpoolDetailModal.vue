@@ -5,7 +5,8 @@ import { Users, X, MapPin, Navigation, Pencil, RotateCw, CheckCircle2, Sparkles,
 import CostDonut from '@/components/costs/CostDonut.vue'
 import CostItemRow from '@/components/costs/CostItemRow.vue'
 import { buildCarpoolBreakdown } from '@/utils/costBreakdown'
-import { carpoolCoverage, fmt, formatDate, stopNames } from '@/utils/carpool'
+import { carpoolCoverage, formatDate, stopNames } from '@/utils/carpool'
+import { formatAmount } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Detail of a carpool trip, laid out like the drive and trip cost breakdown: summary, legs, cost split, passengers,
@@ -16,6 +17,8 @@ const emit = defineEmits<{ edit: [trip: any]; recalculate: [trip: any]; 'open-dr
 const open = defineModel<boolean>('open', { required: true })
 useEscapeToClose(open, () => (open.value = false))
 const vehicleStore = useVehicleStore()
+// Carpool amounts are in the vehicle's own currency
+const fmt = (v: number) => formatAmount(Number(v || 0), vehicleStore.currency)
 
 const breakdown = computed(() => buildCarpoolBreakdown(props.trip))
 const coverage = computed(() => carpoolCoverage(props.trip))
@@ -97,7 +100,7 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
             </div>
             <div class="flex items-center gap-3 shrink-0">
               <span class="text-[11px] font-bold text-rose-400">{{ leg.distance_km }} km</span>
-              <span class="text-xs font-mono font-bold text-white">{{ fmt(leg.total_cost) }} €</span>
+              <span class="text-xs font-mono font-bold text-white">{{ fmt(leg.total_cost) }}</span>
               <ChevronRight v-if="leg.drive_id" class="w-4 h-4 text-slate-500" />
             </div>
           </component>
@@ -112,7 +115,7 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
                 :items="breakdown.items"
                 :empty-label="$t('drives.driveCostModal.noCost')"
                 :chart-label="$t('drives.driveCostModal.breakdownAria')"
-                :currency="vehicleStore.activeVehicle?.currency || 'EUR'"
+                :currency="vehicleStore.currency"
               />
             </div>
           </div>
@@ -127,7 +130,7 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
                 :amount="item.amount"
                 :share-pct="item.sharePct"
                 :cost-per-km="item.costPerKm"
-                :currency="vehicleStore.activeVehicle?.currency || 'EUR'"
+                :currency="vehicleStore.currency"
               />
             </template>
           </div>
@@ -144,7 +147,7 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
           <div v-for="p in trip.passengers" :key="p.id" class="bg-slate-800/40 border border-slate-800 rounded-xl px-3 py-2 text-xs space-y-1">
             <div class="flex items-center justify-between gap-2">
               <span class="font-semibold text-slate-200 truncate">{{ p.passenger_name }}</span>
-              <span class="font-bold text-emerald-400 shrink-0">+{{ fmt(p.amount_paid) }} €</span>
+              <span class="font-bold text-emerald-400 shrink-0">+{{ fmt(p.amount_paid) }}</span>
             </div>
             <div class="text-[11px] text-slate-400 truncate">
               {{ stops[p.board_stop_index] }} → {{ stops[p.alight_stop_index] }} • {{ $t('carpool.carpoolTripList.seats', p.seats) }}
@@ -163,12 +166,12 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
           <div class="flex items-center justify-between">
             <div>
               <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.totalCostPrice') }}</span>
-              <div class="text-2xl font-black text-white">{{ fmt(trip.total_cost) }} €</div>
+              <div class="text-2xl font-black text-white">{{ fmt(trip.total_cost) }}</div>
             </div>
             <div class="text-right">
               <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
               <div class="text-lg font-extrabold text-emerald-400 font-mono">
-                {{ (trip.distance_km > 0 ? trip.total_cost / trip.distance_km : 0).toFixed(3) }} €<span class="text-xs font-normal text-slate-400">/km</span>
+                {{ formatAmount(trip.distance_km > 0 ? trip.total_cost / trip.distance_km : 0, vehicleStore.currency, 3) }}<span class="text-xs font-normal text-slate-400">/km</span>
               </div>
             </div>
           </div>
@@ -213,11 +216,11 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
             <div class="flex items-center gap-2">
               <CheckCircle2 v-if="trip.net_cost <= 0" class="w-4 h-4 text-emerald-400 shrink-0" />
               <Sparkles v-else class="w-4 h-4 text-amber-400 shrink-0" />
-              <span>{{ $t('carpool.carpoolTripList.driverSShare') }} <strong>{{ fmt(trip.driver_cost_share) }} €</strong></span>
+              <span>{{ $t('carpool.carpoolTripList.driverSShare') }} <strong>{{ fmt(trip.driver_cost_share) }}</strong></span>
             </div>
             <div>
               <template v-if="trip.net_cost > 0">
-                {{ $t('carpool.carpoolTripList.leftToTheDriver') }} <strong class="text-white text-sm">{{ fmt(trip.net_cost) }} €</strong>
+                {{ $t('carpool.carpoolTripList.leftToTheDriver') }} <strong class="text-white text-sm">{{ fmt(trip.net_cost) }}</strong>
               </template>
               <span v-else class="font-bold text-emerald-400 text-sm">{{ $t('carpool.carpoolTripList.netSurplus', { net_cost: fmt(Math.abs(trip.net_cost)) }) }}</span>
             </div>

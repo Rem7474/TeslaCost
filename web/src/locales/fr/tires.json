@@ -72,8 +72,8 @@
     "fullSetFitted4Tires": "Train complet monté (4 pneus)",
     "recordingFormat": "Format d'enregistrement :",
     "addTires": "Ajouter des pneus",
-    "totalPrice": "Prix total du lot (€)",
-    "pricePerTire": "Prix par pneu (€)",
+    "totalPrice": "Prix total du lot ({cur})",
+    "pricePerTire": "Prix par pneu ({cur})",
     "switchTo": "Passer en {mode}",
     "unitPrice": "prix unitaire",
     "totalPriceMode": "prix total",
@@ -139,7 +139,7 @@
     "odometerAtRemovalKm": "Odomètre au démontage (km)"
   },
   "tireDisposedCard": {
-    "kmDrivenWear": "{total_distance_km} km parcourus • Usure : {life_progress_pct}% • {purchase_price} €",
+    "kmDrivenWear": "{total_distance_km} km parcourus • Usure : {life_progress_pct}% • {purchase_price}",
     "scrapped": "Au rebut",
     "selectForABulkAction": "Sélectionner pour une action par lot"
   },
@@ -164,7 +164,7 @@
     "minimumDepthMm": "Profondeur minimale (mm)",
     "newDepthMm": "Profondeur neuve (mm)",
     "estimatedLifespanKm": "Durée de vie estimée (km)",
-    "price": "Prix (€)",
+    "price": "Prix ({cur})",
     "totalPriceSplit": "Prix total réparti",
     "unitPrice": "Prix unitaire",
     "priceEntry": "Saisie du prix",
@@ -215,7 +215,7 @@
     "deleteEntryError": "Supprimer (saisie erronée)",
     "scrapWornPuncturedSold": "Mettre au rebut (usé, crevé, vendu)",
     "editTheTire": "Modifier le pneu",
-    "boughtOn": "Acheté le {purchase_date} • {purchase_price} €",
+    "boughtOn": "Acheté le {purchase_date} • {purchase_price}",
     "sport": "Contrainte Sportive",
     "eco": "Éco-conduite",
     "balanced": "Conduite Équilibrée",

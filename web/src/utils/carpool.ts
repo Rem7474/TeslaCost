@@ -32,8 +32,6 @@ export const COST_FIELDS: Array<{ key: keyof LegForm; label: string }> = [
 
 export const cents = (v: number | string) => Math.round((Number(v) || 0) * 100)
 export const euros = (c: number) => c / 100
-export const fmt = (v: number) => Number(v || 0).toFixed(2)
-
 export function toDateInputString(dateVal: string | Date | null | undefined): string {
   if (!dateVal) return ''
   const d = new Date(dateVal)
@@ -254,7 +252,7 @@ export function pickerDrives(windowDrives: any[], known: Map<string, any>, selec
   return [...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
 }
 
-export const carpoolCsvHeaders = () => t('carpool.csvHeaders').split(',')
+export const carpoolCsvHeaders = (currency: string) => t('carpool.csvHeaders', { cur: currency }).split(',')
 
 export function carpoolCsvRows(trips: any[]) {
   return trips.map((t) => [

@@ -5,6 +5,7 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Layers, X } from 'lucide-vue-next'
+import { currencySymbol } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Merges the selected drives into a trip group, optionally with one expense (toll, parking, ferry) for the whole trip.
@@ -34,7 +35,7 @@ async function handleCreateGroupAndExpense() {
         drive_ids: props.selectedDriveIds,
         type: expenseType.value,
         amount: Number(tollAmount.value),
-        currency: vehicleStore.activeVehicle?.currency || 'EUR',
+        currency: vehicleStore.currency,
         date: new Date(firstStart || Date.now()).toISOString(),
         notes: groupName.value,
       })
@@ -101,7 +102,7 @@ async function handleCreateGroupAndExpense() {
             </select>
           </div>
           <div>
-            <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('drives.driveGroupModal.amount') }}</label>
+            <label for="drive-toll-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('drives.driveGroupModal.amount', { cur: currencySymbol(vehicleStore.currency) }) }}</label>
             <input id="drive-toll-amount"
               v-model="tollAmount"
               type="number"

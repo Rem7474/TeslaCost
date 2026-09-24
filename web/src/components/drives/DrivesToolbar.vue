@@ -203,7 +203,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
       <span class="text-slate-600">•</span>
       <span>{{ $t('drives.drivesToolbar.pageEnergy') }} <strong class="text-white">{{ $t('drives.drivesToolbar.kwh', { pageEnergy: Math.round(pageEnergy).toLocaleString(intlLocale()) }) }}</strong></span>
       <span class="text-slate-600">•</span>
-      <span>{{ $t('drives.drivesToolbar.pageCost') }} <strong class="text-white">{{ formatAmount(pageCost, vehicleStore.activeVehicle?.currency || 'EUR') }}</strong></span>
+      <span>{{ $t('drives.drivesToolbar.pageCost') }} <strong class="text-white">{{ formatAmount(pageCost, vehicleStore.currency) }}</strong></span>
     </div>
   </div>
 </template>

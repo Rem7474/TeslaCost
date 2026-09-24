@@ -1,5 +1,6 @@
-import { intlLocale, t } from '@/i18n'
+import { t } from '@/i18n'
 import { todayIso } from '@/utils/dates'
+import { formatAmount } from '@/currency'
 
 export const acquisitionLabel = (type: string): string => t(`vehicles.acquisition.${type}`)
 
@@ -151,11 +152,11 @@ export function leasePreview(f: OwnershipForm) {
   return { total, perMonth: total / n, totalKm: (allowance * n) / 12 }
 }
 
-export function ownershipSummary(o: any) {
+export function ownershipSummary(o: any, currency = 'EUR') {
   if (!o) return null
-  const fmt = (v: number) => Number(v).toLocaleString(intlLocale(), { maximumFractionDigits: 0 })
+  const fmt = (v: number) => formatAmount(Number(v), currency, 0)
   if (o.acquisition_type === 'CASH' || o.acquisition_type === 'LOAN') {
-    return `${acquisitionLabel(o.acquisition_type)} • ${fmt(o.purchase_price)} €`
+    return `${acquisitionLabel(o.acquisition_type)} • ${fmt(o.purchase_price)}`
   }
   return `${o.acquisition_type} • ${t('vehicles.leaseSummary', { rent: fmt(o.lease_monthly_rent), months: o.lease_duration_months })}`
 }

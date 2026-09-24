@@ -3,6 +3,7 @@ import { intlLocale, t } from '@/i18n'
 import { reactive, ref } from 'vue'
 import { api } from '@/services/api'
 import { useVehicleStore } from '@/stores/vehicle'
+import { currencySymbol, formatAmount } from '@/currency'
 import {
   buildPendingCostPayload,
   costFromTariff,
@@ -40,7 +41,7 @@ async function complete(c: PendingCharge) {
   errors[c.id] = ''
   let payload: ReturnType<typeof buildPendingCostPayload>
   try {
-    payload = buildPendingCostPayload(c, costs[c.id] ?? '', vehicleStore.activeVehicle?.currency || 'EUR')
+    payload = buildPendingCostPayload(c, costs[c.id] ?? '', vehicleStore.currency)
   } catch (err: any) {
     errors[c.id] = err.message
     return
@@ -49,7 +50,7 @@ async function complete(c: PendingCharge) {
   try {
     const result = await api.updateCharge(props.vehicleId, c.id, payload)
     rememberCharge(props.vehicleId, { kwh: c.kwh_added, cost: payload.cost, address: null })
-    emit('completed', { id: c.id, queued: isQueued(result), message: t('quickadd.quickPendingCosts.costAdded', { cost: payload.cost.toLocaleString(intlLocale()) }) })
+    emit('completed', { id: c.id, queued: isQueued(result), message: t('quickadd.quickPendingCosts.costAdded', { cost: formatAmount(payload.cost, vehicleStore.currency) }) })
   } catch (err: any) {
     errors[c.id] = err?.message || t('quickadd.quickPendingCosts.saveFailed')
   } finally {
@@ -78,7 +79,7 @@ async function complete(c: PendingCharge) {
           </div>
 
           <form class="mt-2 flex gap-2" novalidate @submit.prevent="complete(c)">
-            <label :for="`qp-cost-${c.id}`" class="sr-only">{{ $t('quickadd.quickPendingCosts.costOfTheChargeOf', { date: fmtDate(c.date) }) }}</label>
+            <label :for="`qp-cost-${c.id}`" class="sr-only">{{ $t('quickadd.quickPendingCosts.costOfTheChargeOf', { date: fmtDate(c.date), cur: currencySymbol(vehicleStore.currency) }) }}</label>
             <input
               :id="`qp-cost-${c.id}`"
               v-model="costs[c.id]"
@@ -86,7 +87,7 @@ async function complete(c: PendingCharge) {
               inputmode="decimal"
               step="any"
               min="0"
-              :placeholder="$t('quickadd.quickPendingCosts.cost')"
+              :placeholder="$t('quickadd.quickPendingCosts.cost', { cur: currencySymbol(vehicleStore.currency) })"
               class="quick-input min-w-0"
             />
             <button
@@ -104,7 +105,7 @@ async function complete(c: PendingCharge) {
             class="mt-2 min-h-11 rounded-lg px-1 text-xs font-semibold text-indigo-300 hover:text-indigo-200"
             @click="costs[c.id] = suggestion(c)!"
           >
-            {{ $t('quickadd.quickPendingCosts.applyTheLastRate', { c: suggestion(c) }) }}
+            {{ $t('quickadd.quickPendingCosts.applyTheLastRate', { c: formatAmount(Number(suggestion(c)), vehicleStore.currency) }) }}
           </button>
           <p v-if="errors[c.id]" role="alert" class="mt-1 text-xs text-rose-300">{{ errors[c.id] }}</p>
         </li>

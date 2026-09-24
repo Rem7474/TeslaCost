@@ -4,10 +4,13 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Snowflake } from 'lucide-vue-next'
 import { AXIS_TEXT, GRID_COLOR, fmt, type EnergyStats } from './energyStats'
+import { useVehicleStore } from '@/stores/vehicle'
+import { formatAmount } from '@/currency'
 
 Chart.register(...registerables)
 
 const props = defineProps<{ stats: EnergyStats }>()
+const vehicleStore = useVehicleStore()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 let chart: Chart | null = null
@@ -83,7 +86,7 @@ onBeforeUnmount(() => chart?.destroy())
     <p v-if="effect.extra_percent !== undefined" class="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-sm text-sky-100">
       {{ $t('dashboard.energyTemperatureSection.below5CTheCar') }} <strong>{{ $t('dashboard.energyTemperatureSection.kwh100Km', { value: fmt(effect.cold_consumption_kwh_100km, 1) }) }}</strong>
       {{ $t('dashboard.energyTemperatureSection.againstInMildWeather15', { value: fmt(effect.mild_consumption_kwh_100km, 1) }) }}
-      <strong>+{{ fmt(effect.extra_percent, 0) }} %</strong><template v-if="effect.extra_cost_per_100km !== undefined">{{ $t('dashboard.energyTemperatureSection.aboutMorePer100Km', { value: fmt(effect.extra_cost_per_100km, 2) }) }}</template>.
+      <strong>+{{ fmt(effect.extra_percent, 0) }} %</strong><template v-if="effect.extra_cost_per_100km !== undefined">{{ $t('dashboard.energyTemperatureSection.aboutMorePer100Km', { value: formatAmount(effect.extra_cost_per_100km, vehicleStore.currency) }) }}</template>.
     </p>
 
     <div class="h-52">

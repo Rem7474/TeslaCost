@@ -3,6 +3,7 @@ import { intlLocale } from '@/i18n'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Repeat, Pencil, Trash2, Paperclip } from 'lucide-vue-next'
 import { categoryLabel, formatDate } from '@/utils/expenses'
+import { formatAmount } from '@/currency'
 
 defineProps<{ maintenanceExpenses: any[]; loading: boolean }>()
 const emit = defineEmits<{
@@ -62,7 +63,7 @@ const vehicleStore = useVehicleStore()
         </div>
         <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
           <div class="text-lg font-extrabold text-pink-400">
-            {{ m.amount.toFixed(2) }} {{ m.currency }}
+            {{ formatAmount(m.amount, m.currency || vehicleStore.currency) }}
           </div>
           <div v-if="vehicleStore.canEdit" class="flex items-center gap-1.5">
             <button

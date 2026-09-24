@@ -10,7 +10,7 @@ import { Receipt, Layers, MapPin, ExternalLink, Zap, X, Users, Coins, Shield, Wr
 import { teslamateDriveUrl as buildTeslamateDriveUrl, tollApplyStatusLabel, mergeExpensesByDrive } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 import { buildDriveBreakdown } from '@/utils/costBreakdown'
-import { formatAmount } from '@/currency'
+import { currencySymbol, formatAmount } from '@/currency'
 import CostDonut from '@/components/costs/CostDonut.vue'
 import CostItemRow from '@/components/costs/CostItemRow.vue'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
@@ -44,7 +44,7 @@ const prefs = usePreferencesStore()
 const { showConfirm, showAlert } = useConfirm()
 const formatDate = formatDayTime
 const breakdown = computed(() => buildDriveBreakdown(selectedCostDrive.value?.costs, Number(selectedCostDrive.value?.distance_km) || 0))
-const vehicleCurrency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
+const vehicleCurrency = computed(() => vehicleStore.currency)
 const teslamateDriveUrl = (d: any) => buildTeslamateDriveUrl(vehicleStore.activeVehicle, d)
 
 // Expense edition inside the cost modal
@@ -281,7 +281,7 @@ async function handleDeleteExpense(exp: any) {
   const scope = exp.trip_group_id ? t('drives.driveCostModal.tripScope', { name: exp.trip_group_name }) : ''
   const ok = await showConfirm({
     title: t('drives.driveCostModal.deleteCostTitle'),
-    message: t('drives.driveCostModal.deleteCostMessage', { amount: Number(exp.amount).toFixed(2), currency: exp.currency, scope }),
+    message: t('drives.driveCostModal.deleteCostMessage', { amount: formatAmount(Number(exp.amount), exp.currency || vehicleCurrency.value), scope }),
     confirmText: t('common.delete'),
     type: 'danger',
   })
@@ -448,7 +448,7 @@ async function handleDeleteExpense(exp: any) {
           </div>
           <div class="text-right shrink-0">
             <div class="text-xs font-mono font-bold text-emerald-400">+{{ formatAmount(Number(c.total_revenue || 0), vehicleCurrency) }}</div>
-            <div class="text-[10px] text-slate-400">{{ $t('drives.driveCostModal.carpoolNetCost', { amount: Number(c.net_cost || 0).toFixed(2) }) }}</div>
+            <div class="text-[10px] text-slate-400">{{ $t('drives.driveCostModal.carpoolNetCost', { amount: formatAmount(Number(c.net_cost || 0), vehicleCurrency) }) }}</div>
           </div>
         </button>
       </div>
@@ -474,7 +474,7 @@ async function handleDeleteExpense(exp: any) {
           :icon="Zap"
           tone="sky"
           :label="$t('drives.driveCostModal.electricEnergy')"
-          :sub="$t('drives.driveCostModal.kwhKwh', { electricity_kwh: selectedCostDrive.costs?.electricity_kwh || 0, electricity_rate: (selectedCostDrive.costs?.electricity_rate || 0.22).toFixed(3) })"
+          :sub="$t('drives.driveCostModal.kwhKwh', { electricity_kwh: selectedCostDrive.costs?.electricity_kwh || 0, electricity_rate: formatAmount(selectedCostDrive.costs?.electricity_rate || 0.22, vehicleCurrency, 3) })"
           :amount="selectedCostDrive.costs?.electricity_cost || 0"
           :share-pct="breakdown.byKey.energy.sharePct"
           :cost-per-km="breakdown.byKey.energy.costPerKm"
@@ -603,7 +603,7 @@ async function handleDeleteExpense(exp: any) {
                   {{ exp.type === 'TOLL' ? $t('drives.driveCostModal.toll') : exp.type }}
                   <span v-if="exp.source === 'AUTO_TOLL'" class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/10 text-cyan-400 font-medium" :title="$t('drives.driveCostModal.calculatedAutomaticallyFromTheGps')">{{ $t('drives.driveCostModal.auto') }}</span>
                   <span v-if="exp.notes" class="text-slate-500">({{ exp.notes }})</span>
-                  <span v-if="exp.trip_group_id && !selectedCostDrive.is_trip_group" class="text-indigo-400"> {{ $t('drives.driveCostModal.shareOfATripCosting', { amount: exp.amount.toFixed(2), currency: exp.currency }) }}</span>
+                  <span v-if="exp.trip_group_id && !selectedCostDrive.is_trip_group" class="text-indigo-400"> {{ $t('drives.driveCostModal.shareOfATripCosting', { amount: formatAmount(exp.amount, exp.currency || vehicleCurrency) }) }}</span>
                 </span>
                 <span class="flex items-center gap-1.5">
                   <span class="font-mono text-amber-400">{{ formatAmount(exp.allocated_amount ?? exp.amount, vehicleCurrency) }}</span>
@@ -698,12 +698,12 @@ async function handleDeleteExpense(exp: any) {
                 <option value="PARKING">{{ $t('drives.driveCostModal.parking') }}</option>
                 <option value="FERRY">{{ $t('drives.driveCostModal.ferry') }}</option>
               </select>
-              <label for="drive-inline-toll-amount" class="sr-only">{{ $t('drives.driveCostModal.amount') }}</label>
+              <label for="drive-inline-toll-amount" class="sr-only">{{ $t('drives.driveCostModal.amount', { cur: currencySymbol(vehicleCurrency) }) }}</label>
               <input id="drive-inline-toll-amount"
                 v-model="inlineTollAmount"
                 type="number"
                 step="0.01"
-                :placeholder="$t('drives.driveCostModal.amount')"
+                :placeholder="$t('drives.driveCostModal.amount', { cur: currencySymbol(vehicleCurrency) })"
                 class="bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white"
               />
             </div>

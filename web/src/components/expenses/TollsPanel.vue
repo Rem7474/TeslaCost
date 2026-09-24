@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Navigation, Layers, Users, Pencil, Trash2, Paperclip } from 'lucide-vue-next'
 import { formatDate } from '@/utils/expenses'
+import { formatAmount } from '@/currency'
 
 defineProps<{ driveExpenses: any[]; loading: boolean }>()
 const emit = defineEmits<{
@@ -52,7 +53,7 @@ const vehicleStore = useVehicleStore()
         </div>
         <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
           <div class="text-lg font-extrabold text-amber-400">
-            {{ e.amount.toFixed(2) }} {{ e.currency }}
+            {{ formatAmount(e.amount, e.currency || vehicleStore.currency) }}
           </div>
           <div v-if="vehicleStore.canEdit" class="flex items-center gap-1.5">
             <button

@@ -21,6 +21,7 @@ import CompleteReminderModal from '@/components/expenses/CompleteReminderModal.v
 import WebhookModal from '@/components/expenses/WebhookModal.vue'
 import { Receipt, Plus, Wrench, Zap, Navigation, Paperclip, Eye, Bell, Radio } from 'lucide-vue-next'
 import type { ReminderPreset } from '@/utils/expenses'
+import { formatAmount } from '@/currency'
 
 // The page owns the lists, the active tab and which modal is open; each modal owns its form and its API
 // call and reports back with "saved".
@@ -191,7 +192,7 @@ async function handleDeleteToll(e: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
     title: t('expenses.expensesView.deleteExpenseTitle'),
-    message: t('expenses.expensesView.deleteTollMessage', { amount: Number(e.amount).toFixed(2) }),
+    message: t('expenses.expensesView.deleteTollMessage', { amount: formatAmount(Number(e.amount), e.currency || vehicleStore.currency) }),
     confirmText: t('common.delete'),
     type: 'danger',
   })
@@ -221,7 +222,7 @@ async function handleDeleteMaint(m: any) {
   if (!vehicleStore.activeVehicle) return
   const ok = await showConfirm({
     title: t('expenses.expensesView.deleteExpenseTitle'),
-    message: t('expenses.expensesView.deleteExpenseMessage', { description: m.description, amount: Number(m.amount).toFixed(2) }),
+    message: t('expenses.expensesView.deleteExpenseMessage', { description: m.description, amount: formatAmount(Number(m.amount), m.currency || vehicleStore.currency) }),
     confirmText: t('common.delete'),
     type: 'danger',
   })

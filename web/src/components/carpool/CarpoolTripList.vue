@@ -4,7 +4,8 @@ import { useVehicleStore } from '@/stores/vehicle'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import SelectAllToggle from '@/components/SelectAllToggle.vue'
 import { Users, Trash2, Edit2, Calendar, Navigation, RotateCw, Download, ChevronRight } from 'lucide-vue-next'
-import { fmt, formatDate } from '@/utils/carpool'
+import { formatDate } from '@/utils/carpool'
+import { formatAmount } from '@/currency'
 
 // The carpool trips as compact cards (the legs, passengers and costs are in the detail, opened by a click), and the
 // selection actions (recalculate, export)
@@ -21,6 +22,8 @@ const emit = defineEmits<{
   delete: [trip: any]
 }>()
 const vehicleStore = useVehicleStore()
+// Carpool amounts are in the vehicle's own currency
+const fmt = (v: number) => formatAmount(Number(v || 0), vehicleStore.currency)
 
 const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTripIds.length === props.trips.length)
 </script>
@@ -136,12 +139,12 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
         <div class="flex items-center gap-x-3 gap-y-1 flex-wrap">
           <span class="flex items-center gap-1.5"><Navigation class="w-3.5 h-3.5 text-indigo-400" />{{ $t('carpool.carpoolTripList.legs', { length: trip.legs.length }) }}</span>
           <span class="flex items-center gap-1.5"><Users class="w-3.5 h-3.5 text-blue-400" />{{ $t('carpool.carpoolTripList.passengers', { length: trip.passengers?.length || 0 }) }}</span>
-          <span>{{ $t('carpool.carpoolTripList.actualCost') }} <strong class="text-slate-200">{{ fmt(trip.total_cost) }} €</strong></span>
-          <span class="text-emerald-400 font-semibold">+{{ fmt(trip.total_revenue) }} €</span>
+          <span>{{ $t('carpool.carpoolTripList.actualCost') }} <strong class="text-slate-200">{{ fmt(trip.total_cost) }}</strong></span>
+          <span class="text-emerald-400 font-semibold">+{{ fmt(trip.total_revenue) }}</span>
         </div>
         <div class="flex items-center gap-2">
           <span v-if="trip.net_cost > 0" class="font-semibold text-slate-200">
-            {{ $t('carpool.carpoolTripList.leftToTheDriver') }} {{ fmt(trip.net_cost) }} €
+            {{ $t('carpool.carpoolTripList.leftToTheDriver') }} {{ fmt(trip.net_cost) }}
           </span>
           <span v-else class="font-semibold text-emerald-400">{{ $t('carpool.carpoolTripList.netSurplus', { net_cost: fmt(Math.abs(trip.net_cost)) }) }}</span>
           <ChevronRight class="w-4 h-4 text-slate-500" />

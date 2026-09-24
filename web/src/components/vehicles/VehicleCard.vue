@@ -107,7 +107,7 @@ function clearCardTestResult() {
         >
           <FileText v-if="ownership" class="w-3.5 h-3.5 text-indigo-400 shrink-0" />
           <Plus v-else class="w-3.5 h-3.5 text-amber-400 shrink-0" />
-          <span>{{ ownership ? ownershipSummary(ownership) : $t('vehicles.vehicleCard.enterContract') }}</span>
+          <span>{{ ownership ? ownershipSummary(ownership, v.currency || 'EUR') : $t('vehicles.vehicleCard.enterContract') }}</span>
           <Pencil v-if="ownership" class="w-3 h-3 text-indigo-400 opacity-60 group-hover:opacity-100 shrink-0 ml-0.5" />
         </button>
       </div>

@@ -49,7 +49,7 @@ const vehicleStore = useVehicleStore()
       </div>
       <div>
         <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireWheelCard.costKm') }}</div>
-        <div class="text-sm font-bold text-amber-400">{{ formatAmount(Number(stat.cost_per_km), vehicleStore.activeVehicle?.currency || 'EUR', 4) }}</div>
+        <div class="text-sm font-bold text-amber-400">{{ formatAmount(Number(stat.cost_per_km), vehicleStore.currency, 4) }}</div>
       </div>
     </div>
 

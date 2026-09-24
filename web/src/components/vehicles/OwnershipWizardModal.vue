@@ -2,7 +2,7 @@
 import { intlLocale, t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
-import { formatAmount } from '@/currency'
+import { currencySymbol, formatAmount } from '@/currency'
 import { useConfirm } from '@/composables/useConfirm'
 import { RefreshCw, X, FileText, ChevronLeft, ChevronRight, Check, Wallet, CreditCard, KeyRound } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -268,15 +268,15 @@ async function handleDeleteOwnership() {
             </h4>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label for="own-purchase-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.purchasePriceInclTax') }} <span class="text-rose-400">*</span></label>
+                <label for="own-purchase-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.purchasePriceInclTax', { cur: currencySymbol(currency) }) }} <span class="text-rose-400">*</span></label>
                 <input id="own-purchase-price" v-model.number="ownershipForm.purchase_price" type="number" step="0.01" min="0" required placeholder="ex: 42000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-purchase-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.additionalFeesRegistrationSetUp') }}</label>
+                <label for="own-purchase-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.additionalFeesRegistrationSetUp', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-purchase-fees" v-model.number="ownershipForm.purchase_fees" type="number" step="0.01" min="0" placeholder="ex: 350" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-incentives" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.bonusesAndGrants') }}</label>
+                <label for="own-incentives" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.bonusesAndGrants', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-incentives" v-model.number="ownershipForm.incentives" type="number" step="0.01" min="0" placeholder="ex: 4000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>
@@ -290,7 +290,7 @@ async function handleDeleteOwnership() {
             </h4>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label for="own-loan-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.amountBorrowed') }} <span class="text-rose-400">*</span></label>
+                <label for="own-loan-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.amountBorrowed', { cur: currencySymbol(currency) }) }} <span class="text-rose-400">*</span></label>
                 <input id="own-loan-amount" v-model.number="ownershipForm.loan_amount" type="number" step="0.01" min="0" required placeholder="ex: 30000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
@@ -302,11 +302,11 @@ async function handleDeleteOwnership() {
                 <input id="own-loan-duration" v-model.number="ownershipForm.loan_duration_months" type="number" min="1" max="360" required placeholder="ex: 60" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-loan-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.arrangementFees') }}</label>
+                <label for="own-loan-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.arrangementFees', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-loan-fees" v-model.number="ownershipForm.loan_fees" type="number" step="0.01" min="0" placeholder="ex: 200" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-loan-insurance" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.borrowerInsuranceMonth') }}</label>
+                <label for="own-loan-insurance" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.borrowerInsuranceMonth', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-loan-insurance" v-model.number="ownershipForm.loan_insurance_monthly" type="number" step="0.01" min="0" placeholder="ex: 15" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>
@@ -315,7 +315,7 @@ async function handleDeleteOwnership() {
             <div v-if="loanPreview" class="p-3 bg-slate-800/70 border border-indigo-500/20 rounded-xl space-y-1 text-xs">
               <div class="flex items-center justify-between text-white font-semibold">
                 <span>{{ $t('vehicles.ownershipWizardModal.estimatedMonthlyPayment') }}</span>
-                <span class="text-indigo-300 font-bold text-sm">{{ $t('vehicles.ownershipWizardModal.month2', { payment: loanPreview.payment.toFixed(2) }) }}</span>
+                <span class="text-indigo-300 font-bold text-sm">{{ $t('vehicles.ownershipWizardModal.month2', { payment: formatAmount(loanPreview.payment, currency) }) }}</span>
               </div>
               <div class="flex items-center justify-between text-slate-400 text-[11px]">
                 <span>{{ $t('vehicles.ownershipWizardModal.totalBankInterest') }}</span>
@@ -336,11 +336,11 @@ async function handleDeleteOwnership() {
             </h4>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label for="own-lease-down" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.downPaymentIncreasedFirstRent') }}</label>
+                <label for="own-lease-down" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.downPaymentIncreasedFirstRent', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-lease-down" v-model.number="ownershipForm.lease_down_payment" type="number" step="0.01" min="0" placeholder="ex: 3000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-lease-rent" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.monthlyRent') }} <span class="text-rose-400">*</span></label>
+                <label for="own-lease-rent" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.monthlyRent', { cur: currencySymbol(currency) }) }} <span class="text-rose-400">*</span></label>
                 <input id="own-lease-rent" v-model.number="ownershipForm.lease_monthly_rent" type="number" step="0.01" min="0" required placeholder="ex: 450" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
@@ -348,11 +348,11 @@ async function handleDeleteOwnership() {
                 <input id="own-lease-duration" v-model.number="ownershipForm.lease_duration_months" type="number" min="1" max="360" required placeholder="ex: 36" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-lease-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.arrangementFees') }}</label>
+                <label for="own-lease-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.arrangementFees', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-lease-fees" v-model.number="ownershipForm.lease_fees" type="number" step="0.01" min="0" placeholder="ex: 150" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-lease-deposit" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.refundableSecurityDeposit') }}</label>
+                <label for="own-lease-deposit" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.refundableSecurityDeposit', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-lease-deposit" v-model.number="ownershipForm.lease_deposit" type="number" step="0.01" min="0" placeholder="ex: 500" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>
@@ -365,7 +365,7 @@ async function handleDeleteOwnership() {
               </div>
               <div class="flex items-center justify-between text-slate-400 text-[11px]">
                 <span>{{ $t('vehicles.ownershipWizardModal.averageSmoothedOverTheTerm') }}</span>
-                <span>{{ $t('vehicles.ownershipWizardModal.month', { perMonth: leasePreview.perMonth.toFixed(2) }) }}</span>
+                <span>{{ $t('vehicles.ownershipWizardModal.month', { perMonth: formatAmount(leasePreview.perMonth, currency) }) }}</span>
               </div>
               <div v-if="leasePreview.totalKm" class="flex items-center justify-between text-slate-400 text-[11px]">
                 <span>{{ $t('vehicles.ownershipWizardModal.totalMileageIncludedInThe') }}</span>
@@ -386,11 +386,11 @@ async function handleDeleteOwnership() {
                 <input id="own-lease-allowance" v-model.number="ownershipForm.lease_km_allowance_per_year" type="number" min="0" placeholder="ex: 15000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-lease-excess" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.pricePerExtraKmKm') }}</label>
+                <label for="own-lease-excess" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.pricePerExtraKmKm', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-lease-excess" v-model.number="ownershipForm.lease_excess_km_price" type="number" step="0.001" min="0" max="5" placeholder="ex: 0.15" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-lease-end-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.estimatedReturnFees') }}</label>
+                <label for="own-lease-end-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.estimatedReturnFees', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-lease-end-fees" v-model.number="ownershipForm.lease_end_fees_estimate" type="number" step="0.01" min="0" placeholder="ex: 400" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>
@@ -418,7 +418,7 @@ async function handleDeleteOwnership() {
             <div v-if="ownershipForm.acquisition_type === 'LOA'" class="pt-2 border-t border-slate-800/80">
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label for="own-lease-option" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.residualPurchaseOptionInclTax') }}</label>
+                  <label for="own-lease-option" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.residualPurchaseOptionInclTax', { cur: currencySymbol(currency) }) }}</label>
                   <input id="own-lease-option" v-model.number="ownershipForm.lease_purchase_option_price" type="number" step="0.01" min="0" placeholder="ex: 18000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
                 </div>
                 <div>
@@ -434,7 +434,7 @@ async function handleDeleteOwnership() {
             <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">{{ $t('vehicles.ownershipWizardModal.depreciationAndPlannedHolding') }}</h4>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label for="own-resale" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.estimatedPlannedResale') }}</label>
+                <label for="own-resale" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.estimatedPlannedResale', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-resale" v-model.number="ownershipForm.expected_resale_value" type="number" step="0.01" min="0" placeholder="ex: 22000" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
@@ -457,7 +457,7 @@ async function handleDeleteOwnership() {
                 <AppDatePicker id="own-end-date" v-model="ownershipForm.end_date" size="sm" :clearable="true" />
               </div>
               <div v-if="isOwnedPhase">
-                <label for="own-sale-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.actualResalePrice') }}</label>
+                <label for="own-sale-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.actualResalePrice', { cur: currencySymbol(currency) }) }}</label>
                 <input id="own-sale-price" v-model.number="ownershipForm.sale_price" type="number" step="0.01" min="0" placeholder="ex: 21500" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
             </div>

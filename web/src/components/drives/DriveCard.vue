@@ -103,9 +103,9 @@ const formatDate = formatDayTime
         </div>
         <div>
           <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
-            <span>{{ d.costs?.has_estimates ? '~' : '' }}{{ formatAmount(d.costs?.total_cost || 0, vehicleStore.activeVehicle?.currency || 'EUR') }}</span>
+            <span>{{ d.costs?.has_estimates ? '~' : '' }}{{ formatAmount(d.costs?.total_cost || 0, vehicleStore.currency) }}</span>
             <span class="text-[10px] font-normal text-emerald-400 font-mono">
-              {{ formatAmount(d.costs?.cost_per_km || 0, vehicleStore.activeVehicle?.currency || 'EUR', 3) }}/km
+              {{ formatAmount(d.costs?.cost_per_km || 0, vehicleStore.currency, 3) }}/km
             </span>
           </div>
         </div>

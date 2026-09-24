@@ -126,7 +126,7 @@ export function selectionSummary(list: any[], currency: string): string {
   return `${Math.round(totalKm).toLocaleString(intlLocale())} km • ${Math.round(totalKwh)} kWh • ${formatAmount(totalCost, currency)}`
 }
 
-export const driveCsvHeaders = () => t('drives.csvHeaders').split(',')
+export const driveCsvHeaders = (currency: string) => t('drives.csvHeaders', { cur: currency }).split(',')
 
 export function driveCsvRows(list: any[]) {
   return list.map((d) => [

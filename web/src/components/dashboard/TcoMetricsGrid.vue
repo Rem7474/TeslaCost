@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
+import { useVehicleStore } from '@/stores/vehicle'
+import { formatAmount } from '@/currency'
 import { Coins, Zap, Receipt, TrendingUp } from 'lucide-vue-next'
 
 defineProps<{ tco: any | null }>()
+const vehicleStore = useVehicleStore()
+// Every TCO figure is in the vehicle's own currency
+const money = (v: number, digits = 2) => formatAmount(v || 0, vehicleStore.currency, digits)
 </script>
 
 <template>
@@ -16,15 +21,15 @@ defineProps<{ tco: any | null }>()
         </div>
       </div>
       <div class="text-2xl sm:text-3xl font-extrabold text-white">
-        {{ (tco?.total_cost || 0).toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+        {{ money(tco?.total_cost) }}
       </div>
       <div class="mt-2 space-y-0.5">
         <p class="text-xs text-slate-300">
-          {{ $t('dashboard.tcoMetricsGrid.fullCost', { full_cost: (tco?.full_cost || 0).toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }) }}
-          <span v-if="tco?.depreciation_cost" class="text-slate-400 text-[11px]"> {{ $t('dashboard.tcoMetricsGrid.includingDepreciation', { depreciation_cost: tco.depreciation_cost.toLocaleString(intlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 0 }) }) }}</span>
+          {{ $t('dashboard.tcoMetricsGrid.fullCost', { full_cost: money(tco?.full_cost) }) }}
+          <span v-if="tco?.depreciation_cost" class="text-slate-400 text-[11px]"> {{ $t('dashboard.tcoMetricsGrid.includingDepreciation', { depreciation_cost: money(tco.depreciation_cost, 0) }) }}</span>
         </p>
         <p v-if="tco?.carpool_revenue" class="text-[11px] text-emerald-400">
-          {{ $t('dashboard.tcoMetricsGrid.netOfCarpooling', { full_cost_net: (tco.full_cost_net || 0).toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }) }}
+          {{ $t('dashboard.tcoMetricsGrid.netOfCarpooling', { full_cost_net: money(tco.full_cost_net) }) }}
         </p>
       </div>
     </div>
@@ -38,15 +43,15 @@ defineProps<{ tco: any | null }>()
         </div>
       </div>
       <div class="text-2xl sm:text-3xl font-extrabold text-emerald-400">
-        {{ (tco?.full_cost_per_km || 0).toLocaleString(intlLocale(), { minimumFractionDigits: 3, maximumFractionDigits: 3 }) }} €<span class="text-xs font-normal text-slate-400">/km</span>
+        {{ money(tco?.full_cost_per_km, 3) }}<span class="text-xs font-normal text-slate-400">/km</span>
       </div>
       <div class="mt-2 space-y-0.5">
         <p class="text-xs text-slate-400">
-          {{ $t('dashboard.tcoMetricsGrid.directRunningCostKm', { usage_cost_per_km: (tco?.usage_cost_per_km || 0).toFixed(3) }) }}
+          {{ $t('dashboard.tcoMetricsGrid.directRunningCostKm', { usage_cost_per_km: money(tco?.usage_cost_per_km, 3) }) }}
         </p>
         <p class="text-[11px] text-slate-500">
           {{ $t('dashboard.tcoMetricsGrid.overKm', { distance_basis_km: Math.round(tco?.distance_basis_km || 0).toLocaleString(intlLocale()) }) }}
-          <template v-if="tco?.depreciation_cost_per_km"> {{ $t('dashboard.tcoMetricsGrid.depreciationKm', { value: tco.depreciation_cost_per_km.toFixed(3) }) }}</template>
+          <template v-if="tco?.depreciation_cost_per_km"> {{ $t('dashboard.tcoMetricsGrid.depreciationKm', { value: money(tco.depreciation_cost_per_km, 3) }) }}</template>
         </p>
       </div>
     </div>
@@ -60,14 +65,14 @@ defineProps<{ tco: any | null }>()
         </div>
       </div>
       <div class="text-2xl sm:text-3xl font-extrabold text-sky-400">
-        {{ (tco?.energy_cost || 0).toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+        {{ money(tco?.energy_cost) }}
       </div>
       <div class="mt-2 space-y-0.5">
         <p v-if="tco?.powertrain === 'ICE'" class="text-xs text-slate-400">
-          {{ (tco?.energy_cost_per_km || 0).toFixed(3) }} €/km • {{ Math.round(tco?.total_liters || 0).toLocaleString(intlLocale()) }} L<template v-if="tco?.consumption_l_100km"> • {{ tco.consumption_l_100km.toFixed(2) }} L/100</template><template v-if="tco?.avg_cost_per_liter"> • {{ tco.avg_cost_per_liter.toFixed(3) }} €/L</template>
+          {{ money(tco?.energy_cost_per_km, 3) }}/km • {{ Math.round(tco?.total_liters || 0).toLocaleString(intlLocale()) }} L<template v-if="tco?.consumption_l_100km"> • {{ tco.consumption_l_100km.toFixed(2) }} L/100</template><template v-if="tco?.avg_cost_per_liter"> • {{ money(tco.avg_cost_per_liter, 3) }}/L</template>
         </p>
         <p v-else class="text-xs text-slate-400">
-          {{ $t('dashboard.tcoMetricsGrid.kmKwh', { energy_cost_per_km: (tco?.energy_cost_per_km || 0).toFixed(3), total_kwh_added: Math.round(tco?.total_kwh_added || 0).toLocaleString(intlLocale()) }) }}
+          {{ $t('dashboard.tcoMetricsGrid.kmKwh', { energy_cost_per_km: money(tco?.energy_cost_per_km, 3), total_kwh_added: Math.round(tco?.total_kwh_added || 0).toLocaleString(intlLocale()) }) }}
         </p>
         <p v-if="tco?.completeness?.charges_without_cost" class="text-[11px] text-amber-400">
           {{ $t('dashboard.tcoMetricsGrid.chargeSWithoutACost', { charges_without_cost: tco.completeness.charges_without_cost }) }}
@@ -84,10 +89,10 @@ defineProps<{ tco: any | null }>()
         </div>
       </div>
       <div class="text-2xl sm:text-3xl font-extrabold text-amber-400">
-        {{ (tco?.tolls_cost || 0).toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+        {{ money(tco?.tolls_cost) }}
       </div>
       <div class="mt-2">
-        <p class="text-xs text-slate-400">{{ (tco?.tolls_cost_per_km || 0).toFixed(3) }} €/km</p>
+        <p class="text-xs text-slate-400">{{ money(tco?.tolls_cost_per_km, 3) }}/km</p>
       </div>
     </div>
   </div>

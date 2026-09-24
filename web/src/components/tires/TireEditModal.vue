@@ -7,6 +7,8 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { isMountedPosition } from '@/utils/tires'
 import { toIsoDay } from '@/utils/dates'
+import { useVehicleStore } from '@/stores/vehicle'
+import { currencySymbol } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Empty fields are left unchanged. fallbackTire / fallbackStats stand in for a tire the list does not carry (opened from its history).
@@ -15,6 +17,7 @@ const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
 useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
+const vehicleStore = useVehicleStore()
 
 const tireEditIds = ref<string[]>([])
 const tireEditPriceMode = ref<'UNIT' | 'TOTAL'>('UNIT')
@@ -174,7 +177,7 @@ async function handleSaveTireEdit() {
             </select>
           </div>
           <div>
-            <label for="tire-edit-price" class="block text-[11px] text-slate-400 mb-1 font-semibold">{{ $t('tires.tireEditModal.price') }}</label>
+            <label for="tire-edit-price" class="block text-[11px] text-slate-400 mb-1 font-semibold">{{ $t('tires.tireEditModal.price', { cur: currencySymbol(vehicleStore.currency) }) }}</label>
             <input id="tire-edit-price" v-model.number="tireEditForm.price" type="number" step="0.01" min="0" :placeholder="tireEditIds.length > 1 ? $t('tires.tireEditModal.unchanged') : ''" class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
           </div>
           <div>
