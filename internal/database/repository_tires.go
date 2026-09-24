@@ -143,7 +143,7 @@ func (r *Repository) DisposeTire(ctx context.Context, vehicleID, tireID string, 
 			return apierror.New("tire.dismount_odometer_required", "The removal odometer is required for a fitted tire")
 		}
 		if t.MountedOdometer != nil && *odometer < *t.MountedOdometer {
-			return apierror.Newf("tire.odometer_below_mount", "The odometer (%.0f km) is lower than the fitting odometer (%.0f km)", *odometer, *t.MountedOdometer)
+			return apierror.Newf("tire.odometer_below_mount", "The odometer (%.0f km) is lower than the fitting odometer (%.0f km)", apierror.Km(*odometer), apierror.Km(*t.MountedOdometer))
 		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE tire_mount_sessions

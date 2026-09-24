@@ -142,7 +142,7 @@ func (r *Repository) applyTirePositions(ctx context.Context, tx pgx.Tx, vehicleI
 	}
 	for tireID := range newPositions {
 		if t := current[tireID]; t.MountedOdometer != nil && odometer < *t.MountedOdometer {
-			return apierror.Newf("tire.odometer_below_mount_tire", "The odometer (%.0f km) is lower than the fitting odometer of the tire %s (%.0f km)", odometer, tireID, *t.MountedOdometer)
+			return apierror.Newf("tire.odometer_below_mount_tire", "The odometer (%.0f km) is lower than the fitting odometer of the tire %s (%.0f km)", apierror.Km(odometer), tireID, apierror.Km(*t.MountedOdometer))
 		}
 	}
 

@@ -9,7 +9,7 @@
     "page_failed": "{p0} (page {p1}) : {p2} — l'import reprendra à la prochaine synchronisation",
     "page_limit": "{p0} : limite de {p1} pages atteinte, historique partiellement importé",
     "odometer_failed": "Odomètre : {p0}",
-    "odometer_lower": "Odomètre TeslaMate ({p0} km) inférieur à l'odomètre enregistré ({p1} km) : vérifiez la saisie manuelle du véhicule"
+    "odometer_lower": "Odomètre TeslaMate ({p0} {unit}) inférieur à l'odomètre enregistré ({p1} {unit}) : vérifiez la saisie manuelle du véhicule"
   },
   "comparison": {
     "sensitivity": {
@@ -19,20 +19,20 @@
       "km_up": "Kilométrage +20 %"
     },
     "assumption": {
-      "usage": "{p0} km/an pendant {p1} an(s), même usage pour les deux véhicules",
+      "usage": "{p0} {unit}/an pendant {p1} an(s), même usage pour les deux véhicules",
       "depreciation": "Dépréciation = (prix d'achat − revente) répartie linéairement sur la période",
       "no_financing": "Financement, crédit et location non inclus",
       "break_even": "Le point d'équilibre compare les décaissements cumulés (achat + coûts d'usage), sans la revente",
       "inflation": "Inflation annuelle : carburant {p0} %, électricité {p1} %, entretien/assurance/taxes {p2} %",
       "constant_prices": "Prix constants (aucune inflation appliquée)",
-      "ev_actual": "Côté électrique : coûts réels du véhicule suivi ramenés au km (assurance et dépréciation incluses)",
+      "ev_actual": "Côté électrique : coûts réels du véhicule suivi ramenés au {unit} (assurance et dépréciation incluses)",
       "ev_price_unknown": "Prix d'achat de l'électrique inconnu (location ou saisie manquante) : dépréciation électrique non incluse",
       "ev_no_distance": "Aucun kilométrage suivi : les coûts réels de l'électrique sont nuls"
     },
     "defaults_source": "Valeurs indicatives pour la France, à ajuster"
   },
   "tire": {
-    "wear_explanation": "{p0}, {p1} : pointes de puissance moyennes de +{p2} kW et {p3} kW en régénération, consommation {p4} kWh/100km. Indice de contrainte : x{p5} (longévité estimée ajustée à ~{p6} km)."
+    "wear_explanation": "{p0}, {p1} : pointes de puissance moyennes de +{p2} kW et {p3} kW en régénération, consommation {p4} kWh/100 {unit}. Indice de contrainte : x{p5} (longévité estimée ajustée à ~{p6} {unit})."
   },
   "keywords": {
     "drives": "Trajets",

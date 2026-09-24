@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"math"
-	"strconv"
 
 	"github.com/teslacost/teslacost/internal/apierror"
 	"github.com/teslacost/teslacost/internal/database"
@@ -60,18 +59,6 @@ type TireWearService struct {
 // NewTireWearService creates a new TireWearService.
 func NewTireWearService(repo tireWearStore) *TireWearService {
 	return &TireWearService{repo: repo}
-}
-
-func formatNumber(n int) string {
-	in := strconv.Itoa(n)
-	out := ""
-	for i, c := range in {
-		if i > 0 && (len(in)-i)%3 == 0 {
-			out += " "
-		}
-		out += string(c)
-	}
-	return out
 }
 
 // TireDistanceAtOdometer returns the distance driven by a tire (mount sessions only) when the vehicle
@@ -277,8 +264,8 @@ func (s *TireWearService) CalculateTireWear(ctx context.Context, tire *models.Ti
 
 		// Parameters: style and axle are keywords the front end translates.
 		wearExplanation = apierror.NewMessagef("tire.wear_explanation",
-			"%s driving, %s axle: average power peaks of +%.0f kW and %.0f kW in regeneration, consumption %.1f kWh/100km. Stress index: x%.2f (estimated lifespan adjusted to ~%s km).",
-			style, axle, avgPowerMax, avgPowerMin, avgConsumption, stressIndex, formatNumber(dynamicLifespan),
+			"%s driving, %s axle: average power peaks of +%.0f kW and %.0f kW in regeneration, consumption %.1f kWh/100km. Stress index: x%.2f (estimated lifespan adjusted to ~%.0f km).",
+			style, axle, avgPowerMax, avgPowerMin, apierror.PerKm(avgConsumption), stressIndex, apierror.Km(dynamicLifespan),
 		)
 	}
 

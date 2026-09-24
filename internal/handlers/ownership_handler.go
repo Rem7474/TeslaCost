@@ -177,7 +177,7 @@ func buildOwnership(vehicleID string, req *SaveOwnershipRequest) (*models.Vehicl
 		}
 		if req.LeaseExcessKmPrice != nil {
 			if err := validateQuantity(*req.LeaseExcessKmPrice, 5); err != nil {
-				return nil, apierror.New("ownership.excess_price", "Invalid price per extra kilometre (0 to 5)")
+				return nil, apierror.Newf("ownership.excess_price", "Invalid price per extra kilometre (0 to %.0f)", apierror.PerKm(5))
 			}
 		}
 		o.LeaseMonthlyRent, o.LeaseDurationMonths, o.LeaseDownPayment = req.LeaseMonthlyRent, req.LeaseDurationMonths, req.LeaseDownPayment

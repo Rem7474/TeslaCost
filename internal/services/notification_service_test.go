@@ -106,7 +106,7 @@ func TestFormatPayloadDiscord(t *testing.T) {
 		RemainingKm: &remKm,
 	}
 
-	payload, err := formatPayload("en", "DISCORD", "Model 3", rem, 42000)
+	payload, err := formatPayload("en", "km", "DISCORD", "Model 3", rem, 42000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -126,7 +126,7 @@ func TestFormatPayloadDiscord(t *testing.T) {
 		t.Errorf("expected the English status label, got %v", embeds[0]["title"])
 	}
 
-	frPayload, err := formatPayload("fr", "DISCORD", "Model 3", rem, 42000)
+	frPayload, err := formatPayload("fr", "km", "DISCORD", "Model 3", rem, 42000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestFormatPayloadTelegramAndGotify(t *testing.T) {
 	}
 
 	// Telegram
-	tgPayload, err := formatPayload("en", "TELEGRAM", "Model Y", rem, 55000)
+	tgPayload, err := formatPayload("en", "km", "TELEGRAM", "Model Y", rem, 55000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -155,13 +155,37 @@ func TestFormatPayloadTelegramAndGotify(t *testing.T) {
 	}
 
 	// Gotify
-	gotifyPayload, err := formatPayload("en", "GOTIFY", "Model Y", rem, 55000)
+	gotifyPayload, err := formatPayload("en", "km", "GOTIFY", "Model Y", rem, 55000)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	gotifyMap := gotifyPayload.(map[string]any)
 	if gotifyMap["priority"] != 8 {
 		t.Errorf("expected priority 8 for OVERDUE, got %v", gotifyMap["priority"])
+	}
+}
+
+func TestFormatPayloadInMiles(t *testing.T) {
+	remKm := 1609.344
+	rem := &models.MaintenanceReminder{Title: "Tire rotation", Status: "DUE_SOON", RemainingKm: &remKm}
+
+	payload, err := formatPayload("en", "mi", "GOTIFY", "Model 3", rem, 16093.44)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	message := payload.(map[string]any)["message"].(string)
+	for _, want := range []string{"Odometer: 10000 mi", "Mileage: in 1000 mi"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("expected %q in %q", want, message)
+		}
+	}
+	if strings.Contains(message, "km") {
+		t.Errorf("expected no km in a miles reader's message, got %q", message)
+	}
+
+	kmPayload, _ := formatPayload("en", "km", "GOTIFY", "Model 3", rem, 16093.44)
+	if !strings.Contains(kmPayload.(map[string]any)["message"].(string), "Odometer: 16093 km") {
+		t.Errorf("expected the odometer in km, got %v", kmPayload)
 	}
 }
 

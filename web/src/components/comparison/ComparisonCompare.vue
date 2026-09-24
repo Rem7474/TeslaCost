@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import { distanceUnit, formatDistanceValue, kmToDisplayDistance } from '@/units'
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { downloadCsv } from '@/utils/csv'
@@ -73,12 +74,12 @@ function render() {
 function exportCsv() {
   downloadCsv(
     t('comparison.csv.scenariosFile'),
-    t('comparison.csv.scenariosHeader', { cur: vehicleStore.currency }).split(','),
+    t('comparison.csv.scenariosHeader', { unit: distanceUnit(), cur: vehicleStore.currency }).split(','),
     rows.value.map((r) => [
       `"${r.name.replace(/"/g, '""')}"`,
       r.mode,
       r.years,
-      Math.round(r.km),
+      Math.round(kmToDisplayDistance(r.km)),
       Number(r.ev).toFixed(2),
       Number(r.ice).toFixed(2),
       Number(r.savings).toFixed(2),
@@ -118,7 +119,7 @@ onBeforeUnmount(() => chart?.destroy())
           <tr v-for="r in rows" :key="r.id" class="border-t border-slate-800 text-right">
             <th scope="row" class="text-left font-normal py-2">
               <div class="font-semibold text-white">{{ r.name }}</div>
-              <div class="text-[11px] text-slate-500">{{ r.mode }} · {{ $t('comparison.comparisonCompare.usage', { km: Math.round(r.km).toLocaleString(intlLocale()), years: r.years }) }}</div>
+              <div class="text-[11px] text-slate-500">{{ r.mode }} · {{ $t('comparison.comparisonCompare.usage', { unit: distanceUnit(), km: formatDistanceValue(r.km), years: r.years }) }}</div>
             </th>
             <td>{{ fmtMoney(r.ev) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month2', { evMonth: fmtMoney(r.evMonth) }) }}</div></td>
             <td>{{ fmtMoney(r.ice) }}<div class="text-[11px] text-slate-500">{{ $t('comparison.comparisonCompare.month', { iceMonth: fmtMoney(r.iceMonth) }) }}</div></td>

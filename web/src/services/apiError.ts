@@ -1,4 +1,5 @@
-import { i18n, t } from '@/i18n'
+import { i18n, intlLocale, t } from '@/i18n'
+import { distanceUnit, formatDistanceValue, perDistance } from '@/units'
 
 export interface ApiErrorBody {
   error?: string
@@ -16,12 +17,19 @@ function keyOf(code: string | undefined): string | null {
   return CATALOGS.map((catalog) => `${catalog}.${code}`).find((key) => i18n.global.te(key)) ?? null
 }
 
-/** Parameters ready for interpolation: a nested API message is translated, a keyword ("kw:drives") too when it has a label. */
+/**
+ * Parameters ready for interpolation: a nested API message is translated, a keyword ("kw:drives") too when it has a label,
+ * and a distance ("km:42000") or a figure per km ("perkm:16.5") is shown in the account's unit, named by {unit}.
+ */
 function resolveParams(params: Record<string, unknown> | undefined): Record<string, unknown> {
-  const out: Record<string, unknown> = {}
+  const out: Record<string, unknown> = { unit: distanceUnit() }
   for (const [name, value] of Object.entries(params ?? {})) {
     if (value && typeof value === 'object' && 'code' in value) {
       out[name] = apiErrorMessage(value as ApiErrorBody, String((value as ApiErrorBody).message ?? ''))
+    } else if (typeof value === 'string' && value.startsWith('km:')) {
+      out[name] = formatDistanceValue(Number(value.slice(3)))
+    } else if (typeof value === 'string' && value.startsWith('perkm:')) {
+      out[name] = perDistance(Number(value.slice(6))).toLocaleString(intlLocale(), { maximumFractionDigits: 2 })
     } else if (typeof value === 'string' && value.startsWith('kw:') && i18n.global.te(`messages.keywords.${value.slice(3)}`)) {
       out[name] = t(`messages.keywords.${value.slice(3)}`)
     } else {

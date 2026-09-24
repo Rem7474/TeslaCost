@@ -53,7 +53,7 @@ func buildFuelLog(vehicleID string, req *SaveFuelLogRequest) (*models.FuelLog, e
 		return nil, apierror.New("request.invalid_date", "Invalid date")
 	}
 	if req.Odometer != nil {
-		if err := validateRange(*req.Odometer, 0, 2_000_000, apierror.New("odometer.range", "Invalid mileage (0 to 2,000,000 km)")); err != nil {
+		if err := validateRange(*req.Odometer, 0, 2_000_000, apierror.Newf("odometer.range", "Invalid mileage (0 to %.0f km)", apierror.Km(2_000_000))); err != nil {
 			return nil, err
 		}
 	}

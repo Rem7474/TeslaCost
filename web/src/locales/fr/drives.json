@@ -261,5 +261,5 @@
     "failed": "Le tarif n'a pas pu être appliqué."
   },
   "noDrive": "Aucun trajet",
-  "csvHeaders": "ID,Date,Depart,Arrivee,Distance_km,Duree_min,Conso_kWh_100km,Energie_kWh,Cout_Total_{cur},Cout_km_{cur},Tags"
+  "csvHeaders": "ID,Date,Depart,Arrivee,Distance_{unit},Duree_min,Conso_kWh_100{unit},Energie_kWh,Cout_Total_{cur},Cout_{unit}_{cur},Tags"
 }

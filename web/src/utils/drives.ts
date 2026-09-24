@@ -1,5 +1,5 @@
 import { intlLocale, t } from '@/i18n'
-import { formatDistance } from '@/units'
+import { distanceUnit, formatDistance, kmToDisplayDistance, perDistance } from '@/units'
 import { formatAmount } from '@/currency'
 /** Drive of the "to qualify" toll queue: highway-like (speed heuristic or a toll found by the GPS detection), no toll
  * attached, not reviewed. The server decides (needs_toll_qualification), with the same rule as the queue filter. */
@@ -127,20 +127,21 @@ export function selectionSummary(list: any[], currency: string): string {
   return `${formatDistance(totalKm)} • ${Math.round(totalKwh)} kWh • ${formatAmount(totalCost, currency)}`
 }
 
-export const driveCsvHeaders = (currency: string) => t('drives.csvHeaders', { cur: currency }).split(',')
+export const driveCsvHeaders = (currency: string) => t('drives.csvHeaders', { unit: distanceUnit(), cur: currency }).split(',')
 
+/** One CSV row per drive, distances and figures per km in the account's unit like the headers. */
 export function driveCsvRows(list: any[]) {
   return list.map((d) => [
     d.id,
     d.start_time ? new Date(d.start_time).toISOString().slice(0, 16) : '',
     `"${(d.start_address || '').replace(/"/g, '""')}"`,
     `"${(d.end_address || '').replace(/"/g, '""')}"`,
-    d.distance_km || 0,
+    Math.round(kmToDisplayDistance(d.distance_km || 0) * 100) / 100,
     d.duration_min || 0,
-    d.consumption_kwh_100km || 0,
+    Math.round(perDistance(d.consumption_kwh_100km || 0) * 10) / 10,
     d.costs?.electricity_kwh || 0,
     (d.costs?.total_cost || 0).toFixed(2),
-    (d.costs?.cost_per_km || 0).toFixed(3),
+    perDistance(d.costs?.cost_per_km || 0).toFixed(3),
     `"${(d.tags || []).join(', ')}"`,
   ])
 }

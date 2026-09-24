@@ -63,7 +63,7 @@ func validateComparisonRequest(req *SaveComparisonRequest) error {
 	if req.Mode != models.ComparisonModeRetrospective && req.Mode != models.ComparisonModeProjection {
 		return apierror.New("comparison.mode_invalid", "Invalid mode (RETROSPECTIVE or PROJECTION)")
 	}
-	if err := validateRange(req.AnnualKm, 1, 200_000, apierror.New("comparison.annual_km", "Invalid yearly mileage (1 to 200,000 km)")); err != nil {
+	if err := validateRange(req.AnnualKm, 1, 200_000, apierror.Newf("comparison.annual_km", "Invalid yearly mileage (%.0f to %.0f km)", apierror.Km(1), apierror.Km(200_000))); err != nil {
 		return err
 	}
 	if req.Years < 1 || req.Years > 15 {
@@ -74,7 +74,7 @@ func validateComparisonRequest(req *SaveComparisonRequest) error {
 	if !models.FuelTypes[ice.FuelType] {
 		return apierror.New("fuel.type_invalid", "Invalid fuel")
 	}
-	if err := validateRange(ice.LPer100Km, 0.1, 50, apierror.New("comparison.ice_consumption", "Invalid combustion consumption (0.1 to 50 L/100 km)")); err != nil {
+	if err := validateRange(ice.LPer100Km, 0.1, 50, apierror.Newf("comparison.ice_consumption", "Invalid combustion consumption (%.1f to %.0f L/100 km)", apierror.PerKm(0.1), apierror.PerKm(50))); err != nil {
 		return err
 	}
 	if err := validateRange(ice.FuelPrice, 0, 10, apierror.New("comparison.fuel_price", "Invalid fuel price (0 to 10 per litre)")); err != nil {
@@ -104,7 +104,7 @@ func validateComparisonRequest(req *SaveComparisonRequest) error {
 		if req.EV == nil {
 			return apierror.New("comparison.ev_required", "The electric vehicle data is required in projection mode")
 		}
-		if err := validateRange(req.EV.KwhPer100Km, 0.1, 100, apierror.New("comparison.ev_consumption", "Invalid electric consumption (0.1 to 100 kWh/100 km)")); err != nil {
+		if err := validateRange(req.EV.KwhPer100Km, 0.1, 100, apierror.Newf("comparison.ev_consumption", "Invalid electric consumption (%.1f to %.0f kWh/100 km)", apierror.PerKm(0.1), apierror.PerKm(100))); err != nil {
 			return err
 		}
 		if err := validateRange(req.EV.EurPerKwh, 0, 5, apierror.New("comparison.electricity_price", "Invalid electricity price (0 to 5 per kWh)")); err != nil {

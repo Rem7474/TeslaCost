@@ -3,7 +3,7 @@ import { intlLocale } from '@/i18n'
 import { useVehicleStore } from '@/stores/vehicle'
 import { formatAmount } from '@/currency'
 import { Coins, Zap, Receipt, TrendingUp } from 'lucide-vue-next'
-import { distanceUnit, formatDistanceValue, perDistance } from '@/units'
+import { distanceUnit, formatDistanceValue, formatPerDistanceValue, perDistance } from '@/units'
 
 defineProps<{ tco: any | null }>()
 const vehicleStore = useVehicleStore()
@@ -72,7 +72,7 @@ const perUnit = (v: number) => money(perDistance(v || 0), 3)
       </div>
       <div class="mt-2 space-y-0.5">
         <p v-if="tco?.powertrain === 'ICE'" class="text-xs text-slate-400">
-          {{ perUnit(tco?.energy_cost_per_km) }}/{{ distanceUnit() }} • {{ Math.round(tco?.total_liters || 0).toLocaleString(intlLocale()) }} L<template v-if="tco?.consumption_l_100km"> • {{ tco.consumption_l_100km.toFixed(2) }} L/100</template><template v-if="tco?.avg_cost_per_liter"> • {{ money(tco.avg_cost_per_liter, 3) }}/L</template>
+          {{ perUnit(tco?.energy_cost_per_km) }}/{{ distanceUnit() }} • {{ Math.round(tco?.total_liters || 0).toLocaleString(intlLocale()) }} L<template v-if="tco?.consumption_l_100km"> • {{ formatPerDistanceValue(tco.consumption_l_100km, 2) }} L/100 {{ distanceUnit() }}</template><template v-if="tco?.avg_cost_per_liter"> • {{ money(tco.avg_cost_per_liter, 3) }}/L</template>
         </p>
         <p v-else class="text-xs text-slate-400">
           {{ $t('dashboard.tcoMetricsGrid.kmKwh', { unit: distanceUnit(), energy_cost_per_km: perUnit(tco?.energy_cost_per_km), total_kwh_added: Math.round(tco?.total_kwh_added || 0).toLocaleString(intlLocale()) }) }}
