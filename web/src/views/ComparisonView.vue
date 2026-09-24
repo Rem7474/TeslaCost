@@ -467,7 +467,7 @@ function exportResultCsv() {
   rows.push(['', '', ''])
   rows.push(t('comparison.csv.cumulativeHeader').split(','))
   for (const p of r.cumulative) rows.push([p.year, Number(p.ev).toFixed(2), Number(p.ice).toFixed(2)])
-  downloadCsv(`${t('comparison.csv.filePrefix')}-${name}`, t('comparison.csv.header').split(','), rows)
+  downloadCsv(`${t('comparison.csv.filePrefix')}-${name}`, t('comparison.csv.header', { cur: currency.value }).split(','), rows)
 }
 
 function printResult() {

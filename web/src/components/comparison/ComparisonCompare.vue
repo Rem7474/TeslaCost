@@ -73,7 +73,7 @@ function render() {
 function exportCsv() {
   downloadCsv(
     t('comparison.csv.scenariosFile'),
-    t('comparison.csv.scenariosHeader').split(','),
+    t('comparison.csv.scenariosHeader', { cur: vehicleStore.currency }).split(','),
     rows.value.map((r) => [
       `"${r.name.replace(/"/g, '""')}"`,
       r.mode,

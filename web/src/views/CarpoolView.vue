@@ -85,7 +85,7 @@ function clearTripSelection() {
 function exportSelectedCarpools() {
   const selected = trips.value.filter((t) => selectedTripIds.value.includes(t.id))
   if (!selected.length) return
-  downloadCsv(`${t('carpool.carpoolView.csvFileName')}_${new Date().toISOString().slice(0, 10)}.csv`, carpoolCsvHeaders(), carpoolCsvRows(selected))
+  downloadCsv(`${t('carpool.carpoolView.csvFileName')}_${new Date().toISOString().slice(0, 10)}.csv`, carpoolCsvHeaders(vehicleStore.currency), carpoolCsvRows(selected))
 }
 
 async function loadData() {

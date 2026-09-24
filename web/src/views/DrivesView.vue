@@ -178,7 +178,7 @@ async function handleBatchTag(tag: 'Pro' | 'Perso' | null) {
 // Export selected drives to CSV
 function exportSelectedDrives() {
   if (!selectedList.value.length) return
-  downloadCsv(`${t('drives.drivesView.csvFileName')}_${new Date().toISOString().slice(0, 10)}.csv`, driveCsvHeaders(), driveCsvRows(selectedList.value))
+  downloadCsv(`${t('drives.drivesView.csvFileName')}_${new Date().toISOString().slice(0, 10)}.csv`, driveCsvHeaders(vehicleStore.currency), driveCsvRows(selectedList.value))
 }
 
 async function loadDrives(silent = false) {

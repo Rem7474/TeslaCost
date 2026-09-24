@@ -252,7 +252,7 @@ export function pickerDrives(windowDrives: any[], known: Map<string, any>, selec
   return [...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
 }
 
-export const carpoolCsvHeaders = () => t('carpool.csvHeaders').split(',')
+export const carpoolCsvHeaders = (currency: string) => t('carpool.csvHeaders', { cur: currency }).split(',')
 
 export function carpoolCsvRows(trips: any[]) {
   return trips.map((t) => [

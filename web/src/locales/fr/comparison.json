@@ -143,9 +143,9 @@
     "gap": "Ecart en faveur de l'electrique",
     "cumulativeHeader": "Annee,Cout cumule electrique,Cout cumule thermique",
     "filePrefix": "comparatif",
-    "header": "Poste,Electrique (EUR),Thermique (EUR)",
+    "header": "Poste,Electrique ({cur}),Thermique ({cur})",
     "scenariosFile": "comparatif-scenarios",
-    "scenariosHeader": "Scenario,Type,Duree (ans),Km par an,Total electrique (EUR),Total thermique (EUR),Ecart en faveur de l'electrique (EUR),Point d'equilibre"
+    "scenariosHeader": "Scenario,Type,Duree (ans),Km par an,Total electrique ({cur}),Total thermique ({cur}),Ecart en faveur de l'electrique ({cur}),Point d'equilibre"
   },
   "compare": {
     "saves": "l'électrique économise",

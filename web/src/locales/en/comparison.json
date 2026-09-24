@@ -143,9 +143,9 @@
     "gap": "Gap in favour of the electric vehicle",
     "cumulativeHeader": "Year,Cumulative electric cost,Cumulative combustion cost",
     "filePrefix": "comparison",
-    "header": "Category,Electric (EUR),Combustion (EUR)",
+    "header": "Category,Electric ({cur}),Combustion ({cur})",
     "scenariosFile": "comparison-scenarios",
-    "scenariosHeader": "Scenario,Type,Duration (years),Km per year,Electric total (EUR),Combustion total (EUR),Gap in favour of electric (EUR),Break-even"
+    "scenariosHeader": "Scenario,Type,Duration (years),Km per year,Electric total ({cur}),Combustion total ({cur}),Gap in favour of electric ({cur}),Break-even"
   },
   "compare": {
     "saves": "electric saves",

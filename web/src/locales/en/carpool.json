@@ -147,5 +147,5 @@
   },
   "stop": "Stop {n}",
   "legCount": "{count} legs",
-  "csvHeaders": "ID,Date,Title,Distance_km,Passengers,Actual_Cost_EUR,Revenue_EUR,Net_Cost_EUR,Recovery_pct"
+  "csvHeaders": "ID,Date,Title,Distance_km,Passengers,Actual_Cost_{cur},Revenue_{cur},Net_Cost_{cur},Recovery_pct"
 }

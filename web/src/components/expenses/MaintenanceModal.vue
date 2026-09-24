@@ -277,7 +277,7 @@ async function handleCreateMaint() {
             </div>
           </div>
         </div>
-        <div v-if="maintForm.currency !== 'EUR'">
+        <div v-if="maintForm.currency !== baseCurrency">
           <label for="maint-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.conversionRate1', { currency: maintForm.currency, base: baseCurrency }) }}</label>
           <input id="maint-form-fx-rate" v-model="maintForm.fx_rate" type="number" step="0.000001" min="0.000001" required class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
