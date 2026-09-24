@@ -140,7 +140,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
 
         <!-- Custom Date Range (when periodMode === 'CUSTOM') -->
         <div v-if="periodMode === 'CUSTOM'" class="flex items-center gap-2 bg-slate-950 px-2.5 py-1 rounded-xl border border-slate-800/80 text-xs">
-          <label for="drives-filter-from" class="text-slate-400 shrink-0">Du</label>
+          <label for="drives-filter-from" class="text-slate-400 shrink-0">{{ $t('drives.drivesToolbar.from') }}</label>
           <div class="w-36">
             <AppDatePicker
               id="drives-filter-from"
@@ -149,7 +149,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
               @change="onCustomDateChange"
             />
           </div>
-          <label for="drives-filter-to" class="text-slate-400 shrink-0">Au</label>
+          <label for="drives-filter-to" class="text-slate-400 shrink-0">{{ $t('drives.drivesToolbar.to') }}</label>
           <div class="w-36">
             <AppDatePicker
               id="drives-filter-to"
@@ -188,7 +188,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
     <div v-if="total > 0 && !loading && mode === 'TRIPS'" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
       <span class="font-medium text-slate-300">
         <strong class="text-white">{{ total }}</strong> {{ $t('drives.drivesToolbar.tripSFound') }}
-        <span v-if="periodMode === 'MONTH'">en <span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></span>
+        <i18n-t v-if="periodMode === 'MONTH'" keypath="drives.drivesToolbar.inMonth" tag="span"><template #month><span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></template></i18n-t>
       </span>
       <span class="text-slate-600">•</span>
       <span>{{ $t('drives.drivesToolbar.totalDistance') }} <strong class="text-white">{{ Math.round(pageDistance).toLocaleString(intlLocale()) }} km</strong></span>
@@ -196,7 +196,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
     <div v-else-if="total > 0 && !loading" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
       <span class="font-medium text-slate-300">
         <strong class="text-white">{{ total }}</strong> {{ $t('drives.drivesToolbar.driveSFound') }}
-        <span v-if="periodMode === 'MONTH'">en <span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></span>
+        <i18n-t v-if="periodMode === 'MONTH'" keypath="drives.drivesToolbar.inMonth" tag="span"><template #month><span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></template></i18n-t>
       </span>
       <span class="text-slate-600">•</span>
       <span>{{ $t('drives.drivesToolbar.pageDistance') }} <strong class="text-white">{{ Math.round(pageDistance).toLocaleString(intlLocale()) }} km</strong></span>

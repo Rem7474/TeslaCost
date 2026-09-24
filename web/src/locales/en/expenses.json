@@ -76,7 +76,8 @@
     "unknownPlace": "Unknown charging place",
     "editThisCharge": "Edit this charge",
     "fixCost": "Enter / correct the cost",
-    "loadMore": "Load more"
+    "loadMore": "Load more",
+    "at": "at"
   },
   "completeReminderModal": {
     "confirmTheMaintenance": "Confirm the maintenance",
@@ -161,7 +162,8 @@
     "add": "Add maintenance / fixed expense",
     "uploadHelper": "PDF or image (uploaded and attached to this expense automatically)",
     "enterAnnualPremium": "Please enter the annual premium",
-    "premiumDescription": "Insurance premium ({amount}/year)"
+    "premiumDescription": "Insurance premium ({amount}/year)",
+    "perKm": "Per km"
   },
   "maintenancePanel": {
     "deleteThisExpense": "Delete this expense",

@@ -440,7 +440,7 @@ func (s *TCOService) tagBreakdown(ctx context.Context, vehicleID string, totalDi
 		       COALESCE(SUM(pd.amount), 0)
 		FROM (
 			SELECT d.id,
-			       unnest(CASE WHEN d.tags = '{}' OR d.tags IS NULL THEN ARRAY['Non tagué'] ELSE d.tags END) AS tag,
+			       unnest(CASE WHEN d.tags = '{}' OR d.tags IS NULL THEN ARRAY[''] ELSE d.tags END) AS tag,
 			       d.distance_km, d.energy_consumed_kwh
 			FROM drives d
 			WHERE d.vehicle_id = $1 AND d.deleted_upstream_at IS NULL

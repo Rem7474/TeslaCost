@@ -91,6 +91,7 @@
     "deleteTitle": "Supprimer le relevé kilométrique",
     "deleteMessage": "Supprimer le relevé de {km} km du {date} ?",
     "edit": "Modifier le relevé",
-    "update": "Mettre à jour"
+    "update": "Mettre à jour",
+    "onDate": "le {date}"
   }
 }

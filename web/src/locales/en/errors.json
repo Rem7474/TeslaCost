@@ -246,6 +246,7 @@
     "docker_localhost": "{p0} (Note: inside Docker, 'localhost' is the application container itself. Use 'http://host.docker.internal:PORT' or your machine's local IP)",
     "timeout": "{p0} (Timed out: check that the address and port are reachable and that TeslaMate is responding)",
     "auth_refused": "TeslaMateAPI answered with status {p0}: authentication refused",
-    "not_found": "TeslaMateAPI answered with status {p0}: resource not found (wrong URL or vehicle identifier)"
+    "not_found": "TeslaMateAPI answered with status {p0}: resource not found (wrong URL or vehicle identifier)",
+    "url_required": "The TeslaMate API URL is required"
   }
 }

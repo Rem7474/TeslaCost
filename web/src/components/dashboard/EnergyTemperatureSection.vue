@@ -18,7 +18,7 @@ let chart: Chart | null = null
 const bins = computed(() => props.stats.temperature_bins)
 const effect = computed(() => props.stats.temperature)
 
-const binLabel = (b: { min_c: number; max_c: number }) => `${b.min_c} à ${b.max_c} °C`
+const binLabel = (b: { min_c: number; max_c: number }) => t('dashboard.energyTemperatureSection.binRange', { min: b.min_c, max: b.max_c })
 
 // Cold to warm: the colour repeats what the axis says.
 function binColor(minC: number) {

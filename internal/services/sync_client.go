@@ -56,7 +56,7 @@ func (s *SyncService) TestConnection(ctx context.Context, v *models.Vehicle) (*t
 func (s *SyncService) TestConnectionRaw(ctx context.Context, apiURL string, authType models.AuthMode, apiKey, basicUser, basicPass string, carID int) (*teslamate.StatusDetails, error) {
 	apiURL = strings.TrimSpace(apiURL)
 	if apiURL == "" {
-		return nil, fmt.Errorf("l'URL de l'API TeslaMate est requise")
+		return nil, apierror.New("teslamate.url_required", "The TeslaMate API URL is required")
 	}
 
 	cfg := teslamate.Config{
@@ -99,7 +99,7 @@ func (s *SyncService) buildClient(v *models.Vehicle) (*teslamate.Client, error) 
 // and any other service that needs to call TeslaMateAPI on a vehicle's behalf.
 func buildTeslaMateClient(v *models.Vehicle, encryptor *crypto.Encryptor) (*teslamate.Client, error) {
 	if v.TeslaMateAPIURL == nil || *v.TeslaMateAPIURL == "" {
-		return nil, fmt.Errorf("no TeslaMate API URL provided")
+		return nil, apierror.New("teslamate.url_required", "The TeslaMate API URL is required")
 	}
 
 	cfg := teslamate.Config{

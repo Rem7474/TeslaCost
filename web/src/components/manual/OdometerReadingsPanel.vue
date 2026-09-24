@@ -138,7 +138,7 @@ onMounted(() => {
             min="0"
             max="2000000"
             required
-            placeholder="ex: 45000"
+            :placeholder="$t('common.example', { value: '45000' })"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500"
           />
         </div>
@@ -187,7 +187,7 @@ onMounted(() => {
               <div class="flex items-center gap-2">
                 <span class="text-sm font-bold text-white font-mono">{{ Math.round(r.odometer).toLocaleString(intlLocale()) }} km</span>
                 <span class="text-xs text-slate-400">
-                  le {{ new Date(r.date).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                  {{ $t('manual.odometerReadingsPanel.onDate', { date: new Date(r.date).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) }) }}
                 </span>
               </div>
               <p v-if="r.notes" class="text-xs text-slate-400 truncate mt-0.5">{{ r.notes }}</p>

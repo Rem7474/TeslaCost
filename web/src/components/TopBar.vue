@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { intlLocale } from '@/i18n'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useOfflineStore } from '@/stores/offline'
 import { RefreshCw, Car, Gauge, Plus, AlertCircle, AlertTriangle, X, CheckCircle2, WifiOff, CloudUpload } from 'lucide-vue-next'
@@ -61,7 +62,7 @@ function onVehicleChange(event: Event) {
           <!-- Odometer pill -->
           <div class="hidden min-[360px]:flex shrink-0 items-center gap-1.5 bg-slate-800/80 px-2 py-1 rounded-lg text-xs text-slate-300 border border-slate-700/50">
             <Gauge class="w-3.5 h-3.5 text-rose-400 shrink-0" />
-            <span class="truncate max-w-[90px] sm:max-w-none">{{ Math.round(vehicleStore.activeVehicle?.current_odometer || 0).toLocaleString('fr-FR') }} km</span>
+            <span class="truncate max-w-[90px] sm:max-w-none">{{ Math.round(vehicleStore.activeVehicle?.current_odometer || 0).toLocaleString(intlLocale()) }} km</span>
           </div>
         </div>
 

@@ -55,7 +55,7 @@ type MonthlyCost struct {
 
 // TagCostBreakdown represents costs split by tag (e.g. Pro vs Perso).
 type TagCostBreakdown struct {
-	Tag         string      `json:"tag"`
+	Tag         string      `json:"tag"` // empty for the drives that carry no tag
 	DistanceKm  float64     `json:"distance_km"`
 	EnergyKwh   float64     `json:"energy_kwh"`
 	TollsAmount money.Cents `json:"tolls_amount"`

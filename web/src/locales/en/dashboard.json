@@ -106,7 +106,8 @@
     "below5CTheCar": "Below 5 °C, the car uses",
     "effectOfTemperature": "Effect of temperature",
     "consumption": "Consumption",
-    "drivesAndDistance": "{drives} drive(s), {distance} km"
+    "drivesAndDistance": "{drives} drive(s), {distance} km",
+    "binRange": "{min} to {max} °C"
   },
   "leaseContractCard": {
     "estimatedEndOfContractPenalty": "Estimated end-of-contract penalty: {value}",
@@ -192,7 +193,8 @@
   "tagBreakdown": {
     "ofTollsAndParking": "{value} of tolls and parking",
     "breakdownByDriveCategoryWork": "Breakdown by drive category (work / personal)",
-    "kmKwh": "{distance_km} km ({energy_kwh} kWh)"
+    "kmKwh": "{distance_km} km ({energy_kwh} kWh)",
+    "untagged": "Untagged"
   },
   "tcoMetricsGrid": {
     "tollsAndParking": "Tolls and parking",

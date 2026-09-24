@@ -79,7 +79,10 @@
     "totalPriceMode": "prix total",
     "customSize": "Dimension personnalisée...",
     "requiredFields": "Veuillez renseigner la marque, le modèle et la dimension",
-    "requiredFieldsTitle": "Champs requis"
+    "requiredFieldsTitle": "Champs requis",
+    "front": "Av",
+    "rear": "Ar",
+    "customDimension": "Dimension"
   },
   "tireBatchDisposeModal": {
     "finalOdometerIfRemovedOn": "Odomètre final si démonté à cette date.",
@@ -224,7 +227,8 @@
     "sessionOver": "Session terminée",
     "currentlyFitted": "🟢 Montage en cours",
     "removedAt": "{date} à {odometer} km",
-    "currentlyOnVehicle": "Actuellement sur le véhicule"
+    "currentlyOnVehicle": "Actuellement sur le véhicule",
+    "dateAtKm": "{date} à {km} km"
   },
   "tireLogModal": {
     "saveTheReading": "Enregistrer le relevé",

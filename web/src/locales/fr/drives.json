@@ -224,7 +224,10 @@
     "previousMonth": "Mois précédent",
     "period": "Période",
     "byMonth": "Par mois",
-    "all": "Tous"
+    "all": "Tous",
+    "from": "Du",
+    "to": "Au",
+    "inMonth": "en {month}"
   },
   "tripGroupsPanel": {
     "noTripMatchesTheFilters": "Aucun voyage ne correspond aux filtres.",

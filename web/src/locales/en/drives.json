@@ -224,7 +224,10 @@
     "previousMonth": "Previous month",
     "period": "Period",
     "byMonth": "By month",
-    "all": "All"
+    "all": "All",
+    "from": "From",
+    "to": "To",
+    "inMonth": "in {month}"
   },
   "tripGroupsPanel": {
     "noTripMatchesTheFilters": "No trip matches the filters.",

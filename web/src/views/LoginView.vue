@@ -85,7 +85,7 @@ async function handleSubmit() {
       <!-- Separator: shown only when OIDC is enabled AND local form is still visible -->
       <div v-if="oidcEnabled" class="relative my-4 flex items-center">
         <div class="flex-grow border-t border-slate-700" />
-        <span class="mx-3 text-xs text-slate-500">ou</span>
+        <span class="mx-3 text-xs text-slate-500">{{ $t('common.or') }}</span>
         <div class="flex-grow border-t border-slate-700" />
       </div>
 

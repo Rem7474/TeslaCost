@@ -240,7 +240,7 @@ async function handleCreateMaint() {
                 type="number"
                 step="0.01"
                 min="0"
-                placeholder="ex: 850"
+                :placeholder="$t('common.example', { value: '850' })"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
               />
             </div>
@@ -322,7 +322,7 @@ async function handleCreateMaint() {
               class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="maintForm.amortization_mode === 'DISTANCE' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              Au km
+              {{ $t('expenses.maintenanceModal.perKm') }}
             </button>
             <button
               type="button"
