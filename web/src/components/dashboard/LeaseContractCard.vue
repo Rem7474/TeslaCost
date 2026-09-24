@@ -5,6 +5,7 @@ import { Coins, Gauge, Calendar, FileText, CheckCircle2 } from 'lucide-vue-next'
 import { buildLeaseSummary } from '@/utils/dashboard'
 import { formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
+import { distanceUnit, formatDistance, formatDistanceValue } from '@/units'
 
 // Follow-up of a LOA / LLD contract: duration, mileage against the allowance, costs and included services
 const props = defineProps<{ tco: any | null }>()
@@ -93,12 +94,12 @@ const leaseContract = computed(() => buildLeaseSummary(props.tco))
             {{ $t('dashboard.leaseContractCard.mileageAllowance') }}
           </span>
           <span class="font-bold text-slate-200">
-            {{ Math.round(leaseContract.kmDriven).toLocaleString(intlLocale()) }} km
+            {{ formatDistance(leaseContract.kmDriven) }}
             <span v-if="leaseContract.kmAllowanceTotal" class="text-slate-400 font-normal">
-              / {{ Math.round(leaseContract.kmAllowanceTotal).toLocaleString(intlLocale()) }} km
+              / {{ formatDistance(leaseContract.kmAllowanceTotal) }}
             </span>
             <span v-else class="text-slate-400 font-normal">
-              {{ $t('dashboard.leaseContractCard.kmToDate', { kmAllowanceToDate: Math.round(leaseContract.kmAllowanceToDate).toLocaleString(intlLocale()) }) }}
+              {{ $t('dashboard.leaseContractCard.kmToDate', { unit: distanceUnit(), kmAllowanceToDate: formatDistanceValue(leaseContract.kmAllowanceToDate) }) }}
             </span>
           </span>
         </div>
@@ -115,14 +116,14 @@ const leaseContract = computed(() => buildLeaseSummary(props.tco))
         <!-- Sub-info: Pace & Diff -->
         <div class="flex items-center justify-between text-[11px] flex-wrap gap-1">
           <span class="text-slate-400">
-            {{ $t('dashboard.leaseContractCard.pace') }} <strong>{{ $t('dashboard.leaseContractCard.kmMonth', { actualPaceKmMonth: leaseContract.actualPaceKmMonth }) }}</strong>
-            <template v-if="leaseContract.contractualPaceKmMonth"> {{ $t('dashboard.leaseContractCard.plannedKmMonth', { contractualPaceKmMonth: leaseContract.contractualPaceKmMonth }) }}</template>
+            {{ $t('dashboard.leaseContractCard.pace') }} <strong>{{ $t('dashboard.leaseContractCard.kmMonth', { unit: distanceUnit(), actualPaceKmMonth: formatDistanceValue(leaseContract.actualPaceKmMonth) }) }}</strong>
+            <template v-if="leaseContract.contractualPaceKmMonth"> {{ $t('dashboard.leaseContractCard.plannedKmMonth', { unit: distanceUnit(), contractualPaceKmMonth: formatDistanceValue(leaseContract.contractualPaceKmMonth) }) }}</template>
           </span>
           <span
             v-if="leaseContract.kmDiff !== undefined"
             :class="leaseContract.kmDiff > 0 ? 'text-rose-400 font-semibold' : 'text-emerald-400 font-semibold'"
           >
-            {{ leaseContract.kmDiff > 0 ? $t('dashboard.leaseContractCard.kmOver', { km: leaseContract.kmDiff.toLocaleString(intlLocale()) }) : $t('dashboard.leaseContractCard.kmAhead', { km: Math.abs(leaseContract.kmDiff).toLocaleString(intlLocale()) }) }}
+            {{ leaseContract.kmDiff > 0 ? $t('dashboard.leaseContractCard.kmOver', { unit: distanceUnit(), km: formatDistanceValue(leaseContract.kmDiff) }) : $t('dashboard.leaseContractCard.kmAhead', { unit: distanceUnit(), km: formatDistanceValue(Math.abs(leaseContract.kmDiff)) }) }}
           </span>
         </div>
       </div>

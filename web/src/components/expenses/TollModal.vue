@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import { formatDistance } from '@/units'
 import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -262,7 +263,7 @@ async function handleCreateToll() {
             >
               <option value="">{{ $t('expenses.tollModal.selectARecentDrive') }}</option>
               <option v-for="d in recentDrives" :key="d.id" :value="d.id">
-                {{ formatDayTime(d.start_time) }}{{ $t('expenses.tollModal.dateSeparator') }}{{ (d.start_address || $t('expenses.tollModal.start')).split(',')[0] }} → {{ (d.end_address || $t('expenses.tollModal.destination')).split(',')[0] }} ({{ d.distance_km.toFixed(1) }} km)
+                {{ formatDayTime(d.start_time) }}{{ $t('expenses.tollModal.dateSeparator') }}{{ (d.start_address || $t('expenses.tollModal.start')).split(',')[0] }} → {{ (d.end_address || $t('expenses.tollModal.destination')).split(',')[0] }} ({{ formatDistance(d.distance_km, 1) }})
               </option>
             </select>
           </div>
@@ -288,7 +289,7 @@ async function handleCreateToll() {
                   <Square v-else class="w-4 h-4 text-slate-500" />
                   <span>{{ formatDayTime(d.start_time) }}{{ $t('expenses.tollModal.dateSeparator') }}{{ (d.start_address || $t('expenses.tollModal.start')).split(',')[0] }} → {{ (d.end_address || $t('expenses.tollModal.destination')).split(',')[0] }}</span>
                 </div>
-                <span class="font-mono text-[11px] text-slate-400">{{ d.distance_km.toFixed(0) }} km</span>
+                <span class="font-mono text-[11px] text-slate-400">{{ formatDistance(d.distance_km) }}</span>
               </div>
             </div>
           </div>

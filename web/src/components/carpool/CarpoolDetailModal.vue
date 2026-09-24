@@ -8,6 +8,7 @@ import { buildCarpoolBreakdown } from '@/utils/costBreakdown'
 import { carpoolCoverage, formatDate, stopNames } from '@/utils/carpool'
 import { formatAmount } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit, formatDistance, perDistance } from '@/units'
 
 // Detail of a carpool trip, laid out like the drive and trip cost breakdown: summary, legs, cost split, passengers,
 // total. A leg made from a drive opens the cost detail of that drive, like the legs of a trip. The form to change the
@@ -70,7 +71,7 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
             <span class="truncate">{{ stops[stops.length - 1] }}</span>
           </div>
           <div class="flex items-center gap-3 text-xs text-slate-300 flex-wrap">
-            <span class="font-bold text-rose-400">{{ trip.distance_km }} km</span>
+            <span class="font-bold text-rose-400">{{ formatDistance(trip.distance_km, 1) }}</span>
             <span class="text-indigo-400 font-semibold">{{ $t('carpool.carpoolTripList.legs', { length: trip.legs.length }) }}</span>
             <span class="text-blue-400 font-semibold">{{ $t('carpool.carpoolTripList.passengers', { length: trip.passengers?.length || 0 }) }}</span>
           </div>
@@ -99,7 +100,7 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
               </div>
             </div>
             <div class="flex items-center gap-3 shrink-0">
-              <span class="text-[11px] font-bold text-rose-400">{{ leg.distance_km }} km</span>
+              <span class="text-[11px] font-bold text-rose-400">{{ formatDistance(leg.distance_km, 1) }}</span>
               <span class="text-xs font-mono font-bold text-white">{{ fmt(leg.total_cost) }}</span>
               <ChevronRight v-if="leg.drive_id" class="w-4 h-4 text-slate-500" />
             </div>
@@ -169,9 +170,9 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
               <div class="text-2xl font-black text-white">{{ fmt(trip.total_cost) }}</div>
             </div>
             <div class="text-right">
-              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
+              <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre', { unit: distanceUnit() }) }}</span>
               <div class="text-lg font-extrabold text-emerald-400 font-mono">
-                {{ formatAmount(trip.distance_km > 0 ? trip.total_cost / trip.distance_km : 0, vehicleStore.currency, 3) }}<span class="text-xs font-normal text-slate-400">/km</span>
+                {{ formatAmount(perDistance(trip.distance_km > 0 ? trip.total_cost / trip.distance_km : 0), vehicleStore.currency, 3) }}<span class="text-xs font-normal text-slate-400">/{{ distanceUnit() }}</span>
               </div>
             </div>
           </div>

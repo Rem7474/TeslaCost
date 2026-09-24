@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { formatDistance } from '@/units'
 import { useVehicleStore } from '@/stores/vehicle'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import SelectAllToggle from '@/components/SelectAllToggle.vue'
@@ -101,7 +102,7 @@ const isAllSelected = computed(() => props.trips.length > 0 && props.selectedTri
           <div class="space-y-1 min-w-0 flex-1">
             <div class="flex items-center gap-2.5 flex-wrap min-w-0">
               <h3 class="text-base font-bold text-white truncate max-w-sm sm:max-w-md" :title="trip.title">{{ trip.title }}</h3>
-              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium shrink-0">{{ trip.distance_km }} km</span>
+              <span class="text-xs bg-slate-800 text-slate-300 px-2.5 py-0.5 rounded-full border border-slate-700/60 font-medium shrink-0">{{ formatDistance(trip.distance_km, 1) }}</span>
               <span
                 class="text-xs px-2.5 py-0.5 rounded-full font-semibold border shrink-0"
                 :class="trip.net_cost <= 0 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'"

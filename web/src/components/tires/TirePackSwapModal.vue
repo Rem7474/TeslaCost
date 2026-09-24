@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, watch } from 'vue'
 import { Snowflake, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { getTireSelectLabel } from '@/utils/tires'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 const props = defineProps<{ vehicleId: string; storageTires: any[]; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()
@@ -81,10 +83,9 @@ async function handlePackSwapSubmit() {
 
       <div class="p-5 overflow-y-auto flex-1 overscroll-contain space-y-4 text-xs">
         <div>
-          <label for="tire-pack-swap-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tirePackSwapModal.odometerAtTheSwapKm') }}</label>
-          <input id="tire-pack-swap-odometer"
-            v-model.number="packSwapForm.odometer"
-            type="number"
+          <label for="tire-pack-swap-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tirePackSwapModal.odometerAtTheSwapKm', { unit: distanceUnit() }) }}</label>
+          <DistanceInput id="tire-pack-swap-odometer"
+            v-model="packSwapForm.odometer"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
           />
         </div>

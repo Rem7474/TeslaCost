@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, watch } from 'vue'
 import { Archive, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -121,10 +122,9 @@ async function handleBatchDisposeSubmit() {
           </div>
           <div>
             <label for="batch-dispose-odo" class="block text-slate-300 mb-1 font-semibold">{{ $t('tires.tireBatchDisposeModal.vehicleMileage') }}</label>
-            <input
+            <DistanceInput text
               id="batch-dispose-odo"
               v-model="batchDisposeForm.odometer"
-              type="number"
               :placeholder="$t('tires.tireBatchDisposeModal.optionalForAGarageTire')"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-amber-500 focus:outline-none"
             />

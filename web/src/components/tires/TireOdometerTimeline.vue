@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
+import { displayDistanceToKm, formatDistance, kmToDisplayDistance } from '@/units'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { X } from 'lucide-vue-next'
 import { buildTireTimeline, tickStep, type TimelineSegment, type TimelineTireInfo } from '../../utils/tireTimeline'
@@ -19,7 +20,7 @@ const pinned = ref<TimelineSegment | null>(null)
 const shown = computed(() => pinned.value ?? hovered.value)
 
 const pct = (km: number) => (timeline.value.maxKm > 0 ? (km / timeline.value.maxKm) * 100 : 0)
-const fmtKm = (km: number) => `${Math.round(km).toLocaleString(intlLocale())} km`
+const fmtKm = (km: number) => formatDistance(km)
 
 const hasData = computed(() => timeline.value.lanes.some((l) => l.segments.length > 0))
 const hasGaps = computed(() => timeline.value.lanes.some((l) => l.gaps.length > 0))
@@ -28,9 +29,11 @@ const multiLane = computed(() => timeline.value.lanes.length > 1)
 const barHeight = computed(() => (multiLane.value ? 'h-3' : 'h-4'))
 
 const ticks = computed(() => {
-  const step = tickStep(timeline.value.maxKm)
+  // Round steps in the account's unit, placed on the km scale of the bars
+  const max = kmToDisplayDistance(timeline.value.maxKm)
+  const step = tickStep(max)
   const out: number[] = []
-  for (let km = 0; km <= timeline.value.maxKm; km += step) out.push(km)
+  for (let d = 0; d <= max; d += step) out.push(displayDistanceToKm(d))
   return out
 })
 

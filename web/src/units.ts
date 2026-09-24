@@ -32,7 +32,41 @@ export function displayDistanceToKm(value: number): number {
   return unit.value === 'mi' ? value * KM_PER_MILE : value
 }
 
-/** Rounded, locale-formatted distance with its unit suffix, e.g. "42 000 km" / "26,097 mi". */
-export function formatDistance(km: number): string {
-  return `${Math.round(kmToDisplayDistance(km)).toLocaleString(intlLocale())} ${unit.value}`
+/** A stored km value in the account's unit, locale-formatted without the unit ("42 000", "26,097.3"). */
+export function formatDistanceValue(km: number, digits = 0): string {
+  return kmToDisplayDistance(km).toLocaleString(intlLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
 }
+
+/** Locale-formatted distance with its unit suffix, e.g. "42 000 km" / "26,097 mi". */
+export function formatDistance(km: number, digits = 0): string {
+  return `${formatDistanceValue(km, digits)} ${unit.value}`
+}
+
+/**
+ * A figure expressed per km (a cost per km, kWh per 100 km, a price per extra km), rescaled to the
+ * account's unit: per mile it is 1.609 times larger. Pair it with "/{unit}" in the label.
+ */
+export function perDistance(valuePerKm: number): number {
+  return unit.value === 'mi' ? valuePerKm * KM_PER_MILE : valuePerKm
+}
+
+/** A figure per km (or per 100 km) rescaled to the account's unit, locale-formatted without its unit. */
+export function formatPerDistanceValue(valuePerKm: number, digits = 1): string {
+  return perDistance(valuePerKm).toLocaleString(intlLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
+}
+
+/** The reverse of perDistance, for a per-distance figure typed in a form. */
+export function perDistanceToPerKm(value: number): number {
+  return unit.value === 'mi' ? value / KM_PER_MILE : value
+}
+
+/** Speed unit that goes with the distance unit. */
+export const speedUnit = (): string => (unit.value === 'mi' ? 'mph' : 'km/h')
+
+/** A speed stored in km/h, in the account's unit. */
+export function formatSpeed(kmh: number): string {
+  return `${Math.round(kmToDisplayDistance(kmh)).toLocaleString(intlLocale())} ${speedUnit()}`
+}
+
+/** The account's distance unit label, for a catalog's {unit} placeholder ("Distance ({unit})"). */
+export const distanceUnit = (): DistanceUnit => unit.value

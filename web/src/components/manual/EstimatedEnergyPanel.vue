@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Zap, CheckCircle2 } from 'lucide-vue-next'
@@ -7,6 +8,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { currencySymbol, formatAmount } from '@/currency'
+import { distanceUnit, formatDistance, perDistance } from '@/units'
 
 const props = defineProps<{
   vehicle: any
@@ -46,7 +48,7 @@ async function save() {
   const kwh100 = form.value.kwh_100km != null ? Number(form.value.kwh_100km) : null
   const rate = form.value.price_per_kwh != null ? Number(form.value.price_per_kwh) : null
   if (kwh100 !== null && (kwh100 <= 0 || kwh100 > 100)) {
-    showAlert(t('manual.estimatedEnergyPanel.invalidConsumption'), t('manual.estimatedEnergyPanel.invalidField'), 'warning')
+    showAlert(t('manual.estimatedEnergyPanel.invalidConsumption', { unit: distanceUnit() }), t('manual.estimatedEnergyPanel.invalidField'), 'warning')
     return
   }
   if (rate !== null && (rate <= 0 || rate > 10)) {
@@ -110,11 +112,10 @@ onMounted(() => {
       <form class="space-y-3" @submit.prevent="save">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label for="pre-tm-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.estimatedEnergyPanel.averageConsumptionKwh100km') }}</label>
-            <input
+            <label for="pre-tm-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.estimatedEnergyPanel.averageConsumptionKwh100km', { unit: distanceUnit() }) }}</label>
+            <DistanceInput kind="per-distance"
               id="pre-tm-kwh"
-              v-model.number="form.kwh_100km"
-              type="number"
+              v-model="form.kwh_100km"
               step="0.1"
               min="1"
               max="100"
@@ -141,7 +142,7 @@ onMounted(() => {
 
         <div v-if="preview" class="bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs space-y-1">
           <div class="text-slate-300 font-semibold flex items-center justify-between">
-            <span>{{ $t('manual.estimatedEnergyPanel.estimateOverSmoothedKm', { distance: Math.round(preview.distance).toLocaleString(intlLocale()) }) }}</span>
+            <span>{{ $t('manual.estimatedEnergyPanel.estimateOverSmoothedKm', { distance: formatDistance(preview.distance) }) }}</span>
             <span class="text-sky-400 font-bold font-mono">
               ≈ {{ formatAmount(preview.cost, vehicleStore.currency) }}
             </span>
@@ -149,7 +150,7 @@ onMounted(() => {
           <p class="text-slate-400 text-[11px]">
             {{ $t('manual.estimatedEnergyPanel.estimatedVolume') }}
             <strong class="text-slate-200 font-mono">{{ $t('manual.estimatedEnergyPanel.kwh', { kwh: Math.round(preview.kwh).toLocaleString(intlLocale()) }) }}</strong>
-            {{ $t('manual.estimatedEnergyPanel.kmSpreadProRataAcross', { cost: formatAmount(preview.cost / (preview.distance || 1), vehicleStore.currency, 3) }) }}
+            {{ $t('manual.estimatedEnergyPanel.kmSpreadProRataAcross', { unit: distanceUnit(), cost: formatAmount(perDistance(preview.cost / (preview.distance || 1)), vehicleStore.currency, 3) }) }}
           </p>
         </div>
 

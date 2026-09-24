@@ -87,6 +87,35 @@ describe('message keys used in the source', () => {
     }
     expect(missing).toEqual([])
   })
+
+  // These placeholders carry the vehicle currency or the account's distance unit: a call that forgets one shows an empty gap.
+  const REQUIRED = ['cur', 'unit', 'speed', 'min', 'band']
+  const message = (key: string) => key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), catalog)
+  // The text of a call from its opening parenthesis to the matching closing one.
+  const callArgs = (source: string, open: number) => {
+    let depth = 0
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === '(') depth++
+      else if (source[i] === ')' && --depth === 0) return source.slice(open, i + 1)
+    }
+    return source.slice(open)
+  }
+
+  it('pass the currency and distance placeholders their message needs', () => {
+    const forgotten: string[] = []
+    for (const file of walk(join(__dirname, '..'))) {
+      const source = readFileSync(file, 'utf8')
+      for (const match of source.matchAll(/(?<![\w.])\$?t\(\s*'([a-zA-Z]+(?:\.[a-zA-Z0-9]+)+)'/g)) {
+        const text = message(match[1])
+        if (typeof text !== 'string') continue
+        const args = callArgs(source, match.index! + match[0].indexOf('('))
+        for (const name of REQUIRED) {
+          if (text.includes(`{${name}}`) && !new RegExp(`\\b${name}\\b\\s*[:,}]`).test(args)) forgotten.push(`${file.split('/src/')[1]}: ${match[1]} needs {${name}}`)
+        }
+      }
+    }
+    expect(forgotten).toEqual([])
+  })
 })
 
 // The backend sends a code with each user-facing error: the front end needs a message for every code it can send.

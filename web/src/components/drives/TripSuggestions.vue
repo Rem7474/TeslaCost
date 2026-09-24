@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { formatDistance } from '@/units'
 import { intlLocale } from '@/i18n'
 import { Sparkles, Zap, Timer } from 'lucide-vue-next'
 import { formatTripDates } from '@/utils/drives'
@@ -27,7 +28,7 @@ const route = (s: any) => [s.start_address, s.end_address].filter(Boolean).join(
       <Sparkles class="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
       <div>
         <span class="font-bold text-white">{{ $t('drives.tripSuggestions.title', { count: suggestions.length }) }}</span>
-        <span class="block">{{ $t('drives.tripSuggestions.help') }}</span>
+        <span class="block">{{ $t('drives.tripSuggestions.help', { min: formatDistance(50) }) }}</span>
       </div>
     </div>
 
@@ -41,7 +42,7 @@ const route = (s: any) => [s.start_address, s.end_address].filter(Boolean).join(
         <div class="flex items-center gap-2 flex-wrap mb-1">
           <span class="text-xs font-semibold text-slate-400">{{ formatTripDates({ start_time: s.start_time, end_time: s.end_time }) }}</span>
           <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-800 text-slate-200 border border-slate-700/60">
-            {{ Math.round(s.distance_km).toLocaleString(intlLocale()) }} km
+            {{ formatDistance(s.distance_km) }}
           </span>
           <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30">
             {{ $t('drives.tripGroupsPanel.legS', { length: s.drive_ids.length }) }}

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { api, type MaintenanceReminder } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -9,6 +10,7 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import { todayIso } from '@/utils/dates'
 import { currencySymbol } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 // Marks a reminder as done, optionally logging the maintenance expense. saved carries whether an expense was logged.
 const props = defineProps<{ vehicleId: string; reminder: MaintenanceReminder | null; currentOdometer: number }>()
@@ -105,11 +107,10 @@ async function handleCompleteReminder() {
             />
           </div>
           <div>
-            <label for="complete-form-odo" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.odometerAtTheWorkKm') }}</label>
-            <input
+            <label for="complete-form-odo" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.odometerAtTheWorkKm', { unit: distanceUnit() }) }}</label>
+            <DistanceInput text
               id="complete-form-odo"
               v-model="completeForm.service_odometer"
-              type="number"
               min="0"
               required
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"

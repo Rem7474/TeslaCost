@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, watch } from 'vue'
 import { Check, History, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -7,6 +8,7 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { todayIso } from '@/utils/dates'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 // Records the same past session on several tires stored in the garage
 const props = defineProps<{ vehicleId: string; storageTires: any[]; selectedTireIds: string[]; currentOdometer: number }>()
@@ -176,12 +178,11 @@ async function handleSaveBatchSession() {
             />
           </div>
           <div>
-            <label for="batch-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.odometerAtFittingKm') }}</label>
-            <input
+            <label for="batch-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.odometerAtFittingKm', { unit: distanceUnit() }) }}</label>
+            <DistanceInput
               id="batch-session-mounted-odometer"
-              v-model.number="batchSessionForm.mounted_odometer"
+              v-model="batchSessionForm.mounted_odometer"
               @input="onBatchOdometerChange"
-              type="number"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
             />
           </div>
@@ -198,23 +199,21 @@ async function handleSaveBatchSession() {
             />
           </div>
           <div>
-            <label for="batch-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.odometerAtRemovalKm') }}</label>
-            <input
+            <label for="batch-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.odometerAtRemovalKm', { unit: distanceUnit() }) }}</label>
+            <DistanceInput
               id="batch-session-dismounted-odometer"
-              v-model.number="batchSessionForm.dismounted_odometer"
+              v-model="batchSessionForm.dismounted_odometer"
               @input="onBatchOdometerChange"
-              type="number"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
             />
           </div>
         </div>
 
         <div>
-          <label for="batch-session-distance-km" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.sessionDistanceKm') }}</label>
-          <input
+          <label for="batch-session-distance-km" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireBatchSessionModal.sessionDistanceKm', { unit: distanceUnit() }) }}</label>
+          <DistanceInput
             id="batch-session-distance-km"
-            v-model.number="batchSessionForm.distance_km"
-            type="number"
+            v-model="batchSessionForm.distance_km"
             :placeholder="$t('tires.tireBatchSessionModal.calculatedFromTheOdometersOr')"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:border-rose-500 focus:outline-none"
           />

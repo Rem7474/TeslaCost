@@ -16,7 +16,7 @@
   "deselectAll": "Deselect all",
   "deleteForever": "Delete permanently",
   "or": "or",
-  "atKm": "at {km} km",
-  "atKmCapitalized": "At {km} km",
+  "atKm": "at {km} {unit}",
+  "atKmCapitalized": "At {km} {unit}",
   "example": "e.g. {value}"
 }

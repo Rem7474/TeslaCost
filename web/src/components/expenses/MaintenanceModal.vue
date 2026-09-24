@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -12,6 +13,7 @@ import AppDropzone from '@/components/AppDropzone.vue'
 import { CURRENCIES, currencyPayload, findCloseCandidate, formatDate } from '@/utils/expenses'
 import { todayIso } from '@/utils/dates'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit, formatDistanceValue } from '@/units'
 
 // Adds a maintenance / fixed expense, or edits it when `editing` is set. maintenanceExpenses lets a new one close an earlier revision.
 const props = defineProps<{
@@ -284,12 +286,12 @@ async function handleCreateMaint() {
 
         <div>
           <div class="flex items-center justify-between mb-1">
-            <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300">{{ $t('expenses.maintenanceModal.odometerKm') }}</label>
+            <label for="expense-maint-odometer" class="block text-xs font-semibold text-slate-300">{{ $t('expenses.maintenanceModal.odometerKm', { unit: distanceUnit() }) }}</label>
             <span v-if="detectingOdometer" class="text-[11px] text-slate-400">{{ $t('expenses.maintenanceModal.detectingTheMileage') }}</span>
           </div>
-          <input id="expense-maint-odometer" v-model.number="maintForm.odometer" type="number" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+          <DistanceInput id="expense-maint-odometer" v-model="maintForm.odometer" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           <div v-if="detectedOdometer !== null && detectedOdometer > 0" class="flex items-center justify-between text-[11px] text-emerald-400 mt-1">
-            <span>{{ $t('expenses.maintenanceModal.mileageDetectedKm', { detectedOdometer: Math.round(detectedOdometer) }) }}</span>
+            <span>{{ $t('expenses.maintenanceModal.mileageDetectedKm', { unit: distanceUnit(), detectedOdometer: formatDistanceValue(detectedOdometer) }) }}</span>
             <button
               type="button"
               v-if="maintForm.odometer !== Math.round(detectedOdometer)"
@@ -304,7 +306,7 @@ async function handleCreateMaint() {
         <!-- Lissage du coût pour dépenses non-récurrentes -->
         <div v-if="!maintForm.is_recurring" class="space-y-2.5 bg-slate-800/40 p-3.5 rounded-xl border border-slate-700/60">
           <span class="block text-xs font-semibold text-slate-200">
-            {{ $t('expenses.maintenanceModal.costPerKmSmoothing') }}
+            {{ $t('expenses.maintenanceModal.costPerKmSmoothing', { unit: distanceUnit() }) }}
           </span>
 
           <div class="grid grid-cols-4 gap-1.5 pt-1">
@@ -322,7 +324,7 @@ async function handleCreateMaint() {
               class="py-1.5 px-1 text-xs font-medium rounded-lg transition-colors text-center border"
               :class="maintForm.amortization_mode === 'DISTANCE' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' : 'bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200'"
             >
-              {{ $t('expenses.maintenanceModal.perKm') }}
+              {{ $t('expenses.maintenanceModal.perKm', { unit: distanceUnit() }) }}
             </button>
             <button
               type="button"
@@ -344,11 +346,10 @@ async function handleCreateMaint() {
 
           <!-- Distance parameter -->
           <div v-if="maintForm.amortization_mode === 'DISTANCE' || maintForm.amortization_mode === 'HYBRID'" class="pt-1">
-            <label for="maint-coverage-km" class="block text-xs text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.distanceCoveredKm') }}</label>
-            <input
+            <label for="maint-coverage-km" class="block text-xs text-slate-300 mb-1">{{ $t('expenses.maintenanceModal.distanceCoveredKm', { unit: distanceUnit() }) }}</label>
+            <DistanceInput
               id="maint-coverage-km"
-              v-model.number="maintForm.coverage_km"
-              type="number"
+              v-model="maintForm.coverage_km"
               min="1000"
               step="1000"
               placeholder="50000"

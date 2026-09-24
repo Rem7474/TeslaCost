@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -7,6 +8,7 @@ import { RefreshCw, CheckCircle2, AlertCircle, X, Link2 } from 'lucide-vue-next'
 import { emptyVehicleForm, vehicleFormFrom } from '@/utils/vehicles'
 import { CURRENCIES } from '@/utils/expenses'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit, formatDistanceValue } from '@/units'
 
 // Adds a vehicle, or edits \`editing\`. The TeslaMate connection can be tested with the values typed so far.
 const props = defineProps<{ editing: any | null }>()
@@ -101,11 +103,10 @@ async function testModalConnection() {
             <input id="vehicle-vin" v-model="form.vin" placeholder="5YJ3E1EB..." class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
           <div>
-            <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ form.powertrain === 'ICE' ? $t('vehicles.vehicleFormModal.currentMileage') : $t('vehicles.vehicleFormModal.initialOdometer') }}</label>
-            <input
+            <label for="vehicle-current-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ form.powertrain === 'ICE' ? $t('vehicles.vehicleFormModal.currentMileage', { unit: distanceUnit() }) : $t('vehicles.vehicleFormModal.initialOdometer', { unit: distanceUnit() }) }}</label>
+            <DistanceInput
               id="vehicle-current-odometer"
-              v-model.number="form.current_odometer"
-              type="number"
+              v-model="form.current_odometer"
               step="1"
               :disabled="!!form.teslamate_api_url"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white disabled:opacity-50 disabled:cursor-not-allowed"
@@ -118,8 +119,8 @@ async function testModalConnection() {
           <h4 class="text-xs font-bold text-sky-400 uppercase tracking-wider">{{ $t('vehicles.vehicleFormModal.estimatedEnergyOptional') }}</h4>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="vehicle-pre-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.consumptionKwh100km') }}</label>
-              <input id="vehicle-pre-kwh" v-model.number="form.estimated_kwh_100km" type="number" step="0.1" min="1" max="100" :placeholder="$t('common.example', { value: $n(16.5) })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="vehicle-pre-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.consumptionKwh100km', { unit: distanceUnit() }) }}</label>
+              <DistanceInput kind="per-distance" id="vehicle-pre-kwh" v-model="form.estimated_kwh_100km" step="0.1" min="1" max="100" :placeholder="$t('common.example', { value: $n(16.5) })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
               <label for="vehicle-pre-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.rateKwh', { currency: form.currency }) }}</label>
@@ -198,7 +199,7 @@ async function testModalConnection() {
                 <div v-if="modalTestResult.success">
                   <strong class="font-semibold">{{ $t('vehicles.vehicleFormModal.connectionSuccessful') }}</strong>
                   <p class="text-[11px] text-emerald-200/80 mt-0.5">
-                    {{ $t('vehicles.vehicleFormModal.testStatus', { state: modalTestResult.status?.state || $t('vehicles.vehicleCard.online'), odometer: Math.round(modalTestResult.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
+                    {{ $t('vehicles.vehicleFormModal.testStatus', { unit: distanceUnit(), state: modalTestResult.status?.state || $t('vehicles.vehicleCard.online'), odometer: formatDistanceValue(modalTestResult.status?.odometer || 0) }) }}
                   </p>
                 </div>
                 <div v-else>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
+import { formatDistance } from '@/units'
 import { computed } from 'vue'
 import { ChevronLeft, ChevronRight, X, Search, Calendar } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -191,7 +192,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
         <i18n-t v-if="periodMode === 'MONTH'" keypath="drives.drivesToolbar.inMonth" tag="span"><template #month><span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></template></i18n-t>
       </span>
       <span class="text-slate-600">•</span>
-      <span>{{ $t('drives.drivesToolbar.totalDistance') }} <strong class="text-white">{{ Math.round(pageDistance).toLocaleString(intlLocale()) }} km</strong></span>
+      <span>{{ $t('drives.drivesToolbar.totalDistance') }} <strong class="text-white">{{ formatDistance(pageDistance) }}</strong></span>
     </div>
     <div v-else-if="total > 0 && !loading" class="flex flex-wrap items-center gap-3 text-xs text-slate-400 px-1">
       <span class="font-medium text-slate-300">
@@ -199,7 +200,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
         <i18n-t v-if="periodMode === 'MONTH'" keypath="drives.drivesToolbar.inMonth" tag="span"><template #month><span class="text-rose-400 font-semibold">{{ formattedSelectedMonth }}</span></template></i18n-t>
       </span>
       <span class="text-slate-600">•</span>
-      <span>{{ $t('drives.drivesToolbar.pageDistance') }} <strong class="text-white">{{ Math.round(pageDistance).toLocaleString(intlLocale()) }} km</strong></span>
+      <span>{{ $t('drives.drivesToolbar.pageDistance') }} <strong class="text-white">{{ formatDistance(pageDistance) }}</strong></span>
       <span class="text-slate-600">•</span>
       <span>{{ $t('drives.drivesToolbar.pageEnergy') }} <strong class="text-white">{{ $t('drives.drivesToolbar.kwh', { pageEnergy: Math.round(pageEnergy).toLocaleString(intlLocale()) }) }}</strong></span>
       <span class="text-slate-600">•</span>

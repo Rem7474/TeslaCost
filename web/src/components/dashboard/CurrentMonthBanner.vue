@@ -5,6 +5,7 @@ import { ArrowRight, Calendar, PieChart } from 'lucide-vue-next'
 import { currentMonthStats as buildCurrentMonthStats } from '@/utils/dashboard'
 import { formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
+import { distanceUnit, formatDistanceValue, perDistance } from '@/units'
 
 // Highlight of the current month; opens its cost detail
 const props = defineProps<{ monthlyCosts: any[] | undefined }>()
@@ -24,9 +25,9 @@ const currentMonthStats = computed(() => buildCurrentMonthStats(props.monthlyCos
           <span class="text-xs font-semibold text-indigo-400 uppercase tracking-wider">{{ $t('dashboard.currentMonthBanner.activityThisMonth', { month: currentMonthStats.month }) }}</span>
         </div>
         <div class="text-base sm:text-lg font-bold text-white flex items-center gap-2 sm:gap-3 mt-0.5 flex-wrap">
-          <span>{{ $t('dashboard.currentMonthBanner.kmDriven', { distance_km: Math.round(currentMonthStats.distance_km).toLocaleString(intlLocale()) }) }}</span>
+          <span>{{ $t('dashboard.currentMonthBanner.kmDriven', { unit: distanceUnit(), distance_km: formatDistanceValue(currentMonthStats.distance_km) }) }}</span>
           <span class="text-slate-500">•</span>
-          <span class="text-emerald-400">{{ formatAmount(currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km : 0, vehicleStore.currency, 3) }}/km</span>
+          <span class="text-emerald-400">{{ formatAmount(perDistance(currentMonthStats.cost_per_km > 0 ? currentMonthStats.cost_per_km : 0), vehicleStore.currency, 3) }}/{{ distanceUnit() }}</span>
           <span class="text-slate-500">•</span>
           <span class="text-slate-300">{{ $t('dashboard.currentMonthBanner.spent', { value: formatAmount(currentMonthStats.total, vehicleStore.currency) }) }}</span>
           <template v-if="currentMonthStats.fixedVar && currentMonthStats.fixedVar.totalAmount > 0">

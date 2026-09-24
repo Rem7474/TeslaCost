@@ -1,4 +1,5 @@
 import { intlLocale, t } from '@/i18n'
+import { formatDistance } from '@/units'
 import { CloudSun, Snowflake, Sun } from 'lucide-vue-next'
 import { todayIso, toIsoDay } from '@/utils/dates'
 
@@ -45,11 +46,11 @@ export function getTireSelectLabel(item: any): string {
     : item.tire.current_position === 'DISPOSED'
     ? t('tires.scrapped')
     : t('tires.wheel', { position: item.tire.current_position })
-  const km = Math.round(item.total_distance_km ?? item.tire.accumulated_distance_km ?? 0)
+  const km = item.total_distance_km ?? item.tire.accumulated_distance_km ?? 0
   const sessionCount = item.sessions?.length ?? 0
   const sessionLabel = t('tires.sessionCount', sessionCount)
   const dot = item.tire.dot_code ? ` • DOT ${item.tire.dot_code}` : ''
-  return `${item.tire.brand} ${item.tire.model} (${item.tire.dimension}) — ${pos} • ${km.toLocaleString(intlLocale())} km • ${sessionLabel}${dot}`
+  return `${item.tire.brand} ${item.tire.model} (${item.tire.dimension}) — ${pos} • ${formatDistance(km)} • ${sessionLabel}${dot}`
 }
 
 /** Date and odometer of the most recent dismount of a tire, from the sessions carried by the tire list. */

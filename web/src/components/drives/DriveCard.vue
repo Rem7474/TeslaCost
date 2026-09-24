@@ -7,6 +7,7 @@ import QualifyActions from '@/components/drives/QualifyActions.vue'
 import { needsTollQualification } from '@/utils/drives'
 import { formatDayTime } from '@/utils/dates'
 import { formatAmount } from '@/currency'
+import { distanceUnit, formatDistance, perDistance } from '@/units'
 
 // One drive of the list: click opens its cost breakdown.
 defineProps<{ d: any; selected: boolean }>()
@@ -47,13 +48,13 @@ const formatDate = formatDayTime
         <div class="flex items-center gap-2 flex-wrap mb-1.5">
           <span class="text-xs font-semibold text-slate-400 shrink-0">{{ formatDate(d.start_time) }}</span>
           <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-800 text-slate-200 border border-slate-700/60 shrink-0">
-            {{ d.distance_km }} km
+            {{ formatDistance(d.distance_km, 1) }}
           </span>
           <span v-if="d.duration_min" class="text-xs text-slate-400 flex items-center gap-1 shrink-0">
             <Clock class="w-3 h-3" /> {{ $t('drives.driveCard.min', { duration_min: d.duration_min }) }}
           </span>
           <span v-if="d.consumption_kwh_100km" class="text-xs text-sky-400 font-mono shrink-0">
-            {{ $t('drives.driveCard.kwh100km', { consumption_kwh_100km: d.consumption_kwh_100km }) }}
+            {{ $t('drives.driveCard.kwh100km', { unit: distanceUnit(), consumption_kwh_100km: Math.round(perDistance(d.consumption_kwh_100km) * 10) / 10 }) }}
           </span>
           <!-- Clean tag pills -->
           <span
@@ -105,7 +106,7 @@ const formatDate = formatDayTime
           <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
             <span>{{ d.costs?.has_estimates ? '~' : '' }}{{ formatAmount(d.costs?.total_cost || 0, vehicleStore.currency) }}</span>
             <span class="text-[10px] font-normal text-emerald-400 font-mono">
-              {{ formatAmount(d.costs?.cost_per_km || 0, vehicleStore.currency, 3) }}/km
+              {{ formatAmount(perDistance(d.costs?.cost_per_km || 0), vehicleStore.currency, 3) }}/{{ distanceUnit() }}
             </span>
           </div>
         </div>

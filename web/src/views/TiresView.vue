@@ -33,6 +33,7 @@ import {
   type TireLogForm,
 } from '@/utils/tires'
 import { todayIso, toIsoDay } from '@/utils/dates'
+import { distanceUnit, formatDistanceValue } from '@/units'
 
 // The page owns the tire list, the selection and which modal is open; each modal owns its form and
 // its API call and reports back with "saved".
@@ -188,7 +189,7 @@ async function handleQuickRotate(mode: 'FRONT_BACK' | 'CROSS') {
   const label = mode === 'FRONT_BACK' ? t('tires.tiresView.rotateFrontBack') : t('tires.tiresView.rotateCross')
   const ok = await showConfirm({
     title: t('tires.tiresView.quickRotationTitle'),
-    message: t('tires.tiresView.quickRotationMessage', { label, odometer: odo.toLocaleString(intlLocale()) }),
+    message: t('tires.tiresView.quickRotationMessage', { unit: distanceUnit(), label, odometer: formatDistanceValue(odo) }),
     confirmText: t('tires.tiresView.rotate'),
     type: 'warning',
   })

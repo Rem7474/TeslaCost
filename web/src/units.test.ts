@@ -3,9 +3,15 @@ import {
   currentDistanceUnit,
   displayDistanceToKm,
   DEFAULT_DISTANCE_UNIT,
+  distanceUnit,
   formatDistance,
+  formatDistanceValue,
+  formatSpeed,
   kmToDisplayDistance,
+  perDistance,
+  perDistanceToPerKm,
   setDistanceUnit,
+  speedUnit,
 } from './units'
 
 describe('setDistanceUnit', () => {
@@ -55,5 +61,30 @@ describe('formatDistance', () => {
   it('converts, rounds and appends the unit in miles', () => {
     setDistanceUnit('mi')
     expect(formatDistance(160.9344)).toBe(`${(100).toLocaleString('fr-FR')} mi`)
+  })
+})
+
+describe('per-distance figures', () => {
+  beforeEach(() => setDistanceUnit(null))
+
+  it('keep their value in km', () => {
+    expect(perDistance(0.2)).toBe(0.2)
+    expect(perDistanceToPerKm(0.2)).toBe(0.2)
+    expect(distanceUnit()).toBe('km')
+    expect(speedUnit()).toBe('km/h')
+  })
+
+  it('grow by the mile ratio in miles and convert back', () => {
+    setDistanceUnit('mi')
+    expect(perDistance(0.1)).toBeCloseTo(0.1609344)
+    expect(perDistanceToPerKm(perDistance(0.37))).toBeCloseTo(0.37)
+    expect(distanceUnit()).toBe('mi')
+    expect(formatSpeed(100)).toBe('62 mph')
+  })
+
+  it('format a distance with decimals when asked', () => {
+    setDistanceUnit('mi')
+    expect(formatDistanceValue(16.09344, 1)).toBe((10).toLocaleString('fr-FR', { minimumFractionDigits: 1 }))
+    expect(formatDistance(1.609344, 1)).toBe(`${(1).toLocaleString('fr-FR', { minimumFractionDigits: 1 })} mi`)
   })
 })

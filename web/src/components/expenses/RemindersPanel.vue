@@ -4,6 +4,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import type { MaintenanceReminder, VehicleWebhook } from '@/services/api'
 import { Plus, Pencil, Trash2, AlertTriangle, Bell, Clock, CheckCircle2, Radio, Sparkles } from 'lucide-vue-next'
 import { reminderPresets, formatDate, type ReminderPreset } from '@/utils/expenses'
+import { distanceUnit, formatDistanceValue } from '@/units'
 
 defineProps<{
   reminders: MaintenanceReminder[]
@@ -169,7 +170,7 @@ const vehicleStore = useVehicleStore()
               class="px-2 py-0.5 rounded-lg"
               :class="r.remaining_km <= 0 ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : r.remaining_km <= r.lead_km ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'text-slate-300 bg-slate-800 border border-slate-700'"
             >
-              {{ r.remaining_km <= 0 ? $t('expenses.remindersPanel.kmOver', { km: Math.abs(Math.round(r.remaining_km)).toLocaleString(intlLocale()) }) : $t('expenses.remindersPanel.kmLeft', { km: Math.round(r.remaining_km).toLocaleString(intlLocale()) }) }}
+              {{ r.remaining_km <= 0 ? $t('expenses.remindersPanel.kmOver', { unit: distanceUnit(), km: formatDistanceValue(Math.abs(Math.round(r.remaining_km))) }) : $t('expenses.remindersPanel.kmLeft', { unit: distanceUnit(), km: formatDistanceValue(r.remaining_km) }) }}
             </span>
             <span
               v-if="r.remaining_days !== null && r.remaining_days !== undefined"
@@ -186,9 +187,9 @@ const vehicleStore = useVehicleStore()
           <div class="bg-slate-800/40 p-2.5 rounded-xl border border-slate-800">
             <span class="text-[11px] text-slate-400 block mb-0.5">{{ $t('expenses.remindersPanel.mileageDue') }}</span>
             <span v-if="r.interval_km" class="font-medium text-white">
-              {{ $t('expenses.remindersPanel.everyKm', { interval_km: r.interval_km.toLocaleString(intlLocale()) }) }}
+              {{ $t('expenses.remindersPanel.everyKm', { unit: distanceUnit(), interval_km: formatDistanceValue(r.interval_km) }) }}
               <span v-if="r.due_odometer" class="text-slate-400 block text-[11px]">
-                {{ $t('expenses.remindersPanel.dueAtKm', { due_odometer: Math.round(r.due_odometer).toLocaleString(intlLocale()) }) }}
+                {{ $t('expenses.remindersPanel.dueAtKm', { unit: distanceUnit(), due_odometer: formatDistanceValue(r.due_odometer) }) }}
               </span>
             </span>
             <span v-else class="text-slate-400 italic">{{ $t('expenses.remindersPanel.notApplicable') }}</span>
@@ -210,7 +211,7 @@ const vehicleStore = useVehicleStore()
             <span class="font-medium text-white">
               {{ r.last_service_date ? formatDate(r.last_service_date) : $t('expenses.remindersPanel.notEntered') }}
               <span v-if="r.last_service_odometer" class="text-slate-400 block text-[11px]">
-                {{ $t('common.atKm', { km: Math.round(r.last_service_odometer).toLocaleString(intlLocale()) }) }}
+                {{ $t('common.atKm', { unit: distanceUnit(), km: formatDistanceValue(r.last_service_odometer) }) }}
               </span>
             </span>
           </div>
@@ -223,7 +224,7 @@ const vehicleStore = useVehicleStore()
               {{ $t('expenses.remindersPanel.lastWebhookAlert', { last_notified_at: formatDate(r.last_notified_at) }) }}
             </span>
             <span v-else>
-              {{ $t('expenses.remindersPanel.earlyAlertKmDBefore', { lead_km: r.lead_km.toLocaleString(intlLocale()), lead_days: r.lead_days }) }}
+              {{ $t('expenses.remindersPanel.earlyAlertKmDBefore', { unit: distanceUnit(), lead_km: formatDistanceValue(r.lead_km), lead_days: r.lead_days }) }}
             </span>
           </div>
 
