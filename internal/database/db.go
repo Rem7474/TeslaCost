@@ -17,7 +17,13 @@ type DB struct {
 	Pool *pgxpool.Pool
 }
 
-// Connect initializes a connection pool to PostgreSQL with automatic retries on startup.
+// connectRetryInterval is the pause between two attempts to reach PostgreSQL.
+var connectRetryInterval = 3 * time.Second
+
+// Connect initializes a connection pool to PostgreSQL, retrying at a fixed interval until it succeeds or ctx is
+// done. Give ctx a deadline covering how long a deployment can tolerate waiting for PostgreSQL to become reachable:
+// after an unclean shutdown (e.g. a power outage), PostgreSQL's own crash recovery (WAL replay, fsync of the data
+// directory) can take minutes on a database of any real size, well past a container's first few restart attempts.
 func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 	config, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
@@ -29,38 +35,43 @@ func Connect(ctx context.Context, databaseURL string) (*DB, error) {
 	config.MaxConnLifetime = 1 * time.Hour
 	config.MaxConnIdleTime = 30 * time.Minute
 
-	var pool *pgxpool.Pool
+	start := time.Now()
 	var lastErr error
+	for attempt := 1; ; attempt++ {
+		pool, err := dialAndPing(ctx, config)
+		if err == nil {
+			slog.Info("connected successfully to PostgreSQL", "component", "database", "attempt", attempt, "waited", time.Since(start).Round(time.Second))
+			return &DB{Pool: pool}, nil
+		}
+		lastErr = err
 
-	// Retry loop (up to 30s) to allow PostgreSQL container initialization on first boot
-	maxAttempts := 15
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		// Logged on the first attempt and then roughly every 30s, so a long wait (crash recovery) does not flood
+		// the log with one line every connectRetryInterval.
+		if attempt == 1 || attempt%10 == 0 {
+			slog.Warn("waiting for PostgreSQL to be ready", "component", "database", "attempt", attempt, "waited", time.Since(start).Round(time.Second), "error", err)
+		}
+
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("context cancelled while connecting to database: %w", ctx.Err())
-		default:
-		}
-
-		pool, err = pgxpool.NewWithConfig(ctx, config)
-		if err == nil {
-			pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-			err = pool.Ping(pingCtx)
-			cancel()
-			if err == nil {
-				slog.Info("connected successfully to PostgreSQL", "component", "database")
-				return &DB{Pool: pool}, nil
-			}
-			pool.Close()
-		}
-
-		lastErr = err
-		if attempt < maxAttempts {
-			slog.Warn("waiting for PostgreSQL to be ready", "component", "database", "attempt", attempt, "max_attempts", maxAttempts, "error", err)
-			time.Sleep(2 * time.Second)
+			return nil, fmt.Errorf("database unreachable after %d attempt(s) over %s: %w", attempt, time.Since(start).Round(time.Second), lastErr)
+		case <-time.After(connectRetryInterval):
 		}
 	}
+}
 
-	return nil, fmt.Errorf("database connection failed after %d attempts: %w", maxAttempts, lastErr)
+// dialAndPing opens a pool and confirms PostgreSQL actually answers, closing the pool on any failure.
+func dialAndPing(ctx context.Context, config *pgxpool.Config) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.NewWithConfig(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if err := pool.Ping(pingCtx); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	return pool, nil
 }
 
 // migrationLockID is the advisory lock key serializing concurrent migration runs.

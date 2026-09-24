@@ -142,7 +142,7 @@
     "lessThan500KmDriven": "Moins de 500 km parcourus depuis la première prime : quote-part non calculée",
     "includedInTheLease": "Incluse dans la location",
     "actualPremiums": "Primes réelles",
-    "premiumsPaidOverTheLast": "Primes payées sur les 12 derniers mois divisées par les kilomètres parcourus sur la même période",
+    "premiumsPaidOverTheLast": "Quote-part d'assurance mensuelle basée sur les kilomètres réels du mois (ou moyenne de référence pour le mois en cours)",
     "insuranceShareFixedCost": "Quote-part assurance (coût fixe)",
     "includedInTheLease2": "inclus dans la location",
     "estimate": "estimation",

@@ -17,7 +17,8 @@
     "viewTheBreakdown": "Voir la répartition",
     "spent": "{value} € dépensés",
     "activityThisMonth": "Activité du mois ({month})",
-    "kmDriven": "{distance_km} km roulés"
+    "kmDriven": "{distance_km} km roulés",
+    "fixedVariableRatio": "{fixedPct} % fixes • {variablePct} % variables"
   },
   "dataQualityCard": {
     "estimateTheUntrackedEnergy": "Estimer l'énergie non suivie",
@@ -172,7 +173,12 @@
     "ofWhichKmSmoothed": "dont {smoothedKm} km lissés",
     "smoothingIncluded": "Lissage d'usage inclus",
     "cashAmounts": "Montants comptants",
-    "noExpense": "Aucune dépense"
+    "noExpense": "Aucune dépense",
+    "fixedVsVariable": "Structure des coûts : fixes vs variables",
+    "fixedCosts": "Coûts fixes",
+    "variableCosts": "Coûts variables",
+    "fixedCostsSub": "Assurance, financement, taxes & abonnements",
+    "variableCostsSub": "Énergie, péages, pneumatiques & entretien"
   },
   "monthlyCostChart": {
     "monthlyCostTrendByCategory": "Évolution mensuelle du coût par poste",
@@ -180,7 +186,8 @@
     "tires": "Pneus",
     "maintenance": "Entretien",
     "financing": "Financement",
-    "monthTotal": "Total mois : {total} €"
+    "monthTotal": "Total mois : {total} €",
+    "fixedVariableTooltip": "{fixedPct} % fixes • {variablePct} % variables"
   },
   "tagBreakdown": {
     "ofTollsAndParking": "{value} € de péages & parkings",

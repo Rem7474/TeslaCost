@@ -2,7 +2,7 @@
 import { t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
-import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
+import { computeMonthFixedVariable, filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
 import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
 import { currencySymbol, formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
@@ -86,7 +86,16 @@ function renderChart() {
             },
             footer: (items) => {
               const total = items.reduce((sum, item) => sum + (Number(item.raw) || 0), 0)
-              return t('dashboard.monthlyCostChart.monthTotal', { total: total.toFixed(2) })
+              const lines = [t('dashboard.monthlyCostChart.monthTotal', { total: total.toFixed(2) })]
+              const dataIndex = items[0]?.dataIndex
+              if (dataIndex !== undefined) {
+                const monthItem = filteredList[dataIndex]
+                const fv = computeMonthFixedVariable(monthItem, 'economic')
+                if (fv.totalAmount > 0) {
+                  lines.push(t('dashboard.monthlyCostChart.fixedVariableTooltip', { fixedPct: fv.fixedPct, variablePct: fv.variablePct }))
+                }
+              }
+              return lines
             },
           },
         },

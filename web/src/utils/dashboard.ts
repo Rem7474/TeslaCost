@@ -42,6 +42,7 @@ export function currentMonthStats(monthlyCosts: any[] | undefined, now = new Dat
   const current = list.find((m: any) => m.month === key) || list[list.length - 1]
   const prevIdx = list.indexOf(current) - 1
   const prev = prevIdx >= 0 ? list[prevIdx] : null
+  const fixedVar = computeMonthFixedVariable(current, 'economic')
 
   return {
     raw: current,
@@ -50,6 +51,7 @@ export function currentMonthStats(monthlyCosts: any[] | undefined, now = new Dat
     cost_per_km: current.cost_per_km || 0,
     total: current.total || 0,
     prevDistance: prev ? prev.distance_km : null,
+    fixedVar,
   }
 }
 
@@ -197,6 +199,49 @@ export function buildLeaseSummary(tco: any, now = new Date()) {
 
 export type MonthDetailMode = 'economic' | 'cash'
 
+export interface MonthFixedVariable {
+  fixedAmount: number
+  variableAmount: number
+  totalAmount: number
+  fixedPct: number
+  variablePct: number
+}
+
+/** Computes the fixed vs variable cost breakdown for a month item.
+ * Variable: energy, tolls, tires, maintenance.
+ * Fixed: insurance, financing, other (taxes, subscriptions, accessories).
+ */
+export function computeMonthFixedVariable(m: any, mode: MonthDetailMode = 'economic'): MonthFixedVariable {
+  if (!m) {
+    return { fixedAmount: 0, variableAmount: 0, totalAmount: 0, fixedPct: 0, variablePct: 0 }
+  }
+
+  const isEco = mode === 'economic'
+  const energy = Number(m.energy) || 0
+  const tolls = Number(m.tolls) || 0
+  const tires = isEco ? (Number(m.tires_amortized) || 0) : (Number(m.tires) || 0)
+  const maintenance = isEco ? (Number(m.maintenance_amortized) || 0) : (Number(m.maintenance) || 0)
+
+  const insurance = Number(m.insurance) || 0
+  const financing = isEco ? (Number(m.financing_amortized) || Number(m.financing) || 0) : (Number(m.financing) || 0)
+  const other = Number(m.other) || 0
+
+  const variableAmount = energy + tolls + tires + maintenance
+  const fixedAmount = insurance + financing + other
+  const totalAmount = variableAmount + fixedAmount
+
+  const fixedPct = totalAmount > 0 ? Math.round((fixedAmount / totalAmount) * 100) : 0
+  const variablePct = totalAmount > 0 ? 100 - fixedPct : 0
+
+  return {
+    fixedAmount,
+    variableAmount,
+    totalAmount,
+    fixedPct,
+    variablePct,
+  }
+}
+
 /** Cost items of one month, in the economic view (smoothed) or the cash view (what was paid), with their share and cost per km. */
 export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
   const dist = m.distance_km || 0
@@ -299,5 +344,6 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
     cashTotal,
     activeTotal,
     items: itemsWithStats,
+    fixedVar: computeMonthFixedVariable(m, mode),
   }
 }

@@ -42,7 +42,10 @@ services:
       test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/api/health"]
       interval: 30s
       timeout: 5s
-      start_period: 15s
+      # Covers a slow PostgreSQL crash recovery after an unclean shutdown, which the server itself waits out
+      # (up to dbConnectTimeout in cmd/server/main.go) before it starts listening: failures in this window don't
+      # count towards retries, so a legitimately slow (but recovering) startup isn't reported unhealthy.
+      start_period: 3m30s
       retries: 3
     logging:
       driver: json-file

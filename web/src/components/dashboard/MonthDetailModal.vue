@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info } from 'lucide-vue-next'
+import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info, SlidersHorizontal } from 'lucide-vue-next'
 import { buildMonthBreakdown, formatMonthName, type MonthDetailMode } from '@/utils/dashboard'
 import CostDonut from '@/components/costs/CostDonut.vue'
 import { formatAmount } from '@/currency'
@@ -195,6 +195,46 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           >
             {{ $t('dashboard.monthDetailModal.cashExpenses') }}
           </button>
+        </div>
+      </div>
+
+      <!-- Fixed vs Variable Cost Structure -->
+      <div v-if="selectedMonthBreakdown.fixedVar && selectedMonthBreakdown.fixedVar.totalAmount > 0" class="p-3.5 bg-slate-800/40 border border-slate-700/50 rounded-xl space-y-2">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
+          <span class="font-semibold text-white flex items-center gap-1.5">
+            <SlidersHorizontal class="w-3.5 h-3.5 text-indigo-400" />
+            <span>{{ $t('dashboard.monthDetailModal.fixedVsVariable') }}</span>
+          </span>
+          <div class="flex items-center gap-3 text-[11px] flex-wrap">
+            <span class="flex items-center gap-1.5 text-purple-300">
+              <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+              <span>{{ $t('dashboard.monthDetailModal.fixedCosts') }} : <strong class="text-white">{{ selectedMonthBreakdown.fixedVar.fixedPct }}%</strong> ({{ selectedMonthBreakdown.fixedVar.fixedAmount.toFixed(2) }} €)</span>
+            </span>
+            <span class="text-slate-600">•</span>
+            <span class="flex items-center gap-1.5 text-sky-300">
+              <span class="w-2 h-2 rounded-full bg-sky-500"></span>
+              <span>{{ $t('dashboard.monthDetailModal.variableCosts') }} : <strong class="text-white">{{ selectedMonthBreakdown.fixedVar.variablePct }}%</strong> ({{ selectedMonthBreakdown.fixedVar.variableAmount.toFixed(2) }} €)</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Bicolor bar -->
+        <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden flex" role="progressbar" :aria-label="$t('dashboard.monthDetailModal.fixedVsVariable')">
+          <div
+            class="bg-gradient-to-r from-purple-500 to-indigo-500 h-full transition-all duration-300"
+            :style="{ width: `${selectedMonthBreakdown.fixedVar.fixedPct}%` }"
+            :title="`${$t('dashboard.monthDetailModal.fixedCosts')}: ${selectedMonthBreakdown.fixedVar.fixedPct}%`"
+          ></div>
+          <div
+            class="bg-gradient-to-r from-sky-500 to-teal-400 h-full transition-all duration-300"
+            :style="{ width: `${selectedMonthBreakdown.fixedVar.variablePct}%` }"
+            :title="`${$t('dashboard.monthDetailModal.variableCosts')}: ${selectedMonthBreakdown.fixedVar.variablePct}%`"
+          ></div>
+        </div>
+
+        <div class="flex items-center justify-between text-[10px] text-slate-400 flex-wrap gap-1">
+          <span>{{ $t('dashboard.monthDetailModal.fixedCostsSub') }}</span>
+          <span>{{ $t('dashboard.monthDetailModal.variableCostsSub') }}</span>
         </div>
       </div>
 

@@ -1026,13 +1026,13 @@ func TestCarpoolElectricityRecentCharges5Days(t *testing.T) {
 	}
 }
 
-func TestCarpoolDailyInsuranceAllocation(t *testing.T) {
+func TestCarpoolMonthlyInsuranceAllocation(t *testing.T) {
 	db, repo := setupIntegrationDB(t, false)
 	ctx := context.Background()
 	v := mustVehicle(t, repo, "ins_test@example.com")
 	svc := NewCarpoolService(db.Pool, repo)
 
-	// 1. Annual insurance of 365.25 EUR (36525 cents) -> 1.00 EUR/day (100 cents/day)
+	// 1. Annual insurance of 365.25 EUR (36525 cents) -> Monthly insurance: 30.44 EUR (3044 cents)
 	day1 := time.Date(2026, 6, 15, 8, 0, 0, 0, time.UTC)
 	day2 := time.Date(2026, 6, 16, 9, 0, 0, 0, time.UTC)
 	interval := 12
@@ -1049,17 +1049,15 @@ func TestCarpoolDailyInsuranceAllocation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Day 1 drives:
+	// June 2026 drives (past completed month):
 	// d1: carpool leg 1 (40 km)
 	// d2: carpool leg 2 (60 km)
 	// d3: personal commute (100 km)
-	// Total on Day 1 = 200 km
+	// d4: next day drive (50 km)
+	// Total June km = 250 km
 	d1 := mustDrive(t, repo, v.ID, 201, day1, 10000, 40)
 	d2 := mustDrive(t, repo, v.ID, 202, day1.Add(4*time.Hour), 10040, 60)
 	mustDrive(t, repo, v.ID, 203, day1.Add(8*time.Hour), 10100, 100)
-
-	// Day 2 drive:
-	// d4: 50 km (only drive on Day 2 -> total Day 2 = 50 km)
 	d4 := mustDrive(t, repo, v.ID, 204, day2, 10200, 50)
 
 	// 2. Estimate Day 1 carpool with [d1, d2]
@@ -1067,37 +1065,38 @@ func TestCarpoolDailyInsuranceAllocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if est1.DailyInsuranceCost == nil || *est1.DailyInsuranceCost != 100 {
-		t.Fatalf("expected DailyInsuranceCost to be 100 cents (1 EUR), got %v", est1.DailyInsuranceCost)
+	if est1.MonthlyInsuranceCost == nil || *est1.MonthlyInsuranceCost != 3044 {
+		t.Fatalf("expected MonthlyInsuranceCost to be 3044 cents (~30.44 EUR), got %v", est1.MonthlyInsuranceCost)
 	}
 	if len(est1.Legs) != 2 {
 		t.Fatalf("expected 2 legs, got %d", len(est1.Legs))
 	}
-	// Leg 1: 40 km / 200 km * 1.00 EUR = 0.20 EUR = 20 cents
-	if est1.Legs[0].InsuranceCost != 20 {
-		t.Fatalf("expected Leg 1 insurance 20 cents, got %d", est1.Legs[0].InsuranceCost)
+	// Monthly insurance: 3044 cents allocated across 250 km
+	// Leg 1: 40 km / 250 km * 30.44 EUR = 4.87 EUR = 487 cents
+	if est1.Legs[0].InsuranceCost != 487 {
+		t.Fatalf("expected Leg 1 insurance 487 cents, got %d", est1.Legs[0].InsuranceCost)
 	}
-	// Leg 2: 60 km / 200 km * 1.00 EUR = 0.30 EUR = 30 cents
-	if est1.Legs[1].InsuranceCost != 30 {
-		t.Fatalf("expected Leg 2 insurance 30 cents, got %d", est1.Legs[1].InsuranceCost)
+	// Leg 2: 60 km / 250 km * 30.44 EUR = 7.31 EUR = 731 cents
+	if est1.Legs[1].InsuranceCost != 731 {
+		t.Fatalf("expected Leg 2 insurance 731 cents, got %d", est1.Legs[1].InsuranceCost)
 	}
-	// Total insurance for trip = 50 cents (50% of the day's insurance)
-	if est1.InsuranceCost != 50 {
-		t.Fatalf("expected Total trip insurance 50 cents, got %d", est1.InsuranceCost)
+	// Total insurance for trip = 487 + 731 = 1218 cents (12.18 EUR)
+	if est1.InsuranceCost != 1218 {
+		t.Fatalf("expected Total trip insurance 1218 cents, got %d", est1.InsuranceCost)
 	}
-	// Effective insurance rate: 50 cents / 100 km = 0.005 EUR/km
-	if est1.InsuranceRatePerKm != 0.005 {
-		t.Fatalf("expected InsuranceRatePerKm 0.005, got %f", est1.InsuranceRatePerKm)
+	// Effective insurance rate: 12.18 EUR / 100 km = 0.122 EUR/km
+	if est1.InsuranceRatePerKm != 0.122 {
+		t.Fatalf("expected InsuranceRatePerKm 0.122, got %f", est1.InsuranceRatePerKm)
 	}
 
-	// 3. Estimate Day 2 carpool with [d4] (only drive of the day)
+	// 3. Estimate Day 2 carpool with [d4] (50 km)
 	est2, err := svc.EstimateCosts(ctx, v.ID, nil, nil, []string{d4.ID}, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Leg 1: 50 km / 50 km * 1.00 EUR = 1.00 EUR = 100 cents (100% of the day)
-	if est2.Legs[0].InsuranceCost != 100 || est2.InsuranceCost != 100 {
-		t.Fatalf("expected Day 2 insurance 100 cents, got %d (leg: %d)", est2.InsuranceCost, est2.Legs[0].InsuranceCost)
+	// Leg 1: 50 km / 250 km * 30.44 EUR = 6.09 EUR = 609 cents
+	if est2.Legs[0].InsuranceCost != 609 || est2.InsuranceCost != 609 {
+		t.Fatalf("expected Day 2 insurance 609 cents, got %d (leg: %d)", est2.InsuranceCost, est2.Legs[0].InsuranceCost)
 	}
 
 	// 4. Multi-day carpool trip [d1 (day 1), d4 (day 2)]
@@ -1105,17 +1104,17 @@ func TestCarpoolDailyInsuranceAllocation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if estMulti.Legs[0].InsuranceCost != 20 {
-		t.Fatalf("expected multi-day leg 1 insurance 20 cents, got %d", estMulti.Legs[0].InsuranceCost)
+	if estMulti.Legs[0].InsuranceCost != 487 {
+		t.Fatalf("expected multi-day leg 1 insurance 487 cents, got %d", estMulti.Legs[0].InsuranceCost)
 	}
-	if estMulti.Legs[1].InsuranceCost != 100 {
-		t.Fatalf("expected multi-day leg 2 insurance 100 cents, got %d", estMulti.Legs[1].InsuranceCost)
+	if estMulti.Legs[1].InsuranceCost != 609 {
+		t.Fatalf("expected multi-day leg 2 insurance 609 cents, got %d", estMulti.Legs[1].InsuranceCost)
 	}
-	if estMulti.InsuranceCost != 120 {
-		t.Fatalf("expected multi-day total insurance 120 cents, got %d", estMulti.InsuranceCost)
+	if estMulti.InsuranceCost != 1096 {
+		t.Fatalf("expected multi-day total insurance 1096 cents, got %d", estMulti.InsuranceCost)
 	}
 
-	// 5. Create trip and verify RecalculateTrip after driving more personal km on Day 1
+	// 5. Create trip and verify RecalculateTrip after driving more personal km in June 2026
 	trip := &models.CarpoolTrip{
 		VehicleID: v.ID,
 		Title:     "Covoit Day 1",
@@ -1125,23 +1124,23 @@ func TestCarpoolDailyInsuranceAllocation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Personal drive of 200 km added on Day 1: total Day 1 is now 400 km
+	// Personal drive of 200 km added in June: total June km is now 450 km
 	mustDrive(t, repo, v.ID, 205, day1.Add(10*time.Hour), 10300, 200)
 
 	recalculated, err := svc.RecalculateTrip(ctx, v.ID, trip.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Leg 1: 40 km / 400 km * 1.00 EUR = 0.10 EUR = 10 cents
-	if recalculated.Legs[0].InsuranceCost != 10 {
-		t.Fatalf("expected recalculated leg 1 insurance 10 cents, got %d", recalculated.Legs[0].InsuranceCost)
+	// Leg 1: 40 km / 450 km * 30.44 EUR = 2.71 EUR = 271 cents
+	if recalculated.Legs[0].InsuranceCost != 271 {
+		t.Fatalf("expected recalculated leg 1 insurance 271 cents, got %d", recalculated.Legs[0].InsuranceCost)
 	}
-	// Leg 2: 60 km / 400 km * 1.00 EUR = 0.15 EUR = 15 cents
-	if recalculated.Legs[1].InsuranceCost != 15 {
-		t.Fatalf("expected recalculated leg 2 insurance 15 cents, got %d", recalculated.Legs[1].InsuranceCost)
+	// Leg 2: 60 km / 450 km * 30.44 EUR = 4.06 EUR = 406 cents
+	if recalculated.Legs[1].InsuranceCost != 406 {
+		t.Fatalf("expected recalculated leg 2 insurance 406 cents, got %d", recalculated.Legs[1].InsuranceCost)
 	}
-	if recalculated.InsuranceCost != 25 {
-		t.Fatalf("expected recalculated total insurance 25 cents, got %d", recalculated.InsuranceCost)
+	if recalculated.InsuranceCost != 677 {
+		t.Fatalf("expected recalculated total insurance 677 cents, got %d", recalculated.InsuranceCost)
 	}
 
 	// 6. Lease with insurance included
