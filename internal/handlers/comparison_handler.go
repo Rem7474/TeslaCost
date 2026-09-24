@@ -77,7 +77,7 @@ func validateComparisonRequest(req *SaveComparisonRequest) error {
 	if err := validateRange(ice.LPer100Km, 0.1, 50, apierror.New("comparison.ice_consumption", "Invalid combustion consumption (0.1 to 50 L/100 km)")); err != nil {
 		return err
 	}
-	if err := validateRange(ice.FuelPrice, 0, 10, apierror.New("comparison.fuel_price", "Invalid fuel price (0 to 10 €/L)")); err != nil {
+	if err := validateRange(ice.FuelPrice, 0, 10, apierror.New("comparison.fuel_price", "Invalid fuel price (0 to 10 per litre)")); err != nil {
 		return err
 	}
 	if err := validateAmounts(ice.PurchasePrice, ice.ResaleValue, ice.MaintenanceYearly, ice.InsuranceYearly, ice.TaxYearly); err != nil {
@@ -107,7 +107,7 @@ func validateComparisonRequest(req *SaveComparisonRequest) error {
 		if err := validateRange(req.EV.KwhPer100Km, 0.1, 100, apierror.New("comparison.ev_consumption", "Invalid electric consumption (0.1 to 100 kWh/100 km)")); err != nil {
 			return err
 		}
-		if err := validateRange(req.EV.EurPerKwh, 0, 5, apierror.New("comparison.electricity_price", "Invalid electricity price (0 to 5 €/kWh)")); err != nil {
+		if err := validateRange(req.EV.EurPerKwh, 0, 5, apierror.New("comparison.electricity_price", "Invalid electricity price (0 to 5 per kWh)")); err != nil {
 			return err
 		}
 		if err := validateAmounts(req.EV.PurchasePrice, req.EV.ResaleValue, req.EV.MaintenanceYearly, req.EV.InsuranceYearly, req.EV.TaxYearly); err != nil {

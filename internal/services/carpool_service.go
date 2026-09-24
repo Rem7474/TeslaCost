@@ -151,16 +151,16 @@ func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID st
 		ref = *refTime
 	}
 
-	// 1. Electricity rate (€/kWh): try the last 2 priced charges prior to or at ref
+	// 1. Electricity rate (vehicle currency/kWh): try the last 2 priced charges prior to or at ref
 	rows, err := s.pool.Query(ctx, `
 		SELECT date, kwh_added,
-		       COALESCE(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END, 0)
+		       COALESCE(CASE WHEN currency = (SELECT currency FROM vehicles WHERE id = $1) THEN cost ELSE cost * fx_rate END, 0)
 		FROM charge_logs
 		WHERE vehicle_id = $1
 		  AND deleted_upstream_at IS NULL
 		  AND cost IS NOT NULL
 		  AND cost > 0
-		  AND (currency = 'EUR' OR fx_rate IS NOT NULL)
+		  AND (currency = (SELECT currency FROM vehicles WHERE id = $1) OR fx_rate IS NOT NULL)
 		  AND date <= $2
 		ORDER BY date DESC
 		LIMIT 2;
@@ -203,10 +203,10 @@ func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID st
 		var pricedCost money.Cents
 		var pricedKwh float64
 		if err := s.pool.QueryRow(ctx, `
-			SELECT COALESCE(SUM(CASE WHEN currency = 'EUR' THEN cost ELSE cost * fx_rate END), 0),
+			SELECT COALESCE(SUM(CASE WHEN currency = (SELECT currency FROM vehicles WHERE id = $1) THEN cost ELSE cost * fx_rate END), 0),
 			       COALESCE(SUM(kwh_added), 0)
 			FROM charge_logs
-			WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND cost IS NOT NULL AND (currency = 'EUR' OR fx_rate IS NOT NULL);
+			WHERE vehicle_id = $1 AND deleted_upstream_at IS NULL AND cost IS NOT NULL AND (currency = (SELECT currency FROM vehicles WHERE id = $1) OR fx_rate IS NOT NULL);
 		`, vehicleID).Scan(&pricedCost, &pricedKwh); err != nil {
 			return nil, err
 		}
@@ -216,7 +216,7 @@ func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID st
 		}
 	}
 
-	// Tires rate (€/km): mounted tires purchase price over their remaining expected life
+	// Tires rate (vehicle currency/km): mounted tires purchase price over their remaining expected life
 	var mountedTireRate float64
 	var totalTiresCost money.Cents
 	if err := s.pool.QueryRow(ctx, `
@@ -282,7 +282,7 @@ func (s *CarpoolService) GetVehicleUnitRatesAt(ctx context.Context, vehicleID st
 		), 0)
 		FROM maintenance_expenses
 		WHERE vehicle_id = $1 AND category = 'INSURANCE'
-		  AND (currency = 'EUR' OR fx_rate IS NOT NULL)
+		  AND (currency = (SELECT currency FROM vehicles WHERE id = $1) OR fx_rate IS NOT NULL)
 		  AND date <= $2
 		  AND (recurrence_end_date IS NULL OR recurrence_end_date >= $2);
 	`, vehicleID, ref).Scan(&annualizedMaint)

@@ -38,7 +38,7 @@ type CreateDriveExpenseRequest struct {
 }
 
 // buildDriveExpense validates a drive expense payload.
-func buildDriveExpense(vehicleID string, req *CreateDriveExpenseRequest) (*models.DriveExpense, error) {
+func buildDriveExpense(vehicleID, baseCurrency string, req *CreateDriveExpenseRequest) (*models.DriveExpense, error) {
 	if err := validateAmount(req.Amount, false); err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func buildDriveExpense(vehicleID string, req *CreateDriveExpenseRequest) (*model
 	if err != nil {
 		return nil, err
 	}
-	curr, fxRate, err := normalizeCurrency(req.Currency, req.FxRate)
+	curr, fxRate, err := normalizeCurrency(req.Currency, baseCurrency, req.FxRate)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,8 @@ func expenseGroupName(notes *string, lang string) string {
 
 func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if v == nil {
 		return
 	}
 
@@ -91,7 +92,7 @@ func (h *ExpenseHandler) CreateDriveExpense(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	exp, err := buildDriveExpense(vehicleID, &req)
+	exp, err := buildDriveExpense(vehicleID, v.Currency, &req)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return
@@ -126,7 +127,8 @@ func (h *ExpenseHandler) ListDriveExpenses(w http.ResponseWriter, r *http.Reques
 func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
 	expenseID := chi.URLParam(r, "expenseId")
-	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if v == nil {
 		return
 	}
 
@@ -136,7 +138,7 @@ func (h *ExpenseHandler) UpdateDriveExpense(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	exp, err := buildDriveExpense(vehicleID, &req)
+	exp, err := buildDriveExpense(vehicleID, v.Currency, &req)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return

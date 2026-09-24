@@ -317,7 +317,7 @@ func (r *Repository) ListTripGroups(ctx context.Context, vehicleID string) ([]mo
 		             JOIN drives d ON d.id = tgd.drive_id AND d.deleted_upstream_at IS NULL
 		             WHERE tgd.trip_group_id = tg.id ORDER BY d.start_time),
 		       COALESCE(stats.km, 0), stats.first_start, stats.last_end,
-		       COALESCE((SELECT SUM(`+AmountEURExpr+`) FROM drive_expenses e WHERE e.trip_group_id = tg.id), 0),
+		       COALESCE((SELECT SUM(`+amountInVehicleCurrencyExpr("e.vehicle_id")+`) FROM drive_expenses e WHERE e.trip_group_id = tg.id), 0),
 		       (SELECT COUNT(*) FROM drive_expenses e WHERE e.trip_group_id = tg.id),
 		       (SELECT COUNT(*) FROM carpool_trips c WHERE c.trip_group_id = tg.id),
 		       COALESCE((SELECT SUM(a.allocated) FROM allocations a
@@ -410,8 +410,13 @@ func (r *Repository) DeleteTripGroup(ctx context.Context, vehicleID, tripGroupID
 // Drive Expenses (Tolls, Parking)
 // ============================================================================
 
-// AmountEURExpr converts an expense amount to EUR; NULL when a foreign amount has no conversion rate.
-const AmountEURExpr = `(CASE WHEN currency = 'EUR' THEN amount ELSE amount * fx_rate END)`
+// amountInVehicleCurrencyExpr converts an expense amount to its vehicle's own currency (NULL when a
+// foreign amount has no conversion rate). vehicleIDExpr is a trusted SQL fragment — a column
+// reference or bound parameter already scoped to the right vehicle in the surrounding query, never
+// user input — naming the vehicle to compare currencies against.
+func amountInVehicleCurrencyExpr(vehicleIDExpr string) string {
+	return fmt.Sprintf(`(CASE WHEN currency = (SELECT currency FROM vehicles WHERE id = %s) THEN amount ELSE amount * fx_rate END)`, vehicleIDExpr)
+}
 
 // SaveDriveExpense creates (exp.ID empty) or updates a drive expense in a single transaction.
 // When groupDriveIDs contains several drives, the expense is attached to a trip group: the group

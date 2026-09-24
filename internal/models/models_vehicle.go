@@ -39,6 +39,7 @@ type Vehicle struct {
 	TeslaMateBasicPassEnc    *string     `json:"-"`
 	EstimatedKwh100km        *float64    `json:"estimated_kwh_100km,omitempty"`
 	EstimatedPricePerKwh     *float64    `json:"estimated_price_per_kwh,omitempty"`
+	Currency                 string      `json:"currency"`                        // ISO 4217 code, fixed at creation: see CLAUDE.md
 	Powertrain               string      `json:"powertrain"`                      // PowertrainEV | PowertrainICE
 	TeslaMateGrafanaURL      *string     `json:"teslamate_grafana_url,omitempty"` // Grafana serving the TeslaMate dashboards, to link drives
 	CreatedAt                time.Time   `json:"created_at"`

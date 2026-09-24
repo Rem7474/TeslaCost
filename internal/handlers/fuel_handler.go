@@ -65,7 +65,7 @@ func buildFuelLog(vehicleID string, req *SaveFuelLogRequest) (*models.FuelLog, e
 		}
 	}
 	if price != nil {
-		if err := validateRange(*price, 0.001, 10, apierror.New("fuel.price_range", "Invalid price per litre (0 to 10 €/L)")); err != nil {
+		if err := validateRange(*price, 0.001, 10, apierror.New("fuel.price_range", "Invalid price per litre (0 to 10)")); err != nil {
 			return nil, err
 		}
 	}

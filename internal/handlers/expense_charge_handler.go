@@ -65,7 +65,7 @@ type SaveChargeRequest struct {
 	DocumentID *string      `json:"document_id"`
 }
 
-func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, error) {
+func buildCharge(vehicleID, baseCurrency string, req *SaveChargeRequest) (*models.ChargeLog, error) {
 	date, err := parseDate(req.Date)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 			return nil, err
 		}
 	}
-	curr, fxRate, err := normalizeCurrency(req.Currency, req.FxRate)
+	curr, fxRate, err := normalizeCurrency(req.Currency, baseCurrency, req.FxRate)
 	if err != nil {
 		return nil, err
 	}
@@ -110,13 +110,13 @@ func buildCharge(vehicleID string, req *SaveChargeRequest) (*models.ChargeLog, e
 
 // decodeCharge reads and validates a charge from the request body. It writes the error response and returns
 // false when the payload is invalid or carries no cost (costRequired is the error for that case).
-func decodeCharge(w http.ResponseWriter, r *http.Request, vehicleID string, costRequired *apierror.Error) (*models.ChargeLog, bool) {
+func decodeCharge(w http.ResponseWriter, r *http.Request, vehicleID, baseCurrency string, costRequired *apierror.Error) (*models.ChargeLog, bool) {
 	var req SaveChargeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
 		return nil, false
 	}
-	c, err := buildCharge(vehicleID, &req)
+	c, err := buildCharge(vehicleID, baseCurrency, &req)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, err)
 		return nil, false
@@ -130,11 +130,12 @@ func decodeCharge(w http.ResponseWriter, r *http.Request, vehicleID string, cost
 
 func (h *ExpenseHandler) CreateManualCharge(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
-	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if v == nil {
 		return
 	}
 
-	c, ok := decodeCharge(w, r, vehicleID, apierror.New("charge.manual_cost_required", "The cost of a manual charge is required"))
+	c, ok := decodeCharge(w, r, vehicleID, v.Currency, apierror.New("charge.manual_cost_required", "The cost of a manual charge is required"))
 	if !ok {
 		return
 	}
@@ -153,11 +154,12 @@ func (h *ExpenseHandler) CreateManualCharge(w http.ResponseWriter, r *http.Reque
 func (h *ExpenseHandler) UpdateCharge(w http.ResponseWriter, r *http.Request) {
 	vehicleID := chi.URLParam(r, "vehicleId")
 	chargeID := chi.URLParam(r, "chargeId")
-	if v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor); v == nil {
+	v := requireVehicleAccess(w, r, h.repo, vehicleID, models.RoleEditor)
+	if v == nil {
 		return
 	}
 
-	c, ok := decodeCharge(w, r, vehicleID, apierror.New("charge.cost_required", "The cost is required"))
+	c, ok := decodeCharge(w, r, vehicleID, v.Currency, apierror.New("charge.cost_required", "The cost is required"))
 	if !ok {
 		return
 	}

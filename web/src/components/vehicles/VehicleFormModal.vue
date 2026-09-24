@@ -7,6 +7,10 @@ import { RefreshCw, CheckCircle2, AlertCircle, X, Link2 } from 'lucide-vue-next'
 import { emptyVehicleForm, vehicleFormFrom } from '@/utils/vehicles'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
+// A curated shortlist; the backend accepts any ISO-4217-shaped code, so this is a convenience,
+// not the full list.
+const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'JPY']
+
 // Adds a vehicle, or edits \`editing\`. The TeslaMate connection can be tested with the values typed so far.
 const props = defineProps<{ editing: any | null }>()
 const emit = defineEmits<{ saved: [] }>()
@@ -86,6 +90,14 @@ async function testModalConnection() {
           </select>
         </div>
 
+        <div>
+          <label for="vehicle-currency" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.currency') }}</label>
+          <select id="vehicle-currency" v-model="form.currency" :disabled="isEditing" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white disabled:opacity-50">
+            <option v-for="c in CURRENCIES" :key="c" :value="c">{{ c }}</option>
+          </select>
+          <p v-if="isEditing" class="mt-1 text-[11px] text-slate-500">{{ $t('vehicles.vehicleFormModal.currencyFixed') }}</p>
+        </div>
+
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label for="vehicle-vin" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.vinOptional') }}</label>
@@ -113,7 +125,7 @@ async function testModalConnection() {
               <input id="vehicle-pre-kwh" v-model.number="form.estimated_kwh_100km" type="number" step="0.1" min="1" max="100" placeholder="ex: 16.5" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="vehicle-pre-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.rateKwh') }}</label>
+              <label for="vehicle-pre-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.vehicleFormModal.rateKwh', { currency: form.currency }) }}</label>
               <input id="vehicle-pre-rate" v-model.number="form.estimated_price_per_kwh" type="number" step="0.0001" min="0.01" max="5" placeholder="ex: 0.22" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>

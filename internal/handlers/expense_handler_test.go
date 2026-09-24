@@ -29,7 +29,7 @@ func TestBuildDriveExpenseWithDocumentID(t *testing.T) {
 		DocumentID: &docID,
 	}
 
-	exp, err := buildDriveExpense("veh-1", req)
+	exp, err := buildDriveExpense("veh-1", "EUR", req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -53,7 +53,7 @@ func TestBuildMaintenanceExpenseWithDocumentID(t *testing.T) {
 		DocumentID:       &docID,
 	}
 
-	m, err := buildMaintenanceExpense("veh-1", req)
+	m, err := buildMaintenanceExpense("veh-1", "EUR", req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestBuildChargeWithDocumentID(t *testing.T) {
 		DocumentID: &docID,
 	}
 
-	c, err := buildCharge("veh-1", req)
+	c, err := buildCharge("veh-1", "EUR", req)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
