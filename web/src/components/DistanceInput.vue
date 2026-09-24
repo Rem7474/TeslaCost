@@ -7,6 +7,8 @@ import { displayDistanceToKm, kmToDisplayDistance, perDistance, perDistanceToPer
 const model = defineModel<number | string | null | undefined>()
 const props = withDefaults(
   defineProps<{
+    // The id its <label for> points at
+    id?: string
     // 'distance': an odometer or a length; 'per-distance': a figure per km (kWh/100 km, a price per km)
     kind?: 'distance' | 'per-distance'
     // Decimals shown in the field
@@ -53,5 +55,5 @@ function onInput(event: Event) {
 </script>
 
 <template>
-  <input type="number" :value="shown" @input="onInput" />
+  <input :id="id" type="number" :value="shown" @input="onInput" />
 </template>
