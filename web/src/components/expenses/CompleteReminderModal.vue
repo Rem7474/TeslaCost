@@ -3,6 +3,7 @@ import { t } from '@/i18n'
 import { computed, ref, watch } from 'vue'
 import { api, type MaintenanceReminder } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
+import { useVehicleStore } from '@/stores/vehicle'
 import { X, CheckCircle2 } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { todayIso } from '@/utils/dates'
@@ -14,6 +15,7 @@ const emit = defineEmits<{ saved: [expenseLogged: boolean] }>()
 const open = defineModel<boolean>('open', { required: true })
 useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
+const vehicleStore = useVehicleStore()
 
 const completingReminder = computed(() => props.reminder)
 
@@ -51,7 +53,7 @@ async function handleCompleteReminder() {
       await api.createMaintenance(props.vehicleId, {
         category: reminder.category === 'TIRES' ? 'TIRES' : 'MAINTENANCE',
         amount: Number(completeForm.value.expense_amount),
-        currency: 'EUR',
+        currency: vehicleStore.activeVehicle?.currency || 'EUR',
         fx_rate: null,
         date: new Date(completeForm.value.service_date).toISOString(),
         description: completeForm.value.expense_description || reminder.title,

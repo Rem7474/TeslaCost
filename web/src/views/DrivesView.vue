@@ -128,7 +128,7 @@ const allPageSelected = computed(() => drives.value.length > 0 && drives.value.e
 const somePageSelected = computed(() => !allPageSelected.value && drives.value.some((d) => selectedDrives.value[d.id]))
 
 // Unified selection summary metrics (same as a Voyage)
-const selectedSummaryMetrics = computed(() => selectionSummary(selectedList.value))
+const selectedSummaryMetrics = computed(() => selectionSummary(selectedList.value, vehicleStore.activeVehicle?.currency || 'EUR'))
 
 function clearSelection() {
   selectedDrives.value = {}

@@ -5,11 +5,8 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { RefreshCw, CheckCircle2, AlertCircle, X, Link2 } from 'lucide-vue-next'
 import { emptyVehicleForm, vehicleFormFrom } from '@/utils/vehicles'
+import { CURRENCIES } from '@/utils/expenses'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
-
-// A curated shortlist; the backend accepts any ISO-4217-shaped code, so this is a convenience,
-// not the full list.
-const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'JPY']
 
 // Adds a vehicle, or edits \`editing\`. The TeslaMate connection can be tested with the values typed so far.
 const props = defineProps<{ editing: any | null }>()

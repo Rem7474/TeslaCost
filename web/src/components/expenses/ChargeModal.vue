@@ -28,12 +28,13 @@ const { isUploadingDocument, onSelectExistingDoc, onFileInputChange } = useDocum
 )
 
 const editingCharge = computed(() => props.editing)
+const baseCurrency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 
 const chargeForm = ref({
   date: toLocalDateTimeInput(new Date()),
   kwh_added: '',
   cost: '',
-  currency: 'EUR',
+  currency: baseCurrency.value,
   fx_rate: '',
   address: '',
   odometer: '',
@@ -50,7 +51,7 @@ watch(open, (isOpen) => {
       date: toLocalDateTimeInput(new Date()),
       kwh_added: '',
       cost: '',
-      currency: 'EUR',
+      currency: baseCurrency.value,
       fx_rate: '',
       address: '',
       odometer: props.currentOdometer ? String(Math.round(props.currentOdometer)) : '',
@@ -63,7 +64,7 @@ watch(open, (isOpen) => {
       date: toLocalDateTimeInput(new Date(c.date)),
       kwh_added: String(c.kwh_added),
       cost: c.cost !== null && c.cost !== undefined ? String(c.cost) : '',
-      currency: c.currency || 'EUR',
+      currency: c.currency || baseCurrency.value,
       fx_rate: c.fx_rate ? String(c.fx_rate) : '',
       address: c.address || '',
       odometer: c.odometer ? String(Math.round(c.odometer)) : '',
@@ -80,7 +81,7 @@ async function handleSaveCharge() {
     date: new Date(chargeForm.value.date).toISOString(),
     kwh_added: Number(chargeForm.value.kwh_added),
     cost: Number(chargeForm.value.cost),
-    ...currencyPayload(chargeForm.value),
+    ...currencyPayload(chargeForm.value, baseCurrency.value),
     address: chargeForm.value.address || null,
     odometer: chargeForm.value.odometer ? Number(chargeForm.value.odometer) : null,
     notes: chargeForm.value.notes || null,

@@ -2,6 +2,7 @@
 import { intlLocale, t } from '@/i18n'
 import { reactive, ref } from 'vue'
 import { api } from '@/services/api'
+import { useVehicleStore } from '@/stores/vehicle'
 import {
   buildPendingCostPayload,
   costFromTariff,
@@ -18,6 +19,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ completed: [result: { id: string; queued: boolean; message: string }] }>()
+const vehicleStore = useVehicleStore()
 
 const memory = loadMemory(props.vehicleId)
 const costs = reactive<Record<string, string>>({})
@@ -38,7 +40,7 @@ async function complete(c: PendingCharge) {
   errors[c.id] = ''
   let payload: ReturnType<typeof buildPendingCostPayload>
   try {
-    payload = buildPendingCostPayload(c, costs[c.id] ?? '')
+    payload = buildPendingCostPayload(c, costs[c.id] ?? '', vehicleStore.activeVehicle?.currency || 'EUR')
   } catch (err: any) {
     errors[c.id] = err.message
     return

@@ -83,7 +83,7 @@ describe('buildChargePayload', () => {
   const base = { date: '2026-09-19T10:30', kwh: '30', cost: '11,57', address: '', odometer: '42123', notes: '', documentId: null }
 
   it('builds the API payload with euros and empty optionals as null', () => {
-    const p = buildChargePayload(base)
+    const p = buildChargePayload(base, 'EUR')
     expect(p).toMatchObject({
       kwh_added: 30,
       cost: 11.57,
@@ -97,19 +97,23 @@ describe('buildChargePayload', () => {
     expect(new Date(p.date).getTime()).toBe(new Date('2026-09-19T10:30').getTime())
   })
 
+  it('carries the vehicle\'s own currency, never a hard-coded EUR', () => {
+    expect(buildChargePayload(base, 'USD').currency).toBe('USD')
+  })
+
   it('requires a positive energy', () => {
-    expect(() => buildChargePayload({ ...base, kwh: '' })).toThrow(/énergie/i)
-    expect(() => buildChargePayload({ ...base, kwh: '0' })).toThrow(/énergie/i)
+    expect(() => buildChargePayload({ ...base, kwh: '' }, 'EUR')).toThrow(/énergie/i)
+    expect(() => buildChargePayload({ ...base, kwh: '0' }, 'EUR')).toThrow(/énergie/i)
   })
 
   it('requires a cost but accepts 0 for a free charge', () => {
-    expect(() => buildChargePayload({ ...base, cost: '' })).toThrow(/coût/i)
-    expect(() => buildChargePayload({ ...base, cost: '-1' })).toThrow(/coût/i)
-    expect(buildChargePayload({ ...base, cost: '0' }).cost).toBe(0)
+    expect(() => buildChargePayload({ ...base, cost: '' }, 'EUR')).toThrow(/coût/i)
+    expect(() => buildChargePayload({ ...base, cost: '-1' }, 'EUR')).toThrow(/coût/i)
+    expect(buildChargePayload({ ...base, cost: '0' }, 'EUR').cost).toBe(0)
   })
 
   it('drops a non positive odometer and trims text fields', () => {
-    const p = buildChargePayload({ ...base, odometer: '0', address: '  Borne A ', notes: ' ', documentId: 'doc-1' })
+    const p = buildChargePayload({ ...base, odometer: '0', address: '  Borne A ', notes: ' ', documentId: 'doc-1' }, 'EUR')
     expect(p.odometer).toBeNull()
     expect(p.address).toBe('Borne A')
     expect(p.notes).toBeNull()
@@ -145,12 +149,12 @@ describe('buildFuelPayload', () => {
 
 describe('buildExpensePayload', () => {
   it('builds a toll payload', () => {
-    const p = buildExpensePayload({ type: 'TOLL', date: '2026-09-19T10:30', amount: '8,4', notes: '', documentId: null })
+    const p = buildExpensePayload({ type: 'TOLL', date: '2026-09-19T10:30', amount: '8,4', notes: '', documentId: null }, 'EUR')
     expect(p).toMatchObject({ type: 'TOLL', amount: 8.4, currency: 'EUR', fx_rate: null, notes: '', document_id: null })
   })
 
   it('requires a positive amount', () => {
-    expect(() => buildExpensePayload({ type: 'PARKING', date: '2026-09-19T10:30', amount: '0', notes: '', documentId: null })).toThrow(/montant/i)
+    expect(() => buildExpensePayload({ type: 'PARKING', date: '2026-09-19T10:30', amount: '0', notes: '', documentId: null }, 'EUR')).toThrow(/montant/i)
   })
 })
 
@@ -166,7 +170,7 @@ describe('buildPendingCostPayload', () => {
   }
 
   it('sends back the existing notes, attachment and TeslaMate values so the update wipes nothing', () => {
-    expect(buildPendingCostPayload(charge, '12,5')).toEqual({
+    expect(buildPendingCostPayload(charge, '12,5', 'EUR')).toEqual({
       date: '2026-09-18T18:30:00Z',
       kwh_added: 32.4,
       cost: 12.5,
@@ -180,12 +184,12 @@ describe('buildPendingCostPayload', () => {
   })
 
   it('normalises missing optionals to null', () => {
-    const p = buildPendingCostPayload({ id: 'c2', date: '2026-09-18T18:30:00Z', kwh_added: 10 }, '0')
+    const p = buildPendingCostPayload({ id: 'c2', date: '2026-09-18T18:30:00Z', kwh_added: 10 }, '0', 'EUR')
     expect(p).toMatchObject({ cost: 0, address: null, odometer: null, notes: null, document_id: null })
   })
 
   it('rejects a missing cost', () => {
-    expect(() => buildPendingCostPayload(charge, '')).toThrow(/coût/i)
+    expect(() => buildPendingCostPayload(charge, '', 'EUR')).toThrow(/coût/i)
   })
 })
 

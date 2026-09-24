@@ -3,6 +3,7 @@ import { t } from '@/i18n'
 import { ref } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
+import { useVehicleStore } from '@/stores/vehicle'
 import { Layers, X } from 'lucide-vue-next'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
@@ -12,6 +13,7 @@ const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
 useEscapeToClose(open, () => (open.value = false))
 const { showAlert } = useConfirm()
+const vehicleStore = useVehicleStore()
 
 const groupName = ref('')
 const tollAmount = ref<number | ''>('')
@@ -32,7 +34,7 @@ async function handleCreateGroupAndExpense() {
         drive_ids: props.selectedDriveIds,
         type: expenseType.value,
         amount: Number(tollAmount.value),
-        currency: 'EUR',
+        currency: vehicleStore.activeVehicle?.currency || 'EUR',
         date: new Date(firstStart || Date.now()).toISOString(),
         notes: groupName.value,
       })

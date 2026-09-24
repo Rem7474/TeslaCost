@@ -220,7 +220,7 @@ async function handleAddTollToDrive() {
       ...target,
       type: inlineTollType.value,
       amount: amountNum,
-      currency: 'EUR',
+      currency: vehicleCurrency.value,
       date: selectedCostDrive.value.start_time,
       notes: inlineTollNotes.value || t('drives.driveCostModal.addedFromDrive'),
     })
@@ -421,7 +421,7 @@ async function handleDeleteExpense(exp: any) {
           </div>
           <div class="flex items-center gap-3 shrink-0">
             <span class="text-[11px] font-bold text-rose-400">{{ Math.round(leg.distance_km) }} km</span>
-            <span class="text-xs font-mono font-bold text-white">{{ (leg.costs?.total_cost || 0).toFixed(2) }} €</span>
+            <span class="text-xs font-mono font-bold text-white">{{ formatAmount(leg.costs?.total_cost || 0, vehicleCurrency) }}</span>
             <ChevronRight class="w-4 h-4 text-slate-500" />
           </div>
         </button>
@@ -447,7 +447,7 @@ async function handleDeleteExpense(exp: any) {
             </div>
           </div>
           <div class="text-right shrink-0">
-            <div class="text-xs font-mono font-bold text-emerald-400">+{{ Number(c.total_revenue || 0).toFixed(2) }} €</div>
+            <div class="text-xs font-mono font-bold text-emerald-400">+{{ formatAmount(Number(c.total_revenue || 0), vehicleCurrency) }}</div>
             <div class="text-[10px] text-slate-400">{{ $t('drives.driveCostModal.carpoolNetCost', { amount: Number(c.net_cost || 0).toFixed(2) }) }}</div>
           </div>
         </button>
@@ -462,6 +462,7 @@ async function handleDeleteExpense(exp: any) {
             :items="breakdown.items"
             :empty-label="$t('drives.driveCostModal.noCost')"
             :chart-label="$t('drives.driveCostModal.breakdownAria')"
+            :currency="vehicleCurrency"
           />
         </div>
       </div>
@@ -569,8 +570,8 @@ async function handleDeleteExpense(exp: any) {
             </div>
             <div class="flex items-center gap-2">
               <div class="text-right">
-                <div class="text-sm font-bold text-amber-400 font-mono">{{ (selectedCostDrive.costs?.tolls_cost || 0).toFixed(2) }} €</div>
-                <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ breakdown.byKey.tolls.costPerKm.toFixed(3) }} €/km</span></div>
+                <div class="text-sm font-bold text-amber-400 font-mono">{{ formatAmount(selectedCostDrive.costs?.tolls_cost || 0, vehicleCurrency) }}</div>
+                <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ formatAmount(breakdown.byKey.tolls.costPerKm, vehicleCurrency, 3) }}/km</span></div>
               </div>
               <button
                 v-if="canDetectTolls"
@@ -605,7 +606,7 @@ async function handleDeleteExpense(exp: any) {
                   <span v-if="exp.trip_group_id && !selectedCostDrive.is_trip_group" class="text-indigo-400"> {{ $t('drives.driveCostModal.shareOfATripCosting', { amount: exp.amount.toFixed(2), currency: exp.currency }) }}</span>
                 </span>
                 <span class="flex items-center gap-1.5">
-                  <span class="font-mono text-amber-400">{{ (exp.allocated_amount ?? exp.amount).toFixed(2) }} €</span>
+                  <span class="font-mono text-amber-400">{{ formatAmount(exp.allocated_amount ?? exp.amount, vehicleCurrency) }}</span>
                   <button v-if="!selectedCostDrive.is_suggestion" @click="startEditExpense(exp)" class="p-0.5 text-slate-500 hover:text-amber-400" :title="$t('drives.driveCostModal.editThisCost')">
                     <Pencil class="w-3 h-3" />
                   </button>
@@ -658,7 +659,7 @@ async function handleDeleteExpense(exp: any) {
                 </button>
                 <span v-if="tollDetectionEstimatedTotal != null" class="flex items-center gap-2 shrink-0">
                   <span class="text-slate-400">{{ $t('drives.driveCostModal.totalEstimate') }}</span>
-                  <span class="text-amber-400 font-mono font-semibold" :title="$t('drives.driveCostModal.class1LightVehicle')">{{ tollDetectionEstimatedTotal.toFixed(2) }} €</span>
+                  <span class="text-amber-400 font-mono font-semibold" :title="$t('drives.driveCostModal.class1LightVehicle')">{{ formatAmount(tollDetectionEstimatedTotal, 'EUR') }}</span>
                   <button
                     v-if="canApplyTollEstimate && !estimateMatchesExistingToll"
                     type="button"
@@ -677,7 +678,7 @@ async function handleDeleteExpense(exp: any) {
                   </span>
                   <span v-else-if="seg.type === 'close'">{{ $t('drives.driveCostModal.entryDetectedExitNotIdentified', { entry: seg.entry }) }}</span>
                   <span v-else>{{ $t('drives.driveCostModal.tollGate', { entry: seg.entry }) }}</span>
-                  <span v-if="seg.estimated_price != null" class="text-amber-400 font-mono shrink-0">{{ seg.estimated_price.toFixed(2) }} €</span>
+                  <span v-if="seg.estimated_price != null" class="text-amber-400 font-mono shrink-0">{{ formatAmount(seg.estimated_price, 'EUR') }}</span>
                 </div>
               </div>
             </template>
@@ -736,13 +737,13 @@ async function handleDeleteExpense(exp: any) {
           <div>
             <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.totalCostPrice') }}</span>
             <div class="text-2xl font-black text-white">
-              {{ (selectedCostDrive.costs?.total_cost || 0).toFixed(2) }} €
+              {{ formatAmount(selectedCostDrive.costs?.total_cost || 0, vehicleCurrency) }}
             </div>
           </div>
           <div class="text-right">
             <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
             <div class="text-lg font-extrabold text-emerald-400 font-mono">
-              {{ (selectedCostDrive.costs?.cost_per_km || 0).toFixed(3) }} €<span class="text-xs font-normal text-slate-400">/km</span>
+              {{ formatAmount(selectedCostDrive.costs?.cost_per_km || 0, vehicleCurrency, 3) }}<span class="text-xs font-normal text-slate-400">/km</span>
             </div>
           </div>
         </div>

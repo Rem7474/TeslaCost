@@ -108,7 +108,12 @@ const stops = computed(() => stopNames(props.trip?.legs || []))
           <div class="md:col-span-2 bg-slate-800/30 border border-slate-800 rounded-xl p-4 flex flex-col items-center justify-center">
             <h4 class="text-xs font-bold text-white mb-2 self-start">{{ $t('drives.driveCostModal.breakdownTitle') }}</h4>
             <div class="w-full h-56 sm:h-64 relative">
-              <CostDonut :items="breakdown.items" :empty-label="$t('drives.driveCostModal.noCost')" :chart-label="$t('drives.driveCostModal.breakdownAria')" />
+              <CostDonut
+                :items="breakdown.items"
+                :empty-label="$t('drives.driveCostModal.noCost')"
+                :chart-label="$t('drives.driveCostModal.breakdownAria')"
+                :currency="vehicleStore.activeVehicle?.currency || 'EUR'"
+              />
             </div>
           </div>
 

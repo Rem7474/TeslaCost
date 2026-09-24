@@ -4,6 +4,8 @@ import { computed } from 'vue'
 import { ChevronLeft, ChevronRight, X, Search, Calendar } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { currentYearMonth, formatMonthLabel, shiftMonth } from '@/utils/drives'
+import { formatAmount } from '@/currency'
+import { useVehicleStore } from '@/stores/vehicle'
 
 type PeriodMode = 'ALL' | 'MONTH' | 'CUSTOM'
 
@@ -12,6 +14,7 @@ type PeriodMode = 'ALL' | 'MONTH' | 'CUSTOM'
 // Every change of a filter is reported with change so the page reloads from the first page.
 const props = withDefaults(defineProps<{ total: number; loading: boolean; drives: any[]; mode?: 'DRIVES' | 'TRIPS' }>(), { mode: 'DRIVES' })
 const emit = defineEmits<{ change: [] }>()
+const vehicleStore = useVehicleStore()
 const periodMode = defineModel<PeriodMode>('periodMode', { required: true })
 const selectedMonth = defineModel<string>('selectedMonth', { required: true })
 const customFrom = defineModel<string>('customFrom', { required: true })
@@ -200,7 +203,7 @@ const pageCost = computed(() => props.drives.reduce((acc, d) => acc + (d.costs?.
       <span class="text-slate-600">•</span>
       <span>{{ $t('drives.drivesToolbar.pageEnergy') }} <strong class="text-white">{{ $t('drives.drivesToolbar.kwh', { pageEnergy: Math.round(pageEnergy).toLocaleString(intlLocale()) }) }}</strong></span>
       <span class="text-slate-600">•</span>
-      <span>{{ $t('drives.drivesToolbar.pageCost') }} <strong class="text-white">{{ pageCost.toFixed(2) }} €</strong></span>
+      <span>{{ $t('drives.drivesToolbar.pageCost') }} <strong class="text-white">{{ formatAmount(pageCost, vehicleStore.activeVehicle?.currency || 'EUR') }}</strong></span>
     </div>
   </div>
 </template>

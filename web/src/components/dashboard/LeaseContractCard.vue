@@ -3,9 +3,13 @@ import { intlLocale } from '@/i18n'
 import { computed } from 'vue'
 import { Coins, Gauge, Calendar, FileText, CheckCircle2 } from 'lucide-vue-next'
 import { buildLeaseSummary } from '@/utils/dashboard'
+import { formatAmount } from '@/currency'
+import { useVehicleStore } from '@/stores/vehicle'
 
 // Follow-up of a LOA / LLD contract: duration, mileage against the allowance, costs and included services
 const props = defineProps<{ tco: any | null }>()
+const vehicleStore = useVehicleStore()
+const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 const leaseContract = computed(() => buildLeaseSummary(props.tco))
 </script>
 
@@ -32,7 +36,7 @@ const leaseContract = computed(() => buildLeaseSummary(props.tco))
       <!-- Monthly rent / downpayment -->
       <div v-if="leaseContract.monthlyRent" class="self-start sm:self-auto text-left sm:text-right">
         <span class="text-base sm:text-lg font-extrabold text-white">
-          {{ Number(leaseContract.monthlyRent).toLocaleString(intlLocale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }} €
+          {{ formatAmount(Number(leaseContract.monthlyRent), currency) }}
         </span>
         <span class="text-xs text-slate-400 font-normal"> {{ $t('dashboard.leaseContractCard.month') }}</span>
         <span v-if="leaseContract.downPayment && leaseContract.downPayment > 0" class="block text-[11px] text-slate-400">
@@ -133,7 +137,7 @@ const leaseContract = computed(() => buildLeaseSummary(props.tco))
           class="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 font-medium border border-slate-700/60 flex items-center gap-1.5"
         >
           <Coins class="w-3.5 h-3.5 text-amber-400" />
-          {{ $t('dashboard.leaseContractCard.finalPurchaseOption') }} <strong class="text-white">{{ Number(leaseContract.purchaseOptionPrice).toLocaleString(intlLocale(), { minimumFractionDigits: 0, maximumFractionDigits: 0 }) }} €</strong>
+          {{ $t('dashboard.leaseContractCard.finalPurchaseOption') }} <strong class="text-white">{{ formatAmount(Number(leaseContract.purchaseOptionPrice), currency, 0) }}</strong>
         </span>
 
         <!-- Included Services Badges -->

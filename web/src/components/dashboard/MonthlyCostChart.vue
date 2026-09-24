@@ -4,12 +4,16 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { computeMonthFixedVariable, filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
 import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
+import { currencySymbol, formatAmount } from '@/currency'
+import { useVehicleStore } from '@/stores/vehicle'
 
 Chart.register(...registerables)
 
 // Stacked monthly costs per item; a click on a month opens its detail
 const props = defineProps<{ monthlyCosts: any[] | null }>()
 const emit = defineEmits<{ 'open-month': [month: any] }>()
+const vehicleStore = useVehicleStore()
+const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 
 const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
 const monthlyChartRange = ref<MonthlyRangeKey>('1Y')
@@ -35,13 +39,13 @@ function renderChart() {
     data: {
       labels: filteredLabels,
       datasets: [
-        { label: `${t('dashboard.donut.energy')} (€)`, data: energyData, backgroundColor: '#38bdf8', borderRadius: 4 },
-        { label: `${t('dashboard.donut.tolls')} (€)`, data: tollsData, backgroundColor: '#f59e0b', borderRadius: 4 },
-        { label: `${t('dashboard.monthlyCostChart.tires')} (€)`, data: tiresData, backgroundColor: '#10b981', borderRadius: 4 },
-        { label: `${t('dashboard.monthlyCostChart.maintenance')} (€)`, data: maintData, backgroundColor: '#ec4899', borderRadius: 4 },
-        { label: `${t('dashboard.donut.insurance')} (€)`, data: insuranceData, backgroundColor: '#a855f7', borderRadius: 4 },
-        { label: `${t('dashboard.monthlyCostChart.financing')} (€)`, data: financingData, backgroundColor: '#f97316', borderRadius: 4 },
-        { label: `${t('dashboard.donut.other')} (€)`, data: otherData, backgroundColor: '#64748b', borderRadius: 4 },
+        { label: `${t('dashboard.donut.energy')} (${currencySymbol(currency.value)})`, data: energyData, backgroundColor: '#38bdf8', borderRadius: 4 },
+        { label: `${t('dashboard.donut.tolls')} (${currencySymbol(currency.value)})`, data: tollsData, backgroundColor: '#f59e0b', borderRadius: 4 },
+        { label: `${t('dashboard.monthlyCostChart.tires')} (${currencySymbol(currency.value)})`, data: tiresData, backgroundColor: '#10b981', borderRadius: 4 },
+        { label: `${t('dashboard.monthlyCostChart.maintenance')} (${currencySymbol(currency.value)})`, data: maintData, backgroundColor: '#ec4899', borderRadius: 4 },
+        { label: `${t('dashboard.donut.insurance')} (${currencySymbol(currency.value)})`, data: insuranceData, backgroundColor: '#a855f7', borderRadius: 4 },
+        { label: `${t('dashboard.monthlyCostChart.financing')} (${currencySymbol(currency.value)})`, data: financingData, backgroundColor: '#f97316', borderRadius: 4 },
+        { label: `${t('dashboard.donut.other')} (${currencySymbol(currency.value)})`, data: otherData, backgroundColor: '#64748b', borderRadius: 4 },
       ],
     },
     options: {
@@ -78,8 +82,7 @@ function renderChart() {
         tooltip: {
           callbacks: {
             label: (context) => {
-              const val = Number(context.raw || 0).toFixed(2)
-              return `${context.dataset.label} : ${val} €`
+              return `${context.dataset.label} : ${formatAmount(Number(context.raw || 0), currency.value)}`
             },
             footer: (items) => {
               const total = items.reduce((sum, item) => sum + (Number(item.raw) || 0), 0)
@@ -102,7 +105,7 @@ function renderChart() {
         y: {
           stacked: true,
           grid: { color: '#1e293b' },
-          ticks: { color: '#64748b', callback: (v) => `${v} €` },
+          ticks: { color: '#64748b', callback: (v) => formatAmount(Number(v), currency.value) },
         },
       },
     },

@@ -1,5 +1,8 @@
 import { intlLocale, t } from '@/i18n'
-export const CURRENCIES = ['EUR', 'CHF', 'GBP', 'USD']
+
+// A curated shortlist for the currency pickers (a vehicle's own currency, or a manual expense's
+// foreign currency); the backend accepts any ISO-4217-shaped code, so this is a convenience.
+export const CURRENCIES = ['EUR', 'USD', 'GBP', 'CHF', 'CAD', 'AUD', 'JPY']
 
 /** Label of an expense category in the current language. */
 export const categoryLabel = (category: string): string =>
@@ -73,9 +76,9 @@ export function toLocalDateTimeInput(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-/** Currency fields of an expense payload: a foreign currency carries its rate to EUR. */
-export function currencyPayload(form: { currency: string; fx_rate: string }) {
-  if (form.currency === 'EUR') return { currency: 'EUR', fx_rate: null }
+/** Currency fields of an expense payload: a foreign currency (anything but the vehicle's own) carries its rate to it. */
+export function currencyPayload(form: { currency: string; fx_rate: string }, baseCurrency: string) {
+  if (form.currency === baseCurrency) return { currency: baseCurrency, fx_rate: null }
   return { currency: form.currency, fx_rate: form.fx_rate ? Number(form.fx_rate) : null }
 }
 

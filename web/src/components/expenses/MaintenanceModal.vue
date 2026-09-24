@@ -4,6 +4,8 @@ import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { useDocumentAttach } from '@/composables/useDocumentAttach'
+import { useVehicleStore } from '@/stores/vehicle'
+import { formatAmount } from '@/currency'
 import { Wrench, X, Paperclip, FileText, Eye } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import AppDropzone from '@/components/AppDropzone.vue'
@@ -33,6 +35,8 @@ const { isUploadingDocument, onSelectExistingDoc, onDropzoneDirectUpload } = use
 )
 
 const editingMaintId = computed(() => props.editing?.id ?? null)
+const vehicleStore = useVehicleStore()
+const baseCurrency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
 
 const insuranceAnnualPremium = ref<number | ''>('')
 
@@ -54,7 +58,7 @@ function applyMonthlyPremium() {
 const maintForm = ref({
   category: 'MAINTENANCE',
   amount: '',
-  currency: 'EUR',
+  currency: baseCurrency.value,
   fx_rate: '',
   date: todayIso(),
   odometer: 0,
@@ -107,7 +111,7 @@ watch(open, (isOpen) => {
     maintForm.value = {
       category: 'MAINTENANCE',
       amount: '',
-      currency: 'EUR',
+      currency: baseCurrency.value,
       fx_rate: '',
       date: todayIso(),
       odometer: 0,
@@ -128,7 +132,7 @@ watch(open, (isOpen) => {
     maintForm.value = {
       category: m.category || 'MAINTENANCE',
       amount: String(m.amount),
-      currency: m.currency || 'EUR',
+      currency: m.currency || baseCurrency.value,
       fx_rate: m.fx_rate ? String(m.fx_rate) : '',
       date: new Date(m.date).toISOString().substring(0, 10),
       odometer: m.odometer ? Math.round(m.odometer) : 0,
@@ -162,7 +166,7 @@ async function handleCreateMaint() {
 
     const payload = {
       ...maintForm.value,
-      ...currencyPayload(maintForm.value),
+      ...currencyPayload(maintForm.value, baseCurrency.value),
       amount: Number(maintForm.value.amount),
       odometer: maintForm.value.odometer ? Number(maintForm.value.odometer) : null,
       coverage_km:
@@ -378,7 +382,7 @@ async function handleCreateMaint() {
               <label for="close-candidate" class="text-xs text-slate-300 leading-snug cursor-pointer">
                 {{ $t('expenses.maintenanceModal.closeThePreviousServiceIn') }}
                 <span class="block text-[11px] text-amber-400 font-normal">
-                  {{ closeCandidateMaintenance.description }} ({{ formatDate(closeCandidateMaintenance.date) }} — {{ Number(closeCandidateMaintenance.amount).toFixed(2) }} €)
+                  {{ closeCandidateMaintenance.description }} ({{ formatDate(closeCandidateMaintenance.date) }} — {{ formatAmount(Number(closeCandidateMaintenance.amount), baseCurrency) }})
                 </span>
               </label>
             </div>
