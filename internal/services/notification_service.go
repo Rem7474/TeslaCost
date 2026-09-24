@@ -44,14 +44,28 @@ func NewNotificationService(repo notificationStore) *NotificationService {
 // text built here in the background: there is no HTTP request whose Accept-Language or vue-i18n
 // catalog could translate it instead.
 func (s *NotificationService) language(ctx context.Context, userID string) string {
+	lang, _ := s.readerPrefs(ctx, userID)
+	return lang
+}
+
+// readerPrefs is the vehicle owner's language ("en" or "fr") and distance unit ("km" or "mi"), for text
+// built here without a request to take them from; English and kilometres when unknown.
+func (s *NotificationService) readerPrefs(ctx context.Context, userID string) (lang, unit string) {
+	lang, unit = "en", "km"
 	if s.repo == nil || userID == "" {
-		return "en"
+		return
 	}
 	user, err := s.repo.GetUserByID(ctx, userID)
-	if err != nil || user == nil || user.Language != "fr" {
-		return "en"
+	if err != nil || user == nil {
+		return
 	}
-	return "fr"
+	if user.Language == "fr" {
+		lang = "fr"
+	}
+	if user.DistanceUnit == "mi" {
+		unit = "mi"
+	}
+	return
 }
 
 // CheckAndNotify evaluates reminders for a vehicle and sends webhooks if due thresholds are crossed.
@@ -73,7 +87,7 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 		return fmt.Errorf("failed to list reminders: %w", err)
 	}
 
-	lang := s.language(ctx, vehicle.UserID)
+	lang, unit := s.readerPrefs(ctx, vehicle.UserID)
 	now := time.Now()
 	for _, rem := range reminders {
 		if !rem.WebhookEnabled || rem.Status == "OK" {
@@ -96,7 +110,7 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 		}
 
 		// Dispatch notification
-		if err := s.sendReminderWebhook(ctx, webhook, lang, vehicle.Name, &rem, currentOdometer); err != nil {
+		if err := s.sendReminderWebhook(ctx, webhook, lang, unit, vehicle.Name, &rem, currentOdometer); err != nil {
 			slog.Error("failed to dispatch webhook", "component", "notification", "vehicle_id", vehicle.ID, "reminder_id", rem.ID, "error", err)
 			continue
 		}
@@ -112,8 +126,9 @@ func (s *NotificationService) CheckAndNotify(ctx context.Context, vehicle *model
 
 // TestWebhook dispatches a test message to verify connectivity and configuration.
 func (s *NotificationService) TestWebhook(ctx context.Context, webhook *models.VehicleWebhook, vehicle *models.Vehicle) error {
+	lang, unit := s.readerPrefs(ctx, vehicle.UserID)
 	testReminder := &models.MaintenanceReminder{
-		Title:  servertext.Text(s.language(ctx, vehicle.UserID), "reminder.test_title"),
+		Title:  servertext.Text(lang, "reminder.test_title"),
 		Status: "DUE_SOON",
 	}
 	remKm := 500.0
@@ -121,18 +136,18 @@ func (s *NotificationService) TestWebhook(ctx context.Context, webhook *models.V
 	remDays := 15
 	testReminder.RemainingDays = &remDays
 
-	return s.sendReminderWebhook(ctx, webhook, s.language(ctx, vehicle.UserID), vehicle.Name, testReminder, 50000)
+	return s.sendReminderWebhook(ctx, webhook, lang, unit, vehicle.Name, testReminder, 50000)
 }
 
 func (s *NotificationService) sendReminderWebhook(
 	ctx context.Context,
 	webhook *models.VehicleWebhook,
-	lang string,
+	lang, unit string,
 	vehicleName string,
 	rem *models.MaintenanceReminder,
 	currentOdo float64,
 ) error {
-	payload, err := formatPayload(lang, webhook.Type, vehicleName, rem, currentOdo)
+	payload, err := formatPayload(lang, unit, webhook.Type, vehicleName, rem, currentOdo)
 	if err != nil {
 		return err
 	}
@@ -193,7 +208,7 @@ func (s *NotificationService) postWebhook(ctx context.Context, webhookURL string
 }
 
 func formatPayload(
-	lang, webhookType, vehicleName string,
+	lang, unit, webhookType, vehicleName string,
 	rem *models.MaintenanceReminder,
 	currentOdo float64,
 ) (any, error) {
@@ -207,7 +222,8 @@ func formatPayload(
 		color = 15158332 // Red
 	}
 
-	details := buildDetailsString(lang, rem)
+	details := buildDetailsString(lang, unit, rem)
+	odometer := servertext.Distance(unit, currentOdo)
 
 	switch strings.ToUpper(webhookType) {
 	case "DISCORD":
@@ -217,7 +233,7 @@ func formatPayload(
 			"embeds": []map[string]any{
 				{
 					"title":       servertext.Text(lang, "reminder.discord_title", statusEmoji, statusLabel, rem.Title),
-					"description": servertext.Text(lang, "reminder.discord_description", vehicleName, currentOdo, details),
+					"description": servertext.Text(lang, "reminder.discord_description", vehicleName, odometer, details),
 					"color":       color,
 					"footer": map[string]string{
 						"text": servertext.Text(lang, "reminder.discord_footer"),
@@ -228,7 +244,7 @@ func formatPayload(
 		}, nil
 
 	case "TELEGRAM":
-		text := servertext.Text(lang, "reminder.telegram_text", statusEmoji, statusLabel, rem.Title, vehicleName, currentOdo, details)
+		text := servertext.Text(lang, "reminder.telegram_text", statusEmoji, statusLabel, rem.Title, vehicleName, odometer, details)
 		return map[string]any{
 			"text":       text,
 			"parse_mode": "Markdown",
@@ -241,7 +257,7 @@ func formatPayload(
 		}
 		return map[string]any{
 			"title":    servertext.Text(lang, "reminder.gotify_title", rem.Title, statusLabel),
-			"message":  servertext.Text(lang, "reminder.gotify_message", vehicleName, currentOdo, details),
+			"message":  servertext.Text(lang, "reminder.gotify_message", vehicleName, odometer, details),
 			"priority": priority,
 		}, nil
 
@@ -306,13 +322,13 @@ func formatSyncAlertPayload(lang, webhookType, vehicleName string, cause error, 
 	}
 }
 
-func buildDetailsString(lang string, rem *models.MaintenanceReminder) string {
+func buildDetailsString(lang, unit string, rem *models.MaintenanceReminder) string {
 	var parts []string
 	if rem.RemainingKm != nil {
 		if *rem.RemainingKm <= 0 {
-			parts = append(parts, servertext.Text(lang, "reminder.details_mileage_overdue", -*rem.RemainingKm))
+			parts = append(parts, servertext.Text(lang, "reminder.details_mileage_overdue", servertext.Distance(unit, -*rem.RemainingKm)))
 		} else {
-			parts = append(parts, servertext.Text(lang, "reminder.details_mileage_in", *rem.RemainingKm))
+			parts = append(parts, servertext.Text(lang, "reminder.details_mileage_in", servertext.Distance(unit, *rem.RemainingKm)))
 		}
 	}
 	if rem.RemainingDays != nil {

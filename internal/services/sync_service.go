@@ -158,7 +158,7 @@ func (s *SyncService) SyncVehicle(ctx context.Context, v *models.Vehicle) (*Sync
 		} else if odometer > 0 && odometer+1 < v.CurrentOdometer {
 			syncWarnings = append(syncWarnings, apierror.NewMessagef("sync.odometer_lower",
 				"TeslaMate odometer (%.0f km) is lower than the recorded odometer (%.0f km): check the vehicle's manual entries",
-				odometer, v.CurrentOdometer))
+				apierror.Km(odometer), apierror.Km(v.CurrentOdometer)))
 		}
 	}
 

@@ -30,3 +30,13 @@ func TestAsFindsAWrappedError(t *testing.T) {
 		t.Error("a plain error is not an API error")
 	}
 }
+
+func TestNewfMarksDistancesForTheClient(t *testing.T) {
+	err := Newf("tire.odometer_below_mount", "The odometer (%.0f km) is lower than %.0f km, %.1f kWh/100km", Km(41999.6), Km(42000), PerKm(16.25))
+	if err.Message != "The odometer (42000 km) is lower than 42000 km, 16.2 kWh/100km" {
+		t.Fatalf("English message: got %q", err.Message)
+	}
+	if err.Params["p0"] != "km:41999.6" || err.Params["p1"] != "km:42000" || err.Params["p2"] != "perkm:16.25" {
+		t.Fatalf("params: got %v", err.Params)
+	}
+}

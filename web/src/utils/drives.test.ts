@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { setDistanceUnit } from '@/units'
 import {
   applyBatchTag,
   buildSuggestionCostDrive,
@@ -160,6 +161,19 @@ describe('selectionSummary and CSV rows', () => {
     expect(headers).toHaveLength(driveCsvRows(list)[0].length)
     expect(headers[8]).toMatch(/_USD$/)
     expect(headers.join(',')).not.toContain('EUR')
+  })
+
+  it('writes distances and figures per km in the account\'s unit', () => {
+    setDistanceUnit('mi')
+    try {
+      const [row] = driveCsvRows([{ id: 'x', distance_km: 160.9344, consumption_kwh_100km: 16.09344, costs: { cost_per_km: 0.1 } }])
+      expect(row[4]).toBe(100)
+      expect(row[6]).toBe(25.9)
+      expect(row[9]).toBe('0.161')
+      expect(driveCsvHeaders('USD')[4]).toBe('Distance_mi')
+    } finally {
+      setDistanceUnit(null)
+    }
   })
 })
 

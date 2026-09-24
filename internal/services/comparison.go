@@ -231,7 +231,7 @@ func computeCore(sc *models.ComparisonScenario, ev EVBaseline, km, fuelFactor fl
 
 func comparisonAssumptions(sc *models.ComparisonScenario) []*apierror.Message {
 	a := []*apierror.Message{
-		apierror.NewMessagef("comparison.assumption.usage", "%.0f km/year for %d year(s), same usage for both vehicles", sc.AnnualKm, sc.Years),
+		apierror.NewMessagef("comparison.assumption.usage", "%.0f km/year for %d year(s), same usage for both vehicles", apierror.Km(sc.AnnualKm), sc.Years),
 		apierror.NewMessage("comparison.assumption.depreciation", "Depreciation = (purchase price − resale) spread linearly over the period"),
 		apierror.NewMessage("comparison.assumption.no_financing", "Financing, loans and leases not included"),
 		apierror.NewMessage("comparison.assumption.break_even", "The break-even compares cumulative outlays (purchase + running costs), without resale"),

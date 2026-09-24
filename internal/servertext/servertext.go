@@ -13,19 +13,19 @@ var catalog = map[string]map[string]string{
 	"reminder.test_title":      {"en": "Notification test", "fr": "Test de notification"},
 
 	"reminder.discord_title":       {"en": "%s %s: %s", "fr": "%s %s : %s"},
-	"reminder.discord_description": {"en": "**Vehicle:** %s\n**Odometer:** %.0f km\n\n%s", "fr": "**Véhicule :** %s\n**Odomètre :** %.0f km\n\n%s"},
+	"reminder.discord_description": {"en": "**Vehicle:** %s\n**Odometer:** %s\n\n%s", "fr": "**Véhicule :** %s\n**Odomètre :** %s\n\n%s"},
 	"reminder.discord_footer":      {"en": "AutoLedger • Maintenance tracking", "fr": "AutoLedger • Suivi d'entretien"},
 
 	"reminder.telegram_text": {
-		"en": "?? *AutoLedger — Maintenance Reminder*\n\n%s *%s*\nOperation: *%s*\nVehicle: *%s*\nOdometer: %.0f km\n%s",
-		"fr": "?? *AutoLedger — Rappel d'Entretien*\n\n%s *%s*\nOpération : *%s*\nVéhicule : *%s*\nOdomètre : %.0f km\n%s",
+		"en": "?? *AutoLedger — Maintenance Reminder*\n\n%s *%s*\nOperation: *%s*\nVehicle: *%s*\nOdometer: %s\n%s",
+		"fr": "?? *AutoLedger — Rappel d'Entretien*\n\n%s *%s*\nOpération : *%s*\nVéhicule : *%s*\nOdomètre : %s\n%s",
 	},
 
 	"reminder.gotify_title":   {"en": "AutoLedger: %s (%s)", "fr": "AutoLedger : %s (%s)"},
-	"reminder.gotify_message": {"en": "Vehicle: %s\nOdometer: %.0f km\n%s", "fr": "Véhicule : %s\nOdomètre : %.0f km\n%s"},
+	"reminder.gotify_message": {"en": "Vehicle: %s\nOdometer: %s\n%s", "fr": "Véhicule : %s\nOdomètre : %s\n%s"},
 
-	"reminder.details_mileage_overdue": {"en": "Mileage: %.0f km overdue", "fr": "Kilométrage : Dépassé de %.0f km"},
-	"reminder.details_mileage_in":      {"en": "Mileage: in %.0f km", "fr": "Kilométrage : Dans %.0f km"},
+	"reminder.details_mileage_overdue": {"en": "Mileage: %s overdue", "fr": "Kilométrage : Dépassé de %s"},
+	"reminder.details_mileage_in":      {"en": "Mileage: in %s", "fr": "Kilométrage : Dans %s"},
 	"reminder.details_due_overdue":     {"en": "Due date: %d day(s) overdue", "fr": "Échéance : Dépassée de %d jour(s)"},
 	"reminder.details_due_in":          {"en": "Due date: in %d day(s)", "fr": "Échéance : Dans %d jour(s)"},
 	"reminder.details_due_reached":     {"en": "Due date reached", "fr": "Échéance atteinte"},
@@ -46,6 +46,18 @@ var catalog = map[string]map[string]string{
 
 	"trip.departure": {"en": "Start", "fr": "Départ"},
 	"trip.arrival":   {"en": "Arrival", "fr": "Arrivée"},
+}
+
+// kmPerMile converts the stored kilometres for a reader who chose miles.
+const kmPerMile = 1.609344
+
+// Distance formats a distance stored in km in the reader's unit ("km" or "mi", anything else is km),
+// rounded to the unit: "42000 km", "26098 mi".
+func Distance(unit string, km float64) string {
+	if unit == "mi" {
+		return fmt.Sprintf("%.0f mi", km/kmPerMile)
+	}
+	return fmt.Sprintf("%.0f km", km)
 }
 
 // Text returns the key's phrase in lang ("en" or "fr", falling back to English for an unknown

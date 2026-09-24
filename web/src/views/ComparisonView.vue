@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { intlLocale, t, te } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
+import { distanceUnit, formatDistanceValue, perDistance } from '@/units'
 import { apiMessageText } from '@/services/apiError'
 import { ref, reactive, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
@@ -108,7 +110,7 @@ function fmtMoney(v: number | null | undefined, digits = 0): string {
 }
 
 function fmtKm(v: number): string {
-  return Math.round(Number(v || 0)).toLocaleString(intlLocale())
+  return formatDistanceValue(Number(v || 0))
 }
 
 async function loadScenarios() {
@@ -462,7 +464,7 @@ function exportResultCsv() {
   const rows: (string | number)[][] = costRows.value.map((row) => [row.label, Number(row.ev).toFixed(2), Number(row.ice).toFixed(2)])
   rows.push([t('comparison.csv.total'), Number(r.ev.total).toFixed(2), Number(r.ice.total).toFixed(2)])
   rows.push([t('comparison.csv.perMonth'), Number(r.ev.per_month).toFixed(2), Number(r.ice.per_month).toFixed(2)])
-  rows.push([t('comparison.csv.costPerKm'), r.ev.cost_per_km, r.ice.cost_per_km])
+  rows.push([t('comparison.csv.costPerKm', { unit: distanceUnit() }), perDistance(r.ev.cost_per_km).toFixed(3), perDistance(r.ice.cost_per_km).toFixed(3)])
   rows.push([t('comparison.csv.gap'), Number(r.ev_savings).toFixed(2), ''])
   rows.push(['', '', ''])
   rows.push(t('comparison.csv.cumulativeHeader').split(','))
@@ -538,7 +540,7 @@ onBeforeUnmount(destroyChart)
           <button class="text-left min-w-0 flex-1" @click="openResult(sc)">
             <div class="text-sm font-semibold text-white truncate">{{ sc.name }}</div>
             <div class="text-xs text-slate-400">
-              {{ sc.mode === 'RETROSPECTIVE' ? $t('comparison.comparisonView.trackedVehicle') : $t('comparison.comparisonView.projection') }} · {{ $t('comparison.comparisonView.scenarioUsage', { km: fmtKm(sc.annual_km), years: sc.years }) }}
+              {{ sc.mode === 'RETROSPECTIVE' ? $t('comparison.comparisonView.trackedVehicle') : $t('comparison.comparisonView.projection') }} · {{ $t('comparison.comparisonView.scenarioUsage', { unit: distanceUnit(), km: fmtKm(sc.annual_km), years: sc.years }) }}
             </div>
           </button>
           <div class="flex items-center gap-1.5 shrink-0">
@@ -583,8 +585,8 @@ onBeforeUnmount(destroyChart)
         </div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label for="cmp-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.kilometresPerYear') }}</label>
-            <input id="cmp-km" v-model.number="form.annual_km" type="number" min="1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="cmp-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.kilometresPerYear', { unit: distanceUnit() }) }}</label>
+            <DistanceInput id="cmp-km" v-model="form.annual_km" :digits="0" min="1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             <p v-if="defaults && isRetro" class="text-[11px] text-slate-500 mt-1">
               {{ defaults.annual_km_from_data ? $t('comparison.comparisonView.fromHistory') : $t('comparison.comparisonView.defaultValue') }}
             </p>
@@ -607,8 +609,8 @@ onBeforeUnmount(destroyChart)
               </select>
             </div>
             <div>
-              <label for="cmp-ice-l100" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.consumptionL100Km') }}</label>
-              <input id="cmp-ice-l100" v-model.number="form.ice.l_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="cmp-ice-l100" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.consumptionL100Km', { unit: distanceUnit() }) }}</label>
+              <DistanceInput kind="per-distance" id="cmp-ice-l100" v-model="form.ice.l_per_100km" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
               <label for="cmp-ice-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.fuelPriceL', { cur: currencySign }) }}</label>
@@ -628,8 +630,8 @@ onBeforeUnmount(destroyChart)
           <h2 class="text-sm font-semibold text-sky-300">{{ $t('comparison.comparisonView.electricVehicle') }}</h2>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="cmp-ev-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.consumptionKwh100Km') }}</label>
-              <input id="cmp-ev-kwh" v-model.number="form.ev.kwh_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <label for="cmp-ev-kwh" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.consumptionKwh100Km', { unit: distanceUnit() }) }}</label>
+              <DistanceInput kind="per-distance" id="cmp-ev-kwh" v-model="form.ev.kwh_per_100km" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
               <label for="cmp-ev-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.averageElectricityPriceKwh', { cur: currencySign }) }}</label>
@@ -715,7 +717,7 @@ onBeforeUnmount(destroyChart)
           <component :is="savings >= 0 ? TrendingDown : TrendingUp" class="w-8 h-8 shrink-0" :class="savings >= 0 ? 'text-emerald-400' : 'text-amber-400'" />
           <div>
             <div class="text-lg font-bold text-white">{{ verdict }}</div>
-            <div class="text-xs text-slate-400 mt-0.5">{{ currentScenario?.name }} · {{ $t('comparison.comparisonView.kmPerYear', { km: fmtKm(result.annual_km) }) }}</div>
+            <div class="text-xs text-slate-400 mt-0.5">{{ currentScenario?.name }} · {{ $t('comparison.comparisonView.kmPerYear', { unit: distanceUnit(), km: fmtKm(result.annual_km) }) }}</div>
           </div>
         </div>
 
@@ -728,7 +730,7 @@ onBeforeUnmount(destroyChart)
               </span>
             </div>
             <div class="text-2xl font-bold text-white">{{ fmtMoney(result.ev.total) }}</div>
-            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtMoney(result.ev.per_month), cost_per_km: fmtMoney(result.ev.cost_per_km, 3) }) }}</div>
+            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { unit: distanceUnit(), per_month: fmtMoney(result.ev.per_month), cost_per_km: fmtMoney(perDistance(result.ev.cost_per_km), 3) }) }}</div>
           </div>
           <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
             <div class="flex items-center justify-between mb-2">
@@ -736,7 +738,7 @@ onBeforeUnmount(destroyChart)
               <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('comparison.comparisonView.estimated') }}</span>
             </div>
             <div class="text-2xl font-bold text-white">{{ fmtMoney(result.ice.total) }}</div>
-            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtMoney(result.ice.per_month), cost_per_km: fmtMoney(result.ice.cost_per_km, 3) }) }}</div>
+            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { unit: distanceUnit(), per_month: fmtMoney(result.ice.per_month), cost_per_km: fmtMoney(perDistance(result.ice.cost_per_km), 3) }) }}</div>
           </div>
         </div>
 

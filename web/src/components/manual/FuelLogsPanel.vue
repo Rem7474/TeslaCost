@@ -9,7 +9,7 @@ import { api } from '@/services/api'
 import { useVehicleStore } from '@/stores/vehicle'
 import { currencySymbol, formatAmount } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
-import { distanceUnit, formatDistance, perDistance } from '@/units'
+import { distanceUnit, formatDistance, formatPerDistanceValue, perDistance } from '@/units'
 
 const props = defineProps<{
   vehicleId: string
@@ -201,7 +201,7 @@ onMounted(load)
       </div>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-3">
         <div class="text-[11px] text-slate-400">{{ $t('manual.fuelLogsPanel.averageConsumption') }}</div>
-        <div class="text-lg font-bold text-white">{{ stats.consumption_l_100km ? `${fmtNum(stats.consumption_l_100km, 2)} L/100` : $t('manual.fuelLogsPanel.notMeasurable') }}</div>
+        <div class="text-lg font-bold text-white">{{ stats.consumption_l_100km ? `${formatPerDistanceValue(stats.consumption_l_100km, 2)} L/100 ${distanceUnit()}` : $t('manual.fuelLogsPanel.notMeasurable') }}</div>
       </div>
     </div>
     <p v-if="stats && stats.unmeasurable_segments > 0" class="text-[11px] text-amber-400">
@@ -232,7 +232,7 @@ onMounted(load)
             {{ fmtMoney(log.amount) }}
             <template v-if="log.liters"> · {{ fmtNum(log.liters, 2) }} L</template>
             <template v-if="log.price_per_liter"> · {{ fmtMoney(log.price_per_liter, 3) }}/L</template>
-            <template v-if="log.consumption_l_100km"> · <span class="text-emerald-300">{{ log.segment_estimated ? '≈ ' : '' }}{{ fmtNum(log.consumption_l_100km, 2) }} L/100</span></template>
+            <template v-if="log.consumption_l_100km"> · <span class="text-emerald-300">{{ log.segment_estimated ? '≈ ' : '' }}{{ formatPerDistanceValue(log.consumption_l_100km, 2) }} L/100 {{ distanceUnit() }}</span></template>
             <template v-if="log.cost_per_km"> · {{ fmtMoney(perDistance(log.cost_per_km), 3) }}/{{ distanceUnit() }}</template>
           </div>
         </div>

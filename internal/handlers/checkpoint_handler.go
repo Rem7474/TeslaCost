@@ -39,7 +39,7 @@ func decodeCheckpointRequest(r *http.Request) (time.Time, float64, *string, erro
 		return time.Time{}, 0, nil, apierror.New("request.invalid_date", "Invalid date")
 	}
 	if req.Odometer < 0 || req.Odometer > 2_000_000 {
-		return time.Time{}, 0, nil, apierror.New("odometer.range_checkpoint", "Invalid odometer (must be between 0 and 2,000,000 km)")
+		return time.Time{}, 0, nil, apierror.Newf("odometer.range_checkpoint", "Invalid odometer (must be between 0 and %.0f km)", apierror.Km(2_000_000))
 	}
 
 	var notes *string

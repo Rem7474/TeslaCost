@@ -1,4 +1,5 @@
 import { intlLocale, t } from '@/i18n'
+import { distanceUnit, kmToDisplayDistance } from '@/units'
 export interface LegForm {
   drive_id: string | null
   start_label: string
@@ -252,14 +253,14 @@ export function pickerDrives(windowDrives: any[], known: Map<string, any>, selec
   return [...byId.values()].sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
 }
 
-export const carpoolCsvHeaders = (currency: string) => t('carpool.csvHeaders', { cur: currency }).split(',')
+export const carpoolCsvHeaders = (currency: string) => t('carpool.csvHeaders', { unit: distanceUnit(), cur: currency }).split(',')
 
 export function carpoolCsvRows(trips: any[]) {
   return trips.map((t) => [
     t.id,
     toDateInputString(t.date),
     `"${(t.title || '').replace(/"/g, '""')}"`,
-    t.distance_km,
+    Math.round(kmToDisplayDistance(t.distance_km || 0) * 100) / 100,
     t.passenger_count || (t.passengers || []).length || 0,
     (t.total_cost || 0).toFixed(2),
     (t.total_revenue || 0).toFixed(2),

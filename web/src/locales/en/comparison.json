@@ -14,7 +14,7 @@
     "electric": "Electric",
     "category": "Category",
     "costByCategoryOverYear": "Cost by category over {years_count} year(s)",
-    "monthKm": "{per_month}/month · {cost_per_km}/km",
+    "monthKm": "{per_month}/month · {cost_per_km}/{unit}",
     "estimated": "estimated",
     "calculating": "Calculating…",
     "printPdf": "Print / PDF",
@@ -27,14 +27,14 @@
     "averageYearlyPriceChangeApplied": "Average yearly price change, applied from the second year. Leave at 0 for constant prices.",
     "fineTuneInflationGrants": "Fine-tune (inflation, grants)",
     "averageElectricityPriceKwh": "Average electricity price ({cur}/kWh)",
-    "consumptionKwh100Km": "Consumption (kWh/100 km)",
+    "consumptionKwh100Km": "Consumption (kWh/100 {unit})",
     "electricVehicle": "Electric vehicle",
     "fuelPriceL": "Fuel price ({cur}/L)",
-    "consumptionL100Km": "Consumption (L/100 km)",
+    "consumptionL100Km": "Consumption (L/100 {unit})",
     "fuel": "Fuel",
     "equivalentCombustionVehicle": "Equivalent combustion vehicle",
     "durationYears": "Duration (years)",
-    "kilometresPerYear": "Kilometres per year",
+    "kilometresPerYear": "Distance per year ({unit})",
     "theElectricVehicleSCosts": "The electric vehicle's costs are those actually recorded on your vehicle.",
     "projectionICompareTwoVehicles": "Projection: I compare two vehicles that I enter",
     "comparisonType": "Comparison type",
@@ -50,7 +50,7 @@
     "selectFor": "Select {name} for the comparison",
     "trackedVehicle": "Tracked vehicle",
     "projection": "Projection",
-    "scenarioUsage": "{km} km/year · {years} year(s)",
+    "scenarioUsage": "{km} {unit}/year · {years} year(s)",
     "editScenario": "Edit {name}",
     "deleteScenario": "Delete {name}",
     "stepOf": "Step {step} of 2 — {name}",
@@ -72,7 +72,7 @@
     "deleteMessage": "Delete “{name}”? Your actual data is not affected.",
     "deletion": "Deletion",
     "next": "Next",
-    "kmPerYear": "{km} km/year"
+    "kmPerYear": "{km} {unit}/year"
   },
   "comparisonCompare": {
     "totalElectricAndCombustionCost": "Total electric and combustion cost per scenario",
@@ -87,7 +87,7 @@
     "totalsPerScenario": "Totals per scenario",
     "exportAsCsv": "Export as CSV",
     "comparisonOfScenarios": "Comparison of {length} scenarios",
-    "usage": "{years} year(s) · {km} km/year"
+    "usage": "{years} year(s) · {km} {unit}/year"
   },
   "fields": {
     "purchasePrice": "Purchase price ({cur})",
@@ -139,13 +139,13 @@
     "defaultName": "comparison",
     "total": "Total",
     "perMonth": "Per month",
-    "costPerKm": "Cost per km",
+    "costPerKm": "Cost per {unit}",
     "gap": "Gap in favour of the electric vehicle",
     "cumulativeHeader": "Year,Cumulative electric cost,Cumulative combustion cost",
     "filePrefix": "comparison",
     "header": "Category,Electric ({cur}),Combustion ({cur})",
     "scenariosFile": "comparison-scenarios",
-    "scenariosHeader": "Scenario,Type,Duration (years),Km per year,Electric total ({cur}),Combustion total ({cur}),Gap in favour of electric ({cur}),Break-even"
+    "scenariosHeader": "Scenario,Type,Duration (years),{unit} per year,Electric total ({cur}),Combustion total ({cur}),Gap in favour of electric ({cur}),Break-even"
   },
   "compare": {
     "saves": "electric saves",

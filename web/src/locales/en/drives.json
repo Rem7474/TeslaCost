@@ -261,5 +261,5 @@
     "failed": "The fare could not be applied."
   },
   "noDrive": "No drive",
-  "csvHeaders": "ID,Date,Start,Destination,Distance_km,Duration_min,Consumption_kWh_100km,Energy_kWh,Total_Cost_{cur},Cost_km_{cur},Tags"
+  "csvHeaders": "ID,Date,Start,Destination,Distance_{unit},Duration_min,Consumption_kWh_100{unit},Energy_kWh,Total_Cost_{cur},Cost_{unit}_{cur},Tags"
 }
