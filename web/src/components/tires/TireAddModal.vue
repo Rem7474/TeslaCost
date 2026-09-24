@@ -46,14 +46,14 @@ const teslaDimensionPresets = [
   { group: 'Tesla Model 3', label: '20" Performance — 245/35 R20 95Y', value: '245/35 R20 95Y' },
   { group: 'Tesla Model Y', label: '19" Gemini — 255/45 R19 104W', value: '255/45 R19 104W' },
   { group: 'Tesla Model Y', label: '20" Induction — 255/40 R20 101W', value: '255/40 R20 101W' },
-  { group: 'Tesla Model Y', label: '21" Überturbine Av — 255/35 R21 98W', value: '255/35 R21 98W' },
-  { group: 'Tesla Model Y', label: '21" Überturbine Ar — 275/35 R21 103W', value: '275/35 R21 103W' },
+  { group: 'Tesla Model Y', label: `21" Überturbine ${t('tires.tireAddModal.front')} — 255/35 R21 98W`, value: '255/35 R21 98W' },
+  { group: 'Tesla Model Y', label: `21" Überturbine ${t('tires.tireAddModal.rear')} — 275/35 R21 103W`, value: '275/35 R21 103W' },
   { group: 'Tesla Model S', label: '19" Tempest — 255/45 R19 104Y', value: '255/45 R19 104Y' },
-  { group: 'Tesla Model S', label: '21" Arachnid Av — 265/35 R21', value: '265/35 R21' },
-  { group: 'Tesla Model S', label: '21" Arachnid Ar — 295/30 R21', value: '295/30 R21' },
+  { group: 'Tesla Model S', label: `21" Arachnid ${t('tires.tireAddModal.front')} — 265/35 R21`, value: '265/35 R21' },
+  { group: 'Tesla Model S', label: `21" Arachnid ${t('tires.tireAddModal.rear')} — 295/30 R21`, value: '295/30 R21' },
   { group: 'Tesla Model X', label: '20" Cyberstream — 265/45 R20 / 275/45 R20', value: '265/45 R20' },
 ]
-const customDimensionPreset = { group: 'Autre', label: t('tires.tireAddModal.customSize'), value: 'CUSTOM' }
+const customDimensionPreset = { group: 'Other', label: t('tires.tireAddModal.customSize'), value: 'CUSTOM' }
 // The Tesla model presets are offered to vehicles linked to TeslaMate; any other vehicle types its dimension
 const dimensionPresets = computed(() =>
   vehicleStore.hasTeslaMate ? [...teslaDimensionPresets, customDimensionPreset] : [customDimensionPreset],
@@ -232,11 +232,11 @@ async function handleCreateTires() {
           </option>
         </select>
         <div v-if="isCustomDimension" class="pt-1.5">
-          <label for="tire-add-tire-dimension" class="sr-only">Ex: 245/40 R19 98Y</label>
+          <label for="tire-add-tire-dimension" class="sr-only">{{ $t('tires.tireAddModal.customDimension') }}</label>
           <input id="tire-add-tire-dimension"
             v-model="addTireForm.dimension"
             type="text"
-            placeholder="Ex: 245/40 R19 98Y"
+            :placeholder="$t('common.example', { value: '245/40 R19 98Y' })"
             class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500 font-mono"
           />
         </div>

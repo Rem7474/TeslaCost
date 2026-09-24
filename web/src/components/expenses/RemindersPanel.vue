@@ -210,7 +210,7 @@ const vehicleStore = useVehicleStore()
             <span class="font-medium text-white">
               {{ r.last_service_date ? formatDate(r.last_service_date) : $t('expenses.remindersPanel.notEntered') }}
               <span v-if="r.last_service_odometer" class="text-slate-400 block text-[11px]">
-                à {{ Math.round(r.last_service_odometer).toLocaleString(intlLocale()) }} km
+                {{ $t('common.atKm', { km: Math.round(r.last_service_odometer).toLocaleString(intlLocale()) }) }}
               </span>
             </span>
           </div>

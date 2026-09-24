@@ -37,13 +37,13 @@ const vehicleStore = useVehicleStore()
               <template v-if="m.recurrence_end_date">{{ $t('expenses.maintenancePanel.until', { recurrence_end_date: formatDate(m.recurrence_end_date) }) }}</template>
             </span>
             <span v-else-if="m.amortization_mode === 'DISTANCE'" class="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shrink-0">
-              {{ $t('expenses.maintenancePanel.smoothedOverKm', { coverage_km: m.coverage_km ? Math.round(m.coverage_km).toLocaleString(intlLocale()) : '50 000' }) }}
+              {{ $t('expenses.maintenancePanel.smoothedOverKm', { coverage_km: m.coverage_km ? Math.round(m.coverage_km).toLocaleString(intlLocale()) : (50000).toLocaleString(intlLocale()) }) }}
             </span>
             <span v-else-if="m.amortization_mode === 'DURATION'" class="text-xs px-2 py-0.5 rounded-full font-medium bg-purple-500/10 text-purple-400 border border-purple-500/20 shrink-0">
               {{ $t('expenses.maintenancePanel.smoothedOverMonths', { coverage_months: m.coverage_months || 24 }) }}
             </span>
             <span v-else-if="m.amortization_mode === 'HYBRID'" class="text-xs px-2 py-0.5 rounded-full font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
-              {{ $t('expenses.maintenancePanel.mixedSmoothingKmMonths', { coverage_km: m.coverage_km ? Math.round(m.coverage_km).toLocaleString(intlLocale()) : '50 000', coverage_months: m.coverage_months || 24 }) }}
+              {{ $t('expenses.maintenancePanel.mixedSmoothingKmMonths', { coverage_km: m.coverage_km ? Math.round(m.coverage_km).toLocaleString(intlLocale()) : (50000).toLocaleString(intlLocale()), coverage_months: m.coverage_months || 24 }) }}
             </span>
             <span v-if="m.closes_maintenance_id" class="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
               {{ $t('expenses.maintenancePanel.closesThePreviousService') }}
@@ -59,7 +59,7 @@ const vehicleStore = useVehicleStore()
             </button>
           </div>
           <p class="text-sm font-semibold text-slate-200 truncate">{{ m.description }}</p>
-          <p v-if="m.odometer" class="text-xs text-slate-400">À {{ Math.round(m.odometer) }} km</p>
+          <p v-if="m.odometer" class="text-xs text-slate-400">{{ $t('common.atKmCapitalized', { km: Math.round(m.odometer).toLocaleString(intlLocale()) }) }}</p>
         </div>
         <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
           <div class="text-lg font-extrabold text-pink-400">

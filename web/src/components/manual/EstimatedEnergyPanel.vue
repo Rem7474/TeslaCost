@@ -118,7 +118,7 @@ onMounted(() => {
               step="0.1"
               min="1"
               max="100"
-              placeholder="ex: 16.5"
+              :placeholder="$t('common.example', { value: $n(16.5) })"
               :disabled="!canEdit"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 disabled:opacity-50"
             />
@@ -132,7 +132,7 @@ onMounted(() => {
               step="0.0001"
               min="0.01"
               max="5"
-              placeholder="ex: 0.22"
+              :placeholder="$t('common.example', { value: $n(0.22) })"
               :disabled="!canEdit"
               class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-sky-500 disabled:opacity-50"
             />

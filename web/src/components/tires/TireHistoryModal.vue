@@ -244,7 +244,7 @@ useEscapeToClose(open, () => (open.value = false))
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
               <div>
                 <div class="text-slate-500">{{ $t('tires.tireHistoryModal.fitting') }}</div>
-                <div class="text-slate-200 font-medium">{{ formatDate(s.mounted_date) }} à {{ Math.round(s.mounted_odometer).toLocaleString(intlLocale()) }} km</div>
+                <div class="text-slate-200 font-medium">{{ $t('tires.tireHistoryModal.dateAtKm', { date: formatDate(s.mounted_date), km: Math.round(s.mounted_odometer).toLocaleString(intlLocale()) }) }}</div>
               </div>
               <div>
                 <div class="text-slate-500">{{ $t('tires.tireHistoryModal.removal') }}</div>
@@ -290,7 +290,7 @@ useEscapeToClose(open, () => (open.value = false))
               <span class="text-[10px] text-slate-500">{{ formatDate(l.date) }}</span>
             </div>
             <div class="flex items-center justify-between text-[10px] text-slate-400">
-              <span>à {{ Math.round(l.odometer).toLocaleString(intlLocale()) }} km</span>
+              <span>{{ $t('common.atKm', { km: Math.round(l.odometer).toLocaleString(intlLocale()) }) }}</span>
               <span class="flex items-center gap-1">
                 <button @click="emit('edit-log', l)" class="text-slate-500 hover:text-emerald-400" :title="$t('tires.tireHistoryModal.editTheReading')">
                   <Pencil class="w-3 h-3" />

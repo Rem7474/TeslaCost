@@ -14,5 +14,9 @@
   "deleteError": "Erreur lors de la suppression : {message}",
   "selectAll": "Tout sélectionner",
   "deselectAll": "Tout désélectionner",
-  "deleteForever": "Supprimer définitivement"
+  "deleteForever": "Supprimer définitivement",
+  "or": "ou",
+  "atKm": "à {km} km",
+  "atKmCapitalized": "À {km} km",
+  "example": "ex : {value}"
 }

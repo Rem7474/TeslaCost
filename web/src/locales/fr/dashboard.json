@@ -106,7 +106,8 @@
     "below5CTheCar": "Sous 5 °C, la voiture consomme",
     "effectOfTemperature": "Effet de la température",
     "consumption": "Consommation",
-    "drivesAndDistance": "{drives} trajet(s), {distance} km"
+    "drivesAndDistance": "{drives} trajet(s), {distance} km",
+    "binRange": "{min} à {max} °C"
   },
   "leaseContractCard": {
     "estimatedEndOfContractPenalty": "Pénalité estimée fin de contrat : {value}",
@@ -192,7 +193,8 @@
   "tagBreakdown": {
     "ofTollsAndParking": "{value} de péages & parkings",
     "breakdownByDriveCategoryWork": "Ventilation par Catégorie de Trajets (Pro / Perso)",
-    "kmKwh": "{distance_km} km ({energy_kwh} kWh)"
+    "kmKwh": "{distance_km} km ({energy_kwh} kWh)",
+    "untagged": "Non tagué"
   },
   "tcoMetricsGrid": {
     "tollsAndParking": "Péages & Parkings",

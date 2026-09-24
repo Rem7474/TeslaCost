@@ -76,7 +76,8 @@
     "unknownPlace": "Lieu de recharge inconnu",
     "editThisCharge": "Modifier cette recharge",
     "fixCost": "Renseigner / corriger le coût",
-    "loadMore": "Charger plus"
+    "loadMore": "Charger plus",
+    "at": "à"
   },
   "completeReminderModal": {
     "confirmTheMaintenance": "Confirmer l'entretien",
@@ -161,7 +162,8 @@
     "add": "Ajouter Entretien / Dépense Fixe",
     "uploadHelper": "PDF ou image (téléversé et rattaché automatiquement à cette dépense)",
     "enterAnnualPremium": "Veuillez saisir la prime annuelle",
-    "premiumDescription": "Prime d'assurance ({amount}/an)"
+    "premiumDescription": "Prime d'assurance ({amount}/an)",
+    "perKm": "Au km"
   },
   "maintenancePanel": {
     "deleteThisExpense": "Supprimer cette dépense",

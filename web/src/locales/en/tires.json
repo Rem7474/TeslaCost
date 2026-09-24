@@ -79,7 +79,10 @@
     "totalPriceMode": "total price",
     "customSize": "Custom size...",
     "requiredFields": "Please enter the brand, model and size",
-    "requiredFieldsTitle": "Required fields"
+    "requiredFieldsTitle": "Required fields",
+    "front": "Front",
+    "rear": "Rear",
+    "customDimension": "Size"
   },
   "tireBatchDisposeModal": {
     "finalOdometerIfRemovedOn": "Final odometer if removed on that date.",
@@ -224,7 +227,8 @@
     "sessionOver": "Session over",
     "currentlyFitted": "🟢 Currently fitted",
     "removedAt": "{date} at {odometer} km",
-    "currentlyOnVehicle": "Currently on the vehicle"
+    "currentlyOnVehicle": "Currently on the vehicle",
+    "dateAtKm": "{date} at {km} km"
   },
   "tireLogModal": {
     "saveTheReading": "Save the reading",

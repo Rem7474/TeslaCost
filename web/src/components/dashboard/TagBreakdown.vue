@@ -22,7 +22,7 @@ const vehicleStore = useVehicleStore()
           <div class="flex items-center gap-2">
             <Briefcase v-if="item.tag === 'Pro'" class="w-4 h-4 text-blue-400" />
             <User v-else class="w-4 h-4 text-emerald-400" />
-            <span class="text-sm font-bold text-white">{{ item.tag }}</span>
+            <span class="text-sm font-bold text-white">{{ item.tag || $t('dashboard.tagBreakdown.untagged') }}</span>
           </div>
           <p class="text-xs text-slate-400 mt-1">{{ $t('dashboard.tagBreakdown.kmKwh', { distance_km: item.distance_km.toLocaleString(intlLocale()), energy_kwh: item.energy_kwh }) }}</p>
           <p v-if="item.tolls_amount" class="text-xs text-amber-400">{{ $t('dashboard.tagBreakdown.ofTollsAndParking', { value: formatAmount(item.tolls_amount, vehicleStore.currency) }) }}</p>

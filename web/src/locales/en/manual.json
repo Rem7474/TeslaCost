@@ -91,6 +91,7 @@
     "deleteTitle": "Delete the odometer reading",
     "deleteMessage": "Delete the {km} km reading of {date}?",
     "edit": "Edit the reading",
-    "update": "Update"
+    "update": "Update",
+    "onDate": "on {date}"
   }
 }

@@ -14,5 +14,9 @@
   "deleteError": "Deletion failed: {message}",
   "selectAll": "Select all",
   "deselectAll": "Deselect all",
-  "deleteForever": "Delete permanently"
+  "deleteForever": "Delete permanently",
+  "or": "or",
+  "atKm": "at {km} km",
+  "atKmCapitalized": "At {km} km",
+  "example": "e.g. {value}"
 }
