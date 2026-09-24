@@ -7,6 +7,7 @@ import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
 import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
 import { currencySymbol, formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
+import { distanceUnit, formatDistanceValue, kmToDisplayDistance, perDistance } from '@/units'
 
 Chart.register(...registerables)
 
@@ -26,8 +27,8 @@ function renderChart() {
 
   const filteredMileageList = filteredMileageCosts.value
   const mileageLabels = filteredMileageList.map((m: any) => m.month)
-  const distanceData = filteredMileageList.map((m: any) => m.distance_km || 0)
-  const costPerKmData = filteredMileageList.map((m: any) => m.cost_per_km || 0)
+  const distanceData = filteredMileageList.map((m: any) => Math.round(kmToDisplayDistance(m.distance_km || 0)))
+  const costPerKmData = filteredMileageList.map((m: any) => perDistance(m.cost_per_km || 0))
 
   mileageChartInstance = new Chart(mileageChartRef.value, {
     type: 'bar',
@@ -36,7 +37,7 @@ function renderChart() {
       datasets: [
         {
           type: 'bar',
-          label: t('dashboard.mileageCostChart.kmDriven'),
+          label: t('dashboard.mileageCostChart.kmDriven', { unit: distanceUnit() }),
           data: distanceData,
           backgroundColor: 'rgba(99, 102, 241, 0.65)',
           hoverBackgroundColor: 'rgba(99, 102, 241, 0.9)',
@@ -45,7 +46,7 @@ function renderChart() {
         },
         {
           type: 'line',
-          label: t('dashboard.mileageCostChart.averageCostPerKm', { cur: currencySymbol(vehicleStore.currency) }),
+          label: t('dashboard.mileageCostChart.averageCostPerKm', { unit: distanceUnit(), cur: currencySymbol(vehicleStore.currency) }),
           data: costPerKmData,
           borderColor: '#10b981',
           backgroundColor: '#10b981',
@@ -94,9 +95,9 @@ function renderChart() {
             label: (context) => {
               if (context.dataset.yAxisID === 'yDistance') {
                 const dist = Number(context.raw).toLocaleString(intlLocale())
-                return t('dashboard.mileageCostChart.tooltipDistance', { distance: dist })
+                return t('dashboard.mileageCostChart.tooltipDistance', { unit: distanceUnit(), distance: dist })
               }
-              return t('dashboard.mileageCostChart.tooltipCostPerKm', { cost: formatAmount(Number(context.raw), vehicleStore.currency, 3) })
+              return t('dashboard.mileageCostChart.tooltipCostPerKm', { unit: distanceUnit(), cost: formatAmount(Number(context.raw), vehicleStore.currency, 3) })
             },
           },
         },
@@ -109,9 +110,9 @@ function renderChart() {
           grid: { color: '#1e293b' },
           ticks: {
             color: '#818cf8',
-            callback: (v) => `${v} km`,
+            callback: (v) => `${Number(v).toLocaleString(intlLocale())} ${distanceUnit()}`,
           },
-          title: { display: true, text: t('dashboard.mileageCostChart.axisDistance'), color: '#818cf8', font: { size: 11 } },
+          title: { display: true, text: t('dashboard.mileageCostChart.axisDistance', { unit: distanceUnit() }), color: '#818cf8', font: { size: 11 } },
         },
         yCost: {
           type: 'linear',
@@ -121,7 +122,7 @@ function renderChart() {
             color: '#10b981',
             callback: (v) => formatAmount(Number(v), vehicleStore.currency, 3),
           },
-          title: { display: true, text: t('dashboard.mileageCostChart.axisCostPerKm', { cur: currencySymbol(vehicleStore.currency) }), color: '#10b981', font: { size: 11 } },
+          title: { display: true, text: t('dashboard.mileageCostChart.axisCostPerKm', { unit: distanceUnit(), cur: currencySymbol(vehicleStore.currency) }), color: '#10b981', font: { size: 11 } },
         },
       },
     },
@@ -141,7 +142,7 @@ onUnmounted(() => {
       <div>
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <Activity class="w-4 h-4 text-indigo-400" />
-          <span>{{ $t('dashboard.mileageCostChart.monthlyMileageAndCostPer2', { cur: currencySymbol(vehicleStore.currency) }) }}</span>
+          <span>{{ $t('dashboard.mileageCostChart.monthlyMileageAndCostPer2', { unit: distanceUnit(), cur: currencySymbol(vehicleStore.currency) }) }}</span>
         </h3>
         <p class="text-xs text-slate-400 mt-0.5">{{ $t('dashboard.mileageCostChart.clickABarOfThe') }}</p>
       </div>
@@ -155,22 +156,22 @@ onUnmounted(() => {
           <PieChart class="w-3.5 h-3.5" />
           <span>{{ $t('dashboard.mileageCostChart.lastMonthSDetail') }}</span>
         </button>
-        <MonthlyRangeSelector v-model="mileageChartRange" :label="$t('dashboard.mileageCostChart.monthlyMileageAndCostPer')" />
+        <MonthlyRangeSelector v-model="mileageChartRange" :label="$t('dashboard.mileageCostChart.monthlyMileageAndCostPer', { unit: distanceUnit() })" />
         <div class="flex items-center gap-3 text-xs">
           <span class="flex items-center gap-1.5 text-indigo-300">
             <span class="w-3 h-3 rounded bg-indigo-500/80 inline-block"></span>
-            {{ $t('dashboard.mileageCostChart.distanceKm') }}
+            {{ $t('dashboard.mileageCostChart.distanceKm', { unit: distanceUnit() }) }}
           </span>
           <span class="flex items-center gap-1.5 text-emerald-400">
             <span class="w-3 h-1 rounded bg-emerald-400 inline-block"></span>
-            {{ $t('dashboard.mileageCostChart.costKm', { cur: currencySymbol(vehicleStore.currency) }) }}
+            {{ $t('dashboard.mileageCostChart.costKm', { unit: distanceUnit(), cur: currencySymbol(vehicleStore.currency) }) }}
           </span>
         </div>
       </div>
     </div>
 
     <div class="h-64 sm:h-72">
-      <canvas ref="mileageChartRef" role="img" :aria-label="$t('dashboard.mileageCostChart.monthlyMileageAndCostPer')"></canvas>
+      <canvas ref="mileageChartRef" role="img" :aria-label="$t('dashboard.mileageCostChart.monthlyMileageAndCostPer', { unit: distanceUnit() })"></canvas>
     </div>
   </div>
 </template>

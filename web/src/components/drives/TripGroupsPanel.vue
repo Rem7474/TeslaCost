@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
+import { distanceUnit, formatDistance, perDistance } from '@/units'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Layers, X, Users, Coins, Pencil, Trash2 } from 'lucide-vue-next'
@@ -47,7 +48,7 @@ const formatDate = formatDayTime
             <div class="flex items-center gap-2 flex-wrap mb-1.5">
               <span class="text-xs font-semibold text-slate-400 shrink-0">{{ formatTripDates(tg) }}</span>
               <span class="text-xs px-2.5 py-0.5 rounded-full font-bold bg-slate-800 text-slate-200 border border-slate-700/60 shrink-0">
-                {{ Math.round(tg.distance_km).toLocaleString(intlLocale()) }} km
+                {{ formatDistance(tg.distance_km) }}
               </span>
               <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 shrink-0">
                 {{ $t('drives.tripGroupsPanel.legS', { length: tg.drive_ids?.length || 0 }) }}
@@ -79,7 +80,7 @@ const formatDate = formatDayTime
               <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
                 <span>{{ Number(tg.tolls_total || 0) > 0 ? $t('drives.tripGroupsPanel.costsAmount', { amount: formatAmount(Number(tg.tolls_total), vehicleStore.currency) }) : $t('drives.tripGroupsPanel.costDetail') }}</span>
                 <span v-if="tg.distance_km > 0 && tg.tolls_total" class="text-[10px] font-normal text-emerald-400 font-mono">
-                  {{ formatAmount(Number(tg.tolls_total) / tg.distance_km, vehicleStore.currency, 3) }}/km
+                  {{ formatAmount(perDistance(Number(tg.tolls_total) / tg.distance_km), vehicleStore.currency, 3) }}/{{ distanceUnit() }}
                 </span>
               </div>
             </div>
@@ -128,7 +129,7 @@ const formatDate = formatDayTime
         <div v-for="d in tripDrives" :key="d.id" class="flex items-center justify-between gap-3 text-xs text-slate-300 bg-slate-800/40 rounded-lg px-2.5 py-1.5 min-w-0">
           <span class="truncate min-w-0 flex-1">
             {{ formatDate(d.start_time) }}{{ $t('drives.tripGroupsPanel.dateSeparator') }}{{ (d.start_address || $t('drives.driveCostModal.start')).split(',')[0] }} → {{ (d.end_address || $t('drives.driveCostModal.end')).split(',')[0] }}
-            <span class="text-slate-500">({{ d.distance_km }} km)</span>
+            <span class="text-slate-500">({{ formatDistance(d.distance_km, 1) }})</span>
           </span>
           <button v-if="vehicleStore.canEdit" @click="emit('remove-drive', tg, d.id)" class="text-slate-500 hover:text-rose-400 shrink-0 p-1" :title="$t('drives.tripGroupsPanel.removeThisDriveFromThe')">
             <X class="w-3.5 h-3.5" />

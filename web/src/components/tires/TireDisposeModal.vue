@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, watch } from 'vue'
 import { Archive, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -8,6 +9,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { getLastDismountInfo, isMountedPosition } from '@/utils/tires'
 import { todayIso } from '@/utils/dates'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 // Dispose (worn out, damaged, sold) keeps history and cost; deleting a tire removes an erroneous entry
 const props = defineProps<{ vehicleId: string; selectedTire: any | null; tires: any[]; currentOdometer: number }>()
@@ -77,8 +79,8 @@ async function handleDisposeTire() {
           />
         </div>
         <div v-if="['FL', 'FR', 'RL', 'RR'].includes(selectedTire.current_position)">
-          <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">{{ $t('tires.tireDisposeModal.odometerAtRemovalKm') }}</label>
-          <input id="tire-dispose-odometer" v-model.number="disposeForm.odometer" type="number" min="0" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
+          <label for="tire-dispose-odometer" class="block text-[11px] text-slate-400 mb-1 font-semibold">{{ $t('tires.tireDisposeModal.odometerAtRemovalKm', { unit: distanceUnit() }) }}</label>
+          <DistanceInput id="tire-dispose-odometer" v-model="disposeForm.odometer" min="0" required class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500" />
         </div>
       </form>
 

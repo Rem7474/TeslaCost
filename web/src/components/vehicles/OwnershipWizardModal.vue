@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { currencySymbol, formatAmount } from '@/currency'
@@ -18,6 +19,7 @@ import {
   ownershipStepError,
 } from '@/utils/vehicles'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit, formatDistance } from '@/units'
 
 // The acquisition contract of a vehicle (purchase, loan, LOA, LLD) in three steps. \`ownership\` is the saved
 // contract (null when there is none); saving reports the stored contract, deleting reports deleted.
@@ -252,8 +254,8 @@ async function handleDeleteOwnership() {
               <AppDatePicker id="own-start-date" v-model="ownershipForm.start_date" required size="sm" />
             </div>
             <div>
-              <label for="own-start-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.odometerAtTheStartKm') }}</label>
-              <input id="own-start-odometer" v-model.number="ownershipForm.start_odometer" type="number" min="0" :placeholder="$t('common.example', { value: '0' })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+              <label for="own-start-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.odometerAtTheStartKm', { unit: distanceUnit() }) }}</label>
+              <DistanceInput id="own-start-odometer" v-model="ownershipForm.start_odometer" min="0" :placeholder="$t('common.example', { value: '0' })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
             </div>
           </div>
         </div>
@@ -369,7 +371,7 @@ async function handleDeleteOwnership() {
               </div>
               <div v-if="leasePreview.totalKm" class="flex items-center justify-between text-slate-400 text-[11px]">
                 <span>{{ $t('vehicles.ownershipWizardModal.totalMileageIncludedInThe') }}</span>
-                <span class="text-slate-200 font-medium">{{ Math.round(leasePreview.totalKm).toLocaleString(intlLocale()) }} km</span>
+                <span class="text-slate-200 font-medium">{{ formatDistance(leasePreview.totalKm) }}</span>
               </div>
             </div>
           </div>
@@ -382,12 +384,12 @@ async function handleDeleteOwnership() {
             <h4 class="text-xs font-bold text-indigo-400 uppercase tracking-wider">{{ $t('vehicles.ownershipWizardModal.mileageAllowanceAndInclusions') }}</h4>
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label for="own-lease-allowance" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.mileageAllowanceKmYear') }}</label>
-                <input id="own-lease-allowance" v-model.number="ownershipForm.lease_km_allowance_per_year" type="number" min="0" :placeholder="$t('common.example', { value: '15000' })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+                <label for="own-lease-allowance" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.mileageAllowanceKmYear', { unit: distanceUnit() }) }}</label>
+                <DistanceInput id="own-lease-allowance" v-model="ownershipForm.lease_km_allowance_per_year" min="0" :placeholder="$t('common.example', { value: '15000' })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
-                <label for="own-lease-excess" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.pricePerExtraKmKm', { cur: currencySymbol(currency) }) }}</label>
-                <input id="own-lease-excess" v-model.number="ownershipForm.lease_excess_km_price" type="number" step="0.001" min="0" max="5" :placeholder="$t('common.example', { value: $n(0.15) })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
+                <label for="own-lease-excess" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.pricePerExtraKmKm', { unit: distanceUnit(), cur: currencySymbol(currency) }) }}</label>
+                <DistanceInput kind="per-distance" id="own-lease-excess" v-model="ownershipForm.lease_excess_km_price" step="0.001" min="0" max="5" :placeholder="$t('common.example', { value: $n(0.15) })" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500" />
               </div>
               <div>
                 <label for="own-lease-end-fees" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('vehicles.ownershipWizardModal.estimatedReturnFees', { cur: currencySymbol(currency) }) }}</label>

@@ -7,11 +7,12 @@ import { api } from '@/services/api'
 import EnergyBatterySection from './EnergyBatterySection.vue'
 import EnergyTemperatureSection from './EnergyTemperatureSection.vue'
 import CostDonut from '@/components/costs/CostDonut.vue'
-import { AXIS_TEXT, GRID_COLOR, fmt, fmtMoney, fmtPercent, mergeAcDcClasses, type ChargeClass, type EnergyStats } from './energyStats'
+import { AXIS_TEXT, GRID_COLOR, fmt, fmtMoney, fmtPercent, perUnit, mergeAcDcClasses, type ChargeClass, type EnergyStats } from './energyStats'
 import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
 import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
 import { currencySymbol, formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
+import { distanceUnit } from '@/units'
 
 Chart.register(...registerables)
 
@@ -101,7 +102,7 @@ function drawCharts() {
         datasets: [
           {
             label: t('dashboard.energyEfficiencyPanel.consumption'),
-            data: months.map((m) => m.consumption_kwh_100km ?? null),
+            data: months.map((m) => perUnit(m.consumption_kwh_100km) ?? null),
             borderColor: '#38bdf8',
             backgroundColor: '#38bdf8',
             tension: 0.25,
@@ -110,7 +111,7 @@ function drawCharts() {
           },
         ],
       },
-      options: baseOptions('kWh/100 km'),
+      options: baseOptions(`kWh/100 ${distanceUnit()}`),
     })
   }
 
@@ -123,14 +124,14 @@ function drawCharts() {
           {
             type: 'bar',
             label: t('dashboard.energyEfficiencyPanel.month'),
-            data: months.map((m) => m.cost_per_100km ?? null),
+            data: months.map((m) => perUnit(m.cost_per_100km) ?? null),
             backgroundColor: 'rgba(99, 102, 241, 0.35)',
             borderRadius: 4,
           },
           {
             type: 'line',
             label: t('dashboard.energyEfficiencyPanel.threeMonthAverage'),
-            data: months.map((m) => m.cost_per_100km_trailing ?? null),
+            data: months.map((m) => perUnit(m.cost_per_100km_trailing) ?? null),
             borderColor: '#f59e0b',
             backgroundColor: '#f59e0b',
             tension: 0.25,
@@ -139,7 +140,7 @@ function drawCharts() {
           },
         ],
       },
-      options: baseOptions(`${currencySymbol(currency.value)}/100 km`),
+      options: baseOptions(`${currencySymbol(currency.value)}/100 ${distanceUnit()}`),
     })
   }
 }
@@ -177,12 +178,12 @@ onBeforeUnmount(() => {
     <dl class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
         <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.actualConsumption') }}</dt>
-        <dd class="mt-1 text-xl font-bold text-white">{{ fmt(stats?.summary.consumption_kwh_100km, 1) }} <span class="text-xs font-medium text-slate-400">kWh/100 km</span></dd>
+        <dd class="mt-1 text-xl font-bold text-white">{{ fmt(perUnit(stats?.summary.consumption_kwh_100km), 1) }} <span class="text-xs font-medium text-slate-400">kWh/100 {{ distanceUnit() }}</span></dd>
         <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.energyUsedWhileDrivingMeasured') }}</p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
         <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.energyCost') }}</dt>
-        <dd class="mt-1 text-xl font-bold text-white">{{ formatAmount(stats?.summary.cost_per_100km || 0, currency) }} <span class="text-xs font-medium text-slate-400">/100 km</span></dd>
+        <dd class="mt-1 text-xl font-bold text-white">{{ formatAmount(perUnit(stats?.summary.cost_per_100km) || 0, currency) }} <span class="text-xs font-medium text-slate-400">/100 {{ distanceUnit() }}</span></dd>
         <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.thatIsKwhOnAverage', { price_per_kwh: fmtMoney(stats?.summary.price_per_kwh, currency, 3) }) }}</p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
@@ -198,18 +199,18 @@ onBeforeUnmount(() => {
     </dl>
 
     <p v-if="(stats?.summary.sessions_without_cost ?? 0) > 0" class="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
-      {{ $t('dashboard.energyEfficiencyPanel.chargeSWithoutAKnown', { sessions_without_cost: stats?.summary.sessions_without_cost }) }}
+      {{ $t('dashboard.energyEfficiencyPanel.chargeSWithoutAKnown', { unit: distanceUnit(), sessions_without_cost: stats?.summary.sessions_without_cost }) }}
       <router-link to="/expenses?tab=CHARGES" class="font-semibold underline">{{ $t('dashboard.energyEfficiencyPanel.completeThem') }}</router-link>
     </p>
 
     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <div>
         <h4 class="mb-2 text-xs font-bold text-slate-200">{{ $t('dashboard.energyEfficiencyPanel.monthlyConsumption') }}</h4>
-        <div class="h-56"><canvas ref="consumptionRef" role="img" :aria-label="$t('dashboard.energyEfficiencyPanel.monthlyConsumptionInKwhPer')"></canvas></div>
+        <div class="h-56"><canvas ref="consumptionRef" role="img" :aria-label="$t('dashboard.energyEfficiencyPanel.monthlyConsumptionInKwhPer', { unit: distanceUnit() })"></canvas></div>
       </div>
       <div>
-        <h4 class="mb-2 text-xs font-bold text-slate-200">{{ $t('dashboard.energyEfficiencyPanel.energyCostPer100Km') }}</h4>
-        <div class="h-56"><canvas ref="costRef" role="img" :aria-label="$t('dashboard.energyEfficiencyPanel.monthlyEnergyCostPer100')"></canvas></div>
+        <h4 class="mb-2 text-xs font-bold text-slate-200">{{ $t('dashboard.energyEfficiencyPanel.energyCostPer100Km', { unit: distanceUnit() }) }}</h4>
+        <div class="h-56"><canvas ref="costRef" role="img" :aria-label="$t('dashboard.energyEfficiencyPanel.monthlyEnergyCostPer100', { unit: distanceUnit() })"></canvas></div>
       </div>
     </div>
 
@@ -218,14 +219,14 @@ onBeforeUnmount(() => {
       <table>
         <caption>{{ $t('dashboard.energyEfficiencyPanel.consumptionAndEnergyCostPer') }}</caption>
         <thead>
-          <tr><th>{{ $t('dashboard.energyEfficiencyPanel.month') }}</th><th>kWh/100 km</th><th>{{ currencySymbol(currency) }}/100 km</th><th>{{ $t('dashboard.energyEfficiencyPanel.3MonthAverage100Km', { cur: currencySymbol(currency) }) }}</th></tr>
+          <tr><th>{{ $t('dashboard.energyEfficiencyPanel.month') }}</th><th>kWh/100 {{ distanceUnit() }}</th><th>{{ currencySymbol(currency) }}/100 {{ distanceUnit() }}</th><th>{{ $t('dashboard.energyEfficiencyPanel.3MonthAverage100Km', { unit: distanceUnit(), cur: currencySymbol(currency) }) }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="m in visibleMonths" :key="m.month">
             <td>{{ m.month }}</td>
-            <td>{{ fmt(m.consumption_kwh_100km, 1) }}</td>
-            <td>{{ fmt(m.cost_per_100km, 2) }}</td>
-            <td>{{ fmt(m.cost_per_100km_trailing, 2) }}</td>
+            <td>{{ fmt(perUnit(m.consumption_kwh_100km), 1) }}</td>
+            <td>{{ fmt(perUnit(m.cost_per_100km), 2) }}</td>
+            <td>{{ fmt(perUnit(m.cost_per_100km_trailing), 2) }}</td>
           </tr>
         </tbody>
       </table>

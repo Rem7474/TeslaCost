@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
+import { distanceUnit } from '@/units'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -126,8 +128,8 @@ async function submit() {
         <input id="qc-address" v-model="form.address" :placeholder="$t('quickadd.quickChargeForm.chargerHome')" autocomplete="off" class="quick-input" />
       </div>
       <div>
-        <label for="qc-odometer" class="quick-label">{{ $t('quickadd.quickChargeForm.odometerKm') }}</label>
-        <input id="qc-odometer" v-model="form.odometer" type="number" inputmode="numeric" min="0" class="quick-input" />
+        <label for="qc-odometer" class="quick-label">{{ $t('quickadd.quickChargeForm.odometerKm', { unit: distanceUnit() }) }}</label>
+        <DistanceInput text id="qc-odometer" v-model="form.odometer" inputmode="numeric" min="0" class="quick-input" />
       </div>
       <div>
         <label for="qc-notes" class="quick-label">{{ $t('common.notes') }}</label>

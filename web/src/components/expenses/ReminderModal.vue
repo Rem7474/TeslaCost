@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { api, type MaintenanceReminder } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -8,6 +9,7 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import { reminderPresets, type ReminderPreset } from '@/utils/expenses'
 import { todayIso } from '@/utils/dates'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 // Creates a maintenance reminder, or edits `editing`. `preset` pre-fills a new one from a suggestion.
 const props = defineProps<{ vehicleId: string; editing: MaintenanceReminder | null; preset: ReminderPreset | null; currentOdometer: number }>()
@@ -78,7 +80,7 @@ async function handleSaveReminder() {
     return
   }
   if (!reminderForm.value.interval_km && !reminderForm.value.interval_months) {
-    showAlert(t('expenses.reminderModal.intervalRequired'), t('common.requiredField'), 'warning')
+    showAlert(t('expenses.reminderModal.intervalRequired', { unit: distanceUnit() }), t('common.requiredField'), 'warning')
     return
   }
   try {
@@ -174,11 +176,10 @@ async function handleSaveReminder() {
           <span class="block text-xs font-semibold text-slate-200">{{ $t('expenses.reminderModal.frequencyAtLeastOneOf') }}</span>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="reminder-form-interval-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.intervalInKm') }}</label>
-              <input
+              <label for="reminder-form-interval-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.intervalInKm', { unit: distanceUnit() }) }}</label>
+              <DistanceInput whole text
                 id="reminder-form-interval-km"
                 v-model="reminderForm.interval_km"
-                type="number"
                 min="500"
                 step="500"
                 :placeholder="$t('expenses.reminderModal.eG10000EmptyIgnored')"
@@ -205,11 +206,10 @@ async function handleSaveReminder() {
           <span class="block text-xs font-semibold text-slate-200">{{ $t('expenses.reminderModal.startingPointLastMaintenance') }}</span>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="reminder-form-last-odo" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.odometerAtLastMaintenanceKm') }}</label>
-              <input
+              <label for="reminder-form-last-odo" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.odometerAtLastMaintenanceKm', { unit: distanceUnit() }) }}</label>
+              <DistanceInput text
                 id="reminder-form-last-odo"
                 v-model="reminderForm.last_service_odometer"
-                type="number"
                 min="0"
                 :placeholder="$t('common.example', { value: '45000' })"
                 class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white"
@@ -232,11 +232,10 @@ async function handleSaveReminder() {
           <span class="block text-xs font-semibold text-slate-200">{{ $t('expenses.reminderModal.alertLeadThreshold') }}</span>
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label for="reminder-form-lead-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.alertBeforeKm') }}</label>
-              <input
+              <label for="reminder-form-lead-km" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.reminderModal.alertBeforeKm', { unit: distanceUnit() }) }}</label>
+              <DistanceInput whole
                 id="reminder-form-lead-km"
-                v-model.number="reminderForm.lead_km"
-                type="number"
+                v-model="reminderForm.lead_km"
                 min="0"
                 step="100"
                 placeholder="1000"

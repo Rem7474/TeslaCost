@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import QuickFormShell from './QuickFormShell.vue'
 import { currencySymbol, formatAmount } from '@/currency'
 import { buildFuelPayload, isQueued, toLocalDateInput, toNumber } from '@/utils/quickAdd'
+import { distanceUnit } from '@/units'
 
 const props = defineProps<{ vehicle: any }>()
 const currency: string = props.vehicle.currency || 'EUR'
@@ -93,8 +95,8 @@ async function submit() {
         <input id="qf-date" v-model="form.date" type="date" class="quick-input" />
       </div>
       <div>
-        <label for="qf-odometer" class="quick-label">{{ $t('quickadd.quickFuelForm.odometerKm') }}</label>
-        <input id="qf-odometer" v-model="form.odometer" type="number" inputmode="numeric" min="0" class="quick-input" />
+        <label for="qf-odometer" class="quick-label">{{ $t('quickadd.quickFuelForm.odometerKm', { unit: distanceUnit() }) }}</label>
+        <DistanceInput text id="qf-odometer" v-model="form.odometer" inputmode="numeric" min="0" class="quick-input" />
       </div>
       <div>
         <label for="qf-notes" class="quick-label">{{ $t('common.notes') }}</label>

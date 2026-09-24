@@ -2,6 +2,7 @@
 import { intlLocale } from '@/i18n'
 import { useVehicleStore } from '@/stores/vehicle'
 import { formatAmount } from '@/currency'
+import { distanceUnit, formatDistanceValue } from '@/units'
 
 // A tire that was disposed of: its cost stays in the TCO
 defineProps<{ t: any; selected: boolean }>()
@@ -36,7 +37,7 @@ const vehicleStore = useVehicleStore()
       </span>
     </div>
     <div class="text-xs text-slate-400">
-      {{ $t('tires.tireDisposedCard.kmDrivenWear', { total_distance_km: Math.round(t.total_distance_km).toLocaleString(intlLocale()), life_progress_pct: t.life_progress_pct, purchase_price: formatAmount(Number(t.tire.purchase_price || 0), vehicleStore.currency) }) }}
+      {{ $t('tires.tireDisposedCard.kmDrivenWear', { unit: distanceUnit(), total_distance_km: formatDistanceValue(t.total_distance_km), life_progress_pct: t.life_progress_pct, purchase_price: formatAmount(Number(t.tire.purchase_price || 0), vehicleStore.currency) }) }}
     </div>
   </div>
 </template>

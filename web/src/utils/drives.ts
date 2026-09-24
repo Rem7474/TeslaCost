@@ -1,4 +1,5 @@
 import { intlLocale, t } from '@/i18n'
+import { formatDistance } from '@/units'
 import { formatAmount } from '@/currency'
 /** Drive of the "to qualify" toll queue: highway-like (speed heuristic or a toll found by the GPS detection), no toll
  * attached, not reviewed. The server decides (needs_toll_qualification), with the same rule as the queue filter. */
@@ -123,7 +124,7 @@ export function selectionSummary(list: any[], currency: string): string {
   const totalKm = list.reduce((s, d) => s + (Number(d.distance_km) || 0), 0)
   const totalKwh = list.reduce((s, d) => s + (Number(d.costs?.electricity_kwh) || 0), 0)
   const totalCost = list.reduce((s, d) => s + (Number(d.costs?.total_cost) || 0), 0)
-  return `${Math.round(totalKm).toLocaleString(intlLocale())} km • ${Math.round(totalKwh)} kWh • ${formatAmount(totalCost, currency)}`
+  return `${formatDistance(totalKm)} • ${Math.round(totalKwh)} kWh • ${formatAmount(totalCost, currency)}`
 }
 
 export const driveCsvHeaders = (currency: string) => t('drives.csvHeaders', { cur: currency }).split(',')

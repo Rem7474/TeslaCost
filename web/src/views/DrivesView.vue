@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import { distanceUnit } from '@/units'
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
@@ -607,7 +608,7 @@ async function handleBulkApplyToll() {
       <div>
         <h2 class="text-2xl font-bold tracking-tight text-white">{{ $t('drives.drivesView.drivesAndTrips') }}</h2>
         <p class="text-sm text-slate-400">
-          {{ $t('drives.drivesView.drivesActualEnergyAndTolls', { total }) }}
+          {{ $t('drives.drivesView.drivesActualEnergyAndTolls', { unit: distanceUnit(), total }) }}
         </p>
         <div class="flex items-center gap-1 mt-2 bg-slate-900 border border-slate-800 p-1 rounded-xl w-fit">
           <button

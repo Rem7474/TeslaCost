@@ -6,6 +6,7 @@ import { apiMessageText } from '@/services/apiError'
 import { formatAmount } from '@/currency'
 import { formatDate, type SessionForm } from '@/utils/tires'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit, formatDistance, formatDistanceValue, formatPerDistanceValue, perDistance } from '@/units'
 
 const vehicleStore = useVehicleStore()
 
@@ -85,8 +86,8 @@ useEscapeToClose(open, () => (open.value = false))
         <div class="flex items-center justify-between text-xs">
           <span class="text-slate-400">{{ $t('tires.tireHistoryModal.totalLifetimeMileage') }}</span>
           <span class="text-base font-bold text-white">
-            {{ Math.round(selectedTireStats?.total_distance_km || 0).toLocaleString(intlLocale()) }} km
-            <span class="text-xs text-slate-400 font-normal">{{ $t('tires.tireHistoryModal.kmEstimated', { estimated_lifespan_km: (selectedTire.estimated_lifespan_km || 45000).toLocaleString(intlLocale()) }) }}</span>
+            {{ formatDistance(selectedTireStats?.total_distance_km || 0) }}
+            <span class="text-xs text-slate-400 font-normal">{{ $t('tires.tireHistoryModal.kmEstimated', { unit: distanceUnit(), estimated_lifespan_km: formatDistanceValue(selectedTire.estimated_lifespan_km || 45000) }) }}</span>
           </span>
         </div>
 
@@ -108,8 +109,8 @@ useEscapeToClose(open, () => (open.value = false))
             <div class="font-bold text-slate-200">{{ selectedTireStats?.life_progress_pct }}%</div>
           </div>
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
-            <div class="text-[10px] text-slate-500">{{ $t('tires.tireHistoryModal.actualCostKm') }}</div>
-            <div class="font-bold text-amber-400">{{ formatAmount(Number(selectedTireStats?.cost_per_km), vehicleStore.currency, 4) }}</div>
+            <div class="text-[10px] text-slate-500">{{ $t('tires.tireHistoryModal.actualCostKm', { unit: distanceUnit() }) }}</div>
+            <div class="font-bold text-amber-400">{{ formatAmount(perDistance(Number(selectedTireStats?.cost_per_km)), vehicleStore.currency, 4) }}</div>
           </div>
         </div>
       </div>
@@ -146,11 +147,11 @@ useEscapeToClose(open, () => (open.value = false))
           </div>
           <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
             <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireHistoryModal.averageConsumption') }}</div>
-            <div class="font-bold text-sky-400 text-sm mt-0.5">{{ $t('tires.tireHistoryModal.kwh', { avg_consumption_kwh_100km: selectedTireStats.avg_consumption_kwh_100km }) }}</div>
+            <div class="font-bold text-sky-400 text-sm mt-0.5">{{ $t('tires.tireHistoryModal.kwh', { unit: distanceUnit(), avg_consumption_kwh_100km: formatPerDistanceValue(Number(selectedTireStats.avg_consumption_kwh_100km)) }) }}</div>
           </div>
           <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800">
             <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireHistoryModal.adjustedLongevity') }}</div>
-            <div class="font-bold text-indigo-300 text-sm mt-0.5">~{{ (selectedTireStats.dynamic_lifespan_km || selectedTire.estimated_lifespan_km).toLocaleString(intlLocale()) }} km</div>
+            <div class="font-bold text-indigo-300 text-sm mt-0.5">~{{ formatDistance(selectedTireStats.dynamic_lifespan_km || selectedTire.estimated_lifespan_km) }}</div>
           </div>
         </div>
 
@@ -244,12 +245,12 @@ useEscapeToClose(open, () => (open.value = false))
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800/60">
               <div>
                 <div class="text-slate-500">{{ $t('tires.tireHistoryModal.fitting') }}</div>
-                <div class="text-slate-200 font-medium">{{ $t('tires.tireHistoryModal.dateAtKm', { date: formatDate(s.mounted_date), km: Math.round(s.mounted_odometer).toLocaleString(intlLocale()) }) }}</div>
+                <div class="text-slate-200 font-medium">{{ $t('tires.tireHistoryModal.dateAtKm', { unit: distanceUnit(), date: formatDate(s.mounted_date), km: formatDistanceValue(s.mounted_odometer) }) }}</div>
               </div>
               <div>
                 <div class="text-slate-500">{{ $t('tires.tireHistoryModal.removal') }}</div>
                 <div class="text-slate-200 font-medium">
-                  {{ s.dismounted_date ? $t('tires.tireHistoryModal.removedAt', { date: formatDate(s.dismounted_date), odometer: Math.round(s.dismounted_odometer).toLocaleString(intlLocale()) }) : $t('tires.tireHistoryModal.currentlyOnVehicle') }}
+                  {{ s.dismounted_date ? $t('tires.tireHistoryModal.removedAt', { unit: distanceUnit(), date: formatDate(s.dismounted_date), odometer: formatDistanceValue(s.dismounted_odometer) }) : $t('tires.tireHistoryModal.currentlyOnVehicle') }}
                 </div>
               </div>
             </div>
@@ -257,7 +258,7 @@ useEscapeToClose(open, () => (open.value = false))
             <div class="flex items-center justify-between text-[11px] pt-1">
               <span v-if="s.notes" class="text-slate-400 italic">"{{ s.notes }}"</span>
               <span v-else></span>
-              <span class="font-bold text-rose-400">{{ $t('tires.tireHistoryModal.kmDriven', { distance_km: Math.round(s.distance_km).toLocaleString(intlLocale()) }) }}</span>
+              <span class="font-bold text-rose-400">{{ $t('tires.tireHistoryModal.kmDriven', { unit: distanceUnit(), distance_km: formatDistanceValue(s.distance_km) }) }}</span>
             </div>
           </div>
         </div>
@@ -290,7 +291,7 @@ useEscapeToClose(open, () => (open.value = false))
               <span class="text-[10px] text-slate-500">{{ formatDate(l.date) }}</span>
             </div>
             <div class="flex items-center justify-between text-[10px] text-slate-400">
-              <span>{{ $t('common.atKm', { km: Math.round(l.odometer).toLocaleString(intlLocale()) }) }}</span>
+              <span>{{ $t('common.atKm', { unit: distanceUnit(), km: formatDistanceValue(l.odometer) }) }}</span>
               <span class="flex items-center gap-1">
                 <button @click="emit('edit-log', l)" class="text-slate-500 hover:text-emerald-400" :title="$t('tires.tireHistoryModal.editTheReading')">
                   <Pencil class="w-3 h-3" />

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import { formatDistance } from '@/units'
 import { ref } from 'vue'
 import { api } from '@/services/api'
 import { AlertTriangle } from 'lucide-vue-next'
@@ -105,7 +106,7 @@ const issueLabels: Record<string, () => string> = {
         class="text-[11px] text-amber-100/90 flex items-center justify-between gap-3 bg-slate-950/40 rounded-lg px-2.5 py-1.5"
       >
         <span>{{ new Date(issue.date).toLocaleString(intlLocale(), { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }} — {{ issueLabels[issue.type]?.() || issue.type }}</span>
-        <span class="font-mono">{{ issue.km > 0 ? '+' : '' }}{{ issue.km }} km</span>
+        <span class="font-mono">{{ issue.km > 0 ? '+' : '' }}{{ formatDistance(issue.km, 1) }}</span>
       </div>
     </div>
   </div>

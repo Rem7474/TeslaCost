@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, watch } from 'vue'
 import { Ruler, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -8,6 +9,7 @@ import { useConfirm } from '@/composables/useConfirm'
 import { type TireLogForm } from '@/utils/tires'
 import { todayIso } from '@/utils/dates'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 // Adds or edits (editingLogId set) a tread depth measurement of selectedTire; initialForm seeds the fields when the modal opens
 const props = defineProps<{ vehicleId: string; selectedTire: any | null; editingLogId: string | null; initialForm: TireLogForm }>()
@@ -79,10 +81,9 @@ async function handleAddLog() {
           />
         </div>
         <div>
-          <label for="tire-new-log-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireLogModal.currentOdometerKm') }}</label>
-          <input id="tire-new-log-odometer"
-            v-model.number="newLogForm.odometer"
-            type="number"
+          <label for="tire-new-log-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireLogModal.currentOdometerKm', { unit: distanceUnit() }) }}</label>
+          <DistanceInput id="tire-new-log-odometer"
+            v-model="newLogForm.odometer"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
           />
         </div>

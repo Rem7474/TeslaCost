@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
+import { formatDistance } from '@/units'
 import { getSeasonIcon } from '@/utils/tires'
 
 // A tire kept in the garage
@@ -41,7 +42,7 @@ const emit = defineEmits<{ open: [stat: any]; toggle: [tireId: string] }>()
     <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 text-center text-xs">
       <div>
         <div class="text-[10px] text-slate-500">{{ $t('tires.tireStorageCard.totalDriven') }}</div>
-        <div class="font-bold text-white">{{ Math.round(t.total_distance_km).toLocaleString(intlLocale()) }} km</div>
+        <div class="font-bold text-white">{{ formatDistance(t.total_distance_km) }}</div>
       </div>
       <div>
         <div class="text-[10px] text-slate-500">{{ $t('tires.tireStorageCard.estimatedWear') }}</div>

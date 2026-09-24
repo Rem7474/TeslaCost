@@ -9,7 +9,7 @@
     "saved": "{message} : enregistré"
   },
   "quickChargeForm": {
-    "odometerKm": "Odomètre (km)",
+    "odometerKm": "Odomètre ({unit})",
     "chargerHome": "Borne, domicile…",
     "place": "Lieu",
     "dateAndTime": "Date et heure",
@@ -38,7 +38,7 @@
     "saveFailed": "Impossible d'enregistrer la dépense."
   },
   "quickFuelForm": {
-    "odometerKm": "Odomètre (km)",
+    "odometerKm": "Odomètre ({unit})",
     "moreDetails": "Plus de détails",
     "fullTank": "Plein complet",
     "thatIsL": "Soit {pricePerLiter}/L.",

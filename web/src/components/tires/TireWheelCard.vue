@@ -4,6 +4,7 @@ import { Disc } from 'lucide-vue-next'
 import { getConditionBadge } from '@/utils/tires'
 import { formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
+import { distanceUnit, formatDistance, formatDistanceValue, perDistance } from '@/units'
 
 // One wheel of the chassis view: the mounted tire with its wear, or a placeholder when the wheel is empty
 defineProps<{ pos: string; label: string; stat: any | null; selected: boolean }>()
@@ -45,18 +46,18 @@ const vehicleStore = useVehicleStore()
     <div class="grid grid-cols-2 gap-2 bg-slate-950/60 p-3 rounded-2xl border border-slate-800/80 text-center">
       <div>
         <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireWheelCard.totalDriven') }}</div>
-        <div class="text-sm font-bold text-slate-200">{{ Math.round(stat.total_distance_km).toLocaleString(intlLocale()) }} km</div>
+        <div class="text-sm font-bold text-slate-200">{{ formatDistance(stat.total_distance_km) }}</div>
       </div>
       <div>
-        <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireWheelCard.costKm') }}</div>
-        <div class="text-sm font-bold text-amber-400">{{ formatAmount(Number(stat.cost_per_km), vehicleStore.currency, 4) }}</div>
+        <div class="text-[10px] text-slate-500 uppercase">{{ $t('tires.tireWheelCard.costKm', { unit: distanceUnit() }) }}</div>
+        <div class="text-sm font-bold text-amber-400">{{ formatAmount(perDistance(Number(stat.cost_per_km)), vehicleStore.currency, 4) }}</div>
       </div>
     </div>
 
     <!-- Lifespan progress bar -->
     <div class="space-y-1.5">
       <div class="flex items-center justify-between text-xs text-slate-400">
-        <span>{{ $t('tires.tireWheelCard.estimatedLifespanWearKm', { estimated_lifespan_km: stat.estimated_lifespan_km.toLocaleString(intlLocale()) }) }}</span>
+        <span>{{ $t('tires.tireWheelCard.estimatedLifespanWearKm', { unit: distanceUnit(), estimated_lifespan_km: formatDistanceValue(stat.estimated_lifespan_km) }) }}</span>
         <span class="font-bold text-slate-200">{{ stat.life_progress_pct }}%</span>
       </div>
       <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">

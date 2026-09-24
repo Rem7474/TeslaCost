@@ -15,6 +15,7 @@ import CostBreakdownDonut from '@/components/dashboard/CostBreakdownDonut.vue'
 import MileageCostChart from '@/components/dashboard/MileageCostChart.vue'
 import TagBreakdown from '@/components/dashboard/TagBreakdown.vue'
 import MonthDetailModal from '@/components/dashboard/MonthDetailModal.vue'
+import { distanceUnit } from '@/units'
 
 // The page loads the TCO and the reminders; each card and chart of the dashboard is a component that
 // receives the data it shows. A click on a month (chart or banner) opens its detail modal.
@@ -75,7 +76,7 @@ onMounted(() => {
           {{ $t('dashboard.dashboardView.tcoDashboard') }}
         </h2>
         <p class="text-sm text-slate-400">
-          {{ $t('dashboard.dashboardView.subtitle', { name: vehicleStore.activeVehicle?.name || $t('dashboard.dashboardView.yourVehicle') }) }}
+          {{ $t('dashboard.dashboardView.subtitle', { unit: distanceUnit(), name: vehicleStore.activeVehicle?.name || $t('dashboard.dashboardView.yourVehicle') }) }}
         </p>
       </div>
 

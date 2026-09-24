@@ -1,5 +1,6 @@
 import { intlLocale } from '@/i18n'
 import { formatAmount } from '@/currency'
+import { perDistance } from '@/units'
 // Shape of GET /api/vehicles/{id}/energy-stats, shared by the dashboard sections.
 
 export interface EnergyMonth {
@@ -117,6 +118,9 @@ export const fmt = (v: number | undefined, digits: number) =>
 // Same '—' for a missing figure, as an amount in the vehicle's currency
 export const fmtMoney = (v: number | undefined, currency: string, digits = 2) =>
   v === undefined ? '—' : formatAmount(v, currency, digits)
+
+// A figure per 100 km from the API, per 100 of the account's distance unit
+export const perUnit = (v: number | undefined | null): number | undefined => (v === undefined || v === null ? undefined : perDistance(v))
 
 export const fmtPercent = (v: number | undefined) =>
   v === undefined ? '—' : `${(v * 100).toLocaleString(intlLocale(), { maximumFractionDigits: 0 })} %`

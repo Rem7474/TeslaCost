@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Component } from 'vue'
+import { distanceUnit, perDistance } from '@/units'
 import { formatAmount } from '@/currency'
 
 // One cost of a breakdown: an icon, its label (with badges and a formula line if any), its amount, its share of the
@@ -34,7 +35,7 @@ const TONES: Record<Tone, { box: string; text: string }> = {
     </div>
     <div class="text-right">
       <div class="text-sm font-bold font-mono" :class="TONES[tone].text">{{ formatAmount(amount, currency) }}</div>
-      <div class="text-[10px] text-slate-400 font-normal font-sans">({{ sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ formatAmount(costPerKm, currency, 3) }}/km</span></div>
+      <div class="text-[10px] text-slate-400 font-normal font-sans">({{ sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ formatAmount(perDistance(costPerKm), currency, 3) }}/{{ distanceUnit() }}</span></div>
     </div>
   </div>
 </template>

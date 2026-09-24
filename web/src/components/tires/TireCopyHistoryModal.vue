@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import { formatDistance } from '@/units'
 import { ref, watch } from 'vue'
 import { Copy, X } from 'lucide-vue-next'
 import { api } from '@/services/api'
@@ -191,7 +192,7 @@ async function handleCopyHistorySubmit() {
                 <div class="font-bold truncate text-white flex items-center justify-between gap-2">
                   <span class="truncate">{{ t.tire.brand }} {{ t.tire.model }}</span>
                   <span class="text-[10px] font-normal text-indigo-300 shrink-0">
-                    {{ Math.round(t.total_distance_km ?? t.tire.accumulated_distance_km ?? 0).toLocaleString(intlLocale()) }} km • {{ (t.sessions?.length || 0) }} {{ (t.sessions?.length || 0) > 1 ? 'sessions' : 'session' }}
+                    {{ formatDistance(t.total_distance_km ?? t.tire.accumulated_distance_km ?? 0) }} • {{ (t.sessions?.length || 0) }} {{ (t.sessions?.length || 0) > 1 ? 'sessions' : 'session' }}
                   </span>
                 </div>
                 <div class="text-[10px] text-slate-400 truncate">

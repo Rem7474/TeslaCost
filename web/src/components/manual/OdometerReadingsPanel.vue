@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, watch, onMounted } from 'vue'
 import { Gauge, Edit2, Trash2 } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { useConfirm } from '@/composables/useConfirm'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
+import { distanceUnit, formatDistance, formatDistanceValue } from '@/units'
 
 const props = defineProps<{
   vehicle: any
@@ -83,7 +85,7 @@ async function save() {
 async function remove(r: any) {
   const ok = await showConfirm({
     title: t('manual.odometerReadingsPanel.deleteTitle'),
-    message: t('manual.odometerReadingsPanel.deleteMessage', { km: Math.round(r.odometer).toLocaleString(intlLocale()), date: new Date(r.date).toLocaleDateString(intlLocale()) }),
+    message: t('manual.odometerReadingsPanel.deleteMessage', { unit: distanceUnit(), km: formatDistanceValue(r.odometer), date: new Date(r.date).toLocaleDateString(intlLocale()) }),
     confirmText: t('common.delete'),
     type: 'danger',
   })
@@ -129,11 +131,10 @@ onMounted(() => {
           <AppDatePicker id="checkpoint-date" v-model="form.date" required size="sm" />
         </div>
         <div>
-          <label for="checkpoint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.odometerReadingsPanel.mileageKm') }}</label>
-          <input
+          <label for="checkpoint-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.odometerReadingsPanel.mileageKm', { unit: distanceUnit() }) }}</label>
+          <DistanceInput text
             id="checkpoint-odometer"
             v-model="form.odometer"
-            type="number"
             step="1"
             min="0"
             max="2000000"
@@ -185,7 +186,7 @@ onMounted(() => {
             </div>
             <div class="min-w-0">
               <div class="flex items-center gap-2">
-                <span class="text-sm font-bold text-white font-mono">{{ Math.round(r.odometer).toLocaleString(intlLocale()) }} km</span>
+                <span class="text-sm font-bold text-white font-mono">{{ formatDistance(r.odometer) }}</span>
                 <span class="text-xs text-slate-400">
                   {{ $t('manual.odometerReadingsPanel.onDate', { date: new Date(r.date).toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' }) }) }}
                 </span>
@@ -195,10 +196,10 @@ onMounted(() => {
           </div>
 
           <div v-if="canEdit" class="flex items-center gap-1.5 shrink-0">
-            <button type="button" class="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="$t('manual.odometerReadingsPanel.editReading', { km: Math.round(r.odometer) })" @click="startEdit(r)">
+            <button type="button" class="p-1.5 text-slate-400 hover:text-cyan-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="$t('manual.odometerReadingsPanel.editReading', { unit: distanceUnit(), km: formatDistanceValue(r.odometer) })" @click="startEdit(r)">
               <Edit2 class="w-4 h-4" />
             </button>
-            <button type="button" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="$t('manual.odometerReadingsPanel.deleteReading', { km: Math.round(r.odometer) })" @click="remove(r)">
+            <button type="button" class="p-1.5 text-slate-400 hover:text-rose-400 hover:bg-slate-800 rounded-lg transition-colors" :aria-label="$t('manual.odometerReadingsPanel.deleteReading', { unit: distanceUnit(), km: formatDistanceValue(r.odometer) })" @click="remove(r)">
               <Trash2 class="w-4 h-4" />
             </button>
           </div>

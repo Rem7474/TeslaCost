@@ -3,9 +3,10 @@ import { t } from '@/i18n'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { Chart, registerables } from 'chart.js'
 import { Snowflake } from 'lucide-vue-next'
-import { AXIS_TEXT, GRID_COLOR, fmt, type EnergyStats } from './energyStats'
+import { AXIS_TEXT, GRID_COLOR, fmt, perUnit, type EnergyStats } from './energyStats'
 import { useVehicleStore } from '@/stores/vehicle'
 import { formatAmount } from '@/currency'
+import { distanceUnit, formatDistance, formatDistanceValue, perDistance } from '@/units'
 
 Chart.register(...registerables)
 
@@ -39,7 +40,7 @@ function draw() {
       datasets: [
         {
           label: t('dashboard.energyTemperatureSection.consumption'),
-          data: bins.value.map((b) => b.consumption_kwh_100km),
+          data: bins.value.map((b) => perUnit(b.consumption_kwh_100km) ?? null),
           backgroundColor: bins.value.map((b) => binColor(b.min_c)),
           borderRadius: 4,
         },
@@ -52,17 +53,17 @@ function draw() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (ctx) => `${fmt(Number(ctx.raw), 1)} kWh/100 km`,
+            label: (ctx) => `${fmt(Number(ctx.raw), 1)} kWh/100 ${distanceUnit()}`,
             afterLabel: (ctx) => {
               const b = bins.value[ctx.dataIndex]
-              return t('dashboard.energyTemperatureSection.drivesAndDistance', { drives: b.drives, distance: fmt(b.distance_km, 0) })
+              return t('dashboard.energyTemperatureSection.drivesAndDistance', { unit: distanceUnit(), drives: b.drives, distance: formatDistanceValue(b.distance_km) })
             },
           },
         },
       },
       scales: {
         x: { grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT } },
-        y: { beginAtZero: true, grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT }, title: { display: true, text: 'kWh/100 km', color: AXIS_TEXT } },
+        y: { beginAtZero: true, grid: { color: GRID_COLOR }, ticks: { color: AXIS_TEXT }, title: { display: true, text: `kWh/100 ${distanceUnit()}`, color: AXIS_TEXT } },
       },
     },
   })
@@ -84,25 +85,25 @@ onBeforeUnmount(() => chart?.destroy())
     </h4>
 
     <p v-if="effect.extra_percent !== undefined" class="rounded-xl border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-sm text-sky-100">
-      {{ $t('dashboard.energyTemperatureSection.below5CTheCar') }} <strong>{{ $t('dashboard.energyTemperatureSection.kwh100Km', { value: fmt(effect.cold_consumption_kwh_100km, 1) }) }}</strong>
-      {{ $t('dashboard.energyTemperatureSection.againstInMildWeather15', { value: fmt(effect.mild_consumption_kwh_100km, 1) }) }}
-      <strong>+{{ fmt(effect.extra_percent, 0) }} %</strong><template v-if="effect.extra_cost_per_100km !== undefined">{{ $t('dashboard.energyTemperatureSection.aboutMorePer100Km', { value: formatAmount(effect.extra_cost_per_100km, vehicleStore.currency) }) }}</template>.
+      {{ $t('dashboard.energyTemperatureSection.below5CTheCar') }} <strong>{{ $t('dashboard.energyTemperatureSection.kwh100Km', { unit: distanceUnit(), value: fmt(perUnit(effect.cold_consumption_kwh_100km), 1) }) }}</strong>
+      {{ $t('dashboard.energyTemperatureSection.againstInMildWeather15', { value: fmt(perUnit(effect.mild_consumption_kwh_100km), 1) }) }}
+      <strong>+{{ fmt(effect.extra_percent, 0) }} %</strong><template v-if="effect.extra_cost_per_100km !== undefined">{{ $t('dashboard.energyTemperatureSection.aboutMorePer100Km', { unit: distanceUnit(), value: formatAmount(perDistance(effect.extra_cost_per_100km), vehicleStore.currency) }) }}</template>.
     </p>
 
     <div class="h-52">
-      <canvas ref="canvas" role="img" :aria-label="$t('dashboard.energyTemperatureSection.averageConsumptionPer100Km')"></canvas>
+      <canvas ref="canvas" role="img" :aria-label="$t('dashboard.energyTemperatureSection.averageConsumptionPer100Km', { unit: distanceUnit() })"></canvas>
     </div>
     <div class="sr-only">
       <table>
         <caption>{{ $t('dashboard.energyTemperatureSection.consumptionByOutsideTemperature') }}</caption>
-        <thead><tr><th>{{ $t('dashboard.energyTemperatureSection.temperature') }}</th><th>kWh/100 km</th><th>{{ $t('dashboard.energyTemperatureSection.drives') }}</th><th>{{ $t('dashboard.energyTemperatureSection.distanceKm') }}</th></tr></thead>
+        <thead><tr><th>{{ $t('dashboard.energyTemperatureSection.temperature') }}</th><th>kWh/100 {{ distanceUnit() }}</th><th>{{ $t('dashboard.energyTemperatureSection.drives') }}</th><th>{{ $t('dashboard.energyTemperatureSection.distanceKm', { unit: distanceUnit() }) }}</th></tr></thead>
         <tbody>
           <tr v-for="b in bins" :key="b.min_c">
-            <td>{{ binLabel(b) }}</td><td>{{ fmt(b.consumption_kwh_100km, 1) }}</td><td>{{ b.drives }}</td><td>{{ fmt(b.distance_km, 0) }}</td>
+            <td>{{ binLabel(b) }}</td><td>{{ fmt(perUnit(b.consumption_kwh_100km), 1) }}</td><td>{{ b.drives }}</td><td>{{ formatDistanceValue(b.distance_km) }}</td>
           </tr>
         </tbody>
       </table>
     </div>
-    <p class="text-[11px] text-slate-500">{{ $t('dashboard.energyTemperatureSection.drivesOfAtLeast5') }}</p>
+    <p class="text-[11px] text-slate-500">{{ $t('dashboard.energyTemperatureSection.drivesOfAtLeast5', { min: formatDistance(5), band: formatDistance(50) }) }}</p>
   </div>
 </template>

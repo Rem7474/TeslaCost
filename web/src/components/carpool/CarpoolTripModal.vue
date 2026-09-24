@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -28,6 +29,7 @@ import {
 } from '@/utils/carpool'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 import { currencySymbol, formatAmount } from '@/currency'
+import { distanceUnit, formatDistance, formatDistanceValue } from '@/units'
 
 // Creates a carpool trip, or edits `editing`. A new trip can start from drives or a trip group (createOptions).
 // openToken changes every time the page asks to open the modal, so the form is initialised again even if it is already open.
@@ -429,7 +431,7 @@ async function handleModalRecalculate() {
         <div class="flex items-center justify-between gap-2 flex-wrap">
           <h4 class="text-xs font-bold text-white flex items-center gap-1.5">
             <Navigation class="w-4 h-4 text-indigo-400" />
-            {{ $t('carpool.carpoolTripModal.legsAndActualCostsKm', { liveDistance: liveDistance.toFixed(1), total: fmt(euros(live.total)) }) }}
+            {{ $t('carpool.carpoolTripModal.legsAndActualCostsKm', { unit: distanceUnit(), liveDistance: formatDistanceValue(liveDistance, 1), total: fmt(euros(live.total)) }) }}
           </h4>
           <div class="flex items-center gap-2">
             <button
@@ -473,11 +475,10 @@ async function handleModalRecalculate() {
               :placeholder="$t('carpool.carpoolTripModal.destination')"
               class="w-36 bg-slate-800 text-slate-100 rounded-lg px-2 py-1 border border-slate-700"
             />
-            <label :for="`leg-distance-${i}`" class="text-slate-400">km</label>
-            <input
+            <label :for="`leg-distance-${i}`" class="text-slate-400">{{ distanceUnit() }}</label>
+            <DistanceInput
               :id="`leg-distance-${i}`"
-              v-model.number="leg.distance_km"
-              type="number"
+              v-model="leg.distance_km"
               step="0.1"
               min="0"
               :readonly="!!leg.drive_id"
@@ -640,7 +641,7 @@ async function handleModalRecalculate() {
                       {{ legIdx + 1 }}
                     </span>
                     <span>{{ stops[legIdx] }} → {{ stops[legIdx + 1] }}</span>
-                    <span v-if="Number(leg.distance_km)" class="text-slate-400 font-normal">({{ leg.distance_km }} km)</span>
+                    <span v-if="Number(leg.distance_km)" class="text-slate-400 font-normal">({{ formatDistance(Number(leg.distance_km), 1) }})</span>
                   </span>
                   <span v-if="p.board_stop_index <= legIdx && legIdx < p.alight_stop_index" class="text-indigo-300 font-bold">
                     {{ fmt(euros((live.legDetails[legIdx]?.perPerson || 0) * (Number(p.seats) || 1))) }}

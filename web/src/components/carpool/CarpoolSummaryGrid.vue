@@ -3,6 +3,7 @@ import { intlLocale } from '@/i18n'
 import { Users, TrendingUp, CreditCard, Receipt } from 'lucide-vue-next'
 import { useVehicleStore } from '@/stores/vehicle'
 import { formatAmount } from '@/currency'
+import { distanceUnit, formatDistanceValue, perDistance } from '@/units'
 
 // Totals of all the carpool trips of the vehicle
 defineProps<{ summary: any }>()
@@ -23,7 +24,7 @@ const fmt = (v: number) => formatAmount(Number(v || 0), vehicleStore.currency)
         <span class="text-2xl font-bold text-white">{{ summary.total_trips }}</span>
         <span class="text-xs text-slate-400">{{ $t('carpool.carpoolSummaryGrid.trips') }}</span>
       </div>
-      <div class="mt-1 text-[11px] text-slate-400">{{ $t('carpool.carpoolSummaryGrid.kmShared', { total_distance_km: Math.round(summary.total_distance_km || 0).toLocaleString(intlLocale()) }) }}</div>
+      <div class="mt-1 text-[11px] text-slate-400">{{ $t('carpool.carpoolSummaryGrid.kmShared', { unit: distanceUnit(), total_distance_km: formatDistanceValue(summary.total_distance_km || 0) }) }}</div>
     </div>
 
     <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl shadow-sm">
@@ -64,8 +65,8 @@ const fmt = (v: number) => formatAmount(Number(v || 0), vehicleStore.currency)
         <div class="p-2 bg-amber-500/10 rounded-xl text-amber-400"><Receipt class="w-4 h-4" /></div>
       </div>
       <div class="mt-2 flex items-baseline gap-2">
-        <span class="text-2xl font-bold text-amber-400">{{ formatAmount(Number(summary.net_cost_per_km || 0), vehicleStore.currency, 3) }}</span>
-        <span class="text-xs text-slate-400">/ km</span>
+        <span class="text-2xl font-bold text-amber-400">{{ formatAmount(perDistance(Number(summary.net_cost_per_km || 0)), vehicleStore.currency, 3) }}</span>
+        <span class="text-xs text-slate-400">/ {{ distanceUnit() }}</span>
       </div>
       <div class="mt-1 text-[11px] text-slate-400">{{ $t('carpool.carpoolSummaryGrid.driverSFairShare', { total_driver_share: fmt(summary.total_driver_share) }) }}</div>
     </div>

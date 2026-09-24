@@ -16,7 +16,7 @@
   "deselectAll": "Tout désélectionner",
   "deleteForever": "Supprimer définitivement",
   "or": "ou",
-  "atKm": "à {km} km",
-  "atKmCapitalized": "À {km} km",
+  "atKm": "à {km} {unit}",
+  "atKmCapitalized": "À {km} {unit}",
   "example": "ex : {value}"
 }

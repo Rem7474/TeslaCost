@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { Plus, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -9,6 +10,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { currencySymbol } from '@/currency'
 import { todayIso } from '@/utils/dates'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 const props = defineProps<{ vehicleId: string; currentOdometer: number }>()
 const emit = defineEmits<{ saved: [] }>()
@@ -307,10 +309,9 @@ async function handleCreateTires() {
         </div>
 
         <div>
-          <label for="tire-add-tire-estimated-lifespan-km" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.estimatedLifespanKm') }}</label>
-          <input id="tire-add-tire-estimated-lifespan-km"
-            v-model.number="addTireForm.estimated_lifespan_km"
-            type="number"
+          <label for="tire-add-tire-estimated-lifespan-km" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.estimatedLifespanKm', { unit: distanceUnit() }) }}</label>
+          <DistanceInput whole id="tire-add-tire-estimated-lifespan-km"
+            v-model="addTireForm.estimated_lifespan_km"
             step="5000"
             class="w-full bg-slate-900 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
           />
@@ -319,10 +320,9 @@ async function handleCreateTires() {
 
       <!-- Km already driven (second-hand) -->
       <div>
-        <label for="tire-add-tire-accumulated-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.kmAlreadyDrivenIfUsed') }}</label>
-        <input id="tire-add-tire-accumulated-distance-km"
-          v-model.number="addTireForm.accumulated_distance_km"
-          type="number"
+        <label for="tire-add-tire-accumulated-distance-km" class="block text-xs font-semibold text-slate-400 mb-1">{{ $t('tires.tireAddModal.kmAlreadyDrivenIfUsed', { unit: distanceUnit() }) }}</label>
+        <DistanceInput id="tire-add-tire-accumulated-distance-km"
+          v-model="addTireForm.accumulated_distance_km"
           class="w-full bg-slate-800 text-slate-100 text-xs rounded-xl px-3 py-2 border border-slate-700 focus:outline-none focus:border-rose-500"
         />
       </div>

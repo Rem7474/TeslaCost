@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, watch } from 'vue'
 import { ClipboardPaste, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -7,6 +8,7 @@ import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { emptySessionForm, formatDate, type SessionForm } from '@/utils/tires'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit } from '@/units'
 
 // Adds or edits (editingSessionId set) a mount session of selectedTire; initialForm seeds the fields when the modal opens
 const props = defineProps<{
@@ -134,11 +136,10 @@ async function handleSaveSession() {
             />
           </div>
           <div>
-            <label for="tire-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.odometerAtFittingKm') }}</label>
-            <input id="tire-session-mounted-odometer"
-              v-model.number="sessionForm.mounted_odometer"
+            <label for="tire-session-mounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.odometerAtFittingKm', { unit: distanceUnit() }) }}</label>
+            <DistanceInput id="tire-session-mounted-odometer"
+              v-model="sessionForm.mounted_odometer"
               @input="onSessionOdometerChange"
-              type="number"
               class="w-full bg-slate-800 text-slate-100 rounded-xl px-2.5 py-1.5 border border-slate-700"
             />
           </div>
@@ -162,21 +163,19 @@ async function handleSaveSession() {
             />
           </div>
           <div>
-            <label for="tire-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.odometerAtRemovalKm') }}</label>
-            <input id="tire-session-dismounted-odometer"
-              v-model.number="sessionForm.dismounted_odometer"
+            <label for="tire-session-dismounted-odometer" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.odometerAtRemovalKm', { unit: distanceUnit() }) }}</label>
+            <DistanceInput id="tire-session-dismounted-odometer"
+              v-model="sessionForm.dismounted_odometer"
               @input="onSessionOdometerChange"
-              type="number"
               class="w-full bg-slate-900 text-slate-100 rounded-lg px-2 py-1.5 border border-slate-700"
             />
           </div>
         </div>
 
         <div>
-          <label for="tire-session-distance-km" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.sessionDistanceKm') }}</label>
-          <input id="tire-session-distance-km"
-            v-model.number="sessionForm.distance_km"
-            type="number"
+          <label for="tire-session-distance-km" class="block text-slate-400 mb-1 font-semibold">{{ $t('tires.tireSessionModal.sessionDistanceKm', { unit: distanceUnit() }) }}</label>
+          <DistanceInput id="tire-session-distance-km"
+            v-model="sessionForm.distance_km"
             :placeholder="$t('tires.tireSessionModal.calculatedOrForced')"
             class="w-full bg-slate-800 text-slate-100 rounded-xl px-3 py-2 border border-slate-700"
           />

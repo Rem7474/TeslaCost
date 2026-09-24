@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { computed, ref, watch } from 'vue'
 import { api, type ExpenseDocumentHeader } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
@@ -142,7 +143,7 @@ async function handleSaveCharge() {
             </div>
             <div>
               <label for="charge-form-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.chargeModal.odometerOptional') }}</label>
-              <input id="charge-form-odometer" v-model="chargeForm.odometer" type="number" inputmode="numeric" min="0" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+              <DistanceInput text id="charge-form-odometer" v-model="chargeForm.odometer" inputmode="numeric" min="0" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
         </template>

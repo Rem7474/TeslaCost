@@ -3,11 +3,14 @@ import { intlLocale } from '@/i18n'
 import { useVehicleStore } from '@/stores/vehicle'
 import { formatAmount } from '@/currency'
 import { Coins, Zap, Receipt, TrendingUp } from 'lucide-vue-next'
+import { distanceUnit, formatDistanceValue, perDistance } from '@/units'
 
 defineProps<{ tco: any | null }>()
 const vehicleStore = useVehicleStore()
 // Every TCO figure is in the vehicle's own currency
 const money = (v: number, digits = 2) => formatAmount(v || 0, vehicleStore.currency, digits)
+// A cost per km from the API, per the account's distance unit
+const perUnit = (v: number) => money(perDistance(v || 0), 3)
 </script>
 
 <template>
@@ -37,21 +40,21 @@ const money = (v: number, digits = 2) => formatAmount(v || 0, vehicleStore.curre
     <!-- Cost per km -->
     <div class="bg-gradient-to-br from-slate-900 to-slate-900/50 border border-slate-800 p-4 sm:p-5 rounded-2xl shadow-sm">
       <div class="flex items-center justify-between mb-3">
-        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('dashboard.tcoMetricsGrid.fullCostPerKm') }}</span>
+        <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('dashboard.tcoMetricsGrid.fullCostPerKm', { unit: distanceUnit() }) }}</span>
         <div class="p-2 bg-emerald-500/10 text-emerald-400 rounded-xl">
           <TrendingUp class="w-5 h-5" />
         </div>
       </div>
       <div class="text-2xl sm:text-3xl font-extrabold text-emerald-400">
-        {{ money(tco?.full_cost_per_km, 3) }}<span class="text-xs font-normal text-slate-400">/km</span>
+        {{ perUnit(tco?.full_cost_per_km) }}<span class="text-xs font-normal text-slate-400">/{{ distanceUnit() }}</span>
       </div>
       <div class="mt-2 space-y-0.5">
         <p class="text-xs text-slate-400">
-          {{ $t('dashboard.tcoMetricsGrid.directRunningCostKm', { usage_cost_per_km: money(tco?.usage_cost_per_km, 3) }) }}
+          {{ $t('dashboard.tcoMetricsGrid.directRunningCostKm', { unit: distanceUnit(), usage_cost_per_km: perUnit(tco?.usage_cost_per_km) }) }}
         </p>
         <p class="text-[11px] text-slate-500">
-          {{ $t('dashboard.tcoMetricsGrid.overKm', { distance_basis_km: Math.round(tco?.distance_basis_km || 0).toLocaleString(intlLocale()) }) }}
-          <template v-if="tco?.depreciation_cost_per_km"> {{ $t('dashboard.tcoMetricsGrid.depreciationKm', { value: money(tco.depreciation_cost_per_km, 3) }) }}</template>
+          {{ $t('dashboard.tcoMetricsGrid.overKm', { unit: distanceUnit(), distance_basis_km: formatDistanceValue(tco?.distance_basis_km || 0) }) }}
+          <template v-if="tco?.depreciation_cost_per_km"> {{ $t('dashboard.tcoMetricsGrid.depreciationKm', { unit: distanceUnit(), value: perUnit(tco.depreciation_cost_per_km) }) }}</template>
         </p>
       </div>
     </div>
@@ -69,10 +72,10 @@ const money = (v: number, digits = 2) => formatAmount(v || 0, vehicleStore.curre
       </div>
       <div class="mt-2 space-y-0.5">
         <p v-if="tco?.powertrain === 'ICE'" class="text-xs text-slate-400">
-          {{ money(tco?.energy_cost_per_km, 3) }}/km • {{ Math.round(tco?.total_liters || 0).toLocaleString(intlLocale()) }} L<template v-if="tco?.consumption_l_100km"> • {{ tco.consumption_l_100km.toFixed(2) }} L/100</template><template v-if="tco?.avg_cost_per_liter"> • {{ money(tco.avg_cost_per_liter, 3) }}/L</template>
+          {{ perUnit(tco?.energy_cost_per_km) }}/{{ distanceUnit() }} • {{ Math.round(tco?.total_liters || 0).toLocaleString(intlLocale()) }} L<template v-if="tco?.consumption_l_100km"> • {{ tco.consumption_l_100km.toFixed(2) }} L/100</template><template v-if="tco?.avg_cost_per_liter"> • {{ money(tco.avg_cost_per_liter, 3) }}/L</template>
         </p>
         <p v-else class="text-xs text-slate-400">
-          {{ $t('dashboard.tcoMetricsGrid.kmKwh', { energy_cost_per_km: money(tco?.energy_cost_per_km, 3), total_kwh_added: Math.round(tco?.total_kwh_added || 0).toLocaleString(intlLocale()) }) }}
+          {{ $t('dashboard.tcoMetricsGrid.kmKwh', { unit: distanceUnit(), energy_cost_per_km: perUnit(tco?.energy_cost_per_km), total_kwh_added: Math.round(tco?.total_kwh_added || 0).toLocaleString(intlLocale()) }) }}
         </p>
         <p v-if="tco?.completeness?.charges_without_cost" class="text-[11px] text-amber-400">
           {{ $t('dashboard.tcoMetricsGrid.chargeSWithoutACost', { charges_without_cost: tco.completeness.charges_without_cost }) }}
@@ -92,7 +95,7 @@ const money = (v: number, digits = 2) => formatAmount(v || 0, vehicleStore.curre
         {{ money(tco?.tolls_cost) }}
       </div>
       <div class="mt-2">
-        <p class="text-xs text-slate-400">{{ money(tco?.tolls_cost_per_km, 3) }}/km</p>
+        <p class="text-xs text-slate-400">{{ perUnit(tco?.tolls_cost_per_km) }}/{{ distanceUnit() }}</p>
       </div>
     </div>
   </div>

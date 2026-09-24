@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { APP_NAME } from '@/brand'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -7,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
 import { Zap, ShieldCheck, Car, KeyRound, ArrowRight, CheckCircle2, AlertCircle, RefreshCw, Link2 } from 'lucide-vue-next'
+import { distanceUnit, formatDistanceValue } from '@/units'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -105,7 +107,7 @@ async function testConnection() {
     const st = res.status
     testResult.value = {
       ok: true,
-      message: t('onboarding.testSuccess', { state: st?.state || t('onboarding.online'), odometer: Math.round(st?.odometer || 0).toLocaleString(intlLocale()) }),
+      message: t('onboarding.testSuccess', { unit: distanceUnit(), state: st?.state || t('onboarding.online'), odometer: formatDistanceValue(st?.odometer || 0) }),
     }
   } catch (err: any) {
     testResult.value = { ok: false, message: err.message }
@@ -279,10 +281,9 @@ function finishOnboarding() {
 
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label for="onboarding-vehicle-odometer" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.currentOdometerKm') }}</label>
-              <input id="onboarding-vehicle-odometer"
-                v-model.number="vehicleOdometer"
-                type="number"
+              <label for="onboarding-vehicle-odometer" class="block text-xs font-semibold text-slate-300 mb-1.5 uppercase tracking-wider">{{ $t('onboarding.onboardingView.currentOdometerKm', { unit: distanceUnit() }) }}</label>
+              <DistanceInput id="onboarding-vehicle-odometer"
+                v-model="vehicleOdometer"
                 min="0"
                 step="1"
                 required

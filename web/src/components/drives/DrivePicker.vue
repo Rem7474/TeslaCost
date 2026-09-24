@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { formatDistance } from '@/units'
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
@@ -111,7 +112,7 @@ watch(
           <input type="checkbox" class="select-box" :checked="selectedIds.includes(d.id)" @change="emit('toggle', d.id)" />
           <span class="truncate">{{ formatDriveTime(d.start_time) }}{{ $t('drives.tripGroupsPanel.dateSeparator') }}{{ (d.start_address || $t('drives.driveCostModal.start')).split(',')[0] }} → {{ (d.end_address || $t('drives.driveCostModal.end')).split(',')[0] }}</span>
         </span>
-        <span class="font-mono text-[11px] text-slate-400 shrink-0">{{ Number(d.distance_km).toFixed(0) }} km</span>
+        <span class="font-mono text-[11px] text-slate-400 shrink-0">{{ formatDistance(Number(d.distance_km)) }}</span>
       </label>
     </div>
   </div>

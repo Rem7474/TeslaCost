@@ -1,6 +1,7 @@
 import { intlLocale, t } from '@/i18n'
 import { COST_COLORS } from '@/utils/costBreakdown'
 import { formatAmount } from '@/currency'
+import { distanceUnit, formatDistanceValue } from '@/units'
 export const monthlyRangeOptions = [
   { key: 'ALL', labelKey: 'dashboard.range.all' },
   { key: '1Y', labelKey: 'dashboard.range.oneYear' },
@@ -276,7 +277,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode, currency = 'E
       cashAmount: m.tires || 0,
       note: (m.tires || 0) > 0
         ? t('dashboard.breakdown.tiresCashNote', { amount: money(Number(m.tires)) })
-        : (m.tires_amortized > 0 ? t('dashboard.breakdown.tiresAmortizedNote', { km: Math.round(dist).toLocaleString(intlLocale()), zero: money(0) }) : null),
+        : (m.tires_amortized > 0 ? t('dashboard.breakdown.tiresAmortizedNote', { unit: distanceUnit(), km: formatDistanceValue(dist), zero: money(0) }) : null),
     },
     {
       key: 'maintenance',

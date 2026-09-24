@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
 import { ref } from 'vue'
-import { formatDistance } from '@/units'
+import { distanceUnit, formatDistance, formatDistanceValue, formatPerDistanceValue, perDistance } from '@/units'
 import { formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
@@ -154,7 +154,7 @@ function clearCardTestResult() {
         <span class="text-slate-400">{{ $t('vehicles.vehicleCard.estimatedEnergy') }}</span>
         <p v-if="v.estimated_kwh_100km && v.estimated_price_per_kwh" class="text-xs font-semibold text-sky-400 flex items-center gap-1 mt-1">
           <Zap class="w-3.5 h-3.5 text-sky-400" />
-          {{ $t('vehicles.vehicleCard.kwh100kmKwh', { estimated_kwh_100km: v.estimated_kwh_100km, price: `${formatAmount(v.estimated_price_per_kwh, v.currency || 'EUR', 3)}/kWh` }) }}
+          {{ $t('vehicles.vehicleCard.kwh100kmKwh', { unit: distanceUnit(), estimated_kwh_100km: formatPerDistanceValue(Number(v.estimated_kwh_100km)), price: `${formatAmount(v.estimated_price_per_kwh, v.currency || 'EUR', 3)}/kWh` }) }}
         </p>
         <p v-else class="text-xs text-slate-500 mt-1">{{ $t('vehicles.vehicleCard.notConfigured') }}</p>
       </div>
@@ -221,7 +221,7 @@ function clearCardTestResult() {
         <AlertCircle v-else class="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
         <div>
           <span v-if="cardTest.success">
-            {{ $t('vehicles.testSuccess', { state: cardTest.status?.state || $t('vehicles.vehicleCard.online'), odometer: Math.round(cardTest.status?.odometer || 0).toLocaleString(intlLocale()) }) }}
+            {{ $t('vehicles.testSuccess', { unit: distanceUnit(), state: cardTest.status?.state || $t('vehicles.vehicleCard.online'), odometer: formatDistanceValue(cardTest.status?.odometer || 0) }) }}
           </span>
           <span v-else>{{ cardTest.error }}</span>
         </div>

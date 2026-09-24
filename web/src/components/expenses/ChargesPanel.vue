@@ -4,6 +4,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { Zap, Pencil, Trash2, AlertTriangle, Paperclip } from 'lucide-vue-next'
 import { formatDate } from '@/utils/expenses'
 import { formatAmount } from '@/currency'
+import { distanceUnit, formatPerDistanceValue, perDistance } from '@/units'
 
 defineProps<{
   charges: any[]
@@ -35,7 +36,7 @@ const vehicleStore = useVehicleStore()
         <Zap class="w-4 h-4 shrink-0 text-sky-400" />
         <span>
           {{ $t('expenses.chargesPanel.energyEstimateActive') }}
-          <strong>{{ $t('expenses.chargesPanel.kwh100km', { estimated_kwh_100km: vehicleStore.activeVehicle.estimated_kwh_100km }) }}</strong> {{ $t('expenses.chargesPanel.at') }}
+          <strong>{{ $t('expenses.chargesPanel.kwh100km', { unit: distanceUnit(), estimated_kwh_100km: formatPerDistanceValue(Number(vehicleStore.activeVehicle.estimated_kwh_100km)) }) }}</strong> {{ $t('expenses.chargesPanel.at') }}
           <strong>{{ $t('expenses.chargesPanel.kwh3', { estimated_price_per_kwh: formatAmount(Number(vehicleStore.activeVehicle.estimated_price_per_kwh), vehicleStore.currency, 4) }) }}</strong>
           {{ $t('expenses.chargesPanel.automaticallyIncludedInTheTco') }}
         </span>

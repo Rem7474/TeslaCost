@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { intlLocale, t } from '@/i18n'
+import DistanceInput from '@/components/DistanceInput.vue'
 import { ref, computed, watch, onMounted } from 'vue'
 import { Fuel, Plus, Pencil, Trash2, X } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
@@ -8,6 +9,7 @@ import { api } from '@/services/api'
 import { useVehicleStore } from '@/stores/vehicle'
 import { currencySymbol, formatAmount } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit, formatDistance, perDistance } from '@/units'
 
 const props = defineProps<{
   vehicleId: string
@@ -215,15 +217,15 @@ onMounted(load)
 
     <div v-if="loading && !stats" class="text-sm text-slate-400">{{ $t('manual.fuelLogsPanel.loading') }}</div>
     <div v-else-if="logs.length === 0" class="bg-slate-900 border border-slate-800 rounded-2xl p-6 text-sm text-slate-400">
-      {{ $t('manual.fuelLogsPanel.noFillUpRecordedEnter') }}
+      {{ $t('manual.fuelLogsPanel.noFillUpRecordedEnter', { unit: distanceUnit() }) }}
     </div>
     <ul v-else class="space-y-2">
       <li v-for="log in logs" :key="log.id" class="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex items-center justify-between gap-3">
         <div class="min-w-0">
           <div class="text-sm font-semibold text-white flex flex-wrap items-center gap-2">
             {{ fmtDate(log.date) }}
-            <template v-if="log.odometer != null"> · {{ Math.round(log.odometer).toLocaleString(intlLocale()) }} km</template>
-            <template v-else-if="log.odometer_estimated != null"> · ≈ {{ Math.round(log.odometer_estimated).toLocaleString(intlLocale()) }} km <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('manual.fuelLogsPanel.estimated') }}</span></template>
+            <template v-if="log.odometer != null"> · {{ formatDistance(log.odometer) }}</template>
+            <template v-else-if="log.odometer_estimated != null"> · ≈ {{ formatDistance(log.odometer_estimated) }} <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('manual.fuelLogsPanel.estimated') }}</span></template>
             <span v-if="!log.is_full_tank" class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('manual.fuelLogsPanel.partial') }}</span>
           </div>
           <div class="text-xs text-slate-400 mt-0.5">
@@ -231,7 +233,7 @@ onMounted(load)
             <template v-if="log.liters"> · {{ fmtNum(log.liters, 2) }} L</template>
             <template v-if="log.price_per_liter"> · {{ fmtMoney(log.price_per_liter, 3) }}/L</template>
             <template v-if="log.consumption_l_100km"> · <span class="text-emerald-300">{{ log.segment_estimated ? '≈ ' : '' }}{{ fmtNum(log.consumption_l_100km, 2) }} L/100</span></template>
-            <template v-if="log.cost_per_km"> · {{ fmtMoney(log.cost_per_km, 3) }}/km</template>
+            <template v-if="log.cost_per_km"> · {{ fmtMoney(perDistance(log.cost_per_km), 3) }}/{{ distanceUnit() }}</template>
           </div>
         </div>
         <div v-if="canEdit" class="flex items-center gap-1.5 shrink-0">
@@ -261,8 +263,8 @@ onMounted(load)
             <AppDatePicker id="fuel-date" v-model="form.date" required size="sm" />
           </div>
           <div>
-            <label for="fuel-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.mileageKmOptional') }}</label>
-            <input id="fuel-odometer" v-model.number="form.odometer" type="number" inputmode="numeric" min="0" step="1" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
+            <label for="fuel-odometer" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.fuelLogsPanel.mileageKmOptional', { unit: distanceUnit() }) }}</label>
+            <DistanceInput id="fuel-odometer" v-model="form.odometer" inputmode="numeric" min="0" step="1" class="field-touch w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>
 

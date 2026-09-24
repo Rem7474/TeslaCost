@@ -14,6 +14,7 @@ import { currencySymbol, formatAmount } from '@/currency'
 import CostDonut from '@/components/costs/CostDonut.vue'
 import CostItemRow from '@/components/costs/CostItemRow.vue'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
+import { distanceUnit, formatDistance, kmToDisplayDistance, perDistance, speedUnit } from '@/units'
 
 // Cost breakdown of a drive, or of a trip group (drive.is_trip_group, whose drives are tripDriveIds), with its
 // expenses (edit, delete, add a toll) and the toll detection. A detected trip that is not created yet
@@ -352,10 +353,10 @@ async function handleDeleteExpense(exp: any) {
           <span class="truncate">{{ selectedCostDrive.end_address || $t('drives.driveCostModal.end') }}</span>
         </div>
         <div class="flex items-center gap-3 text-xs text-slate-300 flex-wrap">
-          <span class="font-bold text-rose-400">{{ selectedCostDrive.distance_km }} km</span>
+          <span class="font-bold text-rose-400">{{ formatDistance(selectedCostDrive.distance_km, 1) }}</span>
           <span v-if="selectedCostDrive.duration_min" class="text-slate-400">{{ $t('drives.driveCostModal.min', { duration_min: selectedCostDrive.duration_min }) }}</span>
           <span v-if="selectedCostDrive.drives_count" class="text-indigo-400 font-semibold">{{ $t('drives.driveCostModal.legs', { drives_count: selectedCostDrive.drives_count }) }}</span>
-          <span v-if="selectedCostDrive.speed_avg" class="text-slate-400">{{ $t('drives.driveCostModal.kmHAvg', { speed_avg: Math.round(selectedCostDrive.speed_avg) }) }}</span>
+          <span v-if="selectedCostDrive.speed_avg" class="text-slate-400">{{ $t('drives.driveCostModal.kmHAvg', { speed: speedUnit(), speed_avg: Math.round(kmToDisplayDistance(selectedCostDrive.speed_avg)) }) }}</span>
           <span v-if="selectedCostDrive.costs?.electricity_kwh" class="text-sky-400 font-mono">{{ $t('drives.driveCostModal.kwh', { electricity_kwh: selectedCostDrive.costs.electricity_kwh }) }}</span>
         </div>
 
@@ -420,7 +421,7 @@ async function handleDeleteExpense(exp: any) {
             </div>
           </div>
           <div class="flex items-center gap-3 shrink-0">
-            <span class="text-[11px] font-bold text-rose-400">{{ Math.round(leg.distance_km) }} km</span>
+            <span class="text-[11px] font-bold text-rose-400">{{ formatDistance(leg.distance_km) }}</span>
             <span class="text-xs font-mono font-bold text-white">{{ formatAmount(leg.costs?.total_cost || 0, vehicleCurrency) }}</span>
             <ChevronRight class="w-4 h-4 text-slate-500" />
           </div>
@@ -490,7 +491,7 @@ async function handleDeleteExpense(exp: any) {
           :icon="Disc"
           tone="emerald"
           :label="$t('drives.driveCostModal.tireWear')"
-          :sub="`${selectedCostDrive.distance_km} km × ${formatAmount(selectedCostDrive.costs?.tires_rate || 0.02, vehicleCurrency, 3)}/km`"
+          :sub="`${formatDistance(selectedCostDrive.distance_km, 1)} × ${formatAmount(perDistance(selectedCostDrive.costs?.tires_rate || 0.02), vehicleCurrency, 3)}/${distanceUnit()}`"
           :amount="selectedCostDrive.costs?.tires_cost || 0"
           :share-pct="breakdown.byKey.tires.sharePct"
           :cost-per-km="breakdown.byKey.tires.costPerKm"
@@ -507,7 +508,7 @@ async function handleDeleteExpense(exp: any) {
           :icon="Wrench"
           tone="pink"
           :label="$t('drives.driveCostModal.maintenanceProvision')"
-          :sub="`${selectedCostDrive.distance_km} km × ${formatAmount(selectedCostDrive.costs?.maintenance_rate || 0.015, vehicleCurrency, 3)}/km`"
+          :sub="`${formatDistance(selectedCostDrive.distance_km, 1)} × ${formatAmount(perDistance(selectedCostDrive.costs?.maintenance_rate || 0.015), vehicleCurrency, 3)}/${distanceUnit()}`"
           :amount="selectedCostDrive.costs?.maintenance_cost || 0"
           :share-pct="breakdown.byKey.maintenance.sharePct"
           :cost-per-km="breakdown.byKey.maintenance.costPerKm"
@@ -524,7 +525,7 @@ async function handleDeleteExpense(exp: any) {
           :icon="Shield"
           tone="purple"
           :label="$t('drives.driveCostModal.insuranceShareFixedCost')"
-          :sub="`${selectedCostDrive.distance_km} km × ${formatAmount(selectedCostDrive.costs?.insurance_rate || 0, vehicleCurrency, 3)}/km`"
+          :sub="`${formatDistance(selectedCostDrive.distance_km, 1)} × ${formatAmount(perDistance(selectedCostDrive.costs?.insurance_rate || 0), vehicleCurrency, 3)}/${distanceUnit()}`"
           :amount="selectedCostDrive.costs?.insurance_cost || 0"
           :share-pct="breakdown.byKey.insurance.sharePct"
           :cost-per-km="breakdown.byKey.insurance.costPerKm"
@@ -544,7 +545,7 @@ async function handleDeleteExpense(exp: any) {
             <span
               v-else-if="selectedCostDrive.costs?.insurance_source === 'INSUFFICIENT_DISTANCE'"
               class="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium"
-              :title="$t('drives.driveCostModal.lessThan500KmDriven')"
+              :title="$t('drives.driveCostModal.lessThan500KmDriven', { min: formatDistance(500) })"
             >
               {{ $t('drives.driveCostModal.notEnoughKm') }}
             </span>
@@ -571,7 +572,7 @@ async function handleDeleteExpense(exp: any) {
             <div class="flex items-center gap-2">
               <div class="text-right">
                 <div class="text-sm font-bold text-amber-400 font-mono">{{ formatAmount(selectedCostDrive.costs?.tolls_cost || 0, vehicleCurrency) }}</div>
-                <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ formatAmount(breakdown.byKey.tolls.costPerKm, vehicleCurrency, 3) }}/km</span></div>
+                <div class="text-[10px] text-slate-400 font-normal font-sans">({{ breakdown.byKey.tolls.sharePct.toFixed(1) }}%) · <span class="text-emerald-400">{{ formatAmount(perDistance(breakdown.byKey.tolls.costPerKm), vehicleCurrency, 3) }}/{{ distanceUnit() }}</span></div>
               </div>
               <button
                 v-if="canDetectTolls"
@@ -741,9 +742,9 @@ async function handleDeleteExpense(exp: any) {
             </div>
           </div>
           <div class="text-right">
-            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre') }}</span>
+            <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">{{ $t('drives.driveCostModal.costPerKilometre', { unit: distanceUnit() }) }}</span>
             <div class="text-lg font-extrabold text-emerald-400 font-mono">
-              {{ formatAmount(selectedCostDrive.costs?.cost_per_km || 0, vehicleCurrency, 3) }}<span class="text-xs font-normal text-slate-400">/km</span>
+              {{ formatAmount(perDistance(selectedCostDrive.costs?.cost_per_km || 0), vehicleCurrency, 3) }}<span class="text-xs font-normal text-slate-400">/{{ distanceUnit() }}</span>
             </div>
           </div>
         </div>
