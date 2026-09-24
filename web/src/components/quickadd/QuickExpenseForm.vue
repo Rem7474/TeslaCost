@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { intlLocale, t } from '@/i18n'
+import { t } from '@/i18n'
 import { onMounted, reactive, ref } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import QuickFormShell from './QuickFormShell.vue'
 import QuickPhotoField from './QuickPhotoField.vue'
+import { currencySymbol, formatAmount } from '@/currency'
 import { buildExpensePayload, isQueued, toLocalDateTimeInput, type ExpenseType } from '@/utils/quickAdd'
 
 const props = defineProps<{ vehicle: any }>()
+const currency: string = props.vehicle.currency || 'EUR'
 const emit = defineEmits<{ saved: [result: { queued: boolean; message: string }] }>()
 
 const types: { value: ExpenseType; label: string }[] = [
@@ -37,7 +39,7 @@ async function submit() {
   error.value = ''
   let payload: ReturnType<typeof buildExpensePayload>
   try {
-    payload = buildExpensePayload({ ...form }, props.vehicle.currency || 'EUR')
+    payload = buildExpensePayload({ ...form }, currency)
   } catch (err: any) {
     error.value = err.message
     return
@@ -46,7 +48,7 @@ async function submit() {
   try {
     const result = await api.createDriveExpense(props.vehicle.id, payload)
     const label = t(types.find((type) => type.value === payload.type)?.label ?? 'quickadd.quickAddSheet.tabExpense')
-    emit('saved', { queued: isQueued(result), message: t('quickadd.quickExpenseForm.message', { label, amount: payload.amount.toLocaleString(intlLocale()) }) })
+    emit('saved', { queued: isQueued(result), message: t('quickadd.quickExpenseForm.message', { label, amount: formatAmount(payload.amount, currency) }) })
   } catch (err: any) {
     error.value = err?.message || t('quickadd.quickExpenseForm.saveFailed')
   } finally {
@@ -73,7 +75,7 @@ async function submit() {
     </div>
 
     <div>
-      <label for="qe-amount" class="quick-label">{{ $t('quickadd.quickExpenseForm.amount') }}</label>
+      <label for="qe-amount" class="quick-label">{{ $t('quickadd.quickExpenseForm.amount', { cur: currencySymbol(currency) }) }}</label>
       <input id="qe-amount" ref="amountInput" v-model="form.amount" type="number" inputmode="decimal" step="any" min="0" class="quick-input" />
     </div>
 

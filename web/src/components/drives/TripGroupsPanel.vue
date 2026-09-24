@@ -77,9 +77,9 @@ const formatDate = formatDayTime
             </div>
             <div>
               <div class="text-xs font-extrabold text-white flex items-center gap-1.5">
-                <span>{{ Number(tg.tolls_total || 0) > 0 ? $t('drives.tripGroupsPanel.costsAmount', { amount: Number(tg.tolls_total).toFixed(2) }) : $t('drives.tripGroupsPanel.costDetail') }}</span>
+                <span>{{ Number(tg.tolls_total || 0) > 0 ? $t('drives.tripGroupsPanel.costsAmount', { amount: formatAmount(Number(tg.tolls_total), vehicleStore.currency) }) : $t('drives.tripGroupsPanel.costDetail') }}</span>
                 <span v-if="tg.distance_km > 0 && tg.tolls_total" class="text-[10px] font-normal text-emerald-400 font-mono">
-                  {{ formatAmount(Number(tg.tolls_total) / tg.distance_km, vehicleStore.activeVehicle?.currency || 'EUR', 3) }}/km
+                  {{ formatAmount(Number(tg.tolls_total) / tg.distance_km, vehicleStore.currency, 3) }}/km
                 </span>
               </div>
             </div>

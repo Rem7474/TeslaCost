@@ -6,7 +6,7 @@ import { Zap, CheckCircle2 } from 'lucide-vue-next'
 import { useConfirm } from '@/composables/useConfirm'
 import { useVehicleStore } from '@/stores/vehicle'
 import { api } from '@/services/api'
-import { formatAmount } from '@/currency'
+import { currencySymbol, formatAmount } from '@/currency'
 
 const props = defineProps<{
   vehicle: any
@@ -50,7 +50,7 @@ async function save() {
     return
   }
   if (rate !== null && (rate <= 0 || rate > 10)) {
-    showAlert(t('manual.estimatedEnergyPanel.invalidRate'), t('manual.estimatedEnergyPanel.invalidField'), 'warning')
+    showAlert(t('manual.estimatedEnergyPanel.invalidRate', { cur: currencySymbol(vehicleStore.currency) }), t('manual.estimatedEnergyPanel.invalidField'), 'warning')
     return
   }
   saving.value = true
@@ -124,7 +124,7 @@ onMounted(() => {
             />
           </div>
           <div>
-            <label for="pre-tm-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.estimatedEnergyPanel.electricityRateKwh') }}</label>
+            <label for="pre-tm-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('manual.estimatedEnergyPanel.electricityRateKwh', { cur: currencySymbol(vehicleStore.currency) }) }}</label>
             <input
               id="pre-tm-rate"
               v-model.number="form.price_per_kwh"
@@ -143,13 +143,13 @@ onMounted(() => {
           <div class="text-slate-300 font-semibold flex items-center justify-between">
             <span>{{ $t('manual.estimatedEnergyPanel.estimateOverSmoothedKm', { distance: Math.round(preview.distance).toLocaleString(intlLocale()) }) }}</span>
             <span class="text-sky-400 font-bold font-mono">
-              ≈ {{ formatAmount(preview.cost, vehicleStore.activeVehicle?.currency || 'EUR') }}
+              ≈ {{ formatAmount(preview.cost, vehicleStore.currency) }}
             </span>
           </div>
           <p class="text-slate-400 text-[11px]">
             {{ $t('manual.estimatedEnergyPanel.estimatedVolume') }}
             <strong class="text-slate-200 font-mono">{{ $t('manual.estimatedEnergyPanel.kwh', { kwh: Math.round(preview.kwh).toLocaleString(intlLocale()) }) }}</strong>
-            {{ $t('manual.estimatedEnergyPanel.kmSpreadProRataAcross', { cost: (preview.cost / (preview.distance || 1)).toFixed(3) }) }}
+            {{ $t('manual.estimatedEnergyPanel.kmSpreadProRataAcross', { cost: formatAmount(preview.cost / (preview.distance || 1), vehicleStore.currency, 3) }) }}
           </p>
         </div>
 

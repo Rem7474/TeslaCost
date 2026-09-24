@@ -5,7 +5,7 @@ import { Chart, registerables } from 'chart.js'
 import { Activity, PieChart } from 'lucide-vue-next'
 import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
 import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
-import { formatAmount } from '@/currency'
+import { currencySymbol, formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
 
 Chart.register(...registerables)
@@ -45,7 +45,7 @@ function renderChart() {
         },
         {
           type: 'line',
-          label: t('dashboard.mileageCostChart.averageCostPerKm'),
+          label: t('dashboard.mileageCostChart.averageCostPerKm', { cur: currencySymbol(vehicleStore.currency) }),
           data: costPerKmData,
           borderColor: '#10b981',
           backgroundColor: '#10b981',
@@ -96,8 +96,7 @@ function renderChart() {
                 const dist = Number(context.raw).toLocaleString(intlLocale())
                 return t('dashboard.mileageCostChart.tooltipDistance', { distance: dist })
               }
-              const costPerKm = Number(context.raw).toFixed(3)
-              return t('dashboard.mileageCostChart.tooltipCostPerKm', { cost: costPerKm })
+              return t('dashboard.mileageCostChart.tooltipCostPerKm', { cost: formatAmount(Number(context.raw), vehicleStore.currency, 3) })
             },
           },
         },
@@ -120,9 +119,9 @@ function renderChart() {
           grid: { display: false },
           ticks: {
             color: '#10b981',
-            callback: (v) => formatAmount(Number(v), vehicleStore.activeVehicle?.currency || 'EUR', 3),
+            callback: (v) => formatAmount(Number(v), vehicleStore.currency, 3),
           },
-          title: { display: true, text: t('dashboard.mileageCostChart.axisCostPerKm'), color: '#10b981', font: { size: 11 } },
+          title: { display: true, text: t('dashboard.mileageCostChart.axisCostPerKm', { cur: currencySymbol(vehicleStore.currency) }), color: '#10b981', font: { size: 11 } },
         },
       },
     },
@@ -142,7 +141,7 @@ onUnmounted(() => {
       <div>
         <h3 class="text-sm font-bold text-white flex items-center gap-2">
           <Activity class="w-4 h-4 text-indigo-400" />
-          <span>{{ $t('dashboard.mileageCostChart.monthlyMileageAndCostPer2') }}</span>
+          <span>{{ $t('dashboard.mileageCostChart.monthlyMileageAndCostPer2', { cur: currencySymbol(vehicleStore.currency) }) }}</span>
         </h3>
         <p class="text-xs text-slate-400 mt-0.5">{{ $t('dashboard.mileageCostChart.clickABarOfThe') }}</p>
       </div>
@@ -164,7 +163,7 @@ onUnmounted(() => {
           </span>
           <span class="flex items-center gap-1.5 text-emerald-400">
             <span class="w-3 h-1 rounded bg-emerald-400 inline-block"></span>
-            {{ $t('dashboard.mileageCostChart.costKm') }}
+            {{ $t('dashboard.mileageCostChart.costKm', { cur: currencySymbol(vehicleStore.currency) }) }}
           </span>
         </div>
       </div>

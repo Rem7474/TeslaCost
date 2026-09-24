@@ -6,6 +6,7 @@ import AppDatePicker from '@/components/AppDatePicker.vue'
 import { api } from '@/services/api'
 import { useConfirm } from '@/composables/useConfirm'
 import { useVehicleStore } from '@/stores/vehicle'
+import { currencySymbol } from '@/currency'
 import { todayIso } from '@/utils/dates'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
@@ -279,7 +280,7 @@ async function handleCreateTires() {
         <div>
           <div class="flex items-center justify-between mb-1">
             <label for="tire-add-tire-total-price" class="text-xs font-semibold text-slate-400">
-              {{ isTotalPrice ? $t('tires.tireAddModal.totalPrice') : $t('tires.tireAddModal.pricePerTire') }}
+              {{ isTotalPrice ? $t('tires.tireAddModal.totalPrice', { cur: currencySymbol(vehicleStore.currency) }) : $t('tires.tireAddModal.pricePerTire', { cur: currencySymbol(vehicleStore.currency) }) }}
             </label>
             <button
               type="button"

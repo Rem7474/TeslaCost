@@ -1,4 +1,5 @@
 import { t } from '@/i18n'
+import { formatAmount } from '@/currency'
 // AutoLedger API Service
 import { newIdempotencyKey } from '@/services/offlineQueue'
 import { apiErrorMessage } from '@/services/apiError'
@@ -194,8 +195,9 @@ export const api = {
 
   // Fuel fill-ups (combustion vehicles); the list comes with consumption figures per segment and global stats
   getFuelLogs: (vehicleId: string) => request<any>(`/vehicles/${vehicleId}/fuel-logs`),
-  createFuelLog: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/fuel-logs`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.fillUp', { amount: data.amount })),
+  // A fill-up is always in the vehicle's own currency, which the payload does not carry
+  createFuelLog: (vehicleId: string, data: any, currency: string) =>
+    request<any>(`/vehicles/${vehicleId}/fuel-logs`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.fillUp', { amount: formatAmount(Number(data.amount), currency) })),
   updateFuelLog: (vehicleId: string, fuelLogId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/fuel-logs/${fuelLogId}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteFuelLog: (vehicleId: string, fuelLogId: string) =>
@@ -311,7 +313,7 @@ export const api = {
   // Expenses & Charges
   getDriveExpenses: (vehicleId: string) => request<any[]>(`/vehicles/${vehicleId}/expenses`),
   createDriveExpense: (vehicleId: string, data: any) =>
-    request<any>(`/vehicles/${vehicleId}/expenses`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.toll', { amount: data.amount, currency: data.currency || 'EUR' })),
+    request<any>(`/vehicles/${vehicleId}/expenses`, { method: 'POST', body: JSON.stringify(data) }, t('shell.api.toll', { amount: formatAmount(Number(data.amount), data.currency || 'EUR') })),
   updateDriveExpense: (vehicleId: string, expenseId: string, data: any) =>
     request<any>(`/vehicles/${vehicleId}/expenses/${expenseId}`, { method: 'PUT', body: JSON.stringify(data) }, t('shell.api.tollEdit')),
   deleteDriveExpense: (vehicleId: string, expenseId: string) =>

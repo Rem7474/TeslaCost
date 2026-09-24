@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
+import { useVehicleStore } from '@/stores/vehicle'
+import { formatAmount } from '@/currency'
 import { Briefcase, User } from 'lucide-vue-next'
 
 // Pro / Perso split of the drives
 defineProps<{ tco: any | null }>()
+const vehicleStore = useVehicleStore()
 </script>
 
 <template>
@@ -22,7 +25,7 @@ defineProps<{ tco: any | null }>()
             <span class="text-sm font-bold text-white">{{ item.tag }}</span>
           </div>
           <p class="text-xs text-slate-400 mt-1">{{ $t('dashboard.tagBreakdown.kmKwh', { distance_km: item.distance_km.toLocaleString(intlLocale()), energy_kwh: item.energy_kwh }) }}</p>
-          <p v-if="item.tolls_amount" class="text-xs text-amber-400">{{ $t('dashboard.tagBreakdown.ofTollsAndParking', { value: item.tolls_amount.toFixed(2) }) }}</p>
+          <p v-if="item.tolls_amount" class="text-xs text-amber-400">{{ $t('dashboard.tagBreakdown.ofTollsAndParking', { value: formatAmount(item.tolls_amount, vehicleStore.currency) }) }}</p>
         </div>
         <div class="text-right">
           <span class="text-lg font-extrabold text-white">{{ item.percentage }}%</span>

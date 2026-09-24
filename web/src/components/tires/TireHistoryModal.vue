@@ -53,7 +53,7 @@ useEscapeToClose(open, () => (open.value = false))
             </span>
           </div>
           <div class="text-xs text-slate-400 mt-0.5">
-            {{ $t('tires.tireHistoryModal.boughtOn', { purchase_date: formatDate(selectedTire.purchase_date), purchase_price: selectedTire.purchase_price }) }}
+            {{ $t('tires.tireHistoryModal.boughtOn', { purchase_date: formatDate(selectedTire.purchase_date), purchase_price: formatAmount(Number(selectedTire.purchase_price || 0), vehicleStore.currency) }) }}
           </div>
         </div>
         <div class="flex items-center gap-1.5">
@@ -109,7 +109,7 @@ useEscapeToClose(open, () => (open.value = false))
           </div>
           <div class="bg-slate-900/80 p-2 rounded-xl border border-slate-800">
             <div class="text-[10px] text-slate-500">{{ $t('tires.tireHistoryModal.actualCostKm') }}</div>
-            <div class="font-bold text-amber-400">{{ formatAmount(Number(selectedTireStats?.cost_per_km), vehicleStore.activeVehicle?.currency || 'EUR', 4) }}</div>
+            <div class="font-bold text-amber-400">{{ formatAmount(Number(selectedTireStats?.cost_per_km), vehicleStore.currency, 4) }}</div>
           </div>
         </div>
       </div>

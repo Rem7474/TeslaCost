@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { intlLocale, t } from '@/i18n'
+import { t } from '@/i18n'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import QuickFormShell from './QuickFormShell.vue'
 import QuickPhotoField from './QuickPhotoField.vue'
+import { currencySymbol, formatAmount } from '@/currency'
 import {
   buildChargePayload,
   costFromTariff,
@@ -17,6 +18,7 @@ import {
 } from '@/utils/quickAdd'
 
 const props = defineProps<{ vehicle: any }>()
+const currency: string = props.vehicle.currency || 'EUR'
 const emit = defineEmits<{ saved: [result: { queued: boolean; message: string }] }>()
 
 const memory = loadMemory(props.vehicle.id)
@@ -52,7 +54,7 @@ watch(
 )
 
 const pricePerKwh = computed(() => effectivePricePerKwh(toNumber(form.kwh), toNumber(form.cost)))
-const fmtPrice = (v: number) => v.toLocaleString(intlLocale(), { minimumFractionDigits: 3, maximumFractionDigits: 4 })
+const fmtPrice = (v: number) => formatAmount(v, currency, 4)
 const followsTariff = computed(() => !costTouched.value && memory.pricePerKwh !== undefined && form.cost !== '')
 
 function setFree() {
@@ -64,7 +66,7 @@ async function submit() {
   error.value = ''
   let payload: ReturnType<typeof buildChargePayload>
   try {
-    payload = buildChargePayload({ ...form }, props.vehicle.currency || 'EUR')
+    payload = buildChargePayload({ ...form }, currency)
   } catch (err: any) {
     error.value = err.message
     return
@@ -92,7 +94,7 @@ async function submit() {
     </div>
 
     <div>
-      <label for="qc-cost" class="quick-label">{{ $t('quickadd.quickChargeForm.cost') }}</label>
+      <label for="qc-cost" class="quick-label">{{ $t('quickadd.quickChargeForm.cost', { cur: currencySymbol(currency) }) }}</label>
       <div class="flex gap-2">
         <input id="qc-cost" v-model="form.cost" type="number" inputmode="decimal" step="any" min="0" class="quick-input min-w-0" @input="costTouched = true" />
         <button type="button" class="quick-chip shrink-0 border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700" @click="setFree">{{ $t('quickadd.quickChargeForm.free') }}</button>

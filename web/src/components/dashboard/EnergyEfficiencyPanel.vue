@@ -7,7 +7,7 @@ import { api } from '@/services/api'
 import EnergyBatterySection from './EnergyBatterySection.vue'
 import EnergyTemperatureSection from './EnergyTemperatureSection.vue'
 import CostDonut from '@/components/costs/CostDonut.vue'
-import { AXIS_TEXT, GRID_COLOR, fmt, fmtPercent, mergeAcDcClasses, type ChargeClass, type EnergyStats } from './energyStats'
+import { AXIS_TEXT, GRID_COLOR, fmt, fmtMoney, fmtPercent, mergeAcDcClasses, type ChargeClass, type EnergyStats } from './energyStats'
 import { filterMonthsByRange, type MonthlyRangeKey } from '@/utils/dashboard'
 import MonthlyRangeSelector from './MonthlyRangeSelector.vue'
 import { currencySymbol, formatAmount } from '@/currency'
@@ -23,7 +23,7 @@ const props = defineProps<{
 }>()
 
 const vehicleStore = useVehicleStore()
-const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
+const currency = computed(() => vehicleStore.currency)
 
 const stats = ref<EnergyStats | null>(null)
 const failed = ref(false)
@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
         <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.energyCost') }}</dt>
         <dd class="mt-1 text-xl font-bold text-white">{{ formatAmount(stats?.summary.cost_per_100km || 0, currency) }} <span class="text-xs font-medium text-slate-400">/100 km</span></dd>
-        <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.thatIsKwhOnAverage', { price_per_kwh: fmt(stats?.summary.price_per_kwh, 3) }) }}</p>
+        <p class="mt-0.5 text-[11px] text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.thatIsKwhOnAverage', { price_per_kwh: fmtMoney(stats?.summary.price_per_kwh, currency, 3) }) }}</p>
       </div>
       <div class="rounded-xl border border-slate-800 bg-slate-950/60 p-3">
         <dt class="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{{ $t('dashboard.energyEfficiencyPanel.chargingEfficiency') }}</dt>
@@ -218,7 +218,7 @@ onBeforeUnmount(() => {
       <table>
         <caption>{{ $t('dashboard.energyEfficiencyPanel.consumptionAndEnergyCostPer') }}</caption>
         <thead>
-          <tr><th>{{ $t('dashboard.energyEfficiencyPanel.month') }}</th><th>kWh/100 km</th><th>{{ currencySymbol(currency) }}/100 km</th><th>{{ $t('dashboard.energyEfficiencyPanel.3MonthAverage100Km') }}</th></tr>
+          <tr><th>{{ $t('dashboard.energyEfficiencyPanel.month') }}</th><th>kWh/100 km</th><th>{{ currencySymbol(currency) }}/100 km</th><th>{{ $t('dashboard.energyEfficiencyPanel.3MonthAverage100Km', { cur: currencySymbol(currency) }) }}</th></tr>
         </thead>
         <tbody>
           <tr v-for="m in visibleMonths" :key="m.month">
@@ -255,7 +255,7 @@ onBeforeUnmount(() => {
               <span class="text-xs text-slate-300">{{ $t('dashboard.energyEfficiencyPanel.ofTheEnergyChargeS', { value: share(c), sessions: c.sessions }) }}</span>
             </div>
             <p class="mt-2 text-xs text-slate-400">
-              {{ $t('dashboard.energyEfficiencyPanel.kwhKwhEfficiency', { value: fmt(c.kwh_added, 0), value2: fmt(c.price_per_kwh, 3), value3: fmtPercent(c.charge_efficiency) }) }}<template v-if="c.cost_per_full_charge !== undefined"> · 0 → 100 % : {{ fmt(c.cost_per_full_charge, 2) }} €</template>
+              {{ $t('dashboard.energyEfficiencyPanel.kwhKwhEfficiency', { value: fmt(c.kwh_added, 0), value2: fmtMoney(c.price_per_kwh, currency, 3), value3: fmtPercent(c.charge_efficiency) }) }}<template v-if="c.cost_per_full_charge !== undefined"> · 0 → 100 % : {{ formatAmount(c.cost_per_full_charge, currency) }}</template>
             </p>
           </li>
         </ul>

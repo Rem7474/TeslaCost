@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { intlLocale } from '@/i18n'
 import { Users, TrendingUp, CreditCard, Receipt } from 'lucide-vue-next'
-import { fmt } from '@/utils/carpool'
+import { useVehicleStore } from '@/stores/vehicle'
+import { formatAmount } from '@/currency'
 
 // Totals of all the carpool trips of the vehicle
 defineProps<{ summary: any }>()
+
+const vehicleStore = useVehicleStore()
+// Carpool amounts are in the vehicle's own currency
+const fmt = (v: number) => formatAmount(Number(v || 0), vehicleStore.currency)
 </script>
 
 <template>
@@ -38,7 +43,7 @@ defineProps<{ summary: any }>()
         <span class="text-xs font-medium text-slate-400">{{ $t('carpool.carpoolSummaryGrid.totalReceivedFromPassengers') }}</span>
         <div class="p-2 bg-emerald-500/10 rounded-xl text-emerald-400"><CreditCard class="w-4 h-4" /></div>
       </div>
-      <div class="mt-2"><span class="text-2xl font-bold text-emerald-400">{{ fmt(summary.total_revenue) }} €</span></div>
+      <div class="mt-2"><span class="text-2xl font-bold text-emerald-400">{{ fmt(summary.total_revenue) }}</span></div>
       <div class="mt-1 text-[11px]" :class="summary.total_revenue >= summary.total_passengers_share ? 'text-emerald-500/80' : 'text-amber-400'">
         {{ summary.total_revenue >= summary.total_passengers_share ? $t('carpool.carpoolSummaryGrid.covered') : $t('carpool.carpoolSummaryGrid.below', { amount: fmt(summary.total_passengers_share - summary.total_revenue) }) }}
       </div>
@@ -59,7 +64,7 @@ defineProps<{ summary: any }>()
         <div class="p-2 bg-amber-500/10 rounded-xl text-amber-400"><Receipt class="w-4 h-4" /></div>
       </div>
       <div class="mt-2 flex items-baseline gap-2">
-        <span class="text-2xl font-bold text-amber-400">{{ Number(summary.net_cost_per_km || 0).toFixed(3) }} €</span>
+        <span class="text-2xl font-bold text-amber-400">{{ formatAmount(Number(summary.net_cost_per_km || 0), vehicleStore.currency, 3) }}</span>
         <span class="text-xs text-slate-400">/ km</span>
       </div>
       <div class="mt-1 text-[11px] text-slate-400">{{ $t('carpool.carpoolSummaryGrid.driverSFairShare', { total_driver_share: fmt(summary.total_driver_share) }) }}</div>

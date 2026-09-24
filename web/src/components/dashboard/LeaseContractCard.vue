@@ -9,7 +9,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 // Follow-up of a LOA / LLD contract: duration, mileage against the allowance, costs and included services
 const props = defineProps<{ tco: any | null }>()
 const vehicleStore = useVehicleStore()
-const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
+const currency = computed(() => vehicleStore.currency)
 const leaseContract = computed(() => buildLeaseSummary(props.tco))
 </script>
 
@@ -40,7 +40,7 @@ const leaseContract = computed(() => buildLeaseSummary(props.tco))
         </span>
         <span class="text-xs text-slate-400 font-normal"> {{ $t('dashboard.leaseContractCard.month') }}</span>
         <span v-if="leaseContract.downPayment && leaseContract.downPayment > 0" class="block text-[11px] text-slate-400">
-          {{ $t('dashboard.leaseContractCard.downPayment', { downPayment: Number(leaseContract.downPayment).toLocaleString(intlLocale(), { maximumFractionDigits: 0 }) }) }}
+          {{ $t('dashboard.leaseContractCard.downPayment', { downPayment: formatAmount(Number(leaseContract.downPayment), currency, 0) }) }}
         </span>
       </div>
     </div>
@@ -164,10 +164,10 @@ const leaseContract = computed(() => buildLeaseSummary(props.tco))
       <!-- Penalty Warnings if applicable -->
       <div class="flex items-center gap-3">
         <span v-if="leaseContract.excessKmCost > 0" class="text-rose-400 font-semibold">
-          {{ $t('dashboard.leaseContractCard.overageToDate', { value: leaseContract.excessKmCost.toFixed(2) }) }}
+          {{ $t('dashboard.leaseContractCard.overageToDate', { value: formatAmount(leaseContract.excessKmCost, currency) }) }}
         </span>
         <span v-if="leaseContract.excessKmProjected > 0" class="text-amber-400 font-semibold">
-          {{ $t('dashboard.leaseContractCard.estimatedEndOfContractPenalty', { value: leaseContract.excessKmProjected.toFixed(2) }) }}
+          {{ $t('dashboard.leaseContractCard.estimatedEndOfContractPenalty', { value: formatAmount(leaseContract.excessKmProjected, currency) }) }}
         </span>
       </div>
     </div>

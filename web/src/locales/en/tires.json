@@ -72,8 +72,8 @@
     "fullSetFitted4Tires": "Full set fitted (4 tires)",
     "recordingFormat": "Recording format:",
     "addTires": "Add tires",
-    "totalPrice": "Total price of the set (€)",
-    "pricePerTire": "Price per tire (€)",
+    "totalPrice": "Total price of the set ({cur})",
+    "pricePerTire": "Price per tire ({cur})",
     "switchTo": "Switch to {mode}",
     "unitPrice": "unit price",
     "totalPriceMode": "total price",
@@ -139,7 +139,7 @@
     "odometerAtRemovalKm": "Odometer at removal (km)"
   },
   "tireDisposedCard": {
-    "kmDrivenWear": "{total_distance_km} km driven • Wear: {life_progress_pct}% • {purchase_price} €",
+    "kmDrivenWear": "{total_distance_km} km driven • Wear: {life_progress_pct}% • {purchase_price}",
     "scrapped": "Scrapped",
     "selectForABulkAction": "Select for a bulk action"
   },
@@ -164,7 +164,7 @@
     "minimumDepthMm": "Minimum depth (mm)",
     "newDepthMm": "New depth (mm)",
     "estimatedLifespanKm": "Estimated lifespan (km)",
-    "price": "Price (€)",
+    "price": "Price ({cur})",
     "totalPriceSplit": "Total price split",
     "unitPrice": "Unit price",
     "priceEntry": "Price entry",
@@ -215,7 +215,7 @@
     "deleteEntryError": "Delete (entry error)",
     "scrapWornPuncturedSold": "Scrap (worn, punctured, sold)",
     "editTheTire": "Edit the tire",
-    "boughtOn": "Bought on {purchase_date} • {purchase_price} €",
+    "boughtOn": "Bought on {purchase_date} • {purchase_price}",
     "sport": "Sporty load",
     "eco": "Eco driving",
     "balanced": "Balanced driving",

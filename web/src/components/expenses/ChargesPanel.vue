@@ -3,6 +3,7 @@ import { useRouter } from 'vue-router'
 import { useVehicleStore } from '@/stores/vehicle'
 import { Zap, Pencil, Trash2, AlertTriangle, Paperclip } from 'lucide-vue-next'
 import { formatDate } from '@/utils/expenses'
+import { formatAmount } from '@/currency'
 
 defineProps<{
   charges: any[]
@@ -35,7 +36,7 @@ const vehicleStore = useVehicleStore()
         <span>
           {{ $t('expenses.chargesPanel.energyEstimateActive') }}
           <strong>{{ $t('expenses.chargesPanel.kwh100km', { estimated_kwh_100km: vehicleStore.activeVehicle.estimated_kwh_100km }) }}</strong> à
-          <strong>{{ $t('expenses.chargesPanel.kwh3', { estimated_price_per_kwh: Number(vehicleStore.activeVehicle.estimated_price_per_kwh).toFixed(4) }) }}</strong>
+          <strong>{{ $t('expenses.chargesPanel.kwh3', { estimated_price_per_kwh: formatAmount(Number(vehicleStore.activeVehicle.estimated_price_per_kwh), vehicleStore.currency, 4) }) }}</strong>
           {{ $t('expenses.chargesPanel.automaticallyIncludedInTheTco') }}
         </span>
       </div>
@@ -91,9 +92,9 @@ const vehicleStore = useVehicleStore()
         <div class="flex items-center justify-between sm:justify-end gap-3 shrink-0">
           <div class="text-left sm:text-right">
             <template v-if="c.cost !== null">
-              <span class="text-lg font-extrabold text-sky-400">{{ c.cost.toFixed(2) }} {{ c.currency }}</span>
+              <span class="text-lg font-extrabold text-sky-400">{{ formatAmount(c.cost, c.currency || vehicleStore.currency) }}</span>
               <p v-if="c.kwh_added > 0" class="text-[11px] text-slate-400">
-                {{ $t('expenses.chargesPanel.kwh', { cost: (c.cost / c.kwh_added).toFixed(3), currency: c.currency }) }}
+                {{ $t('expenses.chargesPanel.kwh', { cost: formatAmount(c.cost / c.kwh_added, c.currency || vehicleStore.currency, 3) }) }}
               </p>
             </template>
             <span v-else class="text-xs font-bold text-amber-400 flex items-center gap-1">

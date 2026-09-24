@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Coins, Zap, Receipt, Disc, Wrench, Briefcase, ArrowRight, Activity, Shield, X, ChevronLeft, ChevronRight, PieChart, Info, SlidersHorizontal } from 'lucide-vue-next'
 import { buildMonthBreakdown, formatMonthName, type MonthDetailMode } from '@/utils/dashboard'
 import CostDonut from '@/components/costs/CostDonut.vue'
-import { formatAmount } from '@/currency'
+import { currencySymbol, formatAmount } from '@/currency'
 import { useVehicleStore } from '@/stores/vehicle'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
@@ -13,7 +13,7 @@ import { useEscapeToClose } from '@/composables/useEscapeToClose'
 const props = defineProps<{ monthlyCosts: any[] }>()
 const selectedMonth = defineModel<any | null>('month', { required: true })
 const vehicleStore = useVehicleStore()
-const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
+const currency = computed(() => vehicleStore.currency)
 
 const monthDetailViewMode = ref<MonthDetailMode>('economic')
 
@@ -53,7 +53,7 @@ function closeMonthDetail() {
 
 const selectedMonthBreakdown = computed(() => {
   if (!selectedMonth.value) return null
-  const breakdown = buildMonthBreakdown(selectedMonth.value, monthDetailViewMode.value)
+  const breakdown = buildMonthBreakdown(selectedMonth.value, monthDetailViewMode.value, currency.value)
   return { ...breakdown, items: breakdown.items.map((it) => ({ ...it, icon: ITEM_ICONS[it.key] })) }
 })
 
@@ -183,7 +183,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               monthDetailViewMode === 'economic' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
             ]"
           >
-            {{ $t('dashboard.monthDetailModal.costPriceKm') }}
+            {{ $t('dashboard.monthDetailModal.costPriceKm', { cur: currencySymbol(currency) }) }}
           </button>
           <button
             type="button"
@@ -193,7 +193,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               monthDetailViewMode === 'cash' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
             ]"
           >
-            {{ $t('dashboard.monthDetailModal.cashExpenses') }}
+            {{ $t('dashboard.monthDetailModal.cashExpenses', { cur: currencySymbol(currency) }) }}
           </button>
         </div>
       </div>
@@ -208,12 +208,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           <div class="flex items-center gap-3 text-[11px] flex-wrap">
             <span class="flex items-center gap-1.5 text-purple-300">
               <span class="w-2 h-2 rounded-full bg-purple-500"></span>
-              <span>{{ $t('dashboard.monthDetailModal.fixedCosts') }} : <strong class="text-white">{{ selectedMonthBreakdown.fixedVar.fixedPct }}%</strong> ({{ selectedMonthBreakdown.fixedVar.fixedAmount.toFixed(2) }} €)</span>
+              <span>{{ $t('dashboard.monthDetailModal.fixedCosts') }} : <strong class="text-white">{{ selectedMonthBreakdown.fixedVar.fixedPct }}%</strong> ({{ formatAmount(selectedMonthBreakdown.fixedVar.fixedAmount, currency) }})</span>
             </span>
             <span class="text-slate-600">•</span>
             <span class="flex items-center gap-1.5 text-sky-300">
               <span class="w-2 h-2 rounded-full bg-sky-500"></span>
-              <span>{{ $t('dashboard.monthDetailModal.variableCosts') }} : <strong class="text-white">{{ selectedMonthBreakdown.fixedVar.variablePct }}%</strong> ({{ selectedMonthBreakdown.fixedVar.variableAmount.toFixed(2) }} €)</span>
+              <span>{{ $t('dashboard.monthDetailModal.variableCosts') }} : <strong class="text-white">{{ selectedMonthBreakdown.fixedVar.variablePct }}%</strong> ({{ formatAmount(selectedMonthBreakdown.fixedVar.variableAmount, currency) }})</span>
             </span>
           </div>
         </div>

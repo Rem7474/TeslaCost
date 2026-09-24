@@ -31,7 +31,7 @@ const { isUploadingDocument, onSelectExistingDoc, onDropzoneDirectUpload } = use
 const vehicleStore = useVehicleStore()
 
 const editingTollId = computed(() => props.editing?.id ?? null)
-const baseCurrency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
+const baseCurrency = computed(() => vehicleStore.currency)
 
 const recentDrives = ref<any[]>([])
 const associationMode = ref<'NONE' | 'SINGLE' | 'MULTI'>('NONE')
@@ -215,7 +215,7 @@ async function handleCreateToll() {
           </div>
         </div>
         <div v-if="tollForm.currency !== 'EUR'">
-          <label for="toll-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.tollModal.conversionRate1', { currency: tollForm.currency }) }}</label>
+          <label for="toll-form-fx-rate" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.tollModal.conversionRate1', { currency: tollForm.currency, base: baseCurrency }) }}</label>
           <input id="toll-form-fx-rate" v-model="tollForm.fx_rate" type="number" step="0.000001" min="0.000001" required placeholder="ex: 1.05" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
         </div>
 

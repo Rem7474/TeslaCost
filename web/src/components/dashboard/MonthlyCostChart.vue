@@ -13,7 +13,7 @@ Chart.register(...registerables)
 const props = defineProps<{ monthlyCosts: any[] | null }>()
 const emit = defineEmits<{ 'open-month': [month: any] }>()
 const vehicleStore = useVehicleStore()
-const currency = computed(() => vehicleStore.activeVehicle?.currency || 'EUR')
+const currency = computed(() => vehicleStore.currency)
 
 const monthlyChartRef = ref<HTMLCanvasElement | null>(null)
 const monthlyChartRange = ref<MonthlyRangeKey>('1Y')
@@ -86,7 +86,7 @@ function renderChart() {
             },
             footer: (items) => {
               const total = items.reduce((sum, item) => sum + (Number(item.raw) || 0), 0)
-              const lines = [t('dashboard.monthlyCostChart.monthTotal', { total: total.toFixed(2) })]
+              const lines = [t('dashboard.monthlyCostChart.monthTotal', { total: formatAmount(total, currency.value) })]
               const dataIndex = items[0]?.dataIndex
               if (dataIndex !== undefined) {
                 const monthItem = filteredList[dataIndex]
@@ -123,7 +123,7 @@ onUnmounted(() => {
   <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
     <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
       <h3 class="text-sm font-bold text-white flex items-center gap-2">
-        <span>{{ $t('dashboard.monthlyCostChart.monthlyExpenseTrend') }}</span>
+        <span>{{ $t('dashboard.monthlyCostChart.monthlyExpenseTrend', { cur: currencySymbol(currency) }) }}</span>
       </h3>
       <MonthlyRangeSelector v-model="monthlyChartRange" class="self-start sm:self-auto" :label="$t('dashboard.monthlyCostChart.monthlyCostTrendByCategory')" />
     </div>

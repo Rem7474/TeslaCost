@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { formatAmount } from '@/currency'
 import {
   buildLeaseSummary,
   buildMonthBreakdown,
@@ -175,10 +176,16 @@ describe('buildMonthBreakdown', () => {
 
   it('explains estimates, cash outlays and smoothing in the item notes', () => {
     const eco = buildMonthBreakdown(month, 'economic')
-    expect(eco.items.find((i) => i.key === 'energy')!.note).toContain('5.00 € estimés')
-    expect(eco.items.find((i) => i.key === 'tires')!.note).toContain('400.00 € décaissés')
-    expect(eco.items.find((i) => i.key === 'financing')!.note).toContain('Lissé : 310.00 €')
+    expect(eco.items.find((i) => i.key === 'energy')!.note).toContain(`${formatAmount(5, 'EUR')} estimés`)
+    expect(eco.items.find((i) => i.key === 'tires')!.note).toContain(`${formatAmount(400, 'EUR')} décaissés`)
+    expect(eco.items.find((i) => i.key === 'financing')!.note).toContain(`Lissé : ${formatAmount(310, 'EUR')}`)
     expect(eco.items.find((i) => i.key === 'tolls')!.note).toBeNull()
+  })
+
+  it('writes the notes in the vehicle currency', () => {
+    const usd = buildMonthBreakdown(month, 'economic', 'USD')
+    expect(usd.items.find((i) => i.key === 'energy')!.note).toContain(formatAmount(5, 'USD'))
+    expect(usd.items.find((i) => i.key === 'energy')!.note).not.toContain('€')
   })
 
   it('has zero cost per km and shares without distance or spending', () => {

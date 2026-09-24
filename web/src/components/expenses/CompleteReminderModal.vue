@@ -7,6 +7,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { X, CheckCircle2 } from 'lucide-vue-next'
 import AppDatePicker from '@/components/AppDatePicker.vue'
 import { todayIso } from '@/utils/dates'
+import { currencySymbol } from '@/currency'
 import { useEscapeToClose } from '@/composables/useEscapeToClose'
 
 // Marks a reminder as done, optionally logging the maintenance expense. saved carries whether an expense was logged.
@@ -53,7 +54,7 @@ async function handleCompleteReminder() {
       await api.createMaintenance(props.vehicleId, {
         category: reminder.category === 'TIRES' ? 'TIRES' : 'MAINTENANCE',
         amount: Number(completeForm.value.expense_amount),
-        currency: vehicleStore.activeVehicle?.currency || 'EUR',
+        currency: vehicleStore.currency,
         fx_rate: null,
         date: new Date(completeForm.value.service_date).toISOString(),
         description: completeForm.value.expense_description || reminder.title,
@@ -132,7 +133,7 @@ async function handleCompleteReminder() {
 
           <div v-if="completeForm.log_expense" class="space-y-3 pt-1">
             <div>
-              <label for="complete-form-expense-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.invoiceCost') }}</label>
+              <label for="complete-form-expense-amount" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('expenses.completeReminderModal.invoiceCost', { cur: currencySymbol(vehicleStore.currency) }) }}</label>
               <input
                 id="complete-form-expense-amount"
                 v-model="completeForm.expense_amount"

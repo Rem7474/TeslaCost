@@ -99,7 +99,7 @@
     "requestFailed": "La requête a échoué ({status})",
     "driveNoToll": "Trajet marqué sans péage",
     "tripSuggestionDismiss": "Voyage détecté écarté",
-    "toll": "Péage / parking de {amount} {currency}",
+    "toll": "Péage / parking de {amount}",
     "tollEdit": "Modification de péage / parking",
     "expense": "Dépense « {description} »",
     "chargeCost": "Coût de recharge",
@@ -110,7 +110,7 @@
     "webhookSaved": "Webhook enregistré",
     "webhookDeleted": "Webhook supprimé",
     "webhookTest": "Test de notification envoyé",
-    "fillUp": "Plein de {amount} €",
+    "fillUp": "Plein de {amount}",
     "charge": "Recharge de {kwh} kWh",
     "documentLoadFailed": "Impossible de charger le document"
   }

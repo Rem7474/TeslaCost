@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { formatAmount } from '@/currency'
 import {
   emptyOwnership,
   emptyVehicleForm,
@@ -161,7 +162,8 @@ describe('ownershipSummary', () => {
     expect(ownershipSummary(null)).toBeNull()
     expect(ownershipSummary({ acquisition_type: 'LOAN', purchase_price: 45000 })).toContain('Achat à crédit')
     expect(ownershipSummary({ acquisition_type: 'CASH', purchase_price: 45000 })).toContain('Achat comptant')
-    expect(ownershipSummary({ acquisition_type: 'LOA', lease_monthly_rent: 389, lease_duration_months: 36 })).toMatch(/^LOA • 389 €\/mois sur 36 mois$/)
+    expect(ownershipSummary({ acquisition_type: 'LOA', lease_monthly_rent: 389, lease_duration_months: 36 })).toBe(`LOA • ${formatAmount(389, 'EUR', 0)}/mois sur 36 mois`)
+    expect(ownershipSummary({ acquisition_type: 'CASH', purchase_price: 45000 }, 'USD')).toContain(formatAmount(45000, 'USD', 0))
   })
 })
 

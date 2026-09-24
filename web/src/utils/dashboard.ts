@@ -1,5 +1,6 @@
 import { intlLocale, t } from '@/i18n'
 import { COST_COLORS } from '@/utils/costBreakdown'
+import { formatAmount } from '@/currency'
 export const monthlyRangeOptions = [
   { key: 'ALL', labelKey: 'dashboard.range.all' },
   { key: '1Y', labelKey: 'dashboard.range.oneYear' },
@@ -243,7 +244,8 @@ export function computeMonthFixedVariable(m: any, mode: MonthDetailMode = 'econo
 }
 
 /** Cost items of one month, in the economic view (smoothed) or the cash view (what was paid), with their share and cost per km. */
-export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
+export function buildMonthBreakdown(m: any, mode: MonthDetailMode, currency = 'EUR') {
+  const money = (v: number) => formatAmount(v, currency)
   const dist = m.distance_km || 0
 
   const items = [
@@ -254,7 +256,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       color: COST_COLORS.energy,
       amount: m.energy || 0,
       cashAmount: m.energy || 0,
-      note: m.smoothed_energy > 0 ? t('dashboard.breakdown.energyNote', { amount: m.smoothed_energy.toFixed(2) }) : null,
+      note: m.smoothed_energy > 0 ? t('dashboard.breakdown.energyNote', { amount: money(m.smoothed_energy) }) : null,
     },
     {
       key: 'tolls',
@@ -273,8 +275,8 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       amount: m.tires_amortized || 0,
       cashAmount: m.tires || 0,
       note: (m.tires || 0) > 0
-        ? t('dashboard.breakdown.tiresCashNote', { amount: Number(m.tires).toFixed(2) })
-        : (m.tires_amortized > 0 ? t('dashboard.breakdown.tiresAmortizedNote', { km: Math.round(dist).toLocaleString(intlLocale()) }) : null),
+        ? t('dashboard.breakdown.tiresCashNote', { amount: money(Number(m.tires)) })
+        : (m.tires_amortized > 0 ? t('dashboard.breakdown.tiresAmortizedNote', { km: Math.round(dist).toLocaleString(intlLocale()), zero: money(0) }) : null),
     },
     {
       key: 'maintenance',
@@ -284,7 +286,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       amount: m.maintenance_amortized || 0,
       cashAmount: m.maintenance || 0,
       note: (m.maintenance || 0) > 0
-        ? t('dashboard.breakdown.maintenanceBilledNote', { amount: Number(m.maintenance).toFixed(2) })
+        ? t('dashboard.breakdown.maintenanceBilledNote', { amount: money(Number(m.maintenance)) })
         : (m.maintenance_amortized > 0 ? t('dashboard.breakdown.maintenanceSmoothedNote') : null),
     },
     {
@@ -304,7 +306,7 @@ export function buildMonthBreakdown(m: any, mode: MonthDetailMode) {
       amount: m.financing_amortized || m.financing || 0,
       cashAmount: m.financing || 0,
       note: (m.financing_amortized > 0 && Math.abs(m.financing_amortized - (m.financing || 0)) > 0.01)
-        ? t('dashboard.breakdown.financingNote', { smoothed: m.financing_amortized.toFixed(2), paid: (m.financing || 0).toFixed(2) })
+        ? t('dashboard.breakdown.financingNote', { smoothed: money(m.financing_amortized), paid: money(m.financing || 0) })
         : null,
     },
     {

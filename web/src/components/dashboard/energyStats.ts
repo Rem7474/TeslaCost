@@ -1,4 +1,5 @@
 import { intlLocale } from '@/i18n'
+import { formatAmount } from '@/currency'
 // Shape of GET /api/vehicles/{id}/energy-stats, shared by the dashboard sections.
 
 export interface EnergyMonth {
@@ -112,6 +113,10 @@ export function mergeAcDcClasses(classes: ChargeClass[]): { classes: ChargeClass
 
 export const fmt = (v: number | undefined, digits: number) =>
   v === undefined ? '—' : v.toLocaleString(intlLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
+
+// Same '—' for a missing figure, as an amount in the vehicle's currency
+export const fmtMoney = (v: number | undefined, currency: string, digits = 2) =>
+  v === undefined ? '—' : formatAmount(v, currency, digits)
 
 export const fmtPercent = (v: number | undefined) =>
   v === undefined ? '—' : `${(v * 100).toLocaleString(intlLocale(), { maximumFractionDigits: 0 })} %`

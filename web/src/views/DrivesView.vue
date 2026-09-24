@@ -19,6 +19,7 @@ import DriveGroupModal from '@/components/drives/DriveGroupModal.vue'
 import TripEditModal from '@/components/drives/TripEditModal.vue'
 import AddToTripModal from '@/components/drives/AddToTripModal.vue'
 import { downloadCsv } from '@/utils/csv'
+import { formatAmount } from '@/currency'
 import { Receipt, Layers, List, RotateCcw } from 'lucide-vue-next'
 import {
   driveCsvHeaders,
@@ -128,7 +129,7 @@ const allPageSelected = computed(() => drives.value.length > 0 && drives.value.e
 const somePageSelected = computed(() => !allPageSelected.value && drives.value.some((d) => selectedDrives.value[d.id]))
 
 // Unified selection summary metrics (same as a Voyage)
-const selectedSummaryMetrics = computed(() => selectionSummary(selectedList.value, vehicleStore.activeVehicle?.currency || 'EUR'))
+const selectedSummaryMetrics = computed(() => selectionSummary(selectedList.value, vehicleStore.currency))
 
 function clearSelection() {
   selectedDrives.value = {}
@@ -421,7 +422,7 @@ async function handleDeleteTrip(tg: any) {
   if (tg.expense_count > 0) {
     deleteExpenses = await showConfirm({
       title: t('drives.drivesView.tripCostsTitle'),
-      message: t('drives.drivesView.tripCostsMessage', { count: tg.expense_count, total: Number(tg.expenses_total).toFixed(2) }),
+      message: t('drives.drivesView.tripCostsMessage', { count: tg.expense_count, total: formatAmount(Number(tg.expenses_total), vehicleStore.currency) }),
       confirmText: t('drives.drivesView.deleteCostsToo'),
       cancelText: t('drives.drivesView.keepCostsUnlinked'),
       type: 'warning',

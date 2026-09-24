@@ -8,6 +8,7 @@ import { useVehicleStore } from '@/stores/vehicle'
 import { useConfirm } from '@/composables/useConfirm'
 import { api } from '@/services/api'
 import { downloadCsv } from '@/utils/csv'
+import { currencySymbol } from '@/currency'
 import ComparisonCompare from '@/components/comparison/ComparisonCompare.vue'
 
 Chart.register(...registerables)
@@ -92,10 +93,15 @@ const evFields = [
   { key: 'insurance_yearly', label: 'comparison.fields.insuranceYearly' },
 ] as const
 
-function fmtEur(v: number | null | undefined, digits = 0): string {
+// Amounts are in the active vehicle's currency: the tracked side comes from its own data, and the
+// hypothetical figures are typed in by the same user in the currency they think in
+const currency = computed(() => vehicleStore.currency)
+const currencySign = computed(() => currencySymbol(currency.value))
+
+function fmtMoney(v: number | null | undefined, digits = 0): string {
   return Number(v || 0).toLocaleString(intlLocale(), {
     style: 'currency',
-    currency: 'EUR',
+    currency: currency.value,
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   })
@@ -302,7 +308,7 @@ const savings = computed<number>(() => Number(result.value?.ev_savings || 0))
 const verdict = computed(() => {
   if (!result.value) return ''
   const n = result.value.years_count
-  const abs = fmtEur(Math.abs(savings.value))
+  const abs = fmtMoney(Math.abs(savings.value))
   if (Math.abs(savings.value) < 1) return t('comparison.verdict.same', n)
   return savings.value > 0
     ? t('comparison.verdict.less', { count: n, amount: abs })
@@ -314,7 +320,7 @@ const breakEvenText = computed(() => {
   const be = result.value.break_even_year
   if (be === undefined || be === null) return t('comparison.breakEven.notReached')
   if (be === 0) return t('comparison.breakEven.immediate')
-  return t('comparison.breakEven.after', { years: String(be).replace('.', ',') })
+  return t('comparison.breakEven.after', { years: Number(be).toLocaleString(intlLocale()) })
 })
 
 const costRows = computed(() => {
@@ -340,7 +346,7 @@ function destroyChart() {
 }
 
 const axisStyle = { ticks: { color: '#94a3b8' }, grid: { color: '#1e293b' } }
-const eurAxis = { ticks: { color: '#94a3b8', callback: (v: any) => fmtEur(Number(v)) }, grid: { color: '#1e293b' } }
+const eurAxis = { ticks: { color: '#94a3b8', callback: (v: any) => fmtMoney(Number(v)) }, grid: { color: '#1e293b' } }
 
 function renderChart() {
   destroyChart()
@@ -364,7 +370,7 @@ function renderChart() {
         interaction: { mode: 'index', intersect: false },
         plugins: {
           legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
-          tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtEur(Number(ctx.raw))}` } },
+          tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtMoney(Number(ctx.raw))}` } },
         },
         scales: { x: axisStyle, y: eurAxis },
       },
@@ -388,7 +394,7 @@ function renderChart() {
         maintainAspectRatio: false,
         plugins: {
           legend: { labels: { color: '#94a3b8', boxWidth: 12 } },
-          tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtEur(Number(ctx.raw))}` } },
+          tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label} : ${fmtMoney(Number(ctx.raw))}` } },
         },
         scales: { x: { ...axisStyle, stacked: true }, y: { ...eurAxis, stacked: true } },
       },
@@ -414,7 +420,7 @@ function renderChart() {
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
-          tooltip: { callbacks: { label: (ctx) => ` ${Number(ctx.raw) >= 0 ? '+' : '−'}${fmtEur(Math.abs(Number(ctx.raw)))} ${t('comparison.chart.inFavor')}` } },
+          tooltip: { callbacks: { label: (ctx) => ` ${Number(ctx.raw) >= 0 ? '+' : '−'}${fmtMoney(Math.abs(Number(ctx.raw)))} ${t('comparison.chart.inFavor')}` } },
         },
         scales: { x: eurAxis, y: axisStyle },
       },
@@ -605,14 +611,14 @@ onBeforeUnmount(destroyChart)
               <input id="cmp-ice-l100" v-model.number="form.ice.l_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="cmp-ice-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.fuelPriceL') }}</label>
+              <label for="cmp-ice-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.fuelPriceL', { cur: currencySign }) }}</label>
               <input id="cmp-ice-price" v-model.number="form.ice.fuel_price" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <p class="text-[11px] text-slate-500 flex items-center gap-1"><Info class="w-3 h-3" /> {{ defaults?.source ? apiMessageText(defaults.source) : $t('comparison.comparisonView.indicative') }}</p>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="f in iceFields" :key="f.key">
-              <label :for="`cmp-ice-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t(f.label) }}</label>
+              <label :for="`cmp-ice-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t(f.label, { cur: currencySign }) }}</label>
               <input :id="`cmp-ice-${f.key}`" v-model.number="form.ice[f.key]" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
@@ -626,13 +632,13 @@ onBeforeUnmount(destroyChart)
               <input id="cmp-ev-kwh" v-model.number="form.ev.kwh_per_100km" type="number" min="0.1" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
             <div>
-              <label for="cmp-ev-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.averageElectricityPriceKwh') }}</label>
+              <label for="cmp-ev-price" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.averageElectricityPriceKwh', { cur: currencySign }) }}</label>
               <input id="cmp-ev-price" v-model.number="form.ev.eur_per_kwh" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div v-for="f in evFields" :key="f.key">
-              <label :for="`cmp-ev-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t(f.label) }}</label>
+              <label :for="`cmp-ev-${f.key}`" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t(f.label, { cur: currencySign }) }}</label>
               <input :id="`cmp-ev-${f.key}`" v-model.number="form.ev[f.key]" type="number" min="0" step="any" class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
             </div>
           </div>
@@ -666,7 +672,7 @@ onBeforeUnmount(destroyChart)
             </div>
           </div>
           <div v-if="!isRetro">
-            <label for="cmp-ev-incentives" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.electricPurchaseGrantsDeductedFrom') }}</label>
+            <label for="cmp-ev-incentives" class="block text-xs font-semibold text-slate-300 mb-1">{{ $t('comparison.comparisonView.electricPurchaseGrantsDeductedFrom', { cur: currencySign }) }}</label>
             <input id="cmp-ev-incentives" v-model.number="form.options.ev_incentives" type="number" min="0" step="any" class="w-full sm:w-1/2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" />
           </div>
         </div>
@@ -721,16 +727,16 @@ onBeforeUnmount(destroyChart)
                 {{ result.mode === 'RETROSPECTIVE' ? $t('comparison.comparisonView.actual') : $t('comparison.comparisonView.estimated') }}
               </span>
             </div>
-            <div class="text-2xl font-bold text-white">{{ fmtEur(result.ev.total) }}</div>
-            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtEur(result.ev.per_month), cost_per_km: result.ev.cost_per_km.toFixed(3).replace('.', ',') }) }}</div>
+            <div class="text-2xl font-bold text-white">{{ fmtMoney(result.ev.total) }}</div>
+            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtMoney(result.ev.per_month), cost_per_km: fmtMoney(result.ev.cost_per_km, 3) }) }}</div>
           </div>
           <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
             <div class="flex items-center justify-between mb-2">
               <h2 class="text-sm font-semibold text-amber-300">{{ $t('comparison.comparisonView.combustion') }}</h2>
               <span class="text-[10px] px-2 py-0.5 rounded-full border border-slate-600 text-slate-400">{{ $t('comparison.comparisonView.estimated') }}</span>
             </div>
-            <div class="text-2xl font-bold text-white">{{ fmtEur(result.ice.total) }}</div>
-            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtEur(result.ice.per_month), cost_per_km: result.ice.cost_per_km.toFixed(3).replace('.', ',') }) }}</div>
+            <div class="text-2xl font-bold text-white">{{ fmtMoney(result.ice.total) }}</div>
+            <div class="text-xs text-slate-400 mt-1">{{ $t('comparison.comparisonView.monthKm', { per_month: fmtMoney(result.ice.per_month), cost_per_km: fmtMoney(result.ice.cost_per_km, 3) }) }}</div>
           </div>
         </div>
 
@@ -747,13 +753,13 @@ onBeforeUnmount(destroyChart)
             <tbody class="text-slate-200">
               <tr v-for="row in costRows" :key="row.label" class="border-t border-slate-800 text-right">
                 <th scope="row" class="text-left font-normal py-1.5">{{ row.label }}</th>
-                <td>{{ fmtEur(row.ev) }}</td>
-                <td>{{ fmtEur(row.ice) }}</td>
+                <td>{{ fmtMoney(row.ev) }}</td>
+                <td>{{ fmtMoney(row.ice) }}</td>
               </tr>
               <tr class="border-t border-slate-700 text-right font-semibold text-white">
                 <th scope="row" class="text-left py-1.5">{{ $t('comparison.comparisonView.total') }}</th>
-                <td>{{ fmtEur(result.ev.total) }}</td>
-                <td>{{ fmtEur(result.ice.total) }}</td>
+                <td>{{ fmtMoney(result.ev.total) }}</td>
+                <td>{{ fmtMoney(result.ice.total) }}</td>
               </tr>
             </tbody>
           </table>
@@ -777,7 +783,7 @@ onBeforeUnmount(destroyChart)
           <ul class="text-xs text-slate-300 space-y-1">
             <li v-for="s in result.sensitivity" :key="s.label.code" class="flex justify-between">
               <span>{{ apiMessageText(s.label) }}</span>
-              <span>{{ s.ev_savings >= 0 ? $t('comparison.comparisonView.evLess', { amount: fmtEur(s.ev_savings) }) : $t('comparison.comparisonView.evMore', { amount: fmtEur(-s.ev_savings) }) }}</span>
+              <span>{{ s.ev_savings >= 0 ? $t('comparison.comparisonView.evLess', { amount: fmtMoney(s.ev_savings) }) : $t('comparison.comparisonView.evMore', { amount: fmtMoney(-s.ev_savings) }) }}</span>
             </li>
           </ul>
         </div>

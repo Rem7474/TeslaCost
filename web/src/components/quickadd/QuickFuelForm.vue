@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { intlLocale, t } from '@/i18n'
+import { t } from '@/i18n'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ChevronDown } from 'lucide-vue-next'
 import { api } from '@/services/api'
 import QuickFormShell from './QuickFormShell.vue'
+import { currencySymbol, formatAmount } from '@/currency'
 import { buildFuelPayload, isQueued, toLocalDateInput, toNumber } from '@/utils/quickAdd'
 
 const props = defineProps<{ vehicle: any }>()
+const currency: string = props.vehicle.currency || 'EUR'
 const emit = defineEmits<{ saved: [result: { queued: boolean; message: string }] }>()
 
 const form = reactive({
@@ -31,7 +33,7 @@ const pricePerLiter = computed(() => {
   if (amount === null || liters === null || amount <= 0 || liters <= 0) return null
   return amount / liters
 })
-const fmtPrice = (v: number) => v.toLocaleString(intlLocale(), { minimumFractionDigits: 3, maximumFractionDigits: 3 })
+const fmtPrice = (v: number) => formatAmount(v, currency, 3)
 
 async function submit() {
   error.value = ''
@@ -44,8 +46,8 @@ async function submit() {
   }
   saving.value = true
   try {
-    const result = await api.createFuelLog(props.vehicle.id, payload)
-    emit('saved', { queued: isQueued(result), message: t('quickadd.quickFuelForm.message', { amount: payload.amount.toLocaleString(intlLocale()) }) })
+    const result = await api.createFuelLog(props.vehicle.id, payload, currency)
+    emit('saved', { queued: isQueued(result), message: t('quickadd.quickFuelForm.message', { amount: formatAmount(payload.amount, currency) }) })
   } catch (err: any) {
     error.value = err?.message || t('quickadd.quickFuelForm.saveFailed')
   } finally {
@@ -57,7 +59,7 @@ async function submit() {
 <template>
   <QuickFormShell :submit-label="$t('quickadd.quickFuelForm.saveTheFillUp')" :saving="saving" :error="error" @submit="submit">
     <div>
-      <label for="qf-amount" class="quick-label">{{ $t('quickadd.quickFuelForm.amount') }}</label>
+      <label for="qf-amount" class="quick-label">{{ $t('quickadd.quickFuelForm.amount', { cur: currencySymbol(currency) }) }}</label>
       <input id="qf-amount" ref="amountInput" v-model="form.amount" type="number" inputmode="decimal" step="any" min="0" class="quick-input" />
     </div>
 
