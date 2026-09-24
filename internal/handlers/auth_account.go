@@ -187,3 +187,29 @@ func (h *AuthHandler) UpdateLanguage(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Language updated"})
 }
+
+type UpdateDistanceUnitRequest struct {
+	DistanceUnit string `json:"distance_unit"`
+}
+
+// UpdateDistanceUnit stores the unit ("km" or "mi") the frontend converts distances to for
+// display and form input. Stored distances stay in km either way: this is a display preference,
+// not a data migration.
+func (h *AuthHandler) UpdateDistanceUnit(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+
+	var req UpdateDistanceUnitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeAPIError(w, http.StatusBadRequest, apierror.New("request.invalid_body", "Invalid request body"))
+		return
+	}
+	if req.DistanceUnit != "km" && req.DistanceUnit != "mi" {
+		writeAPIError(w, http.StatusBadRequest, apierror.New("account.distance_unit_invalid", "Distance unit must be \"km\" or \"mi\""))
+		return
+	}
+	if err := h.repo.UpdateUserDistanceUnit(r.Context(), userID, req.DistanceUnit); err != nil {
+		writeRepoError(w, r, err, "Could not update the distance unit")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Distance unit updated"})
+}

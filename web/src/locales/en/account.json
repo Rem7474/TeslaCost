@@ -49,5 +49,8 @@
   "passwordChangedOthers": "Password changed. {count} other device(s) signed out.",
   "passwordChanged": "Password changed.",
   "passwordChangeFailed": "Could not change the password.",
-  "language": "Language"
+  "language": "Language",
+  "distanceUnit": "Distance unit",
+  "distanceUnitKm": "Kilometers",
+  "distanceUnitMi": "Miles"
 }

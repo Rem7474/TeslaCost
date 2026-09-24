@@ -49,5 +49,8 @@
   "passwordChangedOthers": "Mot de passe modifié. {count} autre(s) appareil(s) déconnecté(s).",
   "passwordChanged": "Mot de passe modifié.",
   "passwordChangeFailed": "Impossible de modifier le mot de passe.",
-  "language": "Langue"
+  "language": "Langue",
+  "distanceUnit": "Unité de distance",
+  "distanceUnitKm": "Kilomètres",
+  "distanceUnitMi": "Miles"
 }
